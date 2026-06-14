@@ -8,6 +8,9 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useAuth } from "@/components/auth-provider";
+import { fetchUserOrg } from "@/lib/supabase/auth-actions";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { canAccess, daysUntil, isReadOnlyStatus } from "./can";
 import { defaultTrialSubscription } from "./plans";
 import type {
@@ -57,11 +60,17 @@ function loadDemoOrg(): OrganizationState {
   return { id: null, name: "Demo Shop", isAuthenticated: false };
 }
 
+function toPlanId(id: string): PlanId {
+  if (id === "starter" || id === "business" || id === "pro") return id;
+  return "business";
+}
+
 export function SubscriptionProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { user, loading: authLoading } = useAuth();
   const [ready, setReady] = useState(false);
   const [subscription, setSubscription] = useState<SubscriptionState>(() => ({
     ...defaultTrialSubscription(),
@@ -73,19 +82,51 @@ export function SubscriptionProvider({
     isAuthenticated: false,
   });
 
-  useEffect(() => {
-    setSubscription(loadDemoSubscription());
-    setOrg(loadDemoOrg());
-    setReady(true);
-  }, []);
+  const loadFromCloud = useCallback(async () => {
+    if (!isSupabaseConfigured() || !user) return false;
+    const data = await fetchUserOrg();
+    if (!data?.org || !data.subscription) return false;
+
+    setOrg({
+      id: data.org.id,
+      name: data.org.name,
+      isAuthenticated: true,
+    });
+    setSubscription({
+      planId: toPlanId(data.subscription.planId),
+      status: data.subscription.status,
+      billingCycle: data.subscription.billingCycle as BillingCycle,
+      trialEndsAt: data.subscription.trialEndsAt,
+      currentPeriodEnd: data.subscription.currentPeriodEnd,
+      addons: [],
+      isDemo: false,
+    });
+    return true;
+  }, [user]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (authLoading) return;
+
+    const init = async () => {
+      if (user && (await loadFromCloud())) {
+        setReady(true);
+        return;
+      }
+      setSubscription(loadDemoSubscription());
+      setOrg(loadDemoOrg());
+      setReady(true);
+    };
+
+    init();
+  }, [user, authLoading, loadFromCloud]);
+
+  useEffect(() => {
+    if (!ready || !subscription.isDemo) return;
     localStorage.setItem(DEMO_SUBSCRIPTION_KEY, JSON.stringify(subscription));
   }, [subscription, ready]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || org.isAuthenticated) return;
     localStorage.setItem(DEMO_ORG_KEY, JSON.stringify(org));
   }, [org, ready]);
 

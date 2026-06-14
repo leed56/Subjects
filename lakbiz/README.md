@@ -21,6 +21,17 @@ npm run dev
 
 Open http://localhost:3000 — **working pages**:
 
+### Supabase (cloud database)
+
+1. Copy `lakbiz/app/env.local.example` → `lakbiz/app/.env.local`
+2. Add your project URL and **anon key** only (never put service role key in the app)
+3. Restart `npm run dev`
+4. Open `/login` → **Create shop** with email + password
+
+Schema migration is in `lakbiz/supabase/migrations/` (already applied if using shared project).
+
+- `/login` — email signup → creates org + 14-day Business trial in Supabase
+
 - `/stock` — add / edit items, stock in
 - `/suppliers` — suppliers, **GRN purchases**, payables
 - `/jobs` — **AC installation** jobs (quote → install → service)

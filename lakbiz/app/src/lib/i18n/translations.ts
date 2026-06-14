@@ -387,6 +387,17 @@ const si: Dict = {
   "sub.verify": "තහවුරු කරන්න",
   "sub.login_demo": "ඩෙමෝ දිගට (Supabase නැත)",
   "sub.login_soon": "Phone login activates when Supabase is configured.",
+  "sub.sign_in": "පිවිසෙන්න",
+  "sub.sign_out": "පිටවෙන්න",
+  "sub.create_shop": "වෙළඳසැල සාදන්න",
+  "sub.email": "ඊමේල්",
+  "sub.password": "මුරපදය",
+  "sub.shop_name": "වෙළඳසැල් නම",
+  "sub.create_account": "ගිණුම සාදන්න",
+  "sub.login_email_hint": "ඊමේල් + මුරපදය — 14 දින නොමිලේ අත්හදා බැලීම",
+  "sub.db_connected": "Supabase දත්ත සමුදාය සම්බන්ධයි",
+  "sub.shop_required": "වෙළඳසැල් නම අවශ්‍යයි",
+  "sub.signup_ok": "ගිණුම සාදන ලදී — dashboard වෙත යන්න",
 };
 
 const en: Dict = {
@@ -757,6 +768,17 @@ const en: Dict = {
   "sub.verify": "Verify",
   "sub.login_demo": "Continue in demo (no Supabase)",
   "sub.login_soon": "Phone login activates when Supabase is configured.",
+  "sub.sign_in": "Sign in",
+  "sub.sign_out": "Sign out",
+  "sub.create_shop": "Create shop",
+  "sub.email": "Email",
+  "sub.password": "Password",
+  "sub.shop_name": "Shop name",
+  "sub.create_account": "Create account",
+  "sub.login_email_hint": "Email + password — 14-day free trial",
+  "sub.db_connected": "Supabase database connected",
+  "sub.shop_required": "Shop name is required",
+  "sub.signup_ok": "Account created — go to dashboard",
 };
 
 const dictionaries: Record<Locale, Dict> = { si, en };

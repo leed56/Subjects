@@ -14,12 +14,14 @@ export default function BillingPage() {
   const { t, locale } = useLocale();
   const {
     subscription,
+    org,
     setDemoPlan,
     setDemoBillingCycle,
     daysLeftInTrial,
   } = useSubscription();
   const [message, setMessage] = useState("");
   const [cycle, setCycle] = useState<BillingCycle>(subscription.billingCycle);
+  const cloudConnected = isSupabaseConfigured();
 
   const currentPlan = getPlan(subscription.planId);
 
@@ -60,6 +62,12 @@ export default function BillingPage() {
           <div>
             <p className="text-sm text-slate-500">{t("sub.status")}</p>
             <p className="text-lg font-semibold capitalize">{statusLabel}</p>
+            {org.isAuthenticated && (
+              <p className="text-sm text-slate-600">{org.name}</p>
+            )}
+            {cloudConnected && !subscription.isDemo && (
+              <p className="text-xs text-green-700">{t("sub.db_connected")}</p>
+            )}
             {subscription.status === "trialing" && daysLeftInTrial != null && (
               <p className="text-sm text-teal-700">
                 {t("sub.trial_banner")} {daysLeftInTrial}

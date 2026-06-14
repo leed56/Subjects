@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { TrialBanner } from "@/components/trial-banner";
+import { useAuth } from "@/components/auth-provider";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { ROUTE_FEATURES } from "@/lib/subscription/can";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
@@ -22,6 +23,7 @@ const navKeys = [
 export function SiteHeader() {
   const { locale, setLocale, t } = useLocale();
   const { can } = useSubscription();
+  const { user, logout } = useAuth();
   const pathname = usePathname();
 
   const visibleNav = navKeys.filter((item) => {
@@ -63,8 +65,17 @@ export function SiteHeader() {
             href="/login"
             className="text-sm font-medium text-slate-600 hover:text-teal-700"
           >
-            {t("nav.login")}
+            {user ? user.email?.split("@")[0] : t("nav.login")}
           </Link>
+          {user && (
+            <button
+              type="button"
+              onClick={() => logout()}
+              className="text-xs text-slate-500 hover:text-red-600"
+            >
+              {t("sub.sign_out")}
+            </button>
+          )}
           <nav className="flex flex-wrap gap-3 text-sm font-medium text-slate-600">
             {visibleNav.map((item) => (
               <Link

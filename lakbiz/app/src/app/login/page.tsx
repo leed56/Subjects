@@ -3,36 +3,53 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useAuth } from "@/components/auth-provider";
 import { SiteHeader } from "@/components/site-header";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 
+type Mode = "signin" | "signup";
+
 export default function LoginPage() {
   const { t } = useLocale();
   const router = useRouter();
+  const { signIn, signUp } = useAuth();
+  const [mode, setMode] = useState<Mode>("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [shopName, setShopName] = useState("");
   const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSendOtp = (e: React.FormEvent) => {
+  const configured = isSupabaseConfigured();
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phone.trim()) return;
-    if (!isSupabaseConfigured()) {
+    if (!configured) {
       setMessage(t("sub.login_soon"));
       return;
     }
-    setOtpSent(true);
-    setMessage("OTP sent (wire to Supabase Auth).");
-  };
-
-  const handleVerify = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isSupabaseConfigured()) {
-      setMessage(t("sub.login_soon"));
-      return;
+    setLoading(true);
+    setMessage("");
+    try {
+      if (mode === "signup") {
+        if (!shopName.trim()) {
+          setMessage(t("sub.shop_required"));
+          return;
+        }
+        await signUp({ email, password, shopName, phone });
+        setMessage(t("sub.signup_ok"));
+        router.push("/dashboard");
+      } else {
+        await signIn(email, password);
+        router.push("/dashboard");
+      }
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setLoading(false);
     }
-    setMessage("Verify with Supabase — not wired yet.");
   };
 
   const continueDemo = () => {
@@ -46,7 +63,15 @@ export default function LoginPage() {
         <h1 className="text-2xl font-bold text-slate-900">
           {t("sub.login_title")}
         </h1>
-        <p className="mt-2 text-slate-600">{t("sub.login_subtitle")}</p>
+        <p className="mt-2 text-slate-600">
+          {configured ? t("sub.login_email_hint") : t("sub.login_subtitle")}
+        </p>
+
+        {configured && (
+          <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-800">
+            {t("sub.db_connected")}
+          </p>
+        )}
 
         {message && (
           <div className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -54,37 +79,83 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={otpSent ? handleVerify : handleSendOtp} className="mt-8 space-y-4">
+        <div className="mt-6 flex rounded-lg border border-slate-200 p-1">
+          <button
+            type="button"
+            onClick={() => setMode("signin")}
+            className={`flex-1 rounded-md py-2 text-sm ${
+              mode === "signin" ? "bg-teal-700 text-white" : "text-slate-600"
+            }`}
+          >
+            {t("sub.sign_in")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("signup")}
+            className={`flex-1 rounded-md py-2 text-sm ${
+              mode === "signup" ? "bg-teal-700 text-white" : "text-slate-600"
+            }`}
+          >
+            {t("sub.create_shop")}
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          {mode === "signup" && (
+            <>
+              <label className="block text-sm">
+                {t("sub.shop_name")} *
+                <input
+                  required
+                  value={shopName}
+                  onChange={(e) => setShopName(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+              <label className="block text-sm">
+                {t("sub.phone")}
+                <input
+                  type="tel"
+                  placeholder="07X XXX XXXX"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                />
+              </label>
+            </>
+          )}
           <label className="block text-sm">
-            {t("sub.phone")}
+            {t("sub.email")} *
             <input
-              type="tel"
-              placeholder="07X XXX XXXX"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+            />
+          </label>
+          <label className="block text-sm">
+            {t("sub.password")} *
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
             />
           </label>
 
-          {otpSent && (
-            <label className="block text-sm">
-              {t("sub.otp_code")}
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-              />
-            </label>
-          )}
-
           <button
             type="submit"
-            className="w-full rounded-lg bg-teal-700 py-2.5 text-sm font-medium text-white hover:bg-teal-800"
+            disabled={loading}
+            className="w-full rounded-lg bg-teal-700 py-2.5 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-50"
           >
-            {otpSent ? t("sub.verify") : t("sub.send_otp")}
+            {loading
+              ? "..."
+              : mode === "signup"
+                ? t("sub.create_account")
+                : t("sub.sign_in")}
           </button>
         </form>
 

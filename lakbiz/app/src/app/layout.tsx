@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_Sinhala } from "next/font/google";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
+import { AuthProvider } from "@/components/auth-provider";
 import { SubscriptionProvider } from "@/lib/subscription/subscription-provider";
 import "./globals.css";
 
@@ -38,7 +39,9 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sinhala">
         <LocaleProvider>
-          <SubscriptionProvider>{children}</SubscriptionProvider>
+          <AuthProvider>
+            <SubscriptionProvider>{children}</SubscriptionProvider>
+          </AuthProvider>
         </LocaleProvider>
       </body>
     </html>
