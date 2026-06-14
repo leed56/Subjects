@@ -1,6 +1,11 @@
 import { newId, todayKey } from "@/lib/format";
 import { generateBillNo, generateGrnNo, type BusinessInfo } from "@/lib/invoice";
 import { generateJobNo } from "@/lib/ac-jobs";
+import {
+  daysInStock,
+  generateVehicleStockId,
+  vehicleTotalCost,
+} from "@/lib/vehicles";
 import type { PaymentMethod, Product } from "@/lib/types";
 import type {
   AppData,
@@ -16,6 +21,9 @@ import type {
   SaleOptions,
   StockLog,
   SupplierInput,
+  VehicleInput,
+  VehicleSaleInput,
+  VehicleRecord,
 } from "./types";
 
 export function addProduct(data: AppData, input: ProductInput): AppData {
@@ -435,6 +443,130 @@ export function deleteACJob(data: AppData, id: string): AppData {
   return { ...data, acJobs: data.acJobs.filter((j) => j.id !== id) };
 }
 
+export function addVehicle(data: AppData, input: VehicleInput): AppData {
+  const chassis = input.chassisNo.trim().toUpperCase();
+  if (data.vehicles.some((v) => v.chassisNo === chassis && v.status !== "sold")) {
+    return data;
+  }
+
+  const vehicle: VehicleRecord = {
+    id: newId(),
+    stockId: generateVehicleStockId(data.vehicles.length),
+    dateAdded: new Date().toISOString(),
+    make: input.make.trim(),
+    model: input.model.trim(),
+    year: input.year,
+    chassisNo: chassis,
+    engineNo: input.engineNo?.trim() || undefined,
+    regNo: input.regNo?.trim() || undefined,
+    color: input.color?.trim() || undefined,
+    fuel: input.fuel,
+    transmission: input.transmission,
+    mileageKm: input.mileageKm,
+    condition: input.condition.trim(),
+    purchasePrice: input.purchasePrice,
+    reconditionCost: input.reconditionCost,
+    askPrice: input.askPrice,
+    minPrice: input.minPrice,
+    status: input.status,
+    notes: input.notes?.trim() || undefined,
+  };
+
+  return { ...data, vehicles: [vehicle, ...data.vehicles] };
+}
+
+export function updateVehicle(
+  data: AppData,
+  id: string,
+  input: Partial<VehicleInput>,
+): AppData {
+  return {
+    ...data,
+    vehicles: data.vehicles.map((v) => {
+      if (v.id !== id || v.status === "sold") return v;
+      const chassis = input.chassisNo?.trim().toUpperCase();
+      return {
+        ...v,
+        make: input.make?.trim() ?? v.make,
+        model: input.model?.trim() ?? v.model,
+        year: input.year ?? v.year,
+        chassisNo: chassis ?? v.chassisNo,
+        engineNo: input.engineNo?.trim() ?? v.engineNo,
+        regNo: input.regNo?.trim() ?? v.regNo,
+        color: input.color?.trim() ?? v.color,
+        fuel: input.fuel ?? v.fuel,
+        transmission: input.transmission ?? v.transmission,
+        mileageKm: input.mileageKm ?? v.mileageKm,
+        condition: input.condition?.trim() ?? v.condition,
+        purchasePrice: input.purchasePrice ?? v.purchasePrice,
+        reconditionCost: input.reconditionCost ?? v.reconditionCost,
+        askPrice: input.askPrice ?? v.askPrice,
+        minPrice: input.minPrice ?? v.minPrice,
+        status: input.status ?? v.status,
+        notes: input.notes?.trim() ?? v.notes,
+      };
+    }),
+  };
+}
+
+export function sellVehicle(
+  data: AppData,
+  input: VehicleSaleInput,
+): AppData {
+  const vehicle = data.vehicles.find((v) => v.id === input.vehicleId);
+  if (!vehicle || vehicle.status === "sold" || input.sellPrice <= 0) {
+    return data;
+  }
+
+  const customer = input.customerId
+    ? data.customers.find((c) => c.id === input.customerId)
+    : undefined;
+
+  const customerName =
+    customer?.name ?? (input.customerName?.trim() || undefined);
+
+  const cost = vehicleTotalCost(
+    vehicle.purchasePrice,
+    vehicle.reconditionCost,
+  );
+  const profit = input.sellPrice - cost;
+  const soldDate = new Date().toISOString();
+
+  let customers = data.customers;
+  if (input.paymentMethod === "credit" && input.customerId) {
+    customers = customers.map((c) =>
+      c.id === input.customerId
+        ? { ...c, creditBalance: c.creditBalance + input.sellPrice }
+        : c,
+    );
+  }
+
+  return {
+    ...data,
+    customers,
+    vehicles: data.vehicles.map((v) =>
+      v.id === input.vehicleId
+        ? {
+            ...v,
+            status: "sold" as const,
+            soldPrice: input.sellPrice,
+            soldDate,
+            customerId: input.customerId,
+            customerName,
+            financePartner: input.financePartner,
+            paymentMethod: input.paymentMethod,
+          }
+        : v,
+    ),
+  };
+}
+
+export function deleteVehicle(data: AppData, id: string): AppData {
+  const vehicle = data.vehicles.find((v) => v.id === id);
+  if (!vehicle || vehicle.status === "sold") return data;
+  return { ...data, vehicles: data.vehicles.filter((v) => v.id !== id) };
+}
+
 export function addBankAccount(
   data: AppData,
   input: BankAccountInput,
@@ -690,6 +822,19 @@ export function getDashboardStats(data: AppData) {
     ["quote", "deposit_received", "scheduled"].includes(j.status),
   );
   const serviceDueJobs = data.acJobs.filter((j) => j.status === "service_due");
+  const forSaleVehicles = data.vehicles.filter((v) => v.status === "for_sale");
+  const aging60Vehicles = forSaleVehicles.filter(
+    (v) => daysInStock(v.dateAdded) >= 60,
+  );
+  const soldVehicles = data.vehicles.filter((v) => v.status === "sold");
+  const thisMonth = todayKey().slice(0, 7);
+  const soldThisMonth = soldVehicles.filter(
+    (v) => v.soldDate?.startsWith(thisMonth),
+  );
+  const vehicleProfitThisMonth = soldThisMonth.reduce((s, v) => {
+    const cost = vehicleTotalCost(v.purchasePrice, v.reconditionCost);
+    return s + ((v.soldPrice ?? 0) - cost);
+  }, 0);
 
   return {
     todaySales: salesTotal,
@@ -720,6 +865,11 @@ export function getDashboardStats(data: AppData) {
     pendingACJobCount: pendingACJobs.length,
     pendingACJobs: pendingACJobs.slice(0, 5),
     serviceDueCount: serviceDueJobs.length,
+    forSaleVehicleCount: forSaleVehicles.length,
+    aging60VehicleCount: aging60Vehicles.length,
+    aging60Vehicles: aging60Vehicles.slice(0, 5),
+    vehicleProfitThisMonth,
+    recentSoldVehicles: soldVehicles.slice(0, 5),
     recentLogs: data.stockLogs.slice(0, 5),
   };
 }

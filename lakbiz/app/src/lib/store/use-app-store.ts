@@ -9,6 +9,7 @@ import {
   addCustomer,
   addProduct,
   addSupplier,
+  addVehicle,
   adjustStock,
   createPurchase,
   createSale,
@@ -17,14 +18,17 @@ import {
   deleteCustomer,
   deleteProduct,
   deleteSupplier,
+  deleteVehicle,
   recordCustomerPayment,
   recordSupplierPayment,
+  sellVehicle,
   updateACJob,
   updateBusiness,
   updateChequeStatus,
   updateCustomer,
   updateProduct,
   updateSupplier,
+  updateVehicle,
 } from "./actions";
 import { clearAppData, loadAppData, saveAppData } from "./storage";
 import type {
@@ -38,6 +42,8 @@ import type {
   PurchaseInput,
   SaleOptions,
   SupplierInput,
+  VehicleInput,
+  VehicleSaleInput,
 } from "./types";
 import type { BusinessInfo } from "@/lib/invoice";
 
@@ -193,6 +199,30 @@ export function useAppStore() {
     deleteACJob: (id: string) => {
       if (!data) return;
       persist(deleteACJob(data, id));
+    },
+    addVehicle: (input: VehicleInput) => {
+      if (!data) return false;
+      const before = data.vehicles.length;
+      const next = addVehicle(data, input);
+      if (next.vehicles.length === before) return false;
+      persist(next);
+      return true;
+    },
+    updateVehicle: (id: string, input: Partial<VehicleInput>) => {
+      if (!data) return;
+      persist(updateVehicle(data, id, input));
+    },
+    sellVehicle: (input: VehicleSaleInput) => {
+      if (!data) return false;
+      const v = data.vehicles.find((x) => x.id === input.vehicleId);
+      if (!v || v.status === "sold") return false;
+      const next = sellVehicle(data, input);
+      persist(next);
+      return true;
+    },
+    deleteVehicle: (id: string) => {
+      if (!data) return;
+      persist(deleteVehicle(data, id));
     },
     resetAll: () => {
       clearAppData();

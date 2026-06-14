@@ -6,6 +6,7 @@ const nav = [
   { href: "/suppliers", label: "Suppliers" },
   { href: "/sales", label: "Sales" },
   { href: "/jobs", label: "AC Jobs" },
+  { href: "/vehicles", label: "Vehicles" },
   { href: "/bills", label: "Bills" },
   { href: "/customers", label: "Customers" },
   { href: "/banking", label: "Banking" },

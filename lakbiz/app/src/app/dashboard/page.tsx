@@ -95,11 +95,37 @@ export default function DashboardPage() {
             value={String(stats.chequesDueSoonCount)}
           />
           <DashboardStat
-            labelEn="Customers"
-            labelSi="ගනුදෙනුකරු"
-            value={String(stats.customerCount)}
+            labelEn="Vehicles for sale"
+            labelSi="වාහන තොග"
+            value={String(stats.forSaleVehicleCount)}
+          />
+          <DashboardStat
+            labelEn="Car profit (month)"
+            labelSi="මාසික ලාභය"
+            value={formatLkr(stats.vehicleProfitThisMonth)}
           />
         </div>
+
+        {stats.aging60VehicleCount > 0 && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-medium text-amber-900">
+                {stats.aging60VehicleCount} vehicle(s) 60+ days in yard
+              </p>
+              <Link href="/vehicles" className="text-sm text-amber-800 underline">
+                View vehicles
+              </Link>
+            </div>
+            <ul className="mt-2 space-y-1 text-sm text-amber-900">
+              {stats.aging60Vehicles.map((v) => (
+                <li key={v.id}>
+                  • {v.make} {v.model} {v.year} — {formatLkr(v.askPrice)} (
+                  {v.stockId})
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {stats.pendingACJobCount > 0 && (
           <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4">

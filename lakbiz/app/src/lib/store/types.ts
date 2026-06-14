@@ -44,6 +44,70 @@ export interface ACJobInput {
   notes?: string;
 }
 
+export type VehicleStatus =
+  | "incoming"
+  | "reconditioning"
+  | "for_sale"
+  | "sold";
+
+export interface VehicleRecord {
+  id: string;
+  stockId: string;
+  dateAdded: string;
+  make: string;
+  model: string;
+  year: number;
+  chassisNo: string;
+  engineNo?: string;
+  regNo?: string;
+  color?: string;
+  fuel: "petrol" | "diesel" | "hybrid" | "electric";
+  transmission: "auto" | "manual";
+  mileageKm: number;
+  condition: string;
+  purchasePrice: number;
+  reconditionCost: number;
+  askPrice: number;
+  minPrice?: number;
+  status: VehicleStatus;
+  customerId?: string;
+  customerName?: string;
+  soldPrice?: number;
+  soldDate?: string;
+  financePartner?: string;
+  paymentMethod?: PaymentMethod;
+  notes?: string;
+}
+
+export interface VehicleInput {
+  make: string;
+  model: string;
+  year: number;
+  chassisNo: string;
+  engineNo?: string;
+  regNo?: string;
+  color?: string;
+  fuel: VehicleRecord["fuel"];
+  transmission: VehicleRecord["transmission"];
+  mileageKm: number;
+  condition: string;
+  purchasePrice: number;
+  reconditionCost: number;
+  askPrice: number;
+  minPrice?: number;
+  status: VehicleStatus;
+  notes?: string;
+}
+
+export interface VehicleSaleInput {
+  vehicleId: string;
+  sellPrice: number;
+  customerId?: string;
+  customerName?: string;
+  paymentMethod: PaymentMethod;
+  financePartner?: string;
+}
+
 export interface SaleLine {
   productId: string;
   productName: string;
@@ -170,6 +234,7 @@ export interface AppData {
   purchases: Purchase[];
   supplierPayments: SupplierPayment[];
   acJobs: ACJob[];
+  vehicles: VehicleRecord[];
   bankAccounts: BankAccountRecord[];
   cheques: ChequeRecord[];
 }
