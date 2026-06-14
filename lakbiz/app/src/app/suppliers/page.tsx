@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
-import { formatPaymentLabel } from "@/lib/invoice";
+import { useLocale } from "@/lib/i18n/locale-provider";
+import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { Supplier } from "@/lib/store/types";
 import type { PaymentMethod } from "@/lib/types";
@@ -19,6 +20,7 @@ export default function SuppliersPage() {
     createPurchase,
     recordSupplierPayment,
   } = useAppStore();
+  const { t } = useLocale();
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -56,7 +58,7 @@ export default function SuppliersPage() {
     return (
       <div className="min-h-full bg-slate-50">
         <SiteHeader />
-        <main className="mx-auto max-w-6xl px-4 py-10">Loading...</main>
+        <main className="mx-auto max-w-6xl px-4 py-10">{t("common.loading")}</main>
       </div>
     );
   }
@@ -79,7 +81,7 @@ export default function SuppliersPage() {
 
   const handlePurchase = () => {
     if (!purchaseSupplierId) {
-      setMessage("Select a supplier.");
+      setMessage(t("sup.select_supplier"));
       return;
     }
     const lines = Object.entries(purchaseLines)
@@ -90,7 +92,7 @@ export default function SuppliersPage() {
         unitCost: l.unitCost,
       }));
     if (lines.length === 0) {
-      setMessage("Add at least one item with quantity.");
+      setMessage(t("sup.add_qty"));
       return;
     }
     const ok = createPurchase({
@@ -105,10 +107,10 @@ export default function SuppliersPage() {
     if (ok) {
       setShowPurchase(false);
       setPurchaseLines({});
-      setMessage("Purchase saved. Stock updated.");
+      setMessage(t("sup.saved"));
       setTimeout(() => setMessage(""), 3000);
     } else {
-      setMessage("Could not save purchase — check fields.");
+      setMessage(t("sup.failed"));
     }
   };
 
@@ -118,9 +120,9 @@ export default function SuppliersPage() {
       <main className="mx-auto max-w-6xl px-4 py-10">
         <div className="mb-6 flex flex-wrap justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Suppliers</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{t("sup.title")}</h1>
             <p className="text-slate-600">
-              සැපයුම්කරුවන් — you owe{" "}
+              {t("sup.you_owe")}{" "}
               <strong>{formatLkr(totalPayable)}</strong>
             </p>
           </div>
@@ -134,7 +136,7 @@ export default function SuppliersPage() {
             disabled={data.suppliers.length === 0 || data.products.length === 0}
             className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white disabled:opacity-40"
           >
-            + Record purchase (GRN)
+            {t("sup.record_purchase")}
           </button>
         </div>
 
@@ -159,24 +161,24 @@ export default function SuppliersPage() {
           className="mb-8 rounded-xl border bg-white p-5"
         >
           <h2 className="font-semibold">
-            {editing ? "Edit supplier" : "Add supplier"}
+            {editing ? t("sup.edit") : t("sup.add")}
           </h2>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
             <input
               required
-              placeholder="Supplier name *"
+              placeholder={t("sup.name")}
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="rounded-lg border px-3 py-2 text-sm"
             />
             <input
-              placeholder="Phone"
+              placeholder={t("common.phone")}
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className="rounded-lg border px-3 py-2 text-sm"
             />
             <input
-              placeholder="Address"
+              placeholder={t("common.address")}
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               className="rounded-lg border px-3 py-2 text-sm"
@@ -187,7 +189,7 @@ export default function SuppliersPage() {
               type="submit"
               className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
             >
-              {editing ? "Update" : "Add supplier"}
+              {editing ? t("common.update") : t("sup.add")}
             </button>
             {editing && (
               <button
@@ -195,7 +197,7 @@ export default function SuppliersPage() {
                 onClick={resetSupplierForm}
                 className="rounded-lg border px-4 py-2 text-sm"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             )}
           </div>
@@ -203,17 +205,15 @@ export default function SuppliersPage() {
 
         {showPurchase && (
           <div className="mb-8 rounded-xl border border-teal-200 bg-white p-5">
-            <h2 className="font-semibold">Record purchase (GRN)</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Stock comes in · updates buy price · credit adds to payable
-            </p>
+            <h2 className="font-semibold">{t("sup.purchase_grn")}</h2>
+            <p className="mt-1 text-sm text-slate-500">{t("sup.grn_hint")}</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <select
                 value={purchaseSupplierId}
                 onChange={(e) => setPurchaseSupplierId(e.target.value)}
                 className="rounded-lg border px-3 py-2 text-sm"
               >
-                <option value="">Select supplier</option>
+                <option value="">{t("sup.select")}</option>
                 {data.suppliers.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -227,17 +227,17 @@ export default function SuppliersPage() {
                 }
                 className="rounded-lg border px-3 py-2 text-sm"
               >
-                <option value="credit">Credit (ණය — pay later)</option>
-                <option value="cash">Cash paid</option>
-                <option value="bank_transfer">Bank transfer</option>
-                <option value="cheque">Cheque paid</option>
+                <option value="credit">{t("sup.credit_later")}</option>
+                <option value="cash">{t("sup.cash_paid")}</option>
+                <option value="bank_transfer">{t("pay.bank")}</option>
+                <option value="cheque">{t("sup.cheque_paid")}</option>
               </select>
             </div>
 
             {purchasePayment === "cheque" && (
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 <input
-                  placeholder="Cheque no. *"
+                  placeholder={t("sales.cheque_no")}
                   value={chequeNo}
                   onChange={(e) => setChequeNo(e.target.value)}
                   className="rounded-lg border px-3 py-2 text-sm"
@@ -276,7 +276,7 @@ export default function SuppliersPage() {
                       <input
                         type="number"
                         min={0}
-                        placeholder="Qty"
+                        placeholder={t("common.qty")}
                         value={line.qty || ""}
                         onChange={(e) =>
                           setLine(p.id, Number(e.target.value), line.unitCost)
@@ -286,7 +286,7 @@ export default function SuppliersPage() {
                       <input
                         type="number"
                         min={0}
-                        placeholder="Cost"
+                        placeholder={t("sup.unit_cost")}
                         value={line.unitCost || ""}
                         onChange={(e) =>
                           setLine(p.id, line.qty, Number(e.target.value))
@@ -299,19 +299,19 @@ export default function SuppliersPage() {
               })}
             </div>
 
-            <p className="mt-4 font-semibold">Total: {formatLkr(purchaseTotal)}</p>
+            <p className="mt-4 font-semibold">{t("common.total")}: {formatLkr(purchaseTotal)}</p>
             <div className="mt-3 flex gap-2">
               <button
                 onClick={handlePurchase}
                 className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
               >
-                Save purchase
+                {t("common.save")}
               </button>
               <button
                 onClick={() => setShowPurchase(false)}
                 className="rounded-lg border px-4 py-2 text-sm"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -319,18 +319,17 @@ export default function SuppliersPage() {
 
         {data.suppliers.length === 0 ? (
           <div className="rounded-xl border border-dashed bg-white p-10 text-center text-slate-500">
-            Add suppliers — e.g. Gree distributor, local wholesaler, Panchikawatte
-            parts dealer.
+            {t("sup.no_suppliers")}
           </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border bg-white">
             <table className="w-full text-left text-sm">
               <thead className="border-b bg-slate-50 text-slate-600">
                 <tr>
-                  <th className="px-4 py-3">Supplier</th>
-                  <th className="px-4 py-3">Phone</th>
-                  <th className="px-4 py-3">You owe</th>
-                  <th className="px-4 py-3">Actions</th>
+                  <th className="px-4 py-3">{t("common.supplier")}</th>
+                  <th className="px-4 py-3">{t("common.phone")}</th>
+                  <th className="px-4 py-3">{t("sup.you_owe_col")}</th>
+                  <th className="px-4 py-3">{t("common.actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -359,7 +358,7 @@ export default function SuppliersPage() {
                             }}
                             className="text-teal-700 hover:underline"
                           >
-                            Pay supplier
+                            {t("sup.pay_supplier")}
                           </button>
                         )}
                         <button
@@ -371,15 +370,16 @@ export default function SuppliersPage() {
                           }}
                           className="text-teal-700 hover:underline"
                         >
-                          Edit
+                          {t("common.edit")}
                         </button>
                         <button
                           onClick={() => {
-                            if (confirm(`Delete ${s.name}?`)) deleteSupplier(s.id);
+                            if (confirm(`${t("common.confirm_delete")} ${s.name}?`))
+                              deleteSupplier(s.id);
                           }}
                           className="text-red-600 hover:underline"
                         >
-                          Delete
+                          {t("common.delete")}
                         </button>
                       </div>
                     </td>
@@ -392,16 +392,16 @@ export default function SuppliersPage() {
 
         {data.purchases.length > 0 && (
           <section className="mt-10">
-            <h2 className="font-semibold">Recent purchases (GRN)</h2>
+            <h2 className="font-semibold">{t("sup.recent_grn")}</h2>
             <div className="mt-3 overflow-x-auto rounded-xl border bg-white">
               <table className="w-full text-left text-sm">
                 <thead className="border-b bg-slate-50 text-slate-600">
                   <tr>
                     <th className="px-4 py-3">GRN</th>
-                    <th className="px-4 py-3">Supplier</th>
-                    <th className="px-4 py-3">Items</th>
-                    <th className="px-4 py-3">Total</th>
-                    <th className="px-4 py-3">Payment</th>
+                    <th className="px-4 py-3">{t("common.supplier")}</th>
+                    <th className="px-4 py-3">{t("common.items")}</th>
+                    <th className="px-4 py-3">{t("common.total")}</th>
+                    <th className="px-4 py-3">{t("common.payment")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -414,7 +414,7 @@ export default function SuppliersPage() {
                       </td>
                       <td className="px-4 py-3">{formatLkr(p.total)}</td>
                       <td className="px-4 py-3">
-                        {formatPaymentLabel(p.paymentMethod)}
+                        {paymentLabel(t, p.paymentMethod)}
                       </td>
                     </tr>
                   ))}
@@ -427,7 +427,7 @@ export default function SuppliersPage() {
         {paySupplierId && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-sm rounded-xl bg-white p-5">
-              <h3 className="font-semibold">Pay supplier</h3>
+              <h3 className="font-semibold">{t("sup.pay_supplier")}</h3>
               <input
                 type="number"
                 min={1}
@@ -440,26 +440,30 @@ export default function SuppliersPage() {
                 onChange={(e) => setPayMethod(e.target.value as PaymentMethod)}
                 className="mt-3 w-full rounded-lg border px-3 py-2"
               >
-                <option value="cash">Cash</option>
-                <option value="bank_transfer">Bank transfer</option>
-                <option value="cheque">Cheque</option>
+                {PAYMENT_OPTIONS.filter((m) => m !== "credit" && m !== "card").map(
+                  (m) => (
+                    <option key={m} value={m}>
+                      {paymentLabel(t, m)}
+                    </option>
+                  ),
+                )}
               </select>
               <div className="mt-4 flex gap-2">
                 <button
                   onClick={() => {
                     recordSupplierPayment(paySupplierId, payAmount, payMethod);
                     setPaySupplierId(null);
-                    setMessage("Payment recorded.");
+                    setMessage(t("sup.pay_saved"));
                   }}
                   className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
                 >
-                  Save
+                  {t("common.save")}
                 </button>
                 <button
                   onClick={() => setPaySupplierId(null)}
                   className="rounded-lg border px-4 py-2 text-sm"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </div>
             </div>

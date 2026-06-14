@@ -45,6 +45,11 @@ export function generateJobNo(count: number): string {
   return `JOB-${d}-${String(count + 1).padStart(4, "0")}`;
 }
 
-export function jobStatusLabel(status: ACJobStatus): string {
-  return AC_JOB_STATUSES.find((s) => s.value === status)?.labelEn ?? status;
+export function jobStatusLabel(
+  status: ACJobStatus,
+  locale: "si" | "en" = "si",
+): string {
+  const row = AC_JOB_STATUSES.find((s) => s.value === status);
+  if (!row) return status;
+  return locale === "si" ? row.labelSi : row.labelEn;
 }

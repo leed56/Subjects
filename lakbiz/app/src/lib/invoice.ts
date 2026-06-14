@@ -26,7 +26,20 @@ export function generateGrnNo(existingPurchaseCount: number): string {
   return `GRN-${d}-${seq}`;
 }
 
-export function formatPaymentLabel(method: Sale["paymentMethod"]): string {
+export function formatPaymentLabel(
+  method: Sale["paymentMethod"],
+  t?: (key: string) => string,
+): string {
+  if (t) {
+    const keys: Record<Sale["paymentMethod"], string> = {
+      cash: "pay.cash",
+      bank_transfer: "pay.bank",
+      card: "pay.card",
+      cheque: "pay.cheque",
+      credit: "pay.credit",
+    };
+    return t(keys[method]);
+  }
   const labels: Record<Sale["paymentMethod"], string> = {
     cash: "Cash / මුදල්",
     bank_transfer: "Bank Transfer",
@@ -40,6 +53,7 @@ export function formatPaymentLabel(method: Sale["paymentMethod"]): string {
 export function buildInvoiceText(
   sale: Sale,
   business: BusinessInfo,
+  t?: (key: string) => string,
 ): string {
   const lines = sale.lines
     .map(
@@ -60,9 +74,9 @@ export function buildInvoiceText(
     lines,
     "",
     `*Total: ${formatLkr(sale.total)}*`,
-    `Payment: ${formatPaymentLabel(sale.paymentMethod)}`,
+    `Payment: ${formatPaymentLabel(sale.paymentMethod, t)}`,
     "",
-    "Thank you! / ස්තූතියි",
+    t ? t("bills.thank_you") : "Thank you! / ස්තූතියි",
   ]
     .filter(Boolean)
     .join("\n");

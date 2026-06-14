@@ -9,6 +9,7 @@ import {
   jobStatusLabel,
 } from "@/lib/ac-jobs";
 import { formatLkr } from "@/lib/format";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { ACJob } from "@/lib/store/types";
 import type { ACJobStatus } from "@/lib/ac-jobs";
@@ -24,6 +25,7 @@ const UNIT_TYPES = [
 
 export default function JobsPage() {
   const { data, ready, addACJob, updateACJob, deleteACJob } = useAppStore();
+  const { t, locale } = useLocale();
   const [showForm, setShowForm] = useState(true);
   const [editing, setEditing] = useState<ACJob | null>(null);
   const [filter, setFilter] = useState<ACJobStatus | "all">("all");
@@ -49,7 +51,7 @@ export default function JobsPage() {
     return (
       <div className="min-h-full bg-slate-50">
         <SiteHeader />
-        <main className="mx-auto max-w-6xl px-4 py-10">Loading...</main>
+        <main className="mx-auto max-w-6xl px-4 py-10">{t("common.loading")}</main>
       </div>
     );
   }
@@ -132,10 +134,9 @@ export default function JobsPage() {
       <main className="mx-auto max-w-6xl px-4 py-10">
         <div className="mb-6 flex flex-wrap justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">AC Jobs</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{t("jobs.title")}</h1>
             <p className="text-slate-600">
-              වායු සමන අනුස්ථාපන — {pending.length} pending · quote → install →
-              service
+              {t("jobs.subtitle")} — {pending.length} {t("jobs.pending")}
             </p>
           </div>
           <button
@@ -145,7 +146,7 @@ export default function JobsPage() {
             }}
             className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
           >
-            {showForm ? "Hide form" : "+ New job"}
+            {showForm ? t("common.hide_form") : t("jobs.new")}
           </button>
         </div>
 
@@ -160,16 +161,16 @@ export default function JobsPage() {
             onSubmit={(e) => {
               e.preventDefault();
               if (!address.trim()) {
-                setMessage("Site address is required.");
+                setMessage(t("jobs.address_required"));
                 return;
               }
               const input = buildInput();
               if (editing) {
                 updateACJob(editing.id, input);
-                setMessage("Job updated.");
+                setMessage(t("jobs.updated"));
               } else {
                 addACJob(input);
-                setMessage("Job created.");
+                setMessage(t("jobs.created"));
                 resetForm();
                 setShowForm(false);
               }
@@ -178,7 +179,7 @@ export default function JobsPage() {
             className="mb-8 rounded-xl border bg-white p-5"
           >
             <h2 className="font-semibold">
-              {editing ? `Edit ${editing.jobNo}` : "New AC installation job"}
+              {editing ? `${t("jobs.edit_job")} ${editing.jobNo}` : t("jobs.new_job")}
             </h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <select
@@ -194,7 +195,7 @@ export default function JobsPage() {
                 }}
                 className="rounded-lg border px-3 py-2 text-sm"
               >
-                <option value="">Customer (optional)</option>
+                <option value="">{t("jobs.customer_opt")}</option>
                 {data.customers.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -202,20 +203,20 @@ export default function JobsPage() {
                 ))}
               </select>
               <input
-                placeholder="Customer name *"
+                placeholder={t("jobs.customer_name")}
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
-                placeholder="Phone"
+                placeholder={t("common.phone")}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
                 required
-                placeholder="Site address *"
+                placeholder={t("jobs.site_address")}
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 className="sm:col-span-2 rounded-lg border px-3 py-2 text-sm"
@@ -252,28 +253,28 @@ export default function JobsPage() {
               <input
                 type="number"
                 min={1}
-                placeholder="Units"
+                placeholder={t("jobs.units")}
                 value={unitCount}
                 onChange={(e) => setUnitCount(Number(e.target.value))}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
                 type="number"
-                placeholder="Quote (LKR)"
+                placeholder={t("jobs.quote")}
                 value={quotedAmount || ""}
                 onChange={(e) => setQuotedAmount(Number(e.target.value))}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
                 type="number"
-                placeholder="Deposit (LKR)"
+                placeholder={t("jobs.deposit")}
                 value={depositAmount || ""}
                 onChange={(e) => setDepositAmount(Number(e.target.value))}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
                 type="number"
-                placeholder="Pipe meters (est.)"
+                placeholder={t("jobs.pipe_est")}
                 value={pipeMeters || ""}
                 onChange={(e) => setPipeMeters(Number(e.target.value))}
                 className="rounded-lg border px-3 py-2 text-sm"
@@ -285,7 +286,7 @@ export default function JobsPage() {
               >
                 {AC_JOB_STATUSES.map((s) => (
                   <option key={s.value} value={s.value}>
-                    {s.labelEn}
+                    {locale === "si" ? s.labelSi : s.labelEn}
                   </option>
                 ))}
               </select>
@@ -297,7 +298,7 @@ export default function JobsPage() {
                 placeholder="Install date"
               />
               <input
-                placeholder="Job notes"
+                placeholder={t("jobs.job_notes")}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 className="sm:col-span-2 rounded-lg border px-3 py-2 text-sm"
@@ -308,7 +309,7 @@ export default function JobsPage() {
                 type="submit"
                 className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
               >
-                {editing ? "Update job" : "Create job"}
+                {editing ? t("jobs.update_job") : t("jobs.create")}
               </button>
               {editing && (
                 <button
@@ -316,7 +317,7 @@ export default function JobsPage() {
                   onClick={resetForm}
                   className="rounded-lg border px-4 py-2 text-sm"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               )}
             </div>
@@ -328,7 +329,7 @@ export default function JobsPage() {
             onClick={() => setFilter("all")}
             className={`rounded-full px-3 py-1 text-xs ${filter === "all" ? "bg-teal-700 text-white" : "bg-white border"}`}
           >
-            All ({data.acJobs.length})
+            {t("jobs.all")} ({data.acJobs.length})
           </button>
           {AC_JOB_STATUSES.slice(0, 4).map((s) => (
             <button
@@ -336,14 +337,14 @@ export default function JobsPage() {
               onClick={() => setFilter(s.value)}
               className={`rounded-full px-3 py-1 text-xs ${filter === s.value ? "bg-teal-700 text-white" : "bg-white border"}`}
             >
-              {s.labelEn}
+              {locale === "si" ? s.labelSi : s.labelEn}
             </button>
           ))}
         </div>
 
         {jobs.length === 0 ? (
           <div className="rounded-xl border border-dashed bg-white p-10 text-center text-slate-500">
-            No AC jobs yet. Add site visit / installation above.
+            {t("jobs.no_jobs")}. {t("jobs.no_jobs_hint")}
           </div>
         ) : (
           <div className="space-y-3">
@@ -370,17 +371,17 @@ export default function JobsPage() {
                       </p>
                     </div>
                     <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium">
-                      {jobStatusLabel(job.status)}
+                      {jobStatusLabel(job.status, locale)}
                     </span>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-600">
-                    <span>Quote: {formatLkr(job.quotedAmount)}</span>
-                    <span>Deposit: {formatLkr(job.depositAmount)}</span>
+                    <span>{t("jobs.quote_label")}: {formatLkr(job.quotedAmount)}</span>
+                    <span>{t("jobs.deposit_label")}: {formatLkr(job.depositAmount)}</span>
                     <span className="font-medium text-slate-800">
-                      Balance: {formatLkr(balance)}
+                      {t("jobs.balance_label")}: {formatLkr(balance)}
                     </span>
                     {job.scheduledDate && (
-                      <span>Install: {job.scheduledDate}</span>
+                      <span>{t("jobs.install_label")}: {job.scheduledDate}</span>
                     )}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -388,7 +389,7 @@ export default function JobsPage() {
                       onClick={() => loadJob(job)}
                       className="text-sm text-teal-700 hover:underline"
                     >
-                      Edit
+                      {t("common.edit")}
                     </button>
                     {job.status === "deposit_received" && (
                       <button
@@ -397,7 +398,7 @@ export default function JobsPage() {
                         }
                         className="text-sm text-teal-700 hover:underline"
                       >
-                        → Schedule install
+                        {t("jobs.schedule")}
                       </button>
                     )}
                     {job.status === "scheduled" && (
@@ -412,7 +413,7 @@ export default function JobsPage() {
                         }
                         className="text-sm text-teal-700 hover:underline"
                       >
-                        → Mark installed
+                        {t("jobs.mark_installed")}
                       </button>
                     )}
                     {job.status === "installed" && (
@@ -422,18 +423,18 @@ export default function JobsPage() {
                         }
                         className="text-sm text-teal-700 hover:underline"
                       >
-                        → Complete
+                        {t("jobs.complete")}
                       </button>
                     )}
                     <button
                       onClick={() => {
-                        if (confirm(`Delete job ${job.jobNo}?`)) {
+                        if (confirm(`${t("jobs.delete_confirm")} ${job.jobNo}?`)) {
                           deleteACJob(job.id);
                         }
                       }}
                       className="text-sm text-red-600 hover:underline"
                     >
-                      Delete
+                      {t("common.delete")}
                     </button>
                   </div>
                 </div>

@@ -4,18 +4,20 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { InvoiceView } from "@/components/invoice-view";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 
 export default function BillDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const { data, ready } = useAppStore();
+  const { t } = useLocale();
 
   if (!ready || !data) {
     return (
       <div className="min-h-full bg-slate-50">
         <SiteHeader />
-        <main className="mx-auto max-w-6xl px-4 py-10">Loading...</main>
+        <main className="mx-auto max-w-6xl px-4 py-10">{t("common.loading")}</main>
       </div>
     );
   }
@@ -26,9 +28,9 @@ export default function BillDetailPage() {
       <div className="min-h-full bg-slate-50">
         <SiteHeader />
         <main className="mx-auto max-w-6xl px-4 py-10">
-          <p className="text-slate-600">Bill not found.</p>
+          <p className="text-slate-600">{t("bills.not_found")}</p>
           <Link href="/bills" className="mt-2 text-teal-700 underline">
-            All bills
+            {t("bills.all_bills")}
           </Link>
         </main>
       </div>
@@ -47,7 +49,7 @@ export default function BillDetailPage() {
           href="/bills"
           className="no-print text-sm text-teal-700 hover:underline"
         >
-          ← All bills
+          ← {t("bills.all_bills")}
         </Link>
         <div className="mt-4">
           <InvoiceView

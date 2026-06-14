@@ -4,15 +4,9 @@ import { useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { ChequeRecord, ChequeStatus } from "@/lib/store/types";
-
-const statusLabels: Record<ChequeStatus, string> = {
-  pending: "Pending",
-  deposited: "Deposited",
-  cleared: "Cleared",
-  bounced: "Bounced",
-};
 
 export default function BankingPage() {
   const {
@@ -23,6 +17,14 @@ export default function BankingPage() {
     addCheque,
     updateChequeStatus,
   } = useAppStore();
+  const { t } = useLocale();
+
+  const statusLabels: Record<ChequeStatus, string> = {
+    pending: t("bank.status.pending"),
+    deposited: t("bank.status.deposited"),
+    cleared: t("bank.status.cleared"),
+    bounced: t("bank.status.bounced"),
+  };
 
   const [showBankForm, setShowBankForm] = useState(false);
   const [bankName, setBankName] = useState(LK_BANKS[0]);
@@ -47,7 +49,7 @@ export default function BankingPage() {
     return (
       <div className="min-h-full bg-slate-50">
         <SiteHeader />
-        <main className="mx-auto max-w-6xl px-4 py-10">Loading...</main>
+        <main className="mx-auto max-w-6xl px-4 py-10">{t("common.loading")}</main>
       </div>
     );
   }
@@ -61,9 +63,9 @@ export default function BankingPage() {
       <main className="mx-auto max-w-6xl px-4 py-10">
         <div className="mb-6 flex flex-wrap justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Banking</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{t("bank.title")}</h1>
             <p className="text-slate-600">
-              බැංකු සහ චෙක් — total balance{" "}
+              {t("bank.subtitle")} — {t("bank.total_balance")}{" "}
               <strong>{formatLkr(totalBank)}</strong>
             </p>
           </div>
@@ -72,13 +74,13 @@ export default function BankingPage() {
               onClick={() => setShowBankForm((v) => !v)}
               className="rounded-lg border border-teal-700 px-3 py-2 text-sm text-teal-700"
             >
-              + Bank account
+              {t("bank.add_account")}
             </button>
             <button
               onClick={() => setShowChequeForm((v) => !v)}
               className="rounded-lg bg-teal-700 px-3 py-2 text-sm text-white"
             >
-              + Cheque
+              {t("bank.add_cheque")}
             </button>
           </div>
         </div>
@@ -101,7 +103,7 @@ export default function BankingPage() {
             }}
             className="mb-6 rounded-xl border bg-white p-5"
           >
-            <h2 className="font-semibold">Add bank account</h2>
+            <h2 className="font-semibold">{t("bank.add_account_title")}</h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <select
                 value={bankName}
@@ -113,28 +115,28 @@ export default function BankingPage() {
                 ))}
               </select>
               <input
-                placeholder="Branch"
+                placeholder={t("bank.branch")}
                 value={branch}
                 onChange={(e) => setBranch(e.target.value)}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
                 required
-                placeholder="Account name *"
+                placeholder={t("bank.account_name")}
                 value={accountName}
                 onChange={(e) => setAccountName(e.target.value)}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
                 required
-                placeholder="Account number *"
+                placeholder={t("bank.account_no")}
                 value={accountNumber}
                 onChange={(e) => setAccountNumber(e.target.value)}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
                 type="number"
-                placeholder="Opening balance (LKR)"
+                placeholder={t("bank.opening_balance")}
                 value={balance || ""}
                 onChange={(e) => setBalance(Number(e.target.value))}
                 className="rounded-lg border px-3 py-2 text-sm"
@@ -144,7 +146,7 @@ export default function BankingPage() {
               type="submit"
               className="mt-4 rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
             >
-              Save account
+              {t("bank.save_account")}
             </button>
           </form>
         )}
@@ -169,7 +171,7 @@ export default function BankingPage() {
             }}
             className="mb-6 rounded-xl border bg-white p-5"
           >
-            <h2 className="font-semibold">Add cheque</h2>
+            <h2 className="font-semibold">{t("bank.add_cheque_title")}</h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <select
                 value={chDirection}
@@ -178,12 +180,12 @@ export default function BankingPage() {
                 }
                 className="rounded-lg border px-3 py-2 text-sm"
               >
-                <option value="received">Received from customer</option>
-                <option value="paid">Paid to supplier</option>
+                <option value="received">{t("bank.received")}</option>
+                <option value="paid">{t("bank.paid")}</option>
               </select>
               <input
                 required
-                placeholder="Cheque number *"
+                placeholder={t("bank.cheque_no")}
                 value={chNo}
                 onChange={(e) => setChNo(e.target.value)}
                 className="rounded-lg border px-3 py-2 text-sm"
@@ -199,7 +201,7 @@ export default function BankingPage() {
               </select>
               <input
                 required
-                placeholder="Party name *"
+                placeholder={t("bank.party_name")}
                 value={chParty}
                 onChange={(e) => setChParty(e.target.value)}
                 className="rounded-lg border px-3 py-2 text-sm"
@@ -207,7 +209,7 @@ export default function BankingPage() {
               <input
                 type="number"
                 required
-                placeholder="Amount (LKR) *"
+                placeholder={t("bank.amount")}
                 value={chAmount || ""}
                 onChange={(e) => setChAmount(Number(e.target.value))}
                 className="rounded-lg border px-3 py-2 text-sm"
@@ -225,14 +227,14 @@ export default function BankingPage() {
                   checked={chPostDated}
                   onChange={(e) => setChPostDated(e.target.checked)}
                 />
-                Post-dated cheque (PDC)
+                {t("bank.pdc")}
               </label>
             </div>
             <button
               type="submit"
               className="mt-4 rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
             >
-              Save cheque
+              {t("bank.save_cheque")}
             </button>
           </form>
         )}
@@ -240,7 +242,7 @@ export default function BankingPage() {
         <div className="grid gap-4 md:grid-cols-3">
           {data.bankAccounts.length === 0 ? (
             <p className="text-sm text-slate-500 md:col-span-3">
-              No bank accounts — add one above.
+              {t("bank.no_accounts")}
             </p>
           ) : (
             data.bankAccounts.map((acc) => (
@@ -253,11 +255,11 @@ export default function BankingPage() {
                 <p className="mt-1 text-xl font-bold">{formatLkr(acc.balance)}</p>
                 <button
                   onClick={() => {
-                    if (confirm("Delete this account?")) deleteBankAccount(acc.id);
+                    if (confirm(t("bank.delete_account"))) deleteBankAccount(acc.id);
                   }}
                   className="mt-2 text-xs text-red-600 hover:underline"
                 >
-                  Delete
+                  {t("common.delete")}
                 </button>
               </div>
             ))
@@ -266,24 +268,22 @@ export default function BankingPage() {
 
         <section className="mt-10">
           <h2 className="font-semibold text-slate-900">
-            Cheque register ({pending.length} pending)
+            {t("bank.cheque_register")} ({pending.length} {t("bank.pending")})
           </h2>
           {data.cheques.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">
-              No cheques yet — add manually or use Cheque payment on Sales.
-            </p>
+            <p className="mt-3 text-sm text-slate-500">{t("bank.cheque_hint")}</p>
           ) : (
             <div className="mt-4 overflow-x-auto rounded-xl border bg-white">
               <table className="w-full text-left text-sm">
                 <thead className="border-b bg-slate-50 text-slate-600">
                   <tr>
                     <th className="px-4 py-3">#</th>
-                    <th className="px-4 py-3">Party</th>
-                    <th className="px-4 py-3">In/Out</th>
-                    <th className="px-4 py-3">Amount</th>
-                    <th className="px-4 py-3">Date</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Action</th>
+                    <th className="px-4 py-3">{t("bank.party")}</th>
+                    <th className="px-4 py-3">{t("bank.in_out")}</th>
+                    <th className="px-4 py-3">{t("bank.amount")}</th>
+                    <th className="px-4 py-3">{t("common.date")}</th>
+                    <th className="px-4 py-3">{t("bank.status_col")}</th>
+                    <th className="px-4 py-3">{t("common.actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -292,7 +292,7 @@ export default function BankingPage() {
                       <td className="px-4 py-3 font-mono">{c.chequeNo}</td>
                       <td className="px-4 py-3">{c.partyName}</td>
                       <td className="px-4 py-3">
-                        {c.direction === "received" ? "In" : "Out"}
+                        {c.direction === "received" ? t("bank.in") : t("bank.out")}
                         {c.postDated && (
                           <span className="ml-1 text-xs text-amber-600">PDC</span>
                         )}
@@ -310,7 +310,7 @@ export default function BankingPage() {
                             onClick={() => setStatusCheque(c)}
                             className="text-teal-700 hover:underline"
                           >
-                            Update
+                            {t("common.update")}
                           </button>
                         )}
                       </td>
@@ -325,7 +325,7 @@ export default function BankingPage() {
         {statusCheque && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-sm rounded-xl bg-white p-5">
-              <h3 className="font-semibold">Update cheque status</h3>
+              <h3 className="font-semibold">{t("bank.update_status")}</h3>
               <p className="mt-1 text-sm text-slate-500">
                 {statusCheque.partyName} — {formatLkr(statusCheque.amount)}
               </p>
@@ -335,7 +335,7 @@ export default function BankingPage() {
                 onChange={(e) => {
                   const status = e.target.value as ChequeStatus;
                   if (status === "cleared" && data.bankAccounts.length === 0) {
-                    alert("Add a bank account first to mark cleared.");
+                    alert(t("bank.need_account"));
                     return;
                   }
                   if (status === "cleared") {
@@ -344,10 +344,10 @@ export default function BankingPage() {
                 }}
                 id="cheque-status-select"
               >
-                <option value="pending">Pending</option>
-                <option value="deposited">Deposited</option>
-                <option value="cleared">Cleared</option>
-                <option value="bounced">Bounced</option>
+                <option value="pending">{t("bank.status.pending")}</option>
+                <option value="deposited">{t("bank.status.deposited")}</option>
+                <option value="cleared">{t("bank.status.cleared")}</option>
+                <option value="bounced">{t("bank.status.bounced")}</option>
               </select>
               {data.bankAccounts.length > 0 && (
                 <select
@@ -377,13 +377,13 @@ export default function BankingPage() {
                   }}
                   className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
                 >
-                  Save
+                  {t("common.save")}
                 </button>
                 <button
                   onClick={() => setStatusCheque(null)}
                   className="rounded-lg border px-4 py-2 text-sm"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </div>
             </div>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Product, SectorId } from "@/lib/types";
 import { sectors } from "@/lib/sectors";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import type { ProductInput } from "@/lib/store/types";
 
 const categories = [
@@ -39,8 +40,9 @@ export function ProductForm({
   initial,
   onSubmit,
   onCancel,
-  submitLabel = "Save item",
+  submitLabel,
 }: ProductFormProps) {
+  const { t } = useLocale();
   const [form, setForm] = useState<ProductInput>(() =>
     initial
       ? {
@@ -67,27 +69,28 @@ export function ProductForm({
     if (!initial) setForm(emptyForm());
   };
 
+  const saveLabel = submitLabel ?? t("stock.save_item");
+
   return (
     <form
       onSubmit={handleSubmit}
       className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
     >
       <h2 className="mb-4 font-semibold text-slate-900">
-        {initial ? "Edit item" : "Add new item"}
+        {initial ? t("stock.edit_item") : t("stock.add_new")}
       </h2>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block sm:col-span-2">
-          <span className="text-sm text-slate-600">Item name *</span>
+          <span className="text-sm text-slate-600">{t("stock.item_name")}</span>
           <input
             required
             value={form.name}
             onChange={(e) => set("name", e.target.value)}
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            placeholder="e.g. Daikin 18000 BTU, Rice 5kg"
           />
         </label>
         <label className="block">
-          <span className="text-sm text-slate-600">SKU / Code</span>
+          <span className="text-sm text-slate-600">{t("stock.sku")}</span>
           <input
             value={form.sku}
             onChange={(e) => set("sku", e.target.value)}
@@ -95,7 +98,7 @@ export function ProductForm({
           />
         </label>
         <label className="block">
-          <span className="text-sm text-slate-600">Category</span>
+          <span className="text-sm text-slate-600">{t("stock.category")}</span>
           <select
             value={form.category}
             onChange={(e) => set("category", e.target.value)}
@@ -107,7 +110,7 @@ export function ProductForm({
           </select>
         </label>
         <label className="block">
-          <span className="text-sm text-slate-600">Sector template</span>
+          <span className="text-sm text-slate-600">{t("stock.sector")}</span>
           <select
             value={form.sectorId}
             onChange={(e) => set("sectorId", e.target.value as SectorId)}
@@ -115,13 +118,13 @@ export function ProductForm({
           >
             {sectors.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.nameEn}
+                {s.nameSi} / {s.nameEn}
               </option>
             ))}
           </select>
         </label>
         <label className="block">
-          <span className="text-sm text-slate-600">Unit</span>
+          <span className="text-sm text-slate-600">{t("stock.unit")}</span>
           <select
             value={form.unit}
             onChange={(e) => set("unit", e.target.value)}
@@ -133,7 +136,7 @@ export function ProductForm({
           </select>
         </label>
         <label className="block">
-          <span className="text-sm text-slate-600">Buy price (LKR)</span>
+          <span className="text-sm text-slate-600">{t("stock.buy_price")}</span>
           <input
             type="number"
             min={0}
@@ -143,7 +146,7 @@ export function ProductForm({
           />
         </label>
         <label className="block">
-          <span className="text-sm text-slate-600">Sell price (LKR)</span>
+          <span className="text-sm text-slate-600">{t("stock.sell_price")}</span>
           <input
             type="number"
             min={0}
@@ -153,7 +156,7 @@ export function ProductForm({
           />
         </label>
         <label className="block">
-          <span className="text-sm text-slate-600">Current stock qty</span>
+          <span className="text-sm text-slate-600">{t("stock.current_qty")}</span>
           <input
             type="number"
             min={0}
@@ -163,7 +166,7 @@ export function ProductForm({
           />
         </label>
         <label className="block">
-          <span className="text-sm text-slate-600">Low stock alert at</span>
+          <span className="text-sm text-slate-600">{t("stock.low_alert_at")}</span>
           <input
             type="number"
             min={0}
@@ -178,7 +181,7 @@ export function ProductForm({
           type="submit"
           className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
         >
-          {submitLabel}
+          {saveLabel}
         </button>
         {onCancel && (
           <button
@@ -186,7 +189,7 @@ export function ProductForm({
             onClick={onCancel}
             className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
         )}
       </div>

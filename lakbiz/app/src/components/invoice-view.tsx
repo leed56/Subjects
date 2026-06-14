@@ -2,12 +2,10 @@
 
 import type { Sale } from "@/lib/store/types";
 import type { BusinessInfo } from "@/lib/invoice";
-import {
-  buildInvoiceText,
-  formatPaymentLabel,
-  whatsappShareUrl,
-} from "@/lib/invoice";
+import { buildInvoiceText, whatsappShareUrl } from "@/lib/invoice";
 import { formatLkr } from "@/lib/format";
+import { useLocale } from "@/lib/i18n/locale-provider";
+import { paymentLabel } from "@/lib/i18n/payment";
 
 interface InvoiceViewProps {
   sale: Sale;
@@ -22,8 +20,9 @@ export function InvoiceView({
   customerPhone,
   showActions = true,
 }: InvoiceViewProps) {
+  const { t } = useLocale();
   const billNo = sale.billNo ?? sale.id.slice(0, 8).toUpperCase();
-  const invoiceText = buildInvoiceText(sale, business);
+  const invoiceText = buildInvoiceText(sale, business, t);
   const waUrl = whatsappShareUrl(invoiceText, customerPhone ?? business.phone);
 
   return (
@@ -34,7 +33,7 @@ export function InvoiceView({
             onClick={() => window.print()}
             className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
           >
-            Print bill
+            {t("bills.print")}
           </button>
           <a
             href={waUrl}
@@ -42,7 +41,7 @@ export function InvoiceView({
             rel="noopener noreferrer"
             className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
           >
-            Share on WhatsApp
+            {t("bills.whatsapp")}
           </a>
         </div>
       )}
@@ -57,7 +56,9 @@ export function InvoiceView({
             <p className="mt-1 text-xs text-slate-500">{business.address}</p>
           )}
           {business.phone && (
-            <p className="text-xs text-slate-500">Tel: {business.phone}</p>
+            <p className="text-xs text-slate-500">
+              {t("bills.tel")}: {business.phone}
+            </p>
           )}
           {business.tin && (
             <p className="text-xs text-slate-500">TIN: {business.tin}</p>
@@ -66,33 +67,33 @@ export function InvoiceView({
 
         <div className="mt-4 space-y-1 text-sm text-slate-600">
           <div className="flex justify-between">
-            <span>Bill no.</span>
+            <span>{t("inv.bill_no")}</span>
             <span className="font-mono font-medium text-slate-900">{billNo}</span>
           </div>
           <div className="flex justify-between">
-            <span>Date</span>
+            <span>{t("common.date")}</span>
             <span>{new Date(sale.date).toLocaleString("en-LK")}</span>
           </div>
           {sale.customerName && (
             <div className="flex justify-between">
-              <span>Customer</span>
+              <span>{t("common.customer")}</span>
               <span className="font-medium text-slate-900">
                 {sale.customerName}
               </span>
             </div>
           )}
           <div className="flex justify-between">
-            <span>Payment</span>
-            <span>{formatPaymentLabel(sale.paymentMethod)}</span>
+            <span>{t("common.payment")}</span>
+            <span>{paymentLabel(t, sale.paymentMethod)}</span>
           </div>
         </div>
 
         <table className="mt-4 w-full text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-left text-slate-500">
-              <th className="py-2">Item</th>
-              <th className="py-2 text-right">Qty</th>
-              <th className="py-2 text-right">Amount</th>
+              <th className="py-2">{t("bills.item")}</th>
+              <th className="py-2 text-right">{t("common.qty")}</th>
+              <th className="py-2 text-right">{t("bills.amount")}</th>
             </tr>
           </thead>
           <tbody>
@@ -110,20 +111,20 @@ export function InvoiceView({
 
         <div className="mt-4 border-t border-dashed border-slate-300 pt-3">
           <div className="flex justify-between text-lg font-bold text-slate-900">
-            <span>Total</span>
+            <span>{t("inv.total")}</span>
             <span>{formatLkr(sale.total)}</span>
           </div>
           {sale.paymentMethod === "credit" && (
             <p className="mt-2 text-center text-xs text-amber-700">
-              ණය බිල / Credit — payment due
+              {t("bills.credit_note")}
             </p>
           )}
         </div>
 
         <footer className="mt-6 text-center text-xs text-slate-400">
-          Thank you · ස්තූතියි
+          {t("bills.thank_you")}
           <br />
-          LakBiz · Sri Lanka
+          {t("inv.footer")}
         </footer>
       </article>
     </div>

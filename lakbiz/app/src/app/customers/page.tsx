@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { formatLkr } from "@/lib/format";
+import { useLocale } from "@/lib/i18n/locale-provider";
+import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { Customer } from "@/lib/store/types";
 import type { PaymentMethod } from "@/lib/types";
@@ -16,6 +18,7 @@ export default function CustomersPage() {
     deleteCustomer,
     recordCustomerPayment,
   } = useAppStore();
+  const { t } = useLocale();
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -30,7 +33,7 @@ export default function CustomersPage() {
     return (
       <div className="min-h-full bg-slate-50">
         <SiteHeader />
-        <main className="mx-auto max-w-6xl px-4 py-10">Loading...</main>
+        <main className="mx-auto max-w-6xl px-4 py-10">{t("common.loading")}</main>
       </div>
     );
   }
@@ -48,11 +51,11 @@ export default function CustomersPage() {
     if (editing) {
       updateCustomer(editing.id, { name, phone, address });
       resetForm();
-      setMessage("Customer updated.");
+      setMessage(t("cust.updated"));
     } else {
       addCustomer({ name, phone, address });
       resetForm();
-      setMessage("Customer added.");
+      setMessage(t("cust.added"));
     }
     setTimeout(() => setMessage(""), 2500);
   };
@@ -64,9 +67,9 @@ export default function CustomersPage() {
       <SiteHeader />
       <main className="mx-auto max-w-6xl px-4 py-10">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900">Customers</h1>
+          <h1 className="text-2xl font-bold text-slate-900">{t("cust.title")}</h1>
           <p className="text-slate-600">
-            ගනුදෙනුකරුවන් — credit (ණය) balance · total owed{" "}
+            {t("cust.subtitle")} · {t("cust.total_owed")}{" "}
             <strong>{formatLkr(totalCredit)}</strong>
           </p>
         </div>
@@ -82,24 +85,24 @@ export default function CustomersPage() {
           className="mb-8 rounded-xl border border-slate-200 bg-white p-5"
         >
           <h2 className="font-semibold text-slate-900">
-            {editing ? "Edit customer" : "Add customer"}
+            {editing ? t("cust.edit") : t("cust.add")}
           </h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             <input
               required
-              placeholder="Name *"
+              placeholder={`${t("common.name")} *`}
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
             <input
-              placeholder="Phone"
+              placeholder={t("common.phone")}
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
             <input
-              placeholder="Address"
+              placeholder={t("common.address")}
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
@@ -110,7 +113,7 @@ export default function CustomersPage() {
               type="submit"
               className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
             >
-              {editing ? "Update" : "Add customer"}
+              {editing ? t("common.update") : t("cust.add")}
             </button>
             {editing && (
               <button
@@ -118,7 +121,7 @@ export default function CustomersPage() {
                 onClick={resetForm}
                 className="rounded-lg border px-4 py-2 text-sm"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             )}
           </div>
@@ -126,17 +129,17 @@ export default function CustomersPage() {
 
         {data.customers.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
-            No customers yet. Add one above, then use Credit on the Sales page.
+            {t("cust.no_customers")}. {t("cust.credit_hint")}
           </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-left text-sm">
               <thead className="border-b bg-slate-50 text-slate-600">
                 <tr>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Phone</th>
-                  <th className="px-4 py-3">Credit owed</th>
-                  <th className="px-4 py-3">Actions</th>
+                  <th className="px-4 py-3">{t("common.name")}</th>
+                  <th className="px-4 py-3">{t("common.phone")}</th>
+                  <th className="px-4 py-3">{t("cust.credit_owed")}</th>
+                  <th className="px-4 py-3">{t("common.actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -170,7 +173,7 @@ export default function CustomersPage() {
                             }}
                             className="text-teal-700 hover:underline"
                           >
-                            Record payment
+                            {t("cust.record_payment")}
                           </button>
                         )}
                         <button
@@ -182,15 +185,16 @@ export default function CustomersPage() {
                           }}
                           className="text-teal-700 hover:underline"
                         >
-                          Edit
+                          {t("common.edit")}
                         </button>
                         <button
                           onClick={() => {
-                            if (confirm(`Delete ${c.name}?`)) deleteCustomer(c.id);
+                            if (confirm(`${t("cust.delete_confirm")} ${c.name}?`))
+                              deleteCustomer(c.id);
                           }}
                           className="text-red-600 hover:underline"
                         >
-                          Delete
+                          {t("common.delete")}
                         </button>
                       </div>
                     </td>
@@ -203,11 +207,12 @@ export default function CustomersPage() {
 
         {data.customerPayments.length > 0 && (
           <section className="mt-10">
-            <h2 className="font-semibold text-slate-900">Recent payments received</h2>
+            <h2 className="font-semibold text-slate-900">{t("cust.recent_payments")}</h2>
             <ul className="mt-3 space-y-2 text-sm text-slate-600">
               {data.customerPayments.slice(0, 8).map((p) => (
                 <li key={p.id}>
-                  • {p.customerName} — {formatLkr(p.amount)} ({p.method})
+                  • {p.customerName} — {formatLkr(p.amount)} (
+                  {paymentLabel(t, p.method)})
                 </li>
               ))}
             </ul>
@@ -217,7 +222,7 @@ export default function CustomersPage() {
         {payCustomerId && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-sm rounded-xl bg-white p-5">
-              <h3 className="font-semibold">Record payment</h3>
+              <h3 className="font-semibold">{t("cust.record_payment")}</h3>
               <input
                 type="number"
                 min={1}
@@ -230,10 +235,11 @@ export default function CustomersPage() {
                 onChange={(e) => setPayMethod(e.target.value as PaymentMethod)}
                 className="mt-3 w-full rounded-lg border px-3 py-2"
               >
-                <option value="cash">Cash</option>
-                <option value="bank_transfer">Bank transfer</option>
-                <option value="cheque">Cheque</option>
-                <option value="card">Card</option>
+                {PAYMENT_OPTIONS.filter((m) => m !== "credit").map((m) => (
+                  <option key={m} value={m}>
+                    {paymentLabel(t, m)}
+                  </option>
+                ))}
               </select>
               <div className="mt-4 flex gap-2">
                 <button
@@ -244,19 +250,19 @@ export default function CustomersPage() {
                       payMethod,
                     );
                     if (ok) {
-                      setMessage("Payment recorded.");
+                      setMessage(t("cust.payment_saved"));
                       setPayCustomerId(null);
                     }
                   }}
                   className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
                 >
-                  Save
+                  {t("common.save")}
                 </button>
                 <button
                   onClick={() => setPayCustomerId(null)}
                   className="rounded-lg border px-4 py-2 text-sm"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </div>
             </div>

@@ -5,11 +5,14 @@ import { useMemo, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
+import { useLocale } from "@/lib/i18n/locale-provider";
+import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { PaymentMethod } from "@/lib/types";
 
 export default function SalesPage() {
   const { data, ready, createSale } = useAppStore();
+  const { t } = useLocale();
   const [cart, setCart] = useState<Record<string, number>>({});
   const [payment, setPayment] = useState<PaymentMethod>("cash");
   const [customerId, setCustomerId] = useState("");
@@ -39,7 +42,7 @@ export default function SalesPage() {
     return (
       <div className="min-h-full bg-slate-50">
         <SiteHeader />
-        <main className="mx-auto max-w-6xl px-4 py-10">Loading...</main>
+        <main className="mx-auto max-w-6xl px-4 py-10">{t("common.loading")}</main>
       </div>
     );
   }
@@ -50,11 +53,11 @@ export default function SalesPage() {
 
   const handleSale = () => {
     if (payment === "credit" && !customerId) {
-      setMessage("Select a customer for credit sales.");
+      setMessage(t("sales.credit_need_customer"));
       return;
     }
     if (payment === "cheque" && (!chequeNo || !chequeDate)) {
-      setMessage("Enter cheque number and date.");
+      setMessage(t("sales.cheque_need"));
       return;
     }
 
@@ -78,14 +81,14 @@ export default function SalesPage() {
       setLastBillId(saleId);
       setMessage(
         payment === "credit"
-          ? "Credit sale saved. Customer balance updated."
+          ? t("sales.credit_saved")
           : payment === "cheque"
-            ? "Sale saved. Cheque added to Banking."
-            : "Sale saved. Stock updated.",
+            ? t("sales.cheque_saved")
+            : t("sales.saved"),
       );
       setTimeout(() => setMessage(""), 6000);
     } else {
-      setMessage("Could not complete sale — check stock and required fields.");
+      setMessage(t("sales.failed"));
     }
   };
 
@@ -96,8 +99,8 @@ export default function SalesPage() {
       <SiteHeader />
       <main className="mx-auto max-w-6xl px-4 py-10">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900">New sale</h1>
-          <p className="text-slate-600">විකුණුම — bill customer, stock goes down</p>
+          <h1 className="text-2xl font-bold text-slate-900">{t("sales.title")}</h1>
+          <p className="text-slate-600">{t("sales.subtitle")}</p>
         </div>
 
         {message && (
@@ -109,7 +112,7 @@ export default function SalesPage() {
                   href={`/bills/${lastBillId}`}
                   className="font-semibold underline"
                 >
-                  View &amp; print bill →
+                  {t("sales.view_bill")}
                 </Link>
               </span>
             )}
@@ -118,12 +121,12 @@ export default function SalesPage() {
 
         {inStock.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-            <p className="font-medium text-slate-700">No items in stock</p>
+            <p className="font-medium text-slate-700">{t("sales.no_stock")}</p>
             <p className="mt-2 text-sm text-slate-500">
               <Link href="/stock" className="text-teal-700 underline">
-                Add stock
+                {t("sales.add_stock_link")}
               </Link>{" "}
-              first.
+              {t("sales.first")}.
             </p>
           </div>
         ) : (
@@ -140,7 +143,7 @@ export default function SalesPage() {
                     <div>
                       <p className="font-medium text-slate-900">{p.name}</p>
                       <p className="text-sm text-slate-500">
-                        {formatLkr(p.sellPrice)} · {p.stockQty} {unit} left
+                        {p.stockQty} {unit} {t("sales.left")}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -166,9 +169,9 @@ export default function SalesPage() {
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="font-semibold text-slate-900">Bill summary</h2>
+              <h2 className="font-semibold text-slate-900">{t("sales.bill_summary")}</h2>
               <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                {lines.length === 0 && <li>No items selected</li>}
+                {lines.length === 0 && <li>{t("sales.no_selected")}</li>}
                 {lines.map((l) => (
                   <li key={l.product.id} className="flex justify-between">
                     <span>
@@ -179,22 +182,22 @@ export default function SalesPage() {
                 ))}
               </ul>
               <p className="mt-4 border-t pt-3 text-lg font-bold text-slate-900">
-                Total: {formatLkr(total)}
+                {t("common.total")}: {formatLkr(total)}
               </p>
 
               <label className="mt-4 block text-sm">
-                Customer
+                {t("common.customer")}
                 <select
                   value={customerId}
                   onChange={(e) => setCustomerId(e.target.value)}
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
                 >
-                  <option value="">Walk-in / no account</option>
+                  <option value="">{t("sales.walkin")}</option>
                   {data.customers.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                       {c.creditBalance > 0
-                        ? ` (owes ${formatLkr(c.creditBalance)})`
+                        ? ` (${t("sales.owes")} ${formatLkr(c.creditBalance)})`
                         : ""}
                     </option>
                   ))}
@@ -203,7 +206,7 @@ export default function SalesPage() {
 
               {!customerId && (
                 <label className="mt-3 block text-sm">
-                  Walk-in name (optional)
+                  {t("sales.walkin_name")}
                   <input
                     value={walkInName}
                     onChange={(e) => setWalkInName(e.target.value)}
@@ -213,33 +216,33 @@ export default function SalesPage() {
               )}
 
               <label className="mt-3 block text-sm">
-                Payment
+                {t("common.payment")}
                 <select
                   value={payment}
                   onChange={(e) => setPayment(e.target.value as PaymentMethod)}
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
                 >
-                  <option value="cash">Cash</option>
-                  <option value="bank_transfer">Bank transfer</option>
-                  <option value="card">Card</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="credit">Credit (ණය)</option>
+                  {PAYMENT_OPTIONS.map((m) => (
+                    <option key={m} value={m}>
+                      {paymentLabel(t, m)}
+                    </option>
+                  ))}
                 </select>
               </label>
 
               {payment === "credit" && data.customers.length === 0 && (
                 <p className="mt-2 text-xs text-amber-700">
                   <Link href="/customers" className="underline">
-                    Add a customer
+                    {t("cust.add")}
                   </Link>{" "}
-                  first for credit sales.
+                  {t("sales.add_customer_first")}
                 </p>
               )}
 
               {payment === "cheque" && (
                 <div className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3">
                   <input
-                    placeholder="Cheque number *"
+                    placeholder={t("sales.cheque_no")}
                     value={chequeNo}
                     onChange={(e) => setChequeNo(e.target.value)}
                     className="w-full rounded-lg border px-3 py-2 text-sm"
@@ -265,7 +268,7 @@ export default function SalesPage() {
                       checked={postDated}
                       onChange={(e) => setPostDated(e.target.checked)}
                     />
-                    Post-dated (PDC)
+                    {t("sales.pdc")}
                   </label>
                 </div>
               )}
@@ -275,7 +278,7 @@ export default function SalesPage() {
                 onClick={handleSale}
                 className="mt-5 w-full rounded-lg bg-teal-700 py-2.5 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-40"
               >
-                Complete sale
+                {t("sales.complete")}
               </button>
             </div>
           </div>
@@ -283,16 +286,16 @@ export default function SalesPage() {
 
         {data.sales.length > 0 && (
           <section className="mt-10">
-            <h2 className="font-semibold text-slate-900">Recent sales</h2>
+            <h2 className="font-semibold text-slate-900">{t("sales.recent")}</h2>
             <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white">
               <table className="w-full text-left text-sm">
                 <thead className="border-b bg-slate-50 text-slate-600">
                   <tr>
-                    <th className="px-4 py-3">Date</th>
-                    <th className="px-4 py-3">Customer</th>
-                    <th className="px-4 py-3">Payment</th>
-                    <th className="px-4 py-3">Total</th>
-                    <th className="px-4 py-3">Profit</th>
+                    <th className="px-4 py-3">{t("common.date")}</th>
+                    <th className="px-4 py-3">{t("common.customer")}</th>
+                    <th className="px-4 py-3">{t("common.payment")}</th>
+                    <th className="px-4 py-3">{t("common.total")}</th>
+                    <th className="px-4 py-3">{t("common.profit")}</th>
                     <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
@@ -303,8 +306,8 @@ export default function SalesPage() {
                         {new Date(s.date).toLocaleString("en-LK")}
                       </td>
                       <td className="px-4 py-3">{s.customerName || "—"}</td>
-                      <td className="px-4 py-3 capitalize">
-                        {s.paymentMethod.replace("_", " ")}
+                      <td className="px-4 py-3">
+                        {paymentLabel(t, s.paymentMethod)}
                       </td>
                       <td className="px-4 py-3">{formatLkr(s.total)}</td>
                       <td className="px-4 py-3 text-teal-700">
@@ -315,7 +318,7 @@ export default function SalesPage() {
                           href={`/bills/${s.id}`}
                           className="text-teal-700 hover:underline"
                         >
-                          Bill
+                          {t("sales.bill")}
                         </Link>
                       </td>
                     </tr>

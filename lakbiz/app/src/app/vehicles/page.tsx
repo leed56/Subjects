@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { formatLkr } from "@/lib/format";
+import { useLocale } from "@/lib/i18n/locale-provider";
+import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { VehicleRecord } from "@/lib/store/types";
 import type { VehicleStatus } from "@/lib/store/types";
@@ -25,6 +27,7 @@ export default function VehiclesPage() {
     sellVehicle,
     deleteVehicle,
   } = useAppStore();
+  const { t } = useLocale();
 
   const [showForm, setShowForm] = useState(true);
   const [editing, setEditing] = useState<VehicleRecord | null>(null);
@@ -61,7 +64,7 @@ export default function VehiclesPage() {
     return (
       <div className="min-h-full bg-slate-50">
         <SiteHeader />
-        <main className="mx-auto max-w-6xl px-4 py-10">Loading...</main>
+        <main className="mx-auto max-w-6xl px-4 py-10">{t("common.loading")}</main>
       </div>
     );
   }
@@ -117,15 +120,24 @@ export default function VehiclesPage() {
 
   const forSale = data.vehicles.filter((v) => v.status === "for_sale");
 
+  const vehStatusLabel = (s: VehicleStatus | "all" | "aging") => {
+    if (s === "all") return t("veh.all");
+    if (s === "aging") return t("veh.aging");
+    if (s === "for_sale") return t("veh.for_sale");
+    if (s === "reconditioning") return t("veh.reconditioning");
+    if (s === "incoming") return t("veh.incoming");
+    return t("veh.sold");
+  };
+
   return (
     <div className="min-h-full bg-slate-50">
       <SiteHeader />
       <main className="mx-auto max-w-6xl px-4 py-10">
         <div className="mb-6 flex flex-wrap justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Vehicles</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{t("veh.title")}</h1>
             <p className="text-slate-600">
-              මෝටර් රථ — {forSale.length} for sale · per-vehicle profit tracking
+              {forSale.length} {t("veh.for_sale_count")} · {t("veh.subtitle")}
             </p>
           </div>
           <button
@@ -135,7 +147,7 @@ export default function VehiclesPage() {
             }}
             className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
           >
-            {showForm ? "Hide form" : "+ Add vehicle"}
+            {showForm ? t("common.hide_form") : t("veh.add")}
           </button>
         </div>
 
@@ -150,7 +162,7 @@ export default function VehiclesPage() {
             onSubmit={(e) => {
               e.preventDefault();
               if (!model.trim() || !chassisNo.trim()) {
-                setMessage("Model and chassis number required.");
+                setMessage(t("veh.model_required"));
                 return;
               }
               const input = {
@@ -174,17 +186,17 @@ export default function VehiclesPage() {
               };
               if (editing) {
                 updateVehicle(editing.id, input);
-                setMessage("Vehicle updated.");
+                setMessage(t("veh.updated"));
                 resetForm();
                 setShowForm(false);
               } else {
                 const ok = addVehicle(input);
                 if (ok) {
-                  setMessage("Vehicle added.");
+                  setMessage(t("veh.added"));
                   resetForm();
                   setShowForm(false);
                 } else {
-                  setMessage("Chassis number already in stock.");
+                  setMessage(t("veh.duplicate_chassis"));
                 }
               }
               setTimeout(() => setMessage(""), 3000);
@@ -192,7 +204,7 @@ export default function VehiclesPage() {
             className="mb-8 rounded-xl border bg-white p-5"
           >
             <h2 className="font-semibold">
-              {editing ? `Edit ${editing.stockId}` : "Add vehicle to yard"}
+              {editing ? `${t("common.edit")} ${editing.stockId}` : t("veh.add_yard")}
             </h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <select
@@ -206,39 +218,39 @@ export default function VehiclesPage() {
               </select>
               <input
                 required
-                placeholder="Model *"
+                placeholder={t("veh.model")}
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
                 type="number"
-                placeholder="Year"
+                placeholder={t("veh.year")}
                 value={year}
                 onChange={(e) => setYear(Number(e.target.value))}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
                 required
-                placeholder="Chassis no. *"
+                placeholder={t("veh.chassis")}
                 value={chassisNo}
                 onChange={(e) => setChassisNo(e.target.value)}
                 className="rounded-lg border px-3 py-2 text-sm font-mono"
               />
               <input
-                placeholder="Engine no."
+                placeholder={t("veh.engine_no")}
                 value={engineNo}
                 onChange={(e) => setEngineNo(e.target.value)}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
-                placeholder="Reg no."
+                placeholder={t("veh.reg_no")}
                 value={regNo}
                 onChange={(e) => setRegNo(e.target.value)}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
-                placeholder="Color"
+                placeholder={t("veh.color")}
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
                 className="rounded-lg border px-3 py-2 text-sm"
@@ -250,10 +262,10 @@ export default function VehiclesPage() {
                 }
                 className="rounded-lg border px-3 py-2 text-sm"
               >
-                <option value="petrol">Petrol</option>
-                <option value="diesel">Diesel</option>
-                <option value="hybrid">Hybrid</option>
-                <option value="electric">Electric</option>
+                <option value="petrol">{t("veh.petrol")}</option>
+                <option value="diesel">{t("veh.diesel")}</option>
+                <option value="hybrid">{t("veh.hybrid")}</option>
+                <option value="electric">{t("veh.electric")}</option>
               </select>
               <select
                 value={transmission}
@@ -264,46 +276,46 @@ export default function VehiclesPage() {
                 }
                 className="rounded-lg border px-3 py-2 text-sm"
               >
-                <option value="auto">Auto</option>
-                <option value="manual">Manual</option>
+                <option value="auto">{t("veh.auto")}</option>
+                <option value="manual">{t("veh.manual")}</option>
               </select>
               <input
                 type="number"
-                placeholder="Mileage (km)"
+                placeholder={t("veh.mileage")}
                 value={mileageKm || ""}
                 onChange={(e) => setMileageKm(Number(e.target.value))}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
-                placeholder="Condition"
+                placeholder={t("veh.condition")}
                 value={condition}
                 onChange={(e) => setCondition(e.target.value)}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
                 type="number"
-                placeholder="Purchase price (LKR)"
+                placeholder={t("veh.purchase")}
                 value={purchasePrice || ""}
                 onChange={(e) => setPurchasePrice(Number(e.target.value))}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
                 type="number"
-                placeholder="Recondition cost (LKR)"
+                placeholder={t("veh.recondition")}
                 value={reconditionCost || ""}
                 onChange={(e) => setReconditionCost(Number(e.target.value))}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
                 type="number"
-                placeholder="Ask price (LKR)"
+                placeholder={t("veh.ask_price")}
                 value={askPrice || ""}
                 onChange={(e) => setAskPrice(Number(e.target.value))}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
                 type="number"
-                placeholder="Min price (owner only)"
+                placeholder={t("veh.min_price")}
                 value={minPrice || ""}
                 onChange={(e) => setMinPrice(Number(e.target.value))}
                 className="rounded-lg border px-3 py-2 text-sm"
@@ -315,20 +327,20 @@ export default function VehiclesPage() {
               >
                 {VEHICLE_STATUSES.filter((s) => s.value !== "sold").map((s) => (
                   <option key={s.value} value={s.value}>
-                    {s.labelEn}
+                    {vehStatusLabel(s.value as VehicleStatus)}
                   </option>
                 ))}
               </select>
             </div>
             <p className="mt-3 text-sm text-slate-500">
-              Total cost:{" "}
+              {t("veh.total_cost")}:{" "}
               <strong>
                 {formatLkr(vehicleTotalCost(purchasePrice, reconditionCost))}
               </strong>
               {askPrice > 0 && (
                 <>
                   {" "}
-                  · Est. profit at ask:{" "}
+                  · {t("veh.est_profit")}:{" "}
                   <strong className="text-teal-700">
                     {formatLkr(
                       askPrice -
@@ -343,7 +355,7 @@ export default function VehiclesPage() {
                 type="submit"
                 className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
               >
-                {editing ? "Update" : "Add vehicle"}
+                {editing ? t("common.update") : t("veh.add")}
               </button>
               {editing && (
                 <button
@@ -351,7 +363,7 @@ export default function VehiclesPage() {
                   onClick={resetForm}
                   className="rounded-lg border px-4 py-2 text-sm"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               )}
             </div>
@@ -368,7 +380,7 @@ export default function VehiclesPage() {
                   filter === f ? "bg-teal-700 text-white" : "bg-white border"
                 }`}
               >
-                {f === "aging" ? "60+ days" : f.replace("_", " ")}
+                {vehStatusLabel(f)}
               </button>
             ),
           )}
@@ -376,7 +388,7 @@ export default function VehiclesPage() {
 
         {vehicles.length === 0 ? (
           <div className="rounded-xl border border-dashed bg-white p-10 text-center text-slate-500">
-            No vehicles in this view. Add imported or reconditioned stock above.
+            {t("veh.no_vehicles")}. {t("veh.no_vehicles_hint")}
           </div>
         ) : (
           <div className="space-y-3">
@@ -412,36 +424,38 @@ export default function VehiclesPage() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs capitalize">
-                        {v.status.replace("_", " ")}
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs">
+                        {vehStatusLabel(v.status)}
                       </span>
                       {aging && v.status === "for_sale" && (
                         <p className="mt-1 text-xs font-medium text-amber-700">
-                          {aging} in yard
+                          {aging} {t("veh.in_yard")}
                         </p>
                       )}
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-4 text-sm">
-                    <span>Cost: {formatLkr(cost)}</span>
+                    <span>{t("common.cost")}: {formatLkr(cost)}</span>
                     {v.status === "sold" ? (
                       <>
-                        <span>Sold: {formatLkr(v.soldPrice ?? 0)}</span>
+                        <span>{t("veh.sold_price")}: {formatLkr(v.soldPrice ?? 0)}</span>
                         <span className="font-semibold text-teal-700">
-                          Profit: {formatLkr(profit)}
+                          {t("common.profit")}: {formatLkr(profit)}
                         </span>
                         {v.customerName && (
-                          <span>Buyer: {v.customerName}</span>
+                          <span>{t("veh.buyer")}: {v.customerName}</span>
                         )}
                         {v.financePartner && (
-                          <span>Finance: {v.financePartner}</span>
+                          <span>{t("veh.finance")}: {v.financePartner}</span>
                         )}
                       </>
                     ) : (
-                      <span>Ask: {formatLkr(v.askPrice)}</span>
+                      <span>{t("veh.ask")}: {formatLkr(v.askPrice)}</span>
                     )}
                     {v.status !== "sold" && (
-                      <span className="text-slate-400">{days} days in stock</span>
+                      <span className="text-slate-400">
+                        {days} {t("veh.days_stock")}
+                      </span>
                     )}
                   </div>
                   {v.status !== "sold" && (
@@ -450,7 +464,7 @@ export default function VehiclesPage() {
                         onClick={() => loadVehicle(v)}
                         className="text-sm text-teal-700 hover:underline"
                       >
-                        Edit
+                        {t("common.edit")}
                       </button>
                       {v.status !== "for_sale" && (
                         <button
@@ -459,7 +473,7 @@ export default function VehiclesPage() {
                           }
                           className="text-sm text-teal-700 hover:underline"
                         >
-                          → List for sale
+                          {t("veh.list_sale")}
                         </button>
                       )}
                       {v.status === "for_sale" && (
@@ -470,18 +484,18 @@ export default function VehiclesPage() {
                           }}
                           className="text-sm font-medium text-teal-700 hover:underline"
                         >
-                          Sell vehicle
+                          {t("veh.sell")}
                         </button>
                       )}
                       <button
                         onClick={() => {
-                          if (confirm(`Delete ${v.stockId}?`)) {
+                          if (confirm(`${t("common.confirm_delete")} ${v.stockId}?`)) {
                             deleteVehicle(v.id);
                           }
                         }}
                         className="text-sm text-red-600 hover:underline"
                       >
-                        Delete
+                        {t("common.delete")}
                       </button>
                     </div>
                   )}
@@ -494,11 +508,11 @@ export default function VehiclesPage() {
         {sellId && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-5">
-              <h3 className="font-semibold">Sell vehicle</h3>
+              <h3 className="font-semibold">{t("veh.sell")}</h3>
               <div className="mt-3 space-y-3">
                 <input
                   type="number"
-                  placeholder="Sell price (LKR) *"
+                  placeholder={t("veh.sell_price")}
                   value={sellPrice || ""}
                   onChange={(e) => setSellPrice(Number(e.target.value))}
                   className="w-full rounded-lg border px-3 py-2"
@@ -508,7 +522,7 @@ export default function VehiclesPage() {
                   onChange={(e) => setSellCustomerId(e.target.value)}
                   className="w-full rounded-lg border px-3 py-2"
                 >
-                  <option value="">Customer (optional)</option>
+                  <option value="">{t("jobs.customer_opt")}</option>
                   {data.customers.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -517,7 +531,7 @@ export default function VehiclesPage() {
                 </select>
                 {!sellCustomerId && (
                   <input
-                    placeholder="Buyer name"
+                    placeholder={t("veh.buyer_name")}
                     value={sellCustomerName}
                     onChange={(e) => setSellCustomerName(e.target.value)}
                     className="w-full rounded-lg border px-3 py-2"
@@ -530,10 +544,11 @@ export default function VehiclesPage() {
                   }
                   className="w-full rounded-lg border px-3 py-2"
                 >
-                  <option value="cash">Cash</option>
-                  <option value="bank_transfer">Bank transfer</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="credit">Credit</option>
+                  {PAYMENT_OPTIONS.map((m) => (
+                    <option key={m} value={m}>
+                      {paymentLabel(t, m)}
+                    </option>
+                  ))}
                 </select>
                 <select
                   value={financePartner}
@@ -549,7 +564,7 @@ export default function VehiclesPage() {
                 <button
                   onClick={() => {
                     if (sellPayment === "credit" && !sellCustomerId) {
-                      setMessage("Select customer for credit sale.");
+                      setMessage(t("veh.credit_need"));
                       setSellId(null);
                       return;
                     }
@@ -565,19 +580,19 @@ export default function VehiclesPage() {
                           : financePartner,
                     });
                     if (ok) {
-                      setMessage("Vehicle sold. Profit recorded.");
+                      setMessage(t("veh.sold_msg"));
                       setSellId(null);
                     }
                   }}
                   className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
                 >
-                  Confirm sale
+                  {t("veh.confirm_sale")}
                 </button>
                 <button
                   onClick={() => setSellId(null)}
                   className="rounded-lg border px-4 py-2 text-sm"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </div>
             </div>

@@ -4,12 +4,14 @@ import { useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { ProductForm } from "@/components/product-form";
 import { formatLkr } from "@/lib/format";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { Product } from "@/lib/types";
 
 export default function StockPage() {
   const { data, ready, addProduct, updateProduct, deleteProduct, stockIn } =
     useAppStore();
+  const { t } = useLocale();
   const [editing, setEditing] = useState<Product | null>(null);
   const [stockInId, setStockInId] = useState<string | null>(null);
   const [stockInQty, setStockInQty] = useState(1);
@@ -20,7 +22,7 @@ export default function StockPage() {
       <div className="min-h-full bg-slate-50">
         <SiteHeader />
         <main className="mx-auto max-w-6xl px-4 py-10 text-slate-600">
-          Loading...
+          {t("common.loading")}
         </main>
       </div>
     );
@@ -34,9 +36,9 @@ export default function StockPage() {
       <main className="mx-auto max-w-6xl px-4 py-10">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Stock</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{t("stock.title")}</h1>
             <p className="text-slate-600">
-              තොග — {products.length} items · saved in your browser
+              {products.length} {t("common.items")} · {t("common.saved_browser")}
             </p>
           </div>
           <button
@@ -46,7 +48,7 @@ export default function StockPage() {
             }}
             className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
           >
-            {showForm ? "Hide form" : "+ Add item"}
+            {showForm ? t("common.hide_form") : t("stock.add_item")}
           </button>
         </div>
 
@@ -65,7 +67,7 @@ export default function StockPage() {
           <div className="mb-8">
             <ProductForm
               initial={editing}
-              submitLabel="Update item"
+              submitLabel={t("common.update")}
               onCancel={() => setEditing(null)}
               onSubmit={(input) => {
                 updateProduct(editing.id, input);
@@ -77,22 +79,20 @@ export default function StockPage() {
 
         {products.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-            <p className="text-lg font-medium text-slate-700">No stock yet</p>
-            <p className="mt-2 text-sm text-slate-500">
-              Add your first item above — grocery, AC unit, spare part, anything.
-            </p>
+            <p className="text-lg font-medium text-slate-700">{t("stock.no_stock")}</p>
+            <p className="mt-2 text-sm text-slate-500">{t("stock.no_stock_hint")}</p>
           </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
                 <tr>
-                  <th className="px-4 py-3">Item</th>
-                  <th className="px-4 py-3">Category</th>
-                  <th className="px-4 py-3">Stock</th>
-                  <th className="px-4 py-3">Buy</th>
-                  <th className="px-4 py-3">Sell</th>
-                  <th className="px-4 py-3">Actions</th>
+                  <th className="px-4 py-3">{t("stock.item_name")}</th>
+                  <th className="px-4 py-3">{t("stock.category")}</th>
+                  <th className="px-4 py-3">{t("stock.title")}</th>
+                  <th className="px-4 py-3">{t("stock.buy_price")}</th>
+                  <th className="px-4 py-3">{t("stock.sell_price")}</th>
+                  <th className="px-4 py-3">{t("common.actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -122,7 +122,7 @@ export default function StockPage() {
                         </span>
                         {low && (
                           <span className="ml-2 text-xs text-amber-600">
-                            Low
+                            {t("common.low")}
                           </span>
                         )}
                       </td>
@@ -137,23 +137,23 @@ export default function StockPage() {
                             }}
                             className="text-teal-700 hover:underline"
                           >
-                            Edit
+                            {t("common.edit")}
                           </button>
                           <button
                             onClick={() => setStockInId(p.id)}
                             className="text-teal-700 hover:underline"
                           >
-                            Stock in
+                            {t("stock.stock_in")}
                           </button>
                           <button
                             onClick={() => {
-                              if (confirm(`Delete ${p.name}?`)) {
+                              if (confirm(`${t("common.confirm_delete")} ${p.name}?`)) {
                                 deleteProduct(p.id);
                               }
                             }}
                             className="text-red-600 hover:underline"
                           >
-                            Delete
+                            {t("common.delete")}
                           </button>
                         </div>
                       </td>
@@ -168,10 +168,8 @@ export default function StockPage() {
         {stockInId && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-lg">
-              <h3 className="font-semibold text-slate-900">Stock in</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Add quantity received from supplier
-              </p>
+              <h3 className="font-semibold text-slate-900">{t("stock.stock_in_title")}</h3>
+              <p className="mt-1 text-sm text-slate-500">{t("stock.stock_in_hint")}</p>
               <input
                 type="number"
                 min={1}
@@ -188,13 +186,13 @@ export default function StockPage() {
                   }}
                   className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
                 >
-                  Add stock
+                  {t("stock.add_stock_btn")}
                 </button>
                 <button
                   onClick={() => setStockInId(null)}
                   className="rounded-lg border px-4 py-2 text-sm"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </div>
             </div>
