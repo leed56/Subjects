@@ -2,6 +2,54 @@
 
 import { createBrowserClient } from "./client";
 
+export class AuthFlowError extends Error {
+  constructor(
+    message: string,
+    public code: "email_confirmation" | "auth" | "org",
+  ) {
+    super(message);
+    this.name = "AuthFlowError";
+  }
+}
+
+async function ensureUserOrg(
+  supabase: NonNullable<ReturnType<typeof createBrowserClient>>,
+  userId: string,
+  meta?: { shop_name?: string; phone?: string },
+) {
+  const { data: existing } = await supabase
+    .from("org_members")
+    .select("organization_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing) return existing.organization_id;
+
+  const shopName = meta?.shop_name?.trim();
+  if (!shopName) return null;
+
+  const { data: org, error: orgError } = await supabase
+    .from("organizations")
+    .insert({
+      name: shopName,
+      phone: meta?.phone ?? null,
+    })
+    .select("id")
+    .single();
+
+  if (orgError) throw new AuthFlowError(orgError.message, "org");
+
+  const { error: memberError } = await supabase.from("org_members").insert({
+    organization_id: org.id,
+    user_id: userId,
+    role: "owner",
+  });
+
+  if (memberError) throw new AuthFlowError(memberError.message, "org");
+
+  return org.id;
+}
+
 export async function signUpWithShop(input: {
   email: string;
   password: string;
@@ -14,31 +62,31 @@ export async function signUpWithShop(input: {
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email: input.email,
     password: input.password,
+    options: {
+      data: {
+        shop_name: input.shopName,
+        phone: input.phone ?? null,
+      },
+    },
   });
 
-  if (authError) throw authError;
-  if (!authData.user) throw new Error("Sign up failed");
+  if (authError) throw new AuthFlowError(authError.message, "auth");
+  if (!authData.user) throw new AuthFlowError("Sign up failed", "auth");
 
-  const { data: org, error: orgError } = await supabase
-    .from("organizations")
-    .insert({
-      name: input.shopName,
-      phone: input.phone ?? null,
-    })
-    .select("id")
-    .single();
+  // No session until email is confirmed (Supabase default)
+  if (!authData.session) {
+    throw new AuthFlowError(
+      "Account created. Check your email (inbox + spam) and click Confirm, then Sign in here.",
+      "email_confirmation",
+    );
+  }
 
-  if (orgError) throw orgError;
-
-  const { error: memberError } = await supabase.from("org_members").insert({
-    organization_id: org.id,
-    user_id: authData.user.id,
-    role: "owner",
+  const orgId = await ensureUserOrg(supabase, authData.user.id, {
+    shop_name: input.shopName,
+    phone: input.phone,
   });
 
-  if (memberError) throw memberError;
-
-  return { user: authData.user, organizationId: org.id };
+  return { user: authData.user, organizationId: orgId };
 }
 
 export async function signInWithEmail(email: string, password: string) {
@@ -50,7 +98,23 @@ export async function signInWithEmail(email: string, password: string) {
     password,
   });
 
-  if (error) throw error;
+  if (error) {
+    if (error.message.toLowerCase().includes("email not confirmed")) {
+      throw new AuthFlowError(
+        "Email not confirmed yet. Check your inbox and spam folder, click the link, then try Sign in again.",
+        "email_confirmation",
+      );
+    }
+    throw new AuthFlowError(error.message, "auth");
+  }
+
+  const meta = data.user?.user_metadata as {
+    shop_name?: string;
+    phone?: string;
+  };
+
+  await ensureUserOrg(supabase, data.user!.id, meta);
+
   return data;
 }
 

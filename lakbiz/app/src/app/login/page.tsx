@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth-provider";
 import { SiteHeader } from "@/components/site-header";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { AuthFlowError } from "@/lib/supabase/auth-actions";
 
 type Mode = "signin" | "signup";
 
@@ -46,7 +47,13 @@ export default function LoginPage() {
         router.push("/dashboard");
       }
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Login failed");
+      if (err instanceof AuthFlowError && err.code === "email_confirmation") {
+        setMessage(err.message);
+      } else if (err instanceof Error) {
+        setMessage(err.message);
+      } else {
+        setMessage("Login failed");
+      }
     } finally {
       setLoading(false);
     }
