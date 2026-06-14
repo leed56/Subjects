@@ -80,6 +80,11 @@ export default function DashboardPage() {
             value={formatLkr(stats.creditOutstanding)}
           />
           <DashboardStat
+            labelEn="Supplier payables"
+            labelSi="සැපයුම්කරු ණය"
+            value={formatLkr(stats.payableOutstanding)}
+          />
+          <DashboardStat
             labelEn="Bank balance"
             labelSi="බැංකු ශේෂය"
             value={formatLkr(stats.bankBalance)}
@@ -96,7 +101,7 @@ export default function DashboardPage() {
           />
         </div>
 
-        <div className="mt-10 grid gap-6 lg:grid-cols-2">
+        <div className="mt-10 grid gap-6 lg:grid-cols-3">
           <section className="rounded-xl border border-slate-200 bg-white p-5">
             <h2 className="font-semibold text-slate-900">Low stock alert</h2>
             {stats.lowStockItems.length === 0 ? (
@@ -114,7 +119,7 @@ export default function DashboardPage() {
           </section>
 
           <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="font-semibold text-slate-900">Top credit customers</h2>
+            <h2 className="font-semibold text-slate-900">Credit customers</h2>
             {stats.topDebtors.length === 0 ? (
               <p className="mt-3 text-sm text-slate-500">No credit outstanding.</p>
             ) : (
@@ -131,6 +136,27 @@ export default function DashboardPage() {
               className="mt-3 inline-block text-sm text-teal-700 underline"
             >
               Manage customers
+            </Link>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-5">
+            <h2 className="font-semibold text-slate-900">Supplier payables</h2>
+            {stats.topPayables.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-500">No payables.</p>
+            ) : (
+              <ul className="mt-3 space-y-2 text-sm text-slate-600">
+                {stats.topPayables.map((s) => (
+                  <li key={s.id}>
+                    • {s.name} — {formatLkr(s.payableBalance)}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Link
+              href="/suppliers"
+              className="mt-3 inline-block text-sm text-teal-700 underline"
+            >
+              Manage suppliers
             </Link>
           </section>
         </div>

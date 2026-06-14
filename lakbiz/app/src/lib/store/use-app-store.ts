@@ -7,16 +7,21 @@ import {
   addCheque,
   addCustomer,
   addProduct,
+  addSupplier,
   adjustStock,
+  createPurchase,
   createSale,
   deleteBankAccount,
   deleteCustomer,
   deleteProduct,
+  deleteSupplier,
   recordCustomerPayment,
+  recordSupplierPayment,
   updateChequeStatus,
   updateCustomer,
   updateProduct,
   updateBusiness,
+  updateSupplier,
 } from "./actions";
 import { clearAppData, loadAppData, saveAppData } from "./storage";
 import type {
@@ -26,7 +31,9 @@ import type {
   ChequeStatus,
   CustomerInput,
   ProductInput,
+  PurchaseInput,
   SaleOptions,
+  SupplierInput,
 } from "./types";
 import type { BusinessInfo } from "@/lib/invoice";
 
@@ -76,6 +83,45 @@ export function useAppStore() {
     deleteCustomer: (id: string) => {
       if (!data) return;
       persist(deleteCustomer(data, id));
+    },
+    addSupplier: (input: SupplierInput) => {
+      if (!data) return;
+      persist(addSupplier(data, input));
+    },
+    updateSupplier: (id: string, input: SupplierInput) => {
+      if (!data) return;
+      persist(updateSupplier(data, id, input));
+    },
+    deleteSupplier: (id: string) => {
+      if (!data) return;
+      persist(deleteSupplier(data, id));
+    },
+    createPurchase: (input: PurchaseInput) => {
+      if (!data) return false;
+      const before = data.purchases.length;
+      const next = createPurchase(data, input);
+      if (next.purchases.length === before) return false;
+      persist(next);
+      return true;
+    },
+    recordSupplierPayment: (
+      supplierId: string,
+      amount: number,
+      method: PaymentMethod,
+      note?: string,
+    ) => {
+      if (!data) return false;
+      const before = data.supplierPayments.length;
+      const next = recordSupplierPayment(
+        data,
+        supplierId,
+        amount,
+        method,
+        note,
+      );
+      if (next.supplierPayments.length === before) return false;
+      persist(next);
+      return true;
     },
     recordCustomerPayment: (
       customerId: string,

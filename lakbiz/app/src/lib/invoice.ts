@@ -20,6 +20,12 @@ export function generateBillNo(existingSaleCount: number): string {
   return `LB-${d}-${seq}`;
 }
 
+export function generateGrnNo(existingPurchaseCount: number): string {
+  const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const seq = String(existingPurchaseCount + 1).padStart(4, "0");
+  return `GRN-${d}-${seq}`;
+}
+
 export function formatPaymentLabel(method: Sale["paymentMethod"]): string {
   const labels: Record<Sale["paymentMethod"], string> = {
     cash: "Cash / මුදල්",

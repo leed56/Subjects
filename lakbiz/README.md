@@ -21,6 +21,7 @@ npm run dev
 Open http://localhost:3000 — **working pages**:
 
 - `/stock` — add / edit items, stock in
+- `/suppliers` — suppliers, **GRN purchases**, payables
 - `/sales` — bill customer (cash, credit, cheque)
 - `/bills` — view, **print**, **WhatsApp share** bills
 - `/customers` — credit ledger, record payments

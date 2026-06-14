@@ -1,5 +1,5 @@
 import { newId, todayKey } from "@/lib/format";
-import { generateBillNo, type BusinessInfo } from "@/lib/invoice";
+import { generateBillNo, generateGrnNo, type BusinessInfo } from "@/lib/invoice";
 import type { PaymentMethod, Product } from "@/lib/types";
 import type {
   AppData,
@@ -8,9 +8,12 @@ import type {
   ChequeStatus,
   CustomerInput,
   ProductInput,
+  Purchase,
+  PurchaseInput,
   Sale,
   SaleOptions,
   StockLog,
+  SupplierInput,
 } from "./types";
 
 export function addProduct(data: AppData, input: ProductInput): AppData {
@@ -179,6 +182,183 @@ export function recordCustomerPayment(
         ? { ...c, creditBalance: Math.max(0, c.creditBalance - amount) }
         : c,
     ),
+  };
+}
+
+export function addSupplier(data: AppData, input: SupplierInput): AppData {
+  const supplier = {
+    id: newId(),
+    name: input.name.trim(),
+    phone: input.phone?.trim() || undefined,
+    address: input.address?.trim() || undefined,
+    payableBalance: 0,
+  };
+  return { ...data, suppliers: [supplier, ...data.suppliers] };
+}
+
+export function updateSupplier(
+  data: AppData,
+  id: string,
+  input: SupplierInput,
+): AppData {
+  return {
+    ...data,
+    suppliers: data.suppliers.map((s) =>
+      s.id === id
+        ? {
+            ...s,
+            name: input.name.trim(),
+            phone: input.phone?.trim() || undefined,
+            address: input.address?.trim() || undefined,
+          }
+        : s,
+    ),
+  };
+}
+
+export function deleteSupplier(data: AppData, id: string): AppData {
+  return {
+    ...data,
+    suppliers: data.suppliers.filter((s) => s.id !== id),
+  };
+}
+
+export function recordSupplierPayment(
+  data: AppData,
+  supplierId: string,
+  amount: number,
+  method: PaymentMethod,
+  note?: string,
+): AppData {
+  if (amount <= 0) return data;
+  const supplier = data.suppliers.find((s) => s.id === supplierId);
+  if (!supplier) return data;
+
+  const payment = {
+    id: newId(),
+    supplierId,
+    supplierName: supplier.name,
+    amount,
+    date: new Date().toISOString(),
+    method,
+    note,
+  };
+
+  return {
+    ...data,
+    supplierPayments: [payment, ...data.supplierPayments],
+    suppliers: data.suppliers.map((s) =>
+      s.id === supplierId
+        ? { ...s, payableBalance: Math.max(0, s.payableBalance - amount) }
+        : s,
+    ),
+  };
+}
+
+export function createPurchase(
+  data: AppData,
+  input: PurchaseInput,
+): AppData {
+  const supplier = data.suppliers.find((s) => s.id === input.supplierId);
+  if (!supplier) return data;
+
+  const purchaseLines = input.lines
+    .map(({ productId, qty, unitCost }) => {
+      const product = data.products.find((p) => p.id === productId);
+      if (!product || qty <= 0 || unitCost < 0) return null;
+      return {
+        productId,
+        productName: product.name,
+        qty,
+        unitCost,
+      };
+    })
+    .filter(Boolean) as Purchase["lines"];
+
+  if (purchaseLines.length === 0) return data;
+
+  if (input.paymentMethod === "credit" && !supplier) return data;
+  if (
+    input.paymentMethod === "cheque" &&
+    (!input.chequeNo || !input.chequeBank || !input.chequeDate)
+  ) {
+    return data;
+  }
+
+  const total = purchaseLines.reduce((s, l) => s + l.unitCost * l.qty, 0);
+  const purchaseId = newId();
+  const date = new Date().toISOString();
+
+  let cheques = data.cheques;
+  if (input.paymentMethod === "cheque") {
+    cheques = [
+      {
+        id: newId(),
+        direction: "paid" as const,
+        chequeNo: input.chequeNo!.trim(),
+        bankName: input.chequeBank!.trim(),
+        partyName: supplier.name,
+        amount: total,
+        chequeDate: input.chequeDate!,
+        postDated: input.postDated ?? false,
+        status: "pending" as const,
+        note: `GRN purchase`,
+      },
+      ...cheques,
+    ];
+  }
+
+  const purchase: Purchase = {
+    id: purchaseId,
+    grnNo: generateGrnNo(data.purchases.length),
+    date,
+    supplierId: supplier.id,
+    supplierName: supplier.name,
+    lines: purchaseLines,
+    total,
+    paymentMethod: input.paymentMethod,
+    creditAmount: input.paymentMethod === "credit" ? total : 0,
+    note: input.note,
+  };
+
+  const qtyByProduct = new Map(
+    purchaseLines.map((l) => [l.productId, l] as const),
+  );
+
+  const stockLogs: StockLog[] = purchaseLines.map((line) => ({
+    id: newId(),
+    productId: line.productId,
+    productName: line.productName,
+    type: "in",
+    qty: line.qty,
+    note: `GRN ${purchase.grnNo}`,
+    date,
+  }));
+
+  let suppliers = data.suppliers;
+  if (input.paymentMethod === "credit") {
+    suppliers = suppliers.map((s) =>
+      s.id === supplier.id
+        ? { ...s, payableBalance: s.payableBalance + total }
+        : s,
+    );
+  }
+
+  return {
+    ...data,
+    purchases: [purchase, ...data.purchases],
+    suppliers,
+    cheques,
+    products: data.products.map((p) => {
+      const line = qtyByProduct.get(p.id);
+      if (!line) return p;
+      return {
+        ...p,
+        stockQty: p.stockQty + line.qty,
+        buyPrice: line.unitCost,
+      };
+    }),
+    stockLogs: [...stockLogs, ...data.stockLogs],
   };
 }
 
@@ -420,6 +600,10 @@ export function getDashboardStats(data: AppData) {
     (s, c) => s + c.creditBalance,
     0,
   );
+  const payableOutstanding = data.suppliers.reduce(
+    (s, sup) => s + sup.payableBalance,
+    0,
+  );
   const bankBalance = data.bankAccounts.reduce((s, a) => s + a.balance, 0);
   const chequesDueSoon = data.cheques.filter(
     (c) =>
@@ -436,10 +620,12 @@ export function getDashboardStats(data: AppData) {
     saleCount: todaySales.length,
     productCount: data.products.length,
     customerCount: data.customers.length,
+    supplierCount: data.suppliers.length,
     lowStockCount: lowStock.length,
     lowStockItems: lowStock,
     stockValue,
     creditOutstanding,
+    payableOutstanding,
     bankBalance,
     chequesDueSoonCount: chequesDueSoon.length,
     chequesDueSoon,
@@ -448,6 +634,11 @@ export function getDashboardStats(data: AppData) {
       .filter((c) => c.creditBalance > 0)
       .sort((a, b) => b.creditBalance - a.creditBalance)
       .slice(0, 5),
+    topPayables: [...data.suppliers]
+      .filter((s) => s.payableBalance > 0)
+      .sort((a, b) => b.payableBalance - a.payableBalance)
+      .slice(0, 5),
+    recentPurchases: data.purchases.slice(0, 5),
     recentSales: data.sales.slice(0, 5),
     recentLogs: data.stockLogs.slice(0, 5),
   };

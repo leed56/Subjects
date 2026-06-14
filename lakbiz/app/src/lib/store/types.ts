@@ -79,6 +79,44 @@ export interface ChequeRecord {
   note?: string;
 }
 
+export interface Supplier {
+  id: string;
+  name: string;
+  phone?: string;
+  address?: string;
+  payableBalance: number;
+}
+
+export interface PurchaseLine {
+  productId: string;
+  productName: string;
+  qty: number;
+  unitCost: number;
+}
+
+export interface Purchase {
+  id: string;
+  grnNo: string;
+  date: string;
+  supplierId: string;
+  supplierName: string;
+  lines: PurchaseLine[];
+  total: number;
+  paymentMethod: PaymentMethod;
+  creditAmount: number;
+  note?: string;
+}
+
+export interface SupplierPayment {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  amount: number;
+  date: string;
+  method: PaymentMethod;
+  note?: string;
+}
+
 export interface AppData {
   business: BusinessInfo;
   products: Product[];
@@ -86,6 +124,9 @@ export interface AppData {
   stockLogs: StockLog[];
   customers: Customer[];
   customerPayments: CustomerPayment[];
+  suppliers: Supplier[];
+  purchases: Purchase[];
+  supplierPayments: SupplierPayment[];
   bankAccounts: BankAccountRecord[];
   cheques: ChequeRecord[];
 }
@@ -106,6 +147,23 @@ export type CustomerInput = {
   name: string;
   phone?: string;
   address?: string;
+};
+
+export type SupplierInput = {
+  name: string;
+  phone?: string;
+  address?: string;
+};
+
+export type PurchaseInput = {
+  supplierId: string;
+  lines: { productId: string; qty: number; unitCost: number }[];
+  paymentMethod: PaymentMethod;
+  note?: string;
+  chequeNo?: string;
+  chequeBank?: string;
+  chequeDate?: string;
+  postDated?: boolean;
 };
 
 export type BankAccountInput = {
