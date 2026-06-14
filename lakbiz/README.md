@@ -22,6 +22,7 @@ Open http://localhost:3000 — **working pages**:
 
 - `/stock` — add / edit items, stock in
 - `/sales` — bill customer (cash, credit, cheque)
+- `/bills` — view, **print**, **WhatsApp share** bills
 - `/customers` — credit ledger, record payments
 - `/banking` — bank accounts, cheque register, PDC
 - `/dashboard` — live sales, profit, credit, bank balance

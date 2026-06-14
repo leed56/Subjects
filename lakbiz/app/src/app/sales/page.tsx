@@ -21,6 +21,7 @@ export default function SalesPage() {
   );
   const [postDated, setPostDated] = useState(false);
   const [message, setMessage] = useState("");
+  const [lastBillId, setLastBillId] = useState<string | null>(null);
 
   const lines = useMemo(() => {
     if (!data) return [];
@@ -57,7 +58,7 @@ export default function SalesPage() {
       return;
     }
 
-    const ok = createSale(
+    const saleId = createSale(
       lines.map((l) => ({ productId: l.product.id, qty: l.qty })),
       payment,
       {
@@ -70,10 +71,11 @@ export default function SalesPage() {
       },
     );
 
-    if (ok) {
+    if (saleId) {
       setCart({});
       setWalkInName("");
       setChequeNo("");
+      setLastBillId(saleId);
       setMessage(
         payment === "credit"
           ? "Credit sale saved. Customer balance updated."
@@ -81,7 +83,7 @@ export default function SalesPage() {
             ? "Sale saved. Cheque added to Banking."
             : "Sale saved. Stock updated.",
       );
-      setTimeout(() => setMessage(""), 4000);
+      setTimeout(() => setMessage(""), 6000);
     } else {
       setMessage("Could not complete sale — check stock and required fields.");
     }
@@ -101,6 +103,16 @@ export default function SalesPage() {
         {message && (
           <div className="mb-4 rounded-lg bg-teal-50 px-4 py-3 text-sm text-teal-800">
             {message}
+            {lastBillId && (
+              <span className="mt-2 block">
+                <Link
+                  href={`/bills/${lastBillId}`}
+                  className="font-semibold underline"
+                >
+                  View &amp; print bill →
+                </Link>
+              </span>
+            )}
           </div>
         )}
 
@@ -281,6 +293,7 @@ export default function SalesPage() {
                     <th className="px-4 py-3">Payment</th>
                     <th className="px-4 py-3">Total</th>
                     <th className="px-4 py-3">Profit</th>
+                    <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -296,6 +309,14 @@ export default function SalesPage() {
                       <td className="px-4 py-3">{formatLkr(s.total)}</td>
                       <td className="px-4 py-3 text-teal-700">
                         {formatLkr(s.profit)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/bills/${s.id}`}
+                          className="text-teal-700 hover:underline"
+                        >
+                          Bill
+                        </Link>
                       </td>
                     </tr>
                   ))}

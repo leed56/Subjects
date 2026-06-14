@@ -1,4 +1,6 @@
 import type { PaymentMethod, Product, SectorId } from "@/lib/types";
+import type { BusinessInfo } from "@/lib/invoice";
+import { defaultBusiness } from "@/lib/invoice";
 
 export interface SaleLine {
   productId: string;
@@ -10,6 +12,7 @@ export interface SaleLine {
 
 export interface Sale {
   id: string;
+  billNo?: string;
   date: string;
   lines: SaleLine[];
   total: number;
@@ -77,6 +80,7 @@ export interface ChequeRecord {
 }
 
 export interface AppData {
+  business: BusinessInfo;
   products: Product[];
   sales: Sale[];
   stockLogs: StockLog[];

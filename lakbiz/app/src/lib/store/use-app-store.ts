@@ -16,6 +16,7 @@ import {
   updateChequeStatus,
   updateCustomer,
   updateProduct,
+  updateBusiness,
 } from "./actions";
 import { clearAppData, loadAppData, saveAppData } from "./storage";
 import type {
@@ -27,6 +28,7 @@ import type {
   ProductInput,
   SaleOptions,
 } from "./types";
+import type { BusinessInfo } from "@/lib/invoice";
 
 export function useAppStore() {
   const [data, setData] = useState<AppData | null>(null);
@@ -118,13 +120,17 @@ export function useAppStore() {
       lines: { productId: string; qty: number }[],
       paymentMethod: PaymentMethod,
       options?: SaleOptions,
-    ) => {
+    ): string | false => {
       if (!data) return false;
       const before = data.sales.length;
       const next = createSale(data, lines, paymentMethod, options);
       if (next.sales.length === before) return false;
       persist(next);
-      return true;
+      return next.sales[0].id;
+    },
+    updateBusiness: (business: BusinessInfo) => {
+      if (!data) return;
+      persist(updateBusiness(data, business));
     },
     resetAll: () => {
       clearAppData();

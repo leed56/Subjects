@@ -1,4 +1,5 @@
 import { newId, todayKey } from "@/lib/format";
+import { generateBillNo, type BusinessInfo } from "@/lib/invoice";
 import type { PaymentMethod, Product } from "@/lib/types";
 import type {
   AppData,
@@ -330,6 +331,7 @@ export function createSale(
 
   const sale: Sale = {
     id: saleId,
+    billNo: generateBillNo(data.sales.length),
     date: new Date().toISOString(),
     lines: saleLines,
     total,
@@ -384,6 +386,22 @@ function daysUntil(dateStr: string): number {
   today.setHours(0, 0, 0, 0);
   target.setHours(0, 0, 0, 0);
   return Math.ceil((target.getTime() - today.getTime()) / 86400000);
+}
+
+export function updateBusiness(
+  data: AppData,
+  business: BusinessInfo,
+): AppData {
+  return {
+    ...data,
+    business: {
+      name: business.name.trim() || "My Shop",
+      nameSi: business.nameSi?.trim() || undefined,
+      phone: business.phone?.trim() || undefined,
+      address: business.address?.trim() || undefined,
+      tin: business.tin?.trim() || undefined,
+    },
+  };
 }
 
 export function getDashboardStats(data: AppData) {

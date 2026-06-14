@@ -1,9 +1,11 @@
 import type { AppData } from "./types";
+import { defaultBusiness } from "@/lib/invoice";
 
 const STORAGE_KEY_V2 = "lakbiz-app-data-v2";
 const STORAGE_KEY_V1 = "lakbiz-app-data-v1";
 
 export const emptyAppData = (): AppData => ({
+  business: defaultBusiness(),
   products: [],
   sales: [],
   stockLogs: [],
@@ -16,7 +18,9 @@ export const emptyAppData = (): AppData => ({
 function normalizeSale(sale: AppData["sales"][number]): AppData["sales"][number] {
   return {
     ...sale,
-    creditAmount: sale.creditAmount ?? (sale.paymentMethod === "credit" ? sale.total : 0),
+    billNo: sale.billNo ?? `LB-${sale.id.slice(0, 8).toUpperCase()}`,
+    creditAmount:
+      sale.creditAmount ?? (sale.paymentMethod === "credit" ? sale.total : 0),
   };
 }
 
