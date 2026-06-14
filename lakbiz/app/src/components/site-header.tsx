@@ -4,6 +4,7 @@ const nav = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/stock", label: "Stock" },
   { href: "/sales", label: "Sales" },
+  { href: "/customers", label: "Customers" },
   { href: "/banking", label: "Banking" },
 ];
 

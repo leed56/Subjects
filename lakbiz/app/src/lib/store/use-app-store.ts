@@ -3,14 +3,30 @@
 import { useCallback, useEffect, useState } from "react";
 import type { PaymentMethod } from "@/lib/types";
 import {
+  addBankAccount,
+  addCheque,
+  addCustomer,
   addProduct,
   adjustStock,
   createSale,
+  deleteBankAccount,
+  deleteCustomer,
   deleteProduct,
+  recordCustomerPayment,
+  updateChequeStatus,
+  updateCustomer,
   updateProduct,
 } from "./actions";
 import { clearAppData, loadAppData, saveAppData } from "./storage";
-import type { AppData, ProductInput } from "./types";
+import type {
+  AppData,
+  BankAccountInput,
+  ChequeInput,
+  ChequeStatus,
+  CustomerInput,
+  ProductInput,
+  SaleOptions,
+} from "./types";
 
 export function useAppStore() {
   const [data, setData] = useState<AppData | null>(null);
@@ -47,22 +63,72 @@ export function useAppStore() {
       if (!data || qty <= 0) return;
       persist(adjustStock(data, productId, qty, "out", note));
     },
+    addCustomer: (input: CustomerInput) => {
+      if (!data) return;
+      persist(addCustomer(data, input));
+    },
+    updateCustomer: (id: string, input: CustomerInput) => {
+      if (!data) return;
+      persist(updateCustomer(data, id, input));
+    },
+    deleteCustomer: (id: string) => {
+      if (!data) return;
+      persist(deleteCustomer(data, id));
+    },
+    recordCustomerPayment: (
+      customerId: string,
+      amount: number,
+      method: PaymentMethod,
+      note?: string,
+    ) => {
+      if (!data) return false;
+      const before = data.customerPayments.length;
+      const next = recordCustomerPayment(
+        data,
+        customerId,
+        amount,
+        method,
+        note,
+      );
+      if (next.customerPayments.length === before) return false;
+      persist(next);
+      return true;
+    },
+    addBankAccount: (input: BankAccountInput) => {
+      if (!data) return;
+      persist(addBankAccount(data, input));
+    },
+    deleteBankAccount: (id: string) => {
+      if (!data) return;
+      persist(deleteBankAccount(data, id));
+    },
+    addCheque: (input: ChequeInput) => {
+      if (!data) return;
+      persist(addCheque(data, input));
+    },
+    updateChequeStatus: (
+      chequeId: string,
+      status: ChequeStatus,
+      bankAccountId?: string,
+    ) => {
+      if (!data) return;
+      persist(updateChequeStatus(data, chequeId, status, bankAccountId));
+    },
     createSale: (
       lines: { productId: string; qty: number }[],
       paymentMethod: PaymentMethod,
-      customerName?: string,
+      options?: SaleOptions,
     ) => {
       if (!data) return false;
       const before = data.sales.length;
-      const next = createSale(data, lines, paymentMethod, customerName);
+      const next = createSale(data, lines, paymentMethod, options);
       if (next.sales.length === before) return false;
       persist(next);
       return true;
     },
     resetAll: () => {
       clearAppData();
-      const empty = loadAppData();
-      setData(empty);
+      setData(loadAppData());
     },
   };
 

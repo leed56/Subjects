@@ -73,16 +73,26 @@ export default function DashboardPage() {
           />
         </div>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <DashboardStat
-            labelEn="Stock value (cost)"
-            labelSi="තොග වටිනාකම"
-            value={formatLkr(stats.stockValue)}
+            labelEn="Credit outstanding"
+            labelSi="ණය බිලි"
+            value={formatLkr(stats.creditOutstanding)}
           />
           <DashboardStat
-            labelEn="Sales today"
-            labelSi="අද බිල්"
-            value={String(stats.saleCount)}
+            labelEn="Bank balance"
+            labelSi="බැංකු ශේෂය"
+            value={formatLkr(stats.bankBalance)}
+          />
+          <DashboardStat
+            labelEn="Cheques due (7 days)"
+            labelSi="ඉදිරියට චෙක්"
+            value={String(stats.chequesDueSoonCount)}
+          />
+          <DashboardStat
+            labelEn="Customers"
+            labelSi="ගනුදෙනුකරු"
+            value={String(stats.customerCount)}
           />
         </div>
 
@@ -104,24 +114,24 @@ export default function DashboardPage() {
           </section>
 
           <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="font-semibold text-slate-900">Recent sales</h2>
-            {stats.recentSales.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">
-                No sales yet.{" "}
-                <Link href="/sales" className="text-teal-700 underline">
-                  Create first sale
-                </Link>
-              </p>
+            <h2 className="font-semibold text-slate-900">Top credit customers</h2>
+            {stats.topDebtors.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-500">No credit outstanding.</p>
             ) : (
               <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                {stats.recentSales.map((s) => (
-                  <li key={s.id}>
-                    • {formatLkr(s.total)} —{" "}
-                    {s.lines.map((l) => l.productName).join(", ")}
+                {stats.topDebtors.map((c) => (
+                  <li key={c.id}>
+                    • {c.name} — {formatLkr(c.creditBalance)}
                   </li>
                 ))}
               </ul>
             )}
+            <Link
+              href="/customers"
+              className="mt-3 inline-block text-sm text-teal-700 underline"
+            >
+              Manage customers
+            </Link>
           </section>
         </div>
 
@@ -134,10 +144,17 @@ export default function DashboardPage() {
                 add items
               </li>
               <li>
+                Go to <Link href="/customers" className="underline">Customers</Link> for
+                credit accounts
+              </li>
+              <li>
                 Go to <Link href="/sales" className="underline">Sales</Link> and
                 bill a customer
               </li>
-              <li>Come back here — numbers update automatically</li>
+              <li>
+                <Link href="/banking" className="underline">Banking</Link> for
+                cheques &amp; bank accounts
+              </li>
             </ol>
           </div>
         )}

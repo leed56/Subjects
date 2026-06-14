@@ -20,11 +20,11 @@ npm run dev
 
 Open http://localhost:3000 — **working pages**:
 
-- `/stock` — **add / edit items, stock in** (saves in browser)
-- `/sales` — **bill customer**, stock goes down
-- `/dashboard` — **real** sales, profit, low stock from your data
-- `/sectors` — field reference per business type
-- `/banking` — cheque demo (next to build)
+- `/stock` — add / edit items, stock in
+- `/sales` — bill customer (cash, credit, cheque)
+- `/customers` — credit ledger, record payments
+- `/banking` — bank accounts, cheque register, PDC
+- `/dashboard` — live sales, profit, credit, bank balance
 
 ## Sectors supported
 

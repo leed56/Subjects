@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
+import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { PaymentMethod } from "@/lib/types";
@@ -10,7 +12,14 @@ export default function SalesPage() {
   const { data, ready, createSale } = useAppStore();
   const [cart, setCart] = useState<Record<string, number>>({});
   const [payment, setPayment] = useState<PaymentMethod>("cash");
-  const [customer, setCustomer] = useState("");
+  const [customerId, setCustomerId] = useState("");
+  const [walkInName, setWalkInName] = useState("");
+  const [chequeNo, setChequeNo] = useState("");
+  const [chequeBank, setChequeBank] = useState(LK_BANKS[0]);
+  const [chequeDate, setChequeDate] = useState(
+    new Date().toISOString().slice(0, 10),
+  );
+  const [postDated, setPostDated] = useState(false);
   const [message, setMessage] = useState("");
 
   const lines = useMemo(() => {
@@ -39,18 +48,42 @@ export default function SalesPage() {
   };
 
   const handleSale = () => {
+    if (payment === "credit" && !customerId) {
+      setMessage("Select a customer for credit sales.");
+      return;
+    }
+    if (payment === "cheque" && (!chequeNo || !chequeDate)) {
+      setMessage("Enter cheque number and date.");
+      return;
+    }
+
     const ok = createSale(
       lines.map((l) => ({ productId: l.product.id, qty: l.qty })),
       payment,
-      customer,
+      {
+        customerId: customerId || undefined,
+        customerName: walkInName || undefined,
+        chequeNo: payment === "cheque" ? chequeNo : undefined,
+        chequeBank: payment === "cheque" ? chequeBank : undefined,
+        chequeDate: payment === "cheque" ? chequeDate : undefined,
+        postDated: payment === "cheque" ? postDated : undefined,
+      },
     );
+
     if (ok) {
       setCart({});
-      setCustomer("");
-      setMessage("Sale saved. Stock updated.");
-      setTimeout(() => setMessage(""), 3000);
+      setWalkInName("");
+      setChequeNo("");
+      setMessage(
+        payment === "credit"
+          ? "Credit sale saved. Customer balance updated."
+          : payment === "cheque"
+            ? "Sale saved. Cheque added to Banking."
+            : "Sale saved. Stock updated.",
+      );
+      setTimeout(() => setMessage(""), 4000);
     } else {
-      setMessage("Could not complete sale — check stock quantities.");
+      setMessage("Could not complete sale — check stock and required fields.");
     }
   };
 
@@ -75,12 +108,15 @@ export default function SalesPage() {
           <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
             <p className="font-medium text-slate-700">No items in stock</p>
             <p className="mt-2 text-sm text-slate-500">
-              Add items on the Stock page first.
+              <Link href="/stock" className="text-teal-700 underline">
+                Add stock
+              </Link>{" "}
+              first.
             </p>
           </div>
         ) : (
           <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-3">
+            <div className="space-y-3 lg:col-span-2">
               {inStock.map((p) => {
                 const unit = String(p.customFields.unit ?? "pcs");
                 const qty = cart[p.id] ?? 0;
@@ -135,13 +171,34 @@ export default function SalesPage() {
               </p>
 
               <label className="mt-4 block text-sm">
-                Customer name (optional)
-                <input
-                  value={customer}
-                  onChange={(e) => setCustomer(e.target.value)}
+                Customer
+                <select
+                  value={customerId}
+                  onChange={(e) => setCustomerId(e.target.value)}
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                />
+                >
+                  <option value="">Walk-in / no account</option>
+                  {data.customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                      {c.creditBalance > 0
+                        ? ` (owes ${formatLkr(c.creditBalance)})`
+                        : ""}
+                    </option>
+                  ))}
+                </select>
               </label>
+
+              {!customerId && (
+                <label className="mt-3 block text-sm">
+                  Walk-in name (optional)
+                  <input
+                    value={walkInName}
+                    onChange={(e) => setWalkInName(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                  />
+                </label>
+              )}
 
               <label className="mt-3 block text-sm">
                 Payment
@@ -157,6 +214,49 @@ export default function SalesPage() {
                   <option value="credit">Credit (ණය)</option>
                 </select>
               </label>
+
+              {payment === "credit" && data.customers.length === 0 && (
+                <p className="mt-2 text-xs text-amber-700">
+                  <Link href="/customers" className="underline">
+                    Add a customer
+                  </Link>{" "}
+                  first for credit sales.
+                </p>
+              )}
+
+              {payment === "cheque" && (
+                <div className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3">
+                  <input
+                    placeholder="Cheque number *"
+                    value={chequeNo}
+                    onChange={(e) => setChequeNo(e.target.value)}
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                  />
+                  <select
+                    value={chequeBank}
+                    onChange={(e) => setChequeBank(e.target.value)}
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                  >
+                    {LK_BANKS.map((b) => (
+                      <option key={b}>{b}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="date"
+                    value={chequeDate}
+                    onChange={(e) => setChequeDate(e.target.value)}
+                    className="w-full rounded-lg border px-3 py-2 text-sm"
+                  />
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={postDated}
+                      onChange={(e) => setPostDated(e.target.checked)}
+                    />
+                    Post-dated (PDC)
+                  </label>
+                </div>
+              )}
 
               <button
                 disabled={lines.length === 0}
@@ -178,7 +278,7 @@ export default function SalesPage() {
                   <tr>
                     <th className="px-4 py-3">Date</th>
                     <th className="px-4 py-3">Customer</th>
-                    <th className="px-4 py-3">Items</th>
+                    <th className="px-4 py-3">Payment</th>
                     <th className="px-4 py-3">Total</th>
                     <th className="px-4 py-3">Profit</th>
                   </tr>
@@ -190,8 +290,8 @@ export default function SalesPage() {
                         {new Date(s.date).toLocaleString("en-LK")}
                       </td>
                       <td className="px-4 py-3">{s.customerName || "—"}</td>
-                      <td className="px-4 py-3">
-                        {s.lines.map((l) => l.productName).join(", ")}
+                      <td className="px-4 py-3 capitalize">
+                        {s.paymentMethod.replace("_", " ")}
                       </td>
                       <td className="px-4 py-3">{formatLkr(s.total)}</td>
                       <td className="px-4 py-3 text-teal-700">
