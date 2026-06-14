@@ -1,6 +1,48 @@
 import type { PaymentMethod, Product, SectorId } from "@/lib/types";
 import type { BusinessInfo } from "@/lib/invoice";
 import { defaultBusiness } from "@/lib/invoice";
+import type { ACJobStatus } from "@/lib/ac-jobs";
+
+export interface ACJob {
+  id: string;
+  jobNo: string;
+  date: string;
+  customerId?: string;
+  customerName: string;
+  phone?: string;
+  address: string;
+  brand?: string;
+  btu?: number;
+  unitType?: string;
+  unitCount: number;
+  description: string;
+  quotedAmount: number;
+  depositAmount: number;
+  pipeMeters?: number;
+  status: ACJobStatus;
+  scheduledDate?: string;
+  installedDate?: string;
+  notes?: string;
+}
+
+export interface ACJobInput {
+  customerId?: string;
+  customerName: string;
+  phone?: string;
+  address: string;
+  brand?: string;
+  btu?: number;
+  unitType?: string;
+  unitCount: number;
+  description: string;
+  quotedAmount: number;
+  depositAmount: number;
+  pipeMeters?: number;
+  status: ACJobStatus;
+  scheduledDate?: string;
+  installedDate?: string;
+  notes?: string;
+}
 
 export interface SaleLine {
   productId: string;
@@ -127,6 +169,7 @@ export interface AppData {
   suppliers: Supplier[];
   purchases: Purchase[];
   supplierPayments: SupplierPayment[];
+  acJobs: ACJob[];
   bankAccounts: BankAccountRecord[];
   cheques: ChequeRecord[];
 }

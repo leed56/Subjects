@@ -22,6 +22,7 @@ Open http://localhost:3000 — **working pages**:
 
 - `/stock` — add / edit items, stock in
 - `/suppliers` — suppliers, **GRN purchases**, payables
+- `/jobs` — **AC installation** jobs (quote → install → service)
 - `/sales` — bill customer (cash, credit, cheque)
 - `/bills` — view, **print**, **WhatsApp share** bills
 - `/customers` — credit ledger, record payments

@@ -101,6 +101,26 @@ export default function DashboardPage() {
           />
         </div>
 
+        {stats.pendingACJobCount > 0 && (
+          <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-medium text-sky-900">
+                {stats.pendingACJobCount} AC installation(s) pending
+              </p>
+              <Link href="/jobs" className="text-sm text-sky-800 underline">
+                View jobs
+              </Link>
+            </div>
+            <ul className="mt-2 space-y-1 text-sm text-sky-800">
+              {stats.pendingACJobs.map((j) => (
+                <li key={j.id}>
+                  • {j.customerName} — {j.description} ({j.jobNo})
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div className="mt-10 grid gap-6 lg:grid-cols-3">
           <section className="rounded-xl border border-slate-200 bg-white p-5">
             <h2 className="font-semibold text-slate-900">Low stock alert</h2>

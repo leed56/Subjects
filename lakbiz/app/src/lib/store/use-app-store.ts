@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { PaymentMethod } from "@/lib/types";
 import {
+  addACJob,
   addBankAccount,
   addCheque,
   addCustomer,
@@ -11,21 +12,24 @@ import {
   adjustStock,
   createPurchase,
   createSale,
+  deleteACJob,
   deleteBankAccount,
   deleteCustomer,
   deleteProduct,
   deleteSupplier,
   recordCustomerPayment,
   recordSupplierPayment,
+  updateACJob,
+  updateBusiness,
   updateChequeStatus,
   updateCustomer,
   updateProduct,
-  updateBusiness,
   updateSupplier,
 } from "./actions";
 import { clearAppData, loadAppData, saveAppData } from "./storage";
 import type {
   AppData,
+  ACJobInput,
   BankAccountInput,
   ChequeInput,
   ChequeStatus,
@@ -177,6 +181,18 @@ export function useAppStore() {
     updateBusiness: (business: BusinessInfo) => {
       if (!data) return;
       persist(updateBusiness(data, business));
+    },
+    addACJob: (input: ACJobInput) => {
+      if (!data) return;
+      persist(addACJob(data, input));
+    },
+    updateACJob: (id: string, input: Partial<ACJobInput>) => {
+      if (!data) return;
+      persist(updateACJob(data, id, input));
+    },
+    deleteACJob: (id: string) => {
+      if (!data) return;
+      persist(deleteACJob(data, id));
     },
     resetAll: () => {
       clearAppData();

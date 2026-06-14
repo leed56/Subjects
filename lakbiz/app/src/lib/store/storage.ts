@@ -14,6 +14,7 @@ export const emptyAppData = (): AppData => ({
   suppliers: [],
   purchases: [],
   supplierPayments: [],
+  acJobs: [],
   bankAccounts: [],
   cheques: [],
 });

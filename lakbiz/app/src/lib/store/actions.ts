@@ -1,8 +1,10 @@
 import { newId, todayKey } from "@/lib/format";
 import { generateBillNo, generateGrnNo, type BusinessInfo } from "@/lib/invoice";
+import { generateJobNo } from "@/lib/ac-jobs";
 import type { PaymentMethod, Product } from "@/lib/types";
 import type {
   AppData,
+  ACJobInput,
   BankAccountInput,
   ChequeInput,
   ChequeStatus,
@@ -362,6 +364,77 @@ export function createPurchase(
   };
 }
 
+export function addACJob(data: AppData, input: ACJobInput): AppData {
+  const customer = input.customerId
+    ? data.customers.find((c) => c.id === input.customerId)
+    : undefined;
+
+  const job = {
+    id: newId(),
+    jobNo: generateJobNo(data.acJobs.length),
+    date: new Date().toISOString(),
+    customerId: input.customerId,
+    customerName: customer?.name ?? input.customerName.trim(),
+    phone: input.phone?.trim() || customer?.phone || undefined,
+    address: input.address.trim(),
+    brand: input.brand?.trim() || undefined,
+    btu: input.btu,
+    unitType: input.unitType?.trim() || undefined,
+    unitCount: input.unitCount,
+    description: input.description.trim(),
+    quotedAmount: input.quotedAmount,
+    depositAmount: input.depositAmount,
+    pipeMeters: input.pipeMeters,
+    status: input.status,
+    scheduledDate: input.scheduledDate,
+    installedDate: input.installedDate,
+    notes: input.notes?.trim() || undefined,
+  };
+
+  return { ...data, acJobs: [job, ...data.acJobs] };
+}
+
+export function updateACJob(
+  data: AppData,
+  id: string,
+  input: Partial<ACJobInput>,
+): AppData {
+  return {
+    ...data,
+    acJobs: data.acJobs.map((j) => {
+      if (j.id !== id) return j;
+      const customer = input.customerId
+        ? data.customers.find((c) => c.id === input.customerId)
+        : undefined;
+      return {
+        ...j,
+        customerId: input.customerId ?? j.customerId,
+        customerName:
+          customer?.name ??
+          (input.customerName?.trim() || j.customerName),
+        phone: input.phone?.trim() ?? j.phone,
+        address: input.address?.trim() ?? j.address,
+        brand: input.brand?.trim() ?? j.brand,
+        btu: input.btu ?? j.btu,
+        unitType: input.unitType?.trim() ?? j.unitType,
+        unitCount: input.unitCount ?? j.unitCount,
+        description: input.description?.trim() ?? j.description,
+        quotedAmount: input.quotedAmount ?? j.quotedAmount,
+        depositAmount: input.depositAmount ?? j.depositAmount,
+        pipeMeters: input.pipeMeters ?? j.pipeMeters,
+        status: input.status ?? j.status,
+        scheduledDate: input.scheduledDate ?? j.scheduledDate,
+        installedDate: input.installedDate ?? j.installedDate,
+        notes: input.notes?.trim() ?? j.notes,
+      };
+    }),
+  };
+}
+
+export function deleteACJob(data: AppData, id: string): AppData {
+  return { ...data, acJobs: data.acJobs.filter((j) => j.id !== id) };
+}
+
 export function addBankAccount(
   data: AppData,
   input: BankAccountInput,
@@ -613,6 +686,10 @@ export function getDashboardStats(data: AppData) {
       daysUntil(c.chequeDate) <= 7,
   );
   const pendingCheques = data.cheques.filter((c) => c.status === "pending");
+  const pendingACJobs = data.acJobs.filter((j) =>
+    ["quote", "deposit_received", "scheduled"].includes(j.status),
+  );
+  const serviceDueJobs = data.acJobs.filter((j) => j.status === "service_due");
 
   return {
     todaySales: salesTotal,
@@ -640,6 +717,9 @@ export function getDashboardStats(data: AppData) {
       .slice(0, 5),
     recentPurchases: data.purchases.slice(0, 5),
     recentSales: data.sales.slice(0, 5),
+    pendingACJobCount: pendingACJobs.length,
+    pendingACJobs: pendingACJobs.slice(0, 5),
+    serviceDueCount: serviceDueJobs.length,
     recentLogs: data.stockLogs.slice(0, 5),
   };
 }
