@@ -18,14 +18,13 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000 — demo pages:
+Open http://localhost:3000 — **working pages**:
 
-- `/` — overview
-- `/dashboard` — owner KPIs (AC + car dealer demo)
-- `/sectors` — all business templates
-- `/sectors/ac_hvac` — AC field list
-- `/sectors/car_sales` — vehicle fields
-- `/banking` — cheques, bank accounts
+- `/stock` — **add / edit items, stock in** (saves in browser)
+- `/sales` — **bill customer**, stock goes down
+- `/dashboard` — **real** sales, profit, low stock from your data
+- `/sectors` — field reference per business type
+- `/banking` — cheque demo (next to build)
 
 ## Sectors supported
 

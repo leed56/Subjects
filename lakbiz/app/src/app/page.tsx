@@ -25,16 +25,22 @@ export default function Home() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              href="/dashboard"
+              href="/stock"
               className="rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-teal-900 hover:bg-teal-50"
             >
-              Open demo dashboard
+              Add stock →
             </Link>
             <Link
-              href="/sectors"
+              href="/sales"
               className="rounded-lg border border-teal-400 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800"
             >
-              Browse all sectors
+              New sale
+            </Link>
+            <Link
+              href="/dashboard"
+              className="rounded-lg border border-teal-400 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800"
+            >
+              Dashboard
             </Link>
           </div>
         </section>
@@ -76,17 +82,21 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="mt-12 rounded-xl border border-amber-200 bg-amber-50 p-6">
-          <h2 className="font-semibold text-amber-900">Getting started</h2>
-          <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-amber-900">
-            <li>Pick sector(s) — e.g. AC + Banking for a cooling dealer</li>
-            <li>Add stock (products or vehicles)</li>
-            <li>Bill customers — cash, cheque, or credit</li>
-            <li>Check daily profit on your phone</li>
+        <section className="mt-12 rounded-xl border border-teal-200 bg-teal-50 p-6">
+          <h2 className="font-semibold text-teal-900">Now working — try it</h2>
+          <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-teal-900">
+            <li>
+              <Link href="/stock" className="underline font-medium">Stock</Link> — add items with buy/sell price
+            </li>
+            <li>
+              <Link href="/sales" className="underline font-medium">Sales</Link> — bill customer, stock reduces
+            </li>
+            <li>
+              <Link href="/dashboard" className="underline font-medium">Dashboard</Link> — real profit &amp; low stock
+            </li>
           </ol>
-          <p className="mt-4 text-xs text-amber-800">
-            Planning docs: <code>lakbiz/docs/SECTORS.md</code> and{" "}
-            <code>lakbiz/docs/DATA_MODEL.md</code>
+          <p className="mt-3 text-xs text-teal-800">
+            Data saves in your browser (no database needed yet).
           </p>
         </section>
       </main>
