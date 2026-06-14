@@ -1,42 +1,63 @@
 # LakBiz — Stock & Accounting App (Sri Lanka)
 
-A planning folder for a simple **inventory + accounting** app aimed at Sri Lankan small and medium businesses: grocery shops, electronics stores, electrical suppliers, spare parts dealers, and similar retail/wholesale operations.
+Inventory, sales, and **business banking** for Sri Lankan SMEs — grocery, electronics, electricals, spare parts, **air conditioning**, and **car sales**.
 
-> This folder is **product planning only** — not a full application yet. See [PRODUCT_BRIEF.md](./PRODUCT_BRIEF.md) for market research, feature priorities, and how to attract business owners.
+## Docs
 
-## Why this exists
+| File | Contents |
+|------|----------|
+| [PRODUCT_BRIEF.md](./PRODUCT_BRIEF.md) | Market research, MVP, go-to-market |
+| [docs/SECTORS.md](./docs/SECTORS.md) | **AC, car sales, banking** + all sector fields |
+| [docs/DATA_MODEL.md](./docs/DATA_MODEL.md) | Database / types design |
 
-Sri Lanka already has many POS/ERP tools (Lanka POS, Takkufy, Omnis, Kale, SmartBill, etc.). To win business owners, this app should be **simpler to start**, **local-first**, and **honest about what it does** — not try to be a full ERP on day one.
+## App (starter)
 
-## Target users
+```bash
+cd lakbiz/app
+npm install
+npm run dev
+```
 
-| Segment | Examples | Main pain |
-|---------|----------|-----------|
-| Grocery / mini-mart | Corner shops, supermarkets | Fast billing, expiry, credit customers |
-| Electronics | Mobile shops, computer stores | Serial numbers, warranty, supplier credit |
-| Electricals | Wire, switches, fittings | Units (meters, boxes), project/job billing |
-| Spare parts | Auto, machinery parts | Part numbers, slow vs fast movers, supplier orders |
+Open http://localhost:3000 — demo pages:
 
-## Suggested MVP scope (keep it small)
+- `/` — overview
+- `/dashboard` — owner KPIs (AC + car dealer demo)
+- `/sectors` — all business templates
+- `/sectors/ac_hvac` — AC field list
+- `/sectors/car_sales` — vehicle fields
+- `/banking` — cheques, bank accounts
 
-1. **Stock in / stock out** with categories
-2. **Simple billing** (cash + credit)
-3. **Daily sales & profit summary**
-4. **Low-stock alerts**
-5. **WhatsApp bill share**
-6. **Sinhala + English UI** (Tamil later)
+## Sectors supported
 
-## Folder structure (when you build)
+| Sector | Key extras |
+|--------|------------|
+| Grocery | Weight, expiry, barcode |
+| Electronics | Serial, IMEI, warranty |
+| Electricals | Meters, job billing |
+| Spare parts | Part no., fitment |
+| **AC / HVAC** | BTU, serial pairs, install jobs, AMC |
+| **Car sales** | Chassis, aging, recondition cost, leasing |
+| **Banking** (all) | Cheques, PDC, multi-bank, reconciliation |
+
+## Build order
+
+1. Core stock + POS + customers  
+2. Banking + cheques  
+3. AC jobs + car vehicle units  
+4. VAT invoices, bank CSV reconcile  
+
+## Folder layout
 
 ```
 lakbiz/
-├── README.md              ← you are here
-├── PRODUCT_BRIEF.md       ← full advice & market notes
+├── README.md
+├── PRODUCT_BRIEF.md
 ├── docs/
-│   └── wireframes/        ← optional UI sketches
-└── app/                   ← future: web or mobile app code
+│   ├── SECTORS.md
+│   └── DATA_MODEL.md
+└── app/                 ← Next.js starter
+    └── src/
+        ├── app/           ← pages
+        ├── components/
+        └── lib/           ← types, sector config
 ```
-
-## Next step
-
-Read [PRODUCT_BRIEF.md](./PRODUCT_BRIEF.md), pick 5–7 MVP features, and build a **working demo for one shop type** (e.g. grocery) before adding electronics/spare-parts complexity.
