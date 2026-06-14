@@ -9,6 +9,7 @@ Inventory, sales, and **business banking** for Sri Lankan SMEs — grocery, elec
 | [PRODUCT_BRIEF.md](./PRODUCT_BRIEF.md) | Market research, MVP, go-to-market |
 | [docs/SECTORS.md](./docs/SECTORS.md) | **AC, car sales, banking** + all sector fields |
 | [docs/DATA_MODEL.md](./docs/DATA_MODEL.md) | Database / types design |
+| [docs/SUBSCRIPTION.md](./docs/SUBSCRIPTION.md) | **Pricing tiers, billing roadmap, Supabase schema** |
 
 ## App (starter)
 
@@ -28,6 +29,8 @@ Open http://localhost:3000 — **working pages**:
 - `/bills` — view, **print**, **WhatsApp share** bills
 - `/customers` — credit ledger, record payments
 - `/banking` — bank accounts, cheque register, PDC
+- `/settings/billing` — **subscription plans** (LKR pricing, trial)
+- `/login` — phone OTP scaffold (Supabase)
 - `/dashboard` — live sales, profit, credit, bank balance
 
 ## Sectors supported

@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { TrialBanner } from "@/components/trial-banner";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { ROUTE_FEATURES } from "@/lib/subscription/can";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 const navKeys = [
   { href: "/dashboard", key: "nav.dashboard" },
@@ -17,9 +21,18 @@ const navKeys = [
 
 export function SiteHeader() {
   const { locale, setLocale, t } = useLocale();
+  const { can } = useSubscription();
+  const pathname = usePathname();
+
+  const visibleNav = navKeys.filter((item) => {
+    const feature = ROUTE_FEATURES[item.href];
+    if (!feature) return true;
+    return can(feature);
+  });
 
   return (
     <header className="border-b border-slate-200 bg-white">
+      <TrialBanner />
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-xl font-bold text-teal-800">LakBiz</span>
@@ -36,8 +49,24 @@ export function SiteHeader() {
           >
             {t("nav.lang")}
           </button>
+          <Link
+            href="/settings/billing"
+            className={`text-sm font-medium ${
+              pathname === "/settings/billing"
+                ? "text-teal-800"
+                : "text-slate-600 hover:text-teal-700"
+            }`}
+          >
+            {t("nav.billing")}
+          </Link>
+          <Link
+            href="/login"
+            className="text-sm font-medium text-slate-600 hover:text-teal-700"
+          >
+            {t("nav.login")}
+          </Link>
           <nav className="flex flex-wrap gap-3 text-sm font-medium text-slate-600">
-            {navKeys.map((item) => (
+            {visibleNav.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}

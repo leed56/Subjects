@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_Sinhala } from "next/font/google";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
+import { SubscriptionProvider } from "@/lib/subscription/subscription-provider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -36,7 +37,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${notoSinhala.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sinhala">
-        <LocaleProvider>{children}</LocaleProvider>
+        <LocaleProvider>
+          <SubscriptionProvider>{children}</SubscriptionProvider>
+        </LocaleProvider>
       </body>
     </html>
   );
