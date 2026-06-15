@@ -461,6 +461,13 @@ const si: Dict = {
   "vat.settings_saved": "සැකසුම් සුරකින ලදී",
   "vat.view_return": "VAT ආපසු බලන්න",
   "vat.enable_hint": "VAT මීටරය සක්‍රිය කිරීමට වෙළඳසැල සැකසුම් වෙත යන්න",
+  "vat.settings_saved_local": "සුරකින ලදී — මෙම බ්‍රවුසරයේ (දත්ත එකම උපකරණයේ පමණක්)",
+  "vat.settings_saved_cloud": "සුරකින ලදී — බ්‍රවුසරය + Supabase වලට",
+  "vat.cloud_save_failed": "වලාකුළු සුරැකීම අසාර්ථක (දේශීය සුරකින ලදී)",
+  "vat.no_supabase_env": "Supabase env නැත — දත්ත මෙම බ්‍රවුසරයේ පමණක් සුරකින ලදී",
+  "vat.sign_in_for_cloud": "වලාකුළට සුරැකීමට පිවිසෙන්න",
+  "vat.save_hint_local": "දත්ත මෙම බ්‍රවුසරයේ සුරකින ලදී. වෙනත් දුරකථනයක sync නොවේ.",
+  "vat.save_hint_cloud": "පිවිසි විට දත්ත Supabase වෙත ද සුරකින ලදී.",
 };
 
 const en: Dict = {
@@ -905,6 +912,13 @@ const en: Dict = {
   "vat.settings_saved": "Settings saved",
   "vat.view_return": "View VAT return",
   "vat.enable_hint": "Enable the VAT meter in shop settings",
+  "vat.settings_saved_local": "Saved — in this browser only (same device)",
+  "vat.settings_saved_cloud": "Saved — browser + Supabase cloud",
+  "vat.cloud_save_failed": "Cloud save failed (saved locally instead)",
+  "vat.no_supabase_env": "No Supabase env — saved in this browser only",
+  "vat.sign_in_for_cloud": "Sign in to sync settings to the cloud",
+  "vat.save_hint_local": "Data saves in this browser. It won't sync to other devices.",
+  "vat.save_hint_cloud": "When signed in, settings also sync to Supabase.",
 };
 
 const dictionaries: Record<Locale, Dict> = { si, en };

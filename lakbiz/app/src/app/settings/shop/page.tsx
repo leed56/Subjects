@@ -1,10 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/components/auth-provider";
 import { SiteHeader } from "@/components/site-header";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { BusinessInfo } from "@/lib/invoice";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
+import {
+  fetchOrgShopSettings,
+  saveOrgShopSettings,
+} from "@/lib/supabase/org-settings";
 import { useAppStore } from "@/lib/store/use-app-store";
 
 const QUARTER_MONTHS = [
@@ -16,13 +23,36 @@ const QUARTER_MONTHS = [
 
 export default function ShopSettingsPage() {
   const { data, ready, updateBusiness } = useAppStore();
+  const { org } = useSubscription();
+  const { user } = useAuth();
   const { t } = useLocale();
   const [form, setForm] = useState<BusinessInfo | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [saveMode, setSaveMode] = useState<"local" | "cloud" | null>(null);
+  const hydrated = useRef(false);
 
   useEffect(() => {
-    if (data?.business) setForm({ ...data.business });
-  }, [data?.business]);
+    if (!ready || !data || hydrated.current) return;
+
+    const init = async () => {
+      let business = { ...data.business };
+
+      if (org.id && user && isSupabaseConfigured()) {
+        const cloud = await fetchOrgShopSettings(org.id);
+        if (cloud) {
+          business = { ...business, ...cloud };
+          updateBusiness(business);
+        }
+      }
+
+      setForm(business);
+      hydrated.current = true;
+    };
+
+    void init();
+  }, [ready, data, org.id, user]);
 
   if (!ready || !data || !form) {
     return (
@@ -33,11 +63,46 @@ export default function ShopSettingsPage() {
     );
   }
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateBusiness(form);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setSaving(true);
+    setError("");
+    setSaved(false);
+    setSaveMode(null);
+
+    const payload: BusinessInfo = {
+      ...form,
+      vatRegistered: form.vatRegistered ?? false,
+      quarterStartMonth: form.quarterStartMonth ?? 4,
+    };
+
+    updateBusiness(payload);
+
+    if (org.id && user && isSupabaseConfigured()) {
+      const cloudError = await saveOrgShopSettings(org.id, payload);
+      if (cloudError) {
+        setError(`${t("vat.cloud_save_failed")}: ${cloudError}`);
+        setSaveMode("local");
+        setSaved(true);
+      } else {
+        setSaveMode("cloud");
+        setSaved(true);
+      }
+    } else {
+      setSaveMode("local");
+      setSaved(true);
+      if (!isSupabaseConfigured()) {
+        setError(t("vat.no_supabase_env"));
+      } else if (!user) {
+        setError(t("vat.sign_in_for_cloud"));
+      }
+    }
+
+    setSaving(false);
+    setTimeout(() => {
+      setSaved(false);
+      setSaveMode(null);
+    }, 5000);
   };
 
   return (
@@ -49,7 +114,15 @@ export default function ShopSettingsPage() {
 
         {saved && (
           <p className="mt-4 rounded-lg bg-teal-50 px-4 py-3 text-sm text-teal-800">
-            {t("vat.settings_saved")}
+            {saveMode === "cloud"
+              ? t("vat.settings_saved_cloud")
+              : t("vat.settings_saved_local")}
+          </p>
+        )}
+
+        {error && (
+          <p className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {error}
           </p>
         )}
 
@@ -99,7 +172,7 @@ export default function ShopSettingsPage() {
                 <label className="block text-sm">
                   {t("vat.vat_number")}
                   <input
-                    value={form.vatNumber ?? form.tin ?? ""}
+                    value={form.vatNumber ?? ""}
                     onChange={(e) =>
                       setForm({ ...form, vatNumber: e.target.value })
                     }
@@ -132,15 +205,26 @@ export default function ShopSettingsPage() {
 
           <button
             type="submit"
-            className="w-full rounded-lg bg-teal-700 py-2.5 text-sm font-medium text-white hover:bg-teal-800"
+            disabled={saving}
+            className="w-full rounded-lg bg-teal-700 py-2.5 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-50"
           >
-            {t("common.save")}
+            {saving ? t("common.loading") : t("common.save")}
           </button>
         </form>
+
+        <p className="mt-4 text-center text-xs text-slate-500">
+          {user && org.id
+            ? t("vat.save_hint_cloud")
+            : t("vat.save_hint_local")}
+        </p>
 
         <p className="mt-6 text-center text-sm text-slate-500">
           <Link href="/vat" className="text-teal-700 underline">
             {t("vat.view_return")}
+          </Link>
+          {" · "}
+          <Link href="/dashboard" className="text-teal-700 underline">
+            {t("nav.dashboard")}
           </Link>
           {" · "}
           <Link href="/settings/billing" className="text-teal-700 underline">

@@ -60,6 +60,7 @@ export default function BillsPage() {
             onSubmit={(e) => {
               e.preventDefault();
               updateBusiness({
+                ...data.business,
                 name: bizName,
                 nameSi: bizNameSi,
                 phone: bizPhone,

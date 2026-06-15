@@ -791,19 +791,21 @@ function daysUntil(dateStr: string): number {
 
 export function updateBusiness(
   data: AppData,
-  business: BusinessInfo,
+  business: Partial<BusinessInfo> & Pick<BusinessInfo, "name">,
 ): AppData {
+  const prev = data.business;
   return {
     ...data,
     business: {
-      name: business.name.trim() || "My Shop",
-      nameSi: business.nameSi?.trim() || undefined,
-      phone: business.phone?.trim() || undefined,
-      address: business.address?.trim() || undefined,
-      tin: business.tin?.trim() || undefined,
-      vatRegistered: business.vatRegistered ?? false,
-      vatNumber: business.vatNumber?.trim() || undefined,
-      quarterStartMonth: business.quarterStartMonth ?? 4,
+      name: business.name.trim() || prev.name || "My Shop",
+      nameSi: business.nameSi?.trim() ?? prev.nameSi,
+      phone: business.phone?.trim() ?? prev.phone,
+      address: business.address?.trim() ?? prev.address,
+      tin: business.tin?.trim() ?? prev.tin,
+      vatRegistered: business.vatRegistered ?? prev.vatRegistered ?? false,
+      vatNumber: business.vatNumber?.trim() ?? prev.vatNumber,
+      quarterStartMonth:
+        business.quarterStartMonth ?? prev.quarterStartMonth ?? 4,
     },
   };
 }
