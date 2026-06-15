@@ -68,4 +68,5 @@ export interface SubscriptionContextValue {
   isReadOnly: boolean;
   setDemoPlan: (planId: PlanId) => void;
   setDemoBillingCycle: (cycle: BillingCycle) => void;
+  refreshOrg: () => Promise<boolean>;
 }

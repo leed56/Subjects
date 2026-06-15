@@ -468,6 +468,7 @@ const si: Dict = {
   "vat.sign_in_for_cloud": "වලාකුළට සුරැකීමට පිවිසෙන්න",
   "vat.save_hint_local": "දත්ත මෙම බ්‍රවුසරයේ සුරකින ලදී. වෙනත් දුරකථනයක sync නොවේ.",
   "vat.save_hint_cloud": "පිවිසි විට දත්ත Supabase වෙත ද සුරකින ලදී.",
+  "vat.save_hint_create_org": "පිවිසි සිටියි — Save ඔබන්න. පළමු වතාවට Supabase shop එක සාදා cloud sync කරයි.",
 };
 
 const en: Dict = {
@@ -919,6 +920,7 @@ const en: Dict = {
   "vat.sign_in_for_cloud": "Sign in to sync settings to the cloud",
   "vat.save_hint_local": "Data saves in this browser. It won't sync to other devices.",
   "vat.save_hint_cloud": "When signed in, settings also sync to Supabase.",
+  "vat.save_hint_create_org": "Signed in — press Save. First save creates your cloud shop and syncs settings.",
 };
 
 const dictionaries: Record<Locale, Dict> = { si, en };

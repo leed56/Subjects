@@ -10,6 +10,8 @@ import type { BusinessInfo } from "@/lib/invoice";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   fetchOrgShopSettings,
+  getOrCreateOrgForUser,
+  mergeBusinessSettings,
   saveOrgShopSettings,
 } from "@/lib/supabase/org-settings";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -23,7 +25,7 @@ const QUARTER_MONTHS = [
 
 export default function ShopSettingsPage() {
   const { data, ready, updateBusiness } = useAppStore();
-  const { org } = useSubscription();
+  const { org, refreshOrg } = useSubscription();
   const { user } = useAuth();
   const { t } = useLocale();
   const [form, setForm] = useState<BusinessInfo | null>(null);
@@ -31,28 +33,28 @@ export default function ShopSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saveMode, setSaveMode] = useState<"local" | "cloud" | null>(null);
-  const hydrated = useRef(false);
+  const hydratedFor = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!ready || !data || hydrated.current) return;
+    if (!ready || !data) return;
+
+    const hydrationKey = `${user?.id ?? "anon"}:${org.id ?? "none"}`;
+    if (hydratedFor.current === hydrationKey) return;
 
     const init = async () => {
       let business = { ...data.business };
 
       if (org.id && user && isSupabaseConfigured()) {
         const cloud = await fetchOrgShopSettings(org.id);
-        if (cloud) {
-          business = { ...business, ...cloud };
-          updateBusiness(business);
-        }
+        business = mergeBusinessSettings(business, cloud);
       }
 
       setForm(business);
-      hydrated.current = true;
+      hydratedFor.current = hydrationKey;
     };
 
     void init();
-  }, [ready, data, org.id, user]);
+  }, [ready, data, org.id, user?.id]);
 
   if (!ready || !data || !form) {
     return (
@@ -78,14 +80,43 @@ export default function ShopSettingsPage() {
 
     updateBusiness(payload);
 
-    if (org.id && user && isSupabaseConfigured()) {
-      const cloudError = await saveOrgShopSettings(org.id, payload);
-      if (cloudError) {
-        setError(`${t("vat.cloud_save_failed")}: ${cloudError}`);
-        setSaveMode("local");
-        setSaved(true);
+    let targetOrgId = org.id;
+
+    if (user && isSupabaseConfigured()) {
+      if (!targetOrgId) {
+        const { orgId, error: createError } = await getOrCreateOrgForUser(
+          user.id,
+          payload,
+        );
+        if (createError) {
+          setError(`${t("vat.cloud_save_failed")}: ${createError}`);
+          setSaveMode("local");
+          setSaved(true);
+          setSaving(false);
+          setTimeout(() => {
+            setSaved(false);
+            setSaveMode(null);
+          }, 5000);
+          return;
+        }
+        if (orgId) {
+          targetOrgId = orgId;
+          await refreshOrg();
+        }
+      }
+
+      if (targetOrgId) {
+        const cloudError = await saveOrgShopSettings(targetOrgId, payload);
+        if (cloudError) {
+          setError(`${t("vat.cloud_save_failed")}: ${cloudError}`);
+          setSaveMode("local");
+          setSaved(true);
+        } else {
+          setSaveMode("cloud");
+          setSaved(true);
+        }
       } else {
-        setSaveMode("cloud");
+        setSaveMode("local");
         setSaved(true);
       }
     } else {
@@ -215,7 +246,9 @@ export default function ShopSettingsPage() {
         <p className="mt-4 text-center text-xs text-slate-500">
           {user && org.id
             ? t("vat.save_hint_cloud")
-            : t("vat.save_hint_local")}
+            : user
+              ? t("vat.save_hint_create_org")
+              : t("vat.save_hint_local")}
         </p>
 
         <p className="mt-6 text-center text-sm text-slate-500">

@@ -1,6 +1,7 @@
 "use client";
 
 import type { BusinessInfo } from "@/lib/invoice";
+import { ensureUserOrg } from "./auth-actions";
 import { createBrowserClient } from "./client";
 
 export type OrgShopSettings = {
@@ -13,6 +14,50 @@ export type OrgShopSettings = {
   quarterStartMonth: number;
 };
 
+export function mergeBusinessSettings(
+  local: BusinessInfo,
+  cloud: BusinessInfo | null,
+): BusinessInfo {
+  if (!cloud) return local;
+
+  const localIsDefault =
+    local.name === "My Shop" &&
+    !local.phone &&
+    !local.address &&
+    !local.vatRegistered &&
+    !local.vatNumber;
+
+  return {
+    ...cloud,
+    ...local,
+    name: localIsDefault && cloud.name ? cloud.name : local.name,
+    phone: local.phone ?? cloud.phone,
+    address: local.address ?? cloud.address,
+    tin: local.tin ?? cloud.tin,
+    vatRegistered: local.vatRegistered ?? cloud.vatRegistered ?? false,
+    vatNumber: local.vatNumber ?? cloud.vatNumber,
+    quarterStartMonth: local.quarterStartMonth ?? cloud.quarterStartMonth ?? 4,
+  };
+}
+
+export async function getOrCreateOrgForUser(
+  userId: string,
+  business: BusinessInfo,
+): Promise<{ orgId: string | null; error: string | null }> {
+  const supabase = createBrowserClient();
+  if (!supabase) return { orgId: null, error: "Supabase not configured" };
+
+  try {
+    const orgId = await ensureUserOrg(supabase, userId, {
+      shopName: business.name,
+      phone: business.phone,
+    });
+    return { orgId, error: null };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not create shop";
+    return { orgId: null, error: message };
+  }
+}
 export function businessFromOrg(row: {
   name: string;
   phone?: string | null;
@@ -58,7 +103,7 @@ export async function saveOrgShopSettings(
   const supabase = createBrowserClient();
   if (!supabase) return "Supabase not configured";
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("organizations")
     .update({
       name: business.name.trim() || "My Shop",
@@ -70,8 +115,13 @@ export async function saveOrgShopSettings(
       quarter_start_month: business.quarterStartMonth ?? 4,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", organizationId);
+    .eq("id", organizationId)
+    .select("id")
+    .maybeSingle();
 
   if (error) return error.message;
+  if (!data) {
+    return "No permission to update shop (sign in as shop owner)";
+  }
   return null;
 }

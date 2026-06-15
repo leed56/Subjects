@@ -9,8 +9,8 @@ import {
   useState,
 } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { fetchUserOrg } from "@/lib/supabase/auth-actions";
-import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { ensureUserOrg, fetchUserOrg } from "@/lib/supabase/auth-actions";
+import { createBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { canAccess, daysUntil, isReadOnlyStatus } from "./can";
 import { defaultTrialSubscription } from "./plans";
 import type {
@@ -84,23 +84,45 @@ export function SubscriptionProvider({
 
   const loadFromCloud = useCallback(async () => {
     if (!isSupabaseConfigured() || !user) return false;
-    const data = await fetchUserOrg();
-    if (!data?.org || !data.subscription) return false;
+
+    let data = await fetchUserOrg();
+    if (!data?.org) {
+      const supabase = createBrowserClient();
+      if (supabase) {
+        const emailPrefix = user.email?.split("@")[0]?.trim();
+        try {
+          await ensureUserOrg(supabase, user.id, {
+            shopName: emailPrefix,
+          });
+          data = await fetchUserOrg();
+        } catch {
+          /* org creation may fail if RLS blocks — shop save can retry */
+        }
+      }
+    }
+
+    if (!data?.org) return false;
 
     setOrg({
       id: data.org.id,
       name: data.org.name,
       isAuthenticated: true,
     });
-    setSubscription({
-      planId: toPlanId(data.subscription.planId),
-      status: data.subscription.status,
-      billingCycle: data.subscription.billingCycle as BillingCycle,
-      trialEndsAt: data.subscription.trialEndsAt,
-      currentPeriodEnd: data.subscription.currentPeriodEnd,
-      addons: [],
-      isDemo: false,
-    });
+
+    if (data.subscription) {
+      setSubscription({
+        planId: toPlanId(data.subscription.planId),
+        status: data.subscription.status,
+        billingCycle: data.subscription.billingCycle as BillingCycle,
+        trialEndsAt: data.subscription.trialEndsAt,
+        currentPeriodEnd: data.subscription.currentPeriodEnd,
+        addons: [],
+        isDemo: false,
+      });
+    } else {
+      const trial = defaultTrialSubscription();
+      setSubscription({ ...trial, isDemo: false });
+    }
     return true;
   }, [user]);
 
@@ -159,6 +181,7 @@ export function SubscriptionProvider({
       isReadOnly,
       setDemoPlan,
       setDemoBillingCycle,
+      refreshOrg: loadFromCloud,
     }),
     [
       org,
@@ -168,6 +191,7 @@ export function SubscriptionProvider({
       isReadOnly,
       setDemoPlan,
       setDemoBillingCycle,
+      loadFromCloud,
     ],
   );
 
@@ -195,6 +219,7 @@ export function useSubscription(): SubscriptionContextValue {
       isReadOnly: false,
       setDemoPlan: () => {},
       setDemoBillingCycle: () => {},
+      refreshOrg: async () => false,
     };
   }
   return ctx;

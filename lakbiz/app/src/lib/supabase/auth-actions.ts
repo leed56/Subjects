@@ -12,27 +12,40 @@ export class AuthFlowError extends Error {
   }
 }
 
-async function ensureUserOrg(
+export type EnsureOrgInput = {
+  shopName?: string;
+  phone?: string;
+};
+
+async function findUserOrgId(
   supabase: NonNullable<ReturnType<typeof createBrowserClient>>,
   userId: string,
-  meta?: { shop_name?: string; phone?: string },
-) {
+): Promise<string | null> {
   const { data: existing } = await supabase
     .from("org_members")
     .select("organization_id")
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (existing) return existing.organization_id;
+  return existing?.organization_id ?? null;
+}
 
-  const shopName = meta?.shop_name?.trim();
-  if (!shopName) return null;
+/** Create org + owner membership when the user has none yet. */
+export async function ensureUserOrg(
+  supabase: NonNullable<ReturnType<typeof createBrowserClient>>,
+  userId: string,
+  input: EnsureOrgInput = {},
+): Promise<string | null> {
+  const existingId = await findUserOrgId(supabase, userId);
+  if (existingId) return existingId;
+
+  const shopName = input.shopName?.trim() || "My Shop";
 
   const { data: org, error: orgError } = await supabase
     .from("organizations")
     .insert({
       name: shopName,
-      phone: meta?.phone ?? null,
+      phone: input.phone?.trim() || null,
     })
     .select("id")
     .single();
@@ -88,7 +101,7 @@ export async function signUpWithShop(input: {
   }
 
   const orgId = await ensureUserOrg(supabase, authData.user.id, {
-    shop_name: input.shopName,
+    shopName: input.shopName,
     phone: input.phone,
   });
 
@@ -144,8 +157,12 @@ export async function signInWithEmail(email: string, password: string) {
     shop_name?: string;
     phone?: string;
   };
+  const emailPrefix = email.split("@")[0]?.trim();
 
-  await ensureUserOrg(supabase, data.user!.id, meta);
+  await ensureUserOrg(supabase, data.user!.id, {
+    shopName: meta?.shop_name ?? emailPrefix,
+    phone: meta?.phone,
+  });
 
   return data;
 }
