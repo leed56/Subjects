@@ -34,7 +34,10 @@ export function mergeBusinessSettings(
     phone: local.phone ?? cloud.phone,
     address: local.address ?? cloud.address,
     tin: local.tin ?? cloud.tin,
-    vatRegistered: local.vatRegistered ?? cloud.vatRegistered ?? false,
+    vatRegistered:
+      local.vatRegistered != null
+        ? local.vatRegistered
+        : (cloud.vatRegistered ?? false),
     vatNumber: local.vatNumber ?? cloud.vatNumber,
     quarterStartMonth: local.quarterStartMonth ?? cloud.quarterStartMonth ?? 4,
   };

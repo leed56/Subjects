@@ -15,6 +15,7 @@ import {
   saveOrgShopSettings,
 } from "@/lib/supabase/org-settings";
 import { useAppStore } from "@/lib/store/use-app-store";
+import { loadAppData } from "@/lib/store/storage";
 
 const QUARTER_MONTHS = [
   { value: 1, key: "vat.month_jan" },
@@ -36,16 +37,20 @@ export default function ShopSettingsPage() {
   const hydratedFor = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!ready || !data) return;
+    if (!ready) return;
 
     const hydrationKey = `${user?.id ?? "anon"}:${org.id ?? "none"}`;
     if (hydratedFor.current === hydrationKey) return;
 
+    let cancelled = false;
+
     const init = async () => {
-      let business = { ...data.business };
+      // Read localStorage directly — React store may lag one tick behind persist()
+      let business = { ...loadAppData().business };
 
       if (org.id && user && isSupabaseConfigured()) {
         const cloud = await fetchOrgShopSettings(org.id);
+        if (cancelled) return;
         business = mergeBusinessSettings(business, cloud);
       }
 
@@ -54,7 +59,11 @@ export default function ShopSettingsPage() {
     };
 
     void init();
-  }, [ready, data, org.id, user?.id]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, org.id, user?.id]);
 
   if (!ready || !data || !form) {
     return (
@@ -79,6 +88,7 @@ export default function ShopSettingsPage() {
     };
 
     updateBusiness(payload);
+    setForm(payload);
 
     let targetOrgId = org.id;
 
@@ -101,6 +111,8 @@ export default function ShopSettingsPage() {
         }
         if (orgId) {
           targetOrgId = orgId;
+          // Prevent hydration effect from overwriting form when org.id updates
+          hydratedFor.current = `${user.id}:${orgId}`;
           await refreshOrg();
         }
       }

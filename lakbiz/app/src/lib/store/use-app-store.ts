@@ -185,8 +185,12 @@ export function useAppStore() {
       return next.sales[0].id;
     },
     updateBusiness: (business: BusinessInfo) => {
-      if (!data) return;
-      persist(updateBusiness(data, business));
+      setData((current) => {
+        if (!current) return current;
+        const next = updateBusiness(current, business);
+        saveAppData(next);
+        return next;
+      });
     },
     addACJob: (input: ACJobInput) => {
       if (!data) return;
