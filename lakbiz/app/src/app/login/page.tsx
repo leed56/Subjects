@@ -7,7 +7,7 @@ import { useAuth } from "@/components/auth-provider";
 import { SiteHeader } from "@/components/site-header";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { AuthFlowError } from "@/lib/supabase/auth-actions";
+import { AuthFlowError, resendConfirmationEmail } from "@/lib/supabase/auth-actions";
 
 type Mode = "signin" | "signup";
 
@@ -21,6 +21,7 @@ export default function LoginPage() {
   const [shopName, setShopName] = useState("");
   const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
+  const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const configured = isSupabaseConfigured();
@@ -33,6 +34,7 @@ export default function LoginPage() {
     }
     setLoading(true);
     setMessage("");
+    setNeedsEmailConfirm(false);
     try {
       if (mode === "signup") {
         if (!shopName.trim()) {
@@ -48,12 +50,31 @@ export default function LoginPage() {
       }
     } catch (err) {
       if (err instanceof AuthFlowError && err.code === "email_confirmation") {
+        setNeedsEmailConfirm(true);
         setMessage(err.message);
       } else if (err instanceof Error) {
         setMessage(err.message);
       } else {
         setMessage("Login failed");
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!email.trim()) {
+      setMessage(t("sub.email_required"));
+      return;
+    }
+    setLoading(true);
+    setMessage("");
+    try {
+      await resendConfirmationEmail(email.trim());
+      setNeedsEmailConfirm(true);
+      setMessage(t("sub.resend_ok"));
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Failed to resend");
     } finally {
       setLoading(false);
     }
@@ -83,6 +104,16 @@ export default function LoginPage() {
         {message && (
           <div className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
             {message}
+            {needsEmailConfirm && (
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={loading || !email.trim()}
+                className="mt-3 block w-full rounded-lg border border-amber-300 bg-white py-2 text-sm font-medium text-amber-900 hover:bg-amber-50 disabled:opacity-50"
+              >
+                {t("sub.resend_email")}
+              </button>
+            )}
           </div>
         )}
 

@@ -59,10 +59,16 @@ export async function signUpWithShop(input: {
   const supabase = createBrowserClient();
   if (!supabase) throw new Error("Supabase not configured");
 
+  const redirectTo =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/login`
+      : undefined;
+
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email: input.email,
     password: input.password,
     options: {
+      emailRedirectTo: redirectTo,
       data: {
         shop_name: input.shopName,
         phone: input.phone ?? null,
@@ -89,6 +95,32 @@ export async function signUpWithShop(input: {
   return { user: authData.user, organizationId: orgId };
 }
 
+export async function resendConfirmationEmail(email: string) {
+  const supabase = createBrowserClient();
+  if (!supabase) throw new Error("Supabase not configured");
+
+  const redirectTo =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/login`
+      : undefined;
+
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: redirectTo },
+  });
+
+  if (error) {
+    if (error.message.toLowerCase().includes("rate limit")) {
+      throw new AuthFlowError(
+        "Please wait a minute before requesting another email.",
+        "auth",
+      );
+    }
+    throw new AuthFlowError(error.message, "auth");
+  }
+}
+
 export async function signInWithEmail(email: string, password: string) {
   const supabase = createBrowserClient();
   if (!supabase) throw new Error("Supabase not configured");
@@ -101,7 +133,7 @@ export async function signInWithEmail(email: string, password: string) {
   if (error) {
     if (error.message.toLowerCase().includes("email not confirmed")) {
       throw new AuthFlowError(
-        "Email not confirmed yet. Check your inbox and spam folder, click the link, then try Sign in again.",
+        "Email not confirmed yet. Use Resend email below, or check spam for mail from noreply@mail.app.supabase.io",
         "email_confirmation",
       );
     }

@@ -427,6 +427,9 @@ const si: Dict = {
   "sub.db_connected": "Supabase දත්ත සමුදාය සම්බන්ධයි",
   "sub.shop_required": "වෙළඳසැල් නම අවශ්‍යයි",
   "sub.signup_ok": "ගිණුම සාදන ලදී — dashboard වෙත යන්න",
+  "sub.resend_email": "තහවුරු කිරීමේ ඊමේල් නැවත යවන්න",
+  "sub.resend_ok": "ඊමේල් යවන ලදී — එන ලිපි, spam, සහ Promotions පරීක්ෂා කරන්න (noreply@mail.app.supabase.io)",
+  "sub.email_required": "පළමුව ඔබේ ඊමේල් ලිපිනය ඇතුළත් කරන්න",
 };
 
 const en: Dict = {
@@ -837,6 +840,9 @@ const en: Dict = {
   "sub.db_connected": "Supabase database connected",
   "sub.shop_required": "Shop name is required",
   "sub.signup_ok": "Account created — go to dashboard",
+  "sub.resend_email": "Resend confirmation email",
+  "sub.resend_ok": "Email sent — check inbox, spam, and Promotions (from noreply@mail.app.supabase.io)",
+  "sub.email_required": "Enter your email address first",
 };
 
 const dictionaries: Record<Locale, Dict> = { si, en };
