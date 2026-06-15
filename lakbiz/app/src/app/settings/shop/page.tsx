@@ -75,23 +75,13 @@ function verifyLocalSave(expected: BusinessInfo): boolean {
 
 export default function ShopSettingsPage() {
   const formRef = useRef<HTMLFormElement>(null);
-  const saveBtnRef = useRef<HTMLButtonElement>(null);
-  const savingRef = useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [status, setStatus] = useState<Status | null>(null);
+
   const { updateBusiness } = useAppStore();
   const { org } = useSubscription();
   const { user } = useAuth();
   const { t } = useLocale();
-  const [status, setStatus] = useState<Status | null>(null);
-
-  const userRef = useRef(user);
-  const orgIdRef = useRef(org.id);
-  const tRef = useRef(t);
-  const updateBusinessRef = useRef(updateBusiness);
-
-  userRef.current = user;
-  orgIdRef.current = org.id;
-  tRef.current = t;
-  updateBusinessRef.current = updateBusiness;
 
   // Fill from localStorage on mount
   useEffect(() => {
@@ -100,7 +90,7 @@ export default function ShopSettingsPage() {
     fillForm(form, loadShopSettings());
   }, []);
 
-  // Once org.id is known, pull from Supabase and merge — handles cross-device / cleared-storage
+  // Once org.id is known, pull from Supabase and merge
   useEffect(() => {
     if (!org.id || !isSupabaseConfigured()) return;
     const form = formRef.current;
@@ -114,32 +104,18 @@ export default function ShopSettingsPage() {
     });
   }, [org.id]);
 
-  useEffect(() => {
-    const btn = saveBtnRef.current;
+  async function handleSave() {
     const form = formRef.current;
-    if (!btn || !form) return;
+    if (!form || isSaving) return;
 
-    const runSave = () => {
-      if (savingRef.current) return;
-      savingRef.current = true;
-
+    setIsSaving(true);
+    try {
       const payload = readForm(form);
-      const translate = tRef.current;
 
-      try {
-        saveShopSettings(payload);
-        updateBusinessRef.current(payload);
-      } catch (err) {
-        savingRef.current = false;
-        setStatus({
-          kind: "warn",
-          text: err instanceof Error ? err.message : "Save failed",
-        });
-        return;
-      }
+      saveShopSettings(payload);
+      updateBusiness(payload);
 
       if (!verifyLocalSave(payload)) {
-        savingRef.current = false;
         setStatus({
           kind: "warn",
           text: "Save failed — browser blocked storage. Check privacy settings.",
@@ -149,59 +125,39 @@ export default function ShopSettingsPage() {
 
       setStatus({
         kind: "ok",
-        text: `${translate("vat.settings_saved_local")}: "${payload.name}"`,
+        text: `${t("vat.settings_saved_local")}: "${payload.name}"`,
       });
-      savingRef.current = false;
 
-      const currentUser = userRef.current;
-      if (!currentUser || !isSupabaseConfigured()) return;
+      if (!user || !isSupabaseConfigured()) return;
 
-      void (async () => {
-        let targetOrgId = orgIdRef.current;
-        if (!targetOrgId) {
-          const { orgId } = await getOrCreateOrgForUser(
-            currentUser.id,
-            payload,
-          );
-          targetOrgId = orgId;
-          orgIdRef.current = orgId;
-        }
-        if (!targetOrgId) return;
+      let targetOrgId = org.id;
+      if (!targetOrgId) {
+        const { orgId } = await getOrCreateOrgForUser(user.id, payload);
+        targetOrgId = orgId;
+      }
+      if (!targetOrgId) return;
 
-        const cloudError = await saveOrgShopSettings(targetOrgId, payload);
-        setStatus(
-          cloudError
-            ? {
-                kind: "warn",
-                text: `${translate("vat.settings_saved_local")} — ${translate("vat.cloud_sync_note")}`,
-              }
-            : {
-                kind: "ok",
-                text: translate("vat.settings_saved_cloud"),
-              },
-        );
-      })();
-    };
-
-    const onSaveClick = (event: MouseEvent) => {
-      event.preventDefault();
-      event.stopPropagation();
-      runSave();
-    };
-
-    const onFormSubmit = (event: Event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      runSave();
-    };
-
-    btn.addEventListener("click", onSaveClick);
-    form.addEventListener("submit", onFormSubmit);
-    return () => {
-      btn.removeEventListener("click", onSaveClick);
-      form.removeEventListener("submit", onFormSubmit);
-    };
-  }, []);
+      const cloudError = await saveOrgShopSettings(targetOrgId, payload);
+      setStatus(
+        cloudError
+          ? {
+              kind: "warn",
+              text: `${t("vat.settings_saved_local")} — ${t("vat.cloud_sync_note")}`,
+            }
+          : {
+              kind: "ok",
+              text: t("vat.settings_saved_cloud"),
+            },
+      );
+    } catch (err) {
+      setStatus({
+        kind: "warn",
+        text: err instanceof Error ? err.message : "Save failed",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
     <div className="min-h-full bg-slate-50">
@@ -234,7 +190,10 @@ export default function ShopSettingsPage() {
           ref={formRef}
           className="mt-2 space-y-4 rounded-xl border bg-white p-5 shadow-sm"
           noValidate
-          onSubmit={(e) => e.preventDefault()}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleSave();
+          }}
         >
           <label className="block text-sm">
             {t("vat.shop_name")} *
@@ -295,11 +254,11 @@ export default function ShopSettingsPage() {
           </div>
 
           <button
-            ref={saveBtnRef}
-            type="button"
-            className="w-full rounded-lg bg-teal-700 py-3 text-base font-semibold text-white hover:bg-teal-800"
+            type="submit"
+            disabled={isSaving}
+            className="w-full rounded-lg bg-teal-700 py-3 text-base font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
           >
-            {t("common.save")}
+            {isSaving ? t("common.loading") : t("common.save")}
           </button>
         </form>
 
