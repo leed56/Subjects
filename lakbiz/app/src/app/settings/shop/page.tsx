@@ -86,7 +86,7 @@ export default function ShopSettingsPage() {
           payload,
         );
         if (createError) {
-          setError(`${t("vat.cloud_save_failed")}: ${createError}`);
+          setError(t("vat.cloud_sync_note"));
           setSaveMode("local");
           setSaved(true);
           setSaving(false);
@@ -102,7 +102,7 @@ export default function ShopSettingsPage() {
       if (targetOrgId) {
         const cloudError = await saveOrgShopSettings(targetOrgId, payload);
         if (cloudError) {
-          setError(`${t("vat.cloud_save_failed")}: ${cloudError}`);
+          setError(t("vat.cloud_sync_note"));
           setSaveMode("local");
         } else {
           setSaveMode("cloud");
@@ -137,10 +137,13 @@ export default function ShopSettingsPage() {
             {saveMode === "cloud"
               ? t("vat.settings_saved_cloud")
               : t("vat.settings_saved_local")}
+            {error ? (
+              <span className="mt-1 block text-amber-800">{error}</span>
+            ) : null}
           </p>
         )}
 
-        {error && (
+        {error && !saved && (
           <p className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
             {error}
           </p>
