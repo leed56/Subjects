@@ -11,300 +11,237 @@ import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   fetchOrgShopSettings,
   getOrCreateOrgForUser,
-  mergeBusinessSettings,
   saveOrgShopSettings,
 } from "@/lib/supabase/org-settings";
-import { useAppStore } from "@/lib/store/use-app-store";
-import {
-  loadShopSettings,
-  saveShopSettings,
-} from "@/lib/store/shop-settings";
 
-const QUARTER_MONTHS = [
-  { value: 1, key: "vat.month_jan" },
-  { value: 4, key: "vat.month_apr" },
-  { value: 7, key: "vat.month_jul" },
-  { value: 10, key: "vat.month_oct" },
-] as const;
+// Write to both storage keys so the rest of the app sees the update
+const SHOP_KEY = "lakbiz-shop-settings-v1";
+const APP_KEY = "lakbiz-app-data-v2";
 
-const SHOP_SETTINGS_KEY = "lakbiz-shop-settings-v1";
+function readStorage(): Partial<BusinessInfo> | null {
+  try {
+    const a = localStorage.getItem(SHOP_KEY);
+    if (a) return JSON.parse(a) as Partial<BusinessInfo>;
+    const b = localStorage.getItem(APP_KEY);
+    if (b) return ((JSON.parse(b) as { business?: Partial<BusinessInfo> }).business) ?? null;
+  } catch { /* ignore */ }
+  return null;
+}
 
-type Status = { kind: "ok" | "warn"; text: string };
+function writeStorage(data: BusinessInfo): void {
+  localStorage.setItem(SHOP_KEY, JSON.stringify(data));
+  try {
+    const raw = localStorage.getItem(APP_KEY);
+    const app = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    app.business = { ...(app.business as object ?? {}), ...data };
+    localStorage.setItem(APP_KEY, JSON.stringify(app));
+  } catch { /* ignore */ }
+}
 
 function readForm(form: HTMLFormElement): BusinessInfo {
   const fd = new FormData(form);
-  const vatRegistered = fd.get("vatRegistered") === "on";
   return {
     name: String(fd.get("name") ?? "").trim() || "My Shop",
     phone: String(fd.get("phone") ?? "").trim() || undefined,
     address: String(fd.get("address") ?? "").trim() || undefined,
-    vatRegistered,
+    vatRegistered: fd.get("vatRegistered") === "on",
     vatNumber: String(fd.get("vatNumber") ?? "").trim() || undefined,
-    quarterStartMonth: Number(fd.get("quarterStartMonth") ?? 4) || 4,
+    quarterStartMonth: Number(fd.get("quarterStartMonth")) || 4,
   };
 }
 
-function fillForm(form: HTMLFormElement, business: BusinessInfo) {
+function fillForm(form: HTMLFormElement, s: Partial<BusinessInfo>) {
   const set = (name: string, value: string) => {
     const el = form.elements.namedItem(name);
-    if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) {
-      el.value = value;
-    }
+    if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) el.value = value;
   };
-  set("name", business.name);
-  set("phone", business.phone ?? "");
-  set("address", business.address ?? "");
-  const vat = form.elements.namedItem("vatRegistered");
-  if (vat instanceof HTMLInputElement) {
-    vat.checked = business.vatRegistered ?? false;
-  }
-  set("vatNumber", business.vatNumber ?? "");
-  set("quarterStartMonth", String(business.quarterStartMonth ?? 4));
-}
-
-function verifyLocalSave(expected: BusinessInfo): boolean {
-  try {
-    const raw = localStorage.getItem(SHOP_SETTINGS_KEY);
-    if (!raw) return false;
-    const saved = JSON.parse(raw) as BusinessInfo;
-    return saved.name === expected.name;
-  } catch {
-    return false;
-  }
+  set("name", s.name ?? "");
+  set("phone", s.phone ?? "");
+  set("address", s.address ?? "");
+  set("vatNumber", s.vatNumber ?? "");
+  set("quarterStartMonth", String(s.quarterStartMonth ?? 4));
+  const cb = form.elements.namedItem("vatRegistered");
+  if (cb instanceof HTMLInputElement) cb.checked = s.vatRegistered ?? false;
 }
 
 export default function ShopSettingsPage() {
   const formRef = useRef<HTMLFormElement>(null);
-  const savingRef = useRef(false);
-  const [status, setStatus] = useState<Status | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const { updateBusiness } = useAppStore();
-  const { org } = useSubscription();
+  // NOT consuming useAppStore — avoids context re-render cascade on save
   const { user } = useAuth();
+  const { org } = useSubscription();
   const { t } = useLocale();
 
-  // stable refs so async cloud-save closure never goes stale
   const orgIdRef = useRef(org.id);
   const userRef = useRef(user);
-  const tRef = useRef(t);
-  const updateBusinessRef = useRef(updateBusiness);
   orgIdRef.current = org.id;
   userRef.current = user;
-  tRef.current = t;
-  updateBusinessRef.current = updateBusiness;
 
-  // Fill from localStorage on mount
+  // Load from localStorage on mount
   useEffect(() => {
     const form = formRef.current;
     if (!form) return;
-    fillForm(form, loadShopSettings());
+    const saved = readStorage();
+    if (saved) fillForm(form, saved);
   }, []);
 
-  // Once org.id is known, pull from Supabase and merge
+  // Merge cloud data on first load if local has no name set
   useEffect(() => {
     if (!org.id || !isSupabaseConfigured()) return;
-    const form = formRef.current;
-    if (!form) return;
     void fetchOrgShopSettings(org.id).then((cloud) => {
-      if (!cloud || !formRef.current) return;
-      const local = loadShopSettings();
-      const merged = mergeBusinessSettings(local, cloud);
-      fillForm(formRef.current, merged);
-      saveShopSettings(merged);
+      const form = formRef.current;
+      if (!cloud || !form) return;
+      const local = readStorage();
+      if (local?.name && local.name !== "My Shop") return; // local wins
+      fillForm(form, cloud);
     });
   }, [org.id]);
 
-  // attach save to form submit — native listener so no React re-render on click
-  useEffect(() => {
-    const form = formRef.current;
-    if (!form) return;
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const payload = readForm(form);
 
-    const onSubmit = (e: Event) => {
-      e.preventDefault();
-      if (savingRef.current) return;
-      savingRef.current = true;
+    // Save synchronously
+    try {
+      writeStorage(payload);
+    } catch {
+      setMsg({ ok: false, text: "Save failed — browser storage blocked." });
+      return;
+    }
 
-      const payload = readForm(form);
+    // Verify write landed
+    try {
+      const check = localStorage.getItem(SHOP_KEY);
+      if (!check || (JSON.parse(check) as BusinessInfo).name !== payload.name) {
+        setMsg({ ok: false, text: "Save failed — storage write did not persist." });
+        return;
+      }
+    } catch {
+      setMsg({ ok: false, text: "Save failed." });
+      return;
+    }
 
+    // Show success immediately — this state update is the ONLY one here
+    setMsg({ ok: true, text: `✓ ${t("vat.settings_saved_local")}: "${payload.name}"` });
+
+    // Cloud sync in background — never clears the success message on failure
+    const currentUser = userRef.current;
+    if (!currentUser || !isSupabaseConfigured()) return;
+
+    void (async () => {
       try {
-        saveShopSettings(payload);
-        updateBusinessRef.current(payload);
-      } catch (err) {
-        savingRef.current = false;
-        setStatus({
-          kind: "warn",
-          text: err instanceof Error ? err.message : "Save failed",
-        });
-        return;
-      }
-
-      if (!verifyLocalSave(payload)) {
-        savingRef.current = false;
-        setStatus({
-          kind: "warn",
-          text: "Save failed — browser storage blocked. Check privacy settings.",
-        });
-        return;
-      }
-
-      setStatus({
-        kind: "ok",
-        text: `✓ ${tRef.current("vat.settings_saved_local")}: "${payload.name}"`,
-      });
-      savingRef.current = false;
-
-      const currentUser = userRef.current;
-      if (!currentUser || !isSupabaseConfigured()) return;
-
-      void (async () => {
-        try {
-          let targetOrgId = orgIdRef.current;
-          if (!targetOrgId) {
-            const { orgId } = await getOrCreateOrgForUser(
-              currentUser.id,
-              payload,
-            );
-            targetOrgId = orgId;
-            orgIdRef.current = orgId;
-          }
-          if (!targetOrgId) return;
-
-          const cloudError = await saveOrgShopSettings(targetOrgId, payload);
-          setStatus(
-            cloudError
-              ? {
-                  kind: "warn",
-                  text: `✓ ${tRef.current("vat.settings_saved_local")} — ${tRef.current("vat.cloud_sync_note")}`,
-                }
-              : {
-                  kind: "ok",
-                  text: `✓ ${tRef.current("vat.settings_saved_cloud")}`,
-                },
-          );
-        } catch {
-          /* cloud save errors don't undo the local save */
+        let orgId = orgIdRef.current;
+        if (!orgId) {
+          const { orgId: newId } = await getOrCreateOrgForUser(currentUser.id, payload);
+          orgId = newId;
+          orgIdRef.current = orgId;
         }
-      })();
-    };
-
-    form.addEventListener("submit", onSubmit);
-    return () => form.removeEventListener("submit", onSubmit);
-  }, []);
+        if (!orgId) return;
+        const err = await saveOrgShopSettings(orgId, payload);
+        if (!err) setMsg({ ok: true, text: `✓ ${t("vat.settings_saved_cloud")}` });
+      } catch { /* cloud failure is silent — local save already succeeded */ }
+    })();
+  }
 
   return (
     <div className="min-h-full bg-slate-50">
       <SiteHeader sticky={false} />
-      <main className="relative z-10 mx-auto max-w-lg scroll-mt-4 px-4 py-10">
+      <main className="mx-auto max-w-lg px-4 py-10">
         <h1 className="text-2xl font-bold text-slate-900">{t("vat.shop_settings")}</h1>
         <p className="mt-1 text-sm text-slate-600">{t("vat.shop_settings_hint")}</p>
 
-        <div className="mt-4 min-h-[3.5rem]">
-          {status ? (
+        <div className="mt-4 min-h-[3rem]">
+          {msg && (
             <p
               role="status"
-              aria-live="polite"
-              className={`rounded-lg px-4 py-3 text-sm font-medium ${
-                status.kind === "ok"
-                  ? "bg-teal-50 text-teal-800"
-                  : "bg-amber-50 text-amber-900"
+              className={`rounded-lg border px-4 py-3 text-sm font-medium ${
+                msg.ok
+                  ? "border-teal-200 bg-teal-50 text-teal-800"
+                  : "border-amber-200 bg-amber-50 text-amber-900"
               }`}
             >
-              {status.text}
+              {msg.text}
             </p>
-          ) : (
-            <span className="block text-sm text-transparent select-none" aria-hidden>
-              .
-            </span>
           )}
         </div>
 
         <form
           ref={formRef}
+          onSubmit={handleSubmit}
           className="mt-2 space-y-4 rounded-xl border bg-white p-5 shadow-sm"
           noValidate
         >
-          <label className="block text-sm">
+          <label className="block text-sm font-medium text-slate-700">
             {t("vat.shop_name")} *
             <input
               name="name"
               required
               autoComplete="organization"
-              className="mt-1 w-full rounded-lg border px-3 py-2"
+              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
             />
           </label>
-          <label className="block text-sm">
+
+          <label className="block text-sm font-medium text-slate-700">
             {t("common.phone")}
             <input
               name="phone"
               autoComplete="tel"
-              className="mt-1 w-full rounded-lg border px-3 py-2"
+              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
             />
           </label>
-          <label className="block text-sm">
+
+          <label className="block text-sm font-medium text-slate-700">
             {t("common.address")}
             <input
               name="address"
               autoComplete="street-address"
-              className="mt-1 w-full rounded-lg border px-3 py-2"
+              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
             />
           </label>
 
-          <div className="space-y-4 rounded-lg border border-teal-100 bg-teal-50/50 p-4">
-            <label className="flex items-center gap-3 text-sm font-medium">
-              <input
-                name="vatRegistered"
-                type="checkbox"
-                className="h-4 w-4 rounded border-teal-600"
-              />
+          <div className="space-y-3 rounded-lg border border-teal-100 bg-teal-50/40 p-4">
+            <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+              <input name="vatRegistered" type="checkbox" className="h-4 w-4 accent-teal-600" />
               {t("vat.registered")}
             </label>
-            <label className="block text-sm">
+
+            <label className="block text-sm font-medium text-slate-700">
               {t("vat.vat_number")}
               <input
                 name="vatNumber"
-                className="mt-1 w-full rounded-lg border px-3 py-2"
+                className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
               />
             </label>
-            <label className="block text-sm">
+
+            <label className="block text-sm font-medium text-slate-700">
               {t("vat.quarter_start")}
               <select
                 name="quarterStartMonth"
                 defaultValue="4"
-                className="mt-1 w-full rounded-lg border px-3 py-2"
+                className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
               >
-                {QUARTER_MONTHS.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {t(m.key)}
-                  </option>
-                ))}
+                <option value="1">{t("vat.month_jan")}</option>
+                <option value="4">{t("vat.month_apr")}</option>
+                <option value="7">{t("vat.month_jul")}</option>
+                <option value="10">{t("vat.month_oct")}</option>
               </select>
             </label>
           </div>
 
           <button
             type="submit"
-            className="w-full rounded-lg bg-teal-700 py-3 text-base font-semibold text-white hover:bg-teal-800 active:bg-teal-900"
+            className="w-full rounded-lg bg-teal-700 py-3 text-base font-semibold text-white transition-colors hover:bg-teal-800 active:bg-teal-900"
           >
             {t("common.save")}
           </button>
         </form>
 
-        <p className="mt-4 text-center text-xs text-slate-500">
-          {user && org.id
-            ? t("vat.save_hint_cloud")
-            : user
-              ? t("vat.save_hint_create_org")
-              : t("vat.save_hint_local")}
-        </p>
-
         <p className="mt-6 text-center text-sm text-slate-500">
-          <Link href="/vat" className="text-teal-700 underline">
-            {t("vat.view_return")}
-          </Link>
+          <Link href="/vat" className="text-teal-700 underline">{t("vat.view_return")}</Link>
           {" · "}
-          <Link href="/dashboard" className="text-teal-700 underline">
-            {t("nav.dashboard")}
-          </Link>
+          <Link href="/dashboard" className="text-teal-700 underline">{t("nav.dashboard")}</Link>
         </p>
       </main>
     </div>
