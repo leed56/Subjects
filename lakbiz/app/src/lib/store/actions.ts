@@ -802,7 +802,10 @@ export function updateBusiness(
       phone: business.phone?.trim() ?? prev.phone,
       address: business.address?.trim() ?? prev.address,
       tin: business.tin?.trim() ?? prev.tin,
-      vatRegistered: business.vatRegistered ?? prev.vatRegistered ?? false,
+      vatRegistered:
+        "vatRegistered" in business
+          ? (business.vatRegistered ?? false)
+          : (prev.vatRegistered ?? false),
       vatNumber: business.vatNumber?.trim() ?? prev.vatNumber,
       quarterStartMonth:
         business.quarterStartMonth ?? prev.quarterStartMonth ?? 4,

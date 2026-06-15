@@ -9,13 +9,12 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { BusinessInfo } from "@/lib/invoice";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
-  fetchOrgShopSettings,
   getOrCreateOrgForUser,
-  mergeBusinessSettings,
   saveOrgShopSettings,
 } from "@/lib/supabase/org-settings";
+import { updateBusiness as mergeBusinessIntoApp } from "@/lib/store/actions";
 import { useAppStore } from "@/lib/store/use-app-store";
-import { loadAppData } from "@/lib/store/storage";
+import { loadAppData, saveAppData } from "@/lib/store/storage";
 
 const QUARTER_MONTHS = [
   { value: 1, key: "vat.month_jan" },
@@ -25,7 +24,7 @@ const QUARTER_MONTHS = [
 ] as const;
 
 export default function ShopSettingsPage() {
-  const { data, ready, updateBusiness } = useAppStore();
+  const { ready, updateBusiness } = useAppStore();
   const { org, refreshOrg } = useSubscription();
   const { user } = useAuth();
   const { t } = useLocale();
@@ -34,38 +33,21 @@ export default function ShopSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saveMode, setSaveMode] = useState<"local" | "cloud" | null>(null);
-  const hydratedFor = useRef<string | null>(null);
+  const [cloudOrgId, setCloudOrgId] = useState<string | null>(null);
+  const initialized = useRef(false);
+
+  // Load once from localStorage — never re-fetch cloud into the form (that caused resets)
+  useEffect(() => {
+    if (!ready || initialized.current) return;
+    initialized.current = true;
+    setForm({ ...loadAppData().business });
+  }, [ready]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (org.id) setCloudOrgId(org.id);
+  }, [org.id]);
 
-    const hydrationKey = `${user?.id ?? "anon"}:${org.id ?? "none"}`;
-    if (hydratedFor.current === hydrationKey) return;
-
-    let cancelled = false;
-
-    const init = async () => {
-      // Read localStorage directly — React store may lag one tick behind persist()
-      let business = { ...loadAppData().business };
-
-      if (org.id && user && isSupabaseConfigured()) {
-        const cloud = await fetchOrgShopSettings(org.id);
-        if (cancelled) return;
-        business = mergeBusinessSettings(business, cloud);
-      }
-
-      setForm(business);
-      hydratedFor.current = hydrationKey;
-    };
-
-    void init();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ready, org.id, user?.id]);
-
-  if (!ready || !data || !form) {
+  if (!ready || !form) {
     return (
       <div className="min-h-full bg-slate-50">
         <SiteHeader />
@@ -73,6 +55,8 @@ export default function ShopSettingsPage() {
       </div>
     );
   }
+
+  const activeOrgId = org.id ?? cloudOrgId;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,10 +71,13 @@ export default function ShopSettingsPage() {
       quarterStartMonth: form.quarterStartMonth ?? 4,
     };
 
+    // Write localStorage synchronously first (guaranteed persist)
+    const nextApp = mergeBusinessIntoApp(loadAppData(), payload);
+    saveAppData(nextApp);
     updateBusiness(payload);
     setForm(payload);
 
-    let targetOrgId = org.id;
+    let targetOrgId = activeOrgId;
 
     if (user && isSupabaseConfigured()) {
       if (!targetOrgId) {
@@ -103,17 +90,12 @@ export default function ShopSettingsPage() {
           setSaveMode("local");
           setSaved(true);
           setSaving(false);
-          setTimeout(() => {
-            setSaved(false);
-            setSaveMode(null);
-          }, 5000);
           return;
         }
         if (orgId) {
           targetOrgId = orgId;
-          // Prevent hydration effect from overwriting form when org.id updates
-          hydratedFor.current = `${user.id}:${orgId}`;
-          await refreshOrg();
+          setCloudOrgId(orgId);
+          void refreshOrg();
         }
       }
 
@@ -122,11 +104,10 @@ export default function ShopSettingsPage() {
         if (cloudError) {
           setError(`${t("vat.cloud_save_failed")}: ${cloudError}`);
           setSaveMode("local");
-          setSaved(true);
         } else {
           setSaveMode("cloud");
-          setSaved(true);
         }
+        setSaved(true);
       } else {
         setSaveMode("local");
         setSaved(true);
@@ -142,10 +123,6 @@ export default function ShopSettingsPage() {
     }
 
     setSaving(false);
-    setTimeout(() => {
-      setSaved(false);
-      setSaveMode(null);
-    }, 5000);
   };
 
   return (
@@ -175,7 +152,10 @@ export default function ShopSettingsPage() {
             <input
               required
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onChange={(e) => {
+                setSaved(false);
+                setForm({ ...form, name: e.target.value });
+              }}
               className="mt-1 w-full rounded-lg border px-3 py-2"
             />
           </label>
@@ -183,7 +163,10 @@ export default function ShopSettingsPage() {
             {t("common.phone")}
             <input
               value={form.phone ?? ""}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              onChange={(e) => {
+                setSaved(false);
+                setForm({ ...form, phone: e.target.value });
+              }}
               className="mt-1 w-full rounded-lg border px-3 py-2"
             />
           </label>
@@ -191,7 +174,10 @@ export default function ShopSettingsPage() {
             {t("common.address")}
             <input
               value={form.address ?? ""}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              onChange={(e) => {
+                setSaved(false);
+                setForm({ ...form, address: e.target.value });
+              }}
               className="mt-1 w-full rounded-lg border px-3 py-2"
             />
           </label>
@@ -201,9 +187,10 @@ export default function ShopSettingsPage() {
               <input
                 type="checkbox"
                 checked={form.vatRegistered ?? false}
-                onChange={(e) =>
-                  setForm({ ...form, vatRegistered: e.target.checked })
-                }
+                onChange={(e) => {
+                  setSaved(false);
+                  setForm({ ...form, vatRegistered: e.target.checked });
+                }}
                 className="h-4 w-4 rounded border-teal-600"
               />
               {t("vat.registered")}
@@ -216,9 +203,10 @@ export default function ShopSettingsPage() {
                   {t("vat.vat_number")}
                   <input
                     value={form.vatNumber ?? ""}
-                    onChange={(e) =>
-                      setForm({ ...form, vatNumber: e.target.value })
-                    }
+                    onChange={(e) => {
+                      setSaved(false);
+                      setForm({ ...form, vatNumber: e.target.value });
+                    }}
                     placeholder="VAT-XXXXXXX"
                     className="mt-1 w-full rounded-lg border px-3 py-2"
                   />
@@ -227,12 +215,13 @@ export default function ShopSettingsPage() {
                   {t("vat.quarter_start")}
                   <select
                     value={form.quarterStartMonth ?? 4}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      setSaved(false);
                       setForm({
                         ...form,
                         quarterStartMonth: Number(e.target.value),
-                      })
-                    }
+                      });
+                    }}
                     className="mt-1 w-full rounded-lg border px-3 py-2"
                   >
                     {QUARTER_MONTHS.map((m) => (
@@ -256,7 +245,7 @@ export default function ShopSettingsPage() {
         </form>
 
         <p className="mt-4 text-center text-xs text-slate-500">
-          {user && org.id
+          {user && activeOrgId
             ? t("vat.save_hint_cloud")
             : user
               ? t("vat.save_hint_create_org")
