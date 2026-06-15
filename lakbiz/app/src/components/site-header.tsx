@@ -22,7 +22,7 @@ const navKeys = [
   { href: "/banking", key: "nav.banking" },
 ] as const;
 
-export function SiteHeader() {
+export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
   const { locale, setLocale, t } = useLocale();
   const { can } = useSubscription();
   const { user, logout } = useAuth();
@@ -48,7 +48,13 @@ export function SiteHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-md">
+      <header
+        className={
+          sticky
+            ? "sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-md"
+            : "relative z-30 border-b border-slate-200 bg-white"
+        }
+      >
         <TrialBanner />
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:py-4">
           <Link href="/" className="flex min-w-0 items-center gap-2">

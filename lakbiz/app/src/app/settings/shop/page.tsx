@@ -25,7 +25,9 @@ const QUARTER_MONTHS = [
   { value: 10, key: "vat.month_oct" },
 ] as const;
 
-const SAVE_STATUS_KEY = "lakbiz-shop-save-status";
+const SHOP_SETTINGS_KEY = "lakbiz-shop-settings-v1";
+
+type Status = { kind: "ok" | "warn"; text: string };
 
 function readForm(form: HTMLFormElement): BusinessInfo {
   const fd = new FormData(form);
@@ -60,49 +62,58 @@ function fillForm(form: HTMLFormElement, business: BusinessInfo) {
   set("quarterStartMonth", String(business.quarterStartMonth ?? 4));
 }
 
+function verifyLocalSave(expected: BusinessInfo): boolean {
+  try {
+    const raw = localStorage.getItem(SHOP_SETTINGS_KEY);
+    if (!raw) return false;
+    const saved = JSON.parse(raw) as BusinessInfo;
+    return saved.name === expected.name;
+  } catch {
+    return false;
+  }
+}
+
 export default function ShopSettingsPage() {
   const formRef = useRef<HTMLFormElement>(null);
+  const saveBtnRef = useRef<HTMLButtonElement>(null);
   const savingRef = useRef(false);
   const { updateBusiness } = useAppStore();
   const { org } = useSubscription();
   const { user } = useAuth();
   const { t } = useLocale();
-  const [status, setStatus] = useState<{
-    kind: "ok" | "warn";
-    text: string;
-  } | null>(null);
+  const [status, setStatus] = useState<Status | null>(null);
+
+  const userRef = useRef(user);
+  const orgIdRef = useRef(org.id);
+  const tRef = useRef(t);
+  const updateBusinessRef = useRef(updateBusiness);
+
+  userRef.current = user;
+  orgIdRef.current = org.id;
+  tRef.current = t;
+  updateBusinessRef.current = updateBusiness;
 
   useEffect(() => {
     const form = formRef.current;
     if (!form) return;
     fillForm(form, loadShopSettings());
-
-    try {
-      const raw = sessionStorage.getItem(SAVE_STATUS_KEY);
-      if (raw) {
-        setStatus(JSON.parse(raw) as { kind: "ok" | "warn"; text: string });
-        sessionStorage.removeItem(SAVE_STATUS_KEY);
-      }
-    } catch {
-      /* ignore */
-    }
   }, []);
 
   useEffect(() => {
+    const btn = saveBtnRef.current;
     const form = formRef.current;
-    if (!form) return;
+    if (!btn || !form) return;
 
-    const onSubmit = (event: Event) => {
-      event.preventDefault();
+    const runSave = () => {
       if (savingRef.current) return;
       savingRef.current = true;
-      setStatus(null);
 
       const payload = readForm(form);
+      const translate = tRef.current;
 
       try {
         saveShopSettings(payload);
-        updateBusiness(payload);
+        updateBusinessRef.current(payload);
       } catch (err) {
         savingRef.current = false;
         setStatus({
@@ -112,65 +123,83 @@ export default function ShopSettingsPage() {
         return;
       }
 
-      const localMsg = `${t("vat.settings_saved_local")}: "${payload.name}"`;
-      const statusMsg: { kind: "ok" | "warn"; text: string } = {
-        kind: "ok",
-        text: localMsg,
-      };
-
-      setStatus(statusMsg);
-      try {
-        sessionStorage.setItem(SAVE_STATUS_KEY, JSON.stringify(statusMsg));
-      } catch {
-        /* ignore */
+      if (!verifyLocalSave(payload)) {
+        savingRef.current = false;
+        setStatus({
+          kind: "warn",
+          text: "Save failed — browser blocked storage. Check privacy settings.",
+        });
+        return;
       }
 
+      setStatus({
+        kind: "ok",
+        text: `${translate("vat.settings_saved_local")}: "${payload.name}"`,
+      });
       savingRef.current = false;
 
-      if (!user || !isSupabaseConfigured()) return;
+      const currentUser = userRef.current;
+      if (!currentUser || !isSupabaseConfigured()) return;
 
       void (async () => {
-        let targetOrgId = org.id;
+        let targetOrgId = orgIdRef.current;
         if (!targetOrgId) {
-          const { orgId } = await getOrCreateOrgForUser(user.id, payload);
+          const { orgId } = await getOrCreateOrgForUser(
+            currentUser.id,
+            payload,
+          );
           targetOrgId = orgId;
+          orgIdRef.current = orgId;
         }
         if (!targetOrgId) return;
 
         const cloudError = await saveOrgShopSettings(targetOrgId, payload);
-        const cloudMsg = cloudError
-          ? {
-              kind: "warn" as const,
-              text: `${t("vat.settings_saved_local")} — ${t("vat.cloud_sync_note")}`,
-            }
-          : {
-              kind: "ok" as const,
-              text: t("vat.settings_saved_cloud"),
-            };
-
-        setStatus(cloudMsg);
-        try {
-          sessionStorage.setItem(SAVE_STATUS_KEY, JSON.stringify(cloudMsg));
-        } catch {
-          /* ignore */
-        }
+        setStatus(
+          cloudError
+            ? {
+                kind: "warn",
+                text: `${translate("vat.settings_saved_local")} — ${translate("vat.cloud_sync_note")}`,
+              }
+            : {
+                kind: "ok",
+                text: translate("vat.settings_saved_cloud"),
+              },
+        );
       })();
     };
 
-    form.addEventListener("submit", onSubmit);
-    return () => form.removeEventListener("submit", onSubmit);
-  }, [user, org.id, t, updateBusiness]);
+    const onSaveClick = (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      runSave();
+    };
+
+    const onFormSubmit = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      runSave();
+    };
+
+    btn.addEventListener("click", onSaveClick);
+    form.addEventListener("submit", onFormSubmit);
+    return () => {
+      btn.removeEventListener("click", onSaveClick);
+      form.removeEventListener("submit", onFormSubmit);
+    };
+  }, []);
 
   return (
     <div className="min-h-full bg-slate-50">
-      <SiteHeader />
-      <main className="mx-auto max-w-lg px-4 py-10">
+      <SiteHeader sticky={false} />
+      <main className="relative z-10 mx-auto max-w-lg scroll-mt-4 px-4 py-10">
         <h1 className="text-2xl font-bold text-slate-900">{t("vat.shop_settings")}</h1>
         <p className="mt-1 text-sm text-slate-600">{t("vat.shop_settings_hint")}</p>
 
-        <div className="mt-4 min-h-[3rem]">
-          {status && (
+        <div className="mt-4 min-h-[3.5rem]">
+          {status ? (
             <p
+              role="status"
+              aria-live="polite"
               className={`rounded-lg px-4 py-3 text-sm ${
                 status.kind === "ok"
                   ? "bg-teal-50 text-teal-800"
@@ -179,29 +208,43 @@ export default function ShopSettingsPage() {
             >
               {status.text}
             </p>
+          ) : (
+            <span className="block text-sm text-transparent select-none" aria-hidden>
+              .
+            </span>
           )}
         </div>
 
         <form
           ref={formRef}
-          className="mt-2 space-y-4 rounded-xl border bg-white p-5"
+          className="mt-2 space-y-4 rounded-xl border bg-white p-5 shadow-sm"
           noValidate
+          onSubmit={(e) => e.preventDefault()}
         >
           <label className="block text-sm">
             {t("vat.shop_name")} *
             <input
               name="name"
               required
+              autoComplete="organization"
               className="mt-1 w-full rounded-lg border px-3 py-2"
             />
           </label>
           <label className="block text-sm">
             {t("common.phone")}
-            <input name="phone" className="mt-1 w-full rounded-lg border px-3 py-2" />
+            <input
+              name="phone"
+              autoComplete="tel"
+              className="mt-1 w-full rounded-lg border px-3 py-2"
+            />
           </label>
           <label className="block text-sm">
             {t("common.address")}
-            <input name="address" className="mt-1 w-full rounded-lg border px-3 py-2" />
+            <input
+              name="address"
+              autoComplete="street-address"
+              className="mt-1 w-full rounded-lg border px-3 py-2"
+            />
           </label>
 
           <div className="space-y-4 rounded-lg border border-teal-100 bg-teal-50/50 p-4">
@@ -237,7 +280,8 @@ export default function ShopSettingsPage() {
           </div>
 
           <button
-            type="submit"
+            ref={saveBtnRef}
+            type="button"
             className="w-full rounded-lg bg-teal-700 py-3 text-base font-semibold text-white hover:bg-teal-800"
           >
             {t("common.save")}
