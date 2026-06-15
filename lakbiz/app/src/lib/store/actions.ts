@@ -806,7 +806,10 @@ export function updateBusiness(
         "vatRegistered" in business
           ? (business.vatRegistered ?? false)
           : (prev.vatRegistered ?? false),
-      vatNumber: business.vatNumber?.trim() ?? prev.vatNumber,
+      vatNumber:
+        "vatNumber" in business
+          ? business.vatNumber?.trim() || undefined
+          : prev.vatNumber,
       quarterStartMonth:
         business.quarterStartMonth ?? prev.quarterStartMonth ?? 4,
     },

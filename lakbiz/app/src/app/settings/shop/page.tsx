@@ -37,9 +37,7 @@ function readForm(form: HTMLFormElement): BusinessInfo {
     phone: String(fd.get("phone") ?? "").trim() || undefined,
     address: String(fd.get("address") ?? "").trim() || undefined,
     vatRegistered,
-    vatNumber: vatRegistered
-      ? String(fd.get("vatNumber") ?? "").trim() || undefined
-      : undefined,
+    vatNumber: String(fd.get("vatNumber") ?? "").trim() || undefined,
     quarterStartMonth: Number(fd.get("quarterStartMonth") ?? 4) || 4,
   };
 }

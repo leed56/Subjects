@@ -11,9 +11,7 @@ function normalize(business: BusinessInfo): BusinessInfo {
     phone: business.phone?.trim() || undefined,
     address: business.address?.trim() || undefined,
     vatRegistered: business.vatRegistered ?? false,
-    vatNumber: business.vatRegistered
-      ? business.vatNumber?.trim() || undefined
-      : undefined,
+    vatNumber: business.vatNumber?.trim() || undefined,
     quarterStartMonth: business.quarterStartMonth ?? 4,
   };
 }
