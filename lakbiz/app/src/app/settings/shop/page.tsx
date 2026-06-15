@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useAuth } from "@/components/auth-provider";
 import { SiteHeader } from "@/components/site-header";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -14,17 +15,26 @@ import {
   saveOrgShopSettings,
 } from "@/lib/supabase/org-settings";
 
-// Write to both storage keys so the rest of the app sees the update
 const SHOP_KEY = "lakbiz-shop-settings-v1";
 const APP_KEY = "lakbiz-app-data-v2";
+
+type Msg = { ok: boolean; text: string };
+type BtnState = "idle" | "saving" | "saved";
 
 function readStorage(): Partial<BusinessInfo> | null {
   try {
     const a = localStorage.getItem(SHOP_KEY);
     if (a) return JSON.parse(a) as Partial<BusinessInfo>;
     const b = localStorage.getItem(APP_KEY);
-    if (b) return ((JSON.parse(b) as { business?: Partial<BusinessInfo> }).business) ?? null;
-  } catch { /* ignore */ }
+    if (b) {
+      return (
+        (JSON.parse(b) as { business?: Partial<BusinessInfo> }).business ??
+        null
+      );
+    }
+  } catch {
+    /* ignore */
+  }
   return null;
 }
 
@@ -33,9 +43,11 @@ function writeStorage(data: BusinessInfo): void {
   try {
     const raw = localStorage.getItem(APP_KEY);
     const app = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-    app.business = { ...(app.business as object ?? {}), ...data };
+    app.business = { ...((app.business as object) ?? {}), ...data };
     localStorage.setItem(APP_KEY, JSON.stringify(app));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 function readForm(form: HTMLFormElement): BusinessInfo {
@@ -53,7 +65,9 @@ function readForm(form: HTMLFormElement): BusinessInfo {
 function fillForm(form: HTMLFormElement, s: Partial<BusinessInfo>) {
   const set = (name: string, value: string) => {
     const el = form.elements.namedItem(name);
-    if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) el.value = value;
+    if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) {
+      el.value = value;
+    }
   };
   set("name", s.name ?? "");
   set("phone", s.phone ?? "");
@@ -64,11 +78,19 @@ function fillForm(form: HTMLFormElement, s: Partial<BusinessInfo>) {
   if (cb instanceof HTMLInputElement) cb.checked = s.vatRegistered ?? false;
 }
 
+function msgClasses(ok: boolean): string {
+  return ok
+    ? "border border-teal-200 bg-teal-50 text-teal-900"
+    : "border border-amber-200 bg-amber-50 text-amber-900";
+}
+
 export default function ShopSettingsPage() {
   const formRef = useRef<HTMLFormElement>(null);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
+  const resetBtnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [msg, setMsg] = useState<Msg | null>(null);
+  const [btnState, setBtnState] = useState<BtnState>("idle");
 
-  // NOT consuming useAppStore — avoids context re-render cascade on save
   const { user } = useAuth();
   const { org } = useSubscription();
   const { t } = useLocale();
@@ -78,7 +100,21 @@ export default function ShopSettingsPage() {
   orgIdRef.current = org.id;
   userRef.current = user;
 
-  // Load from localStorage on mount
+  const showMsg = (next: Msg, button: BtnState) => {
+    flushSync(() => {
+      setMsg(next);
+      setBtnState(button);
+    });
+    statusRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  };
+
+  const resetButtonLater = () => {
+    if (resetBtnTimerRef.current) clearTimeout(resetBtnTimerRef.current);
+    resetBtnTimerRef.current = setTimeout(() => {
+      flushSync(() => setBtnState("idle"));
+    }, 2500);
+  };
+
   useEffect(() => {
     const form = formRef.current;
     if (!form) return;
@@ -86,47 +122,63 @@ export default function ShopSettingsPage() {
     if (saved) fillForm(form, saved);
   }, []);
 
-  // Merge cloud data on first load if local has no name set
   useEffect(() => {
     if (!org.id || !isSupabaseConfigured()) return;
     void fetchOrgShopSettings(org.id).then((cloud) => {
       const form = formRef.current;
       if (!cloud || !form) return;
       const local = readStorage();
-      if (local?.name && local.name !== "My Shop") return; // local wins
+      if (local?.name && local.name !== "My Shop") return;
       fillForm(form, cloud);
     });
   }, [org.id]);
+
+  useEffect(() => {
+    return () => {
+      if (resetBtnTimerRef.current) clearTimeout(resetBtnTimerRef.current);
+    };
+  }, []);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const payload = readForm(form);
 
-    // Save synchronously
+    showMsg({ ok: true, text: t("vat.saving") }, "saving");
+
     try {
       writeStorage(payload);
     } catch {
-      setMsg({ ok: false, text: "Save failed — browser storage blocked." });
+      showMsg(
+        { ok: false, text: "Save failed — browser storage blocked." },
+        "idle",
+      );
       return;
     }
 
-    // Verify write landed
     try {
       const check = localStorage.getItem(SHOP_KEY);
       if (!check || (JSON.parse(check) as BusinessInfo).name !== payload.name) {
-        setMsg({ ok: false, text: "Save failed — storage write did not persist." });
+        showMsg(
+          { ok: false, text: "Save failed — storage write did not persist." },
+          "idle",
+        );
         return;
       }
     } catch {
-      setMsg({ ok: false, text: "Save failed." });
+      showMsg({ ok: false, text: "Save failed." }, "idle");
       return;
     }
 
-    // Show success immediately — this state update is the ONLY one here
-    setMsg({ ok: true, text: `✓ ${t("vat.settings_saved_local")}: "${payload.name}"` });
+    showMsg(
+      {
+        ok: true,
+        text: `${t("vat.saved_success")} — ${payload.name}`,
+      },
+      "saved",
+    );
+    resetButtonLater();
 
-    // Cloud sync in background — never clears the success message on failure
     const currentUser = userRef.current;
     if (!currentUser || !isSupabaseConfigured()) return;
 
@@ -134,16 +186,40 @@ export default function ShopSettingsPage() {
       try {
         let orgId = orgIdRef.current;
         if (!orgId) {
-          const { orgId: newId } = await getOrCreateOrgForUser(currentUser.id, payload);
+          const { orgId: newId } = await getOrCreateOrgForUser(
+            currentUser.id,
+            payload,
+          );
           orgId = newId;
           orgIdRef.current = orgId;
         }
         if (!orgId) return;
         const err = await saveOrgShopSettings(orgId, payload);
-        if (!err) setMsg({ ok: true, text: `✓ ${t("vat.settings_saved_cloud")}` });
-      } catch { /* cloud failure is silent — local save already succeeded */ }
+        showMsg(
+          err
+            ? {
+                ok: false,
+                text: `${t("vat.saved_success")} — ${t("vat.cloud_sync_note")}`,
+              }
+            : {
+                ok: true,
+                text: `${t("vat.saved_success")} — ${t("vat.settings_saved_cloud")}`,
+              },
+          "saved",
+        );
+        resetButtonLater();
+      } catch {
+        /* local save already succeeded */
+      }
     })();
   }
+
+  const saveLabel =
+    btnState === "saving"
+      ? t("vat.saving")
+      : btnState === "saved"
+        ? t("vat.saved_success")
+        : t("common.save");
 
   return (
     <div className="min-h-full bg-slate-50">
@@ -152,25 +228,10 @@ export default function ShopSettingsPage() {
         <h1 className="text-2xl font-bold text-slate-900">{t("vat.shop_settings")}</h1>
         <p className="mt-1 text-sm text-slate-600">{t("vat.shop_settings_hint")}</p>
 
-        <div className="mt-4 min-h-[3rem]">
-          {msg && (
-            <p
-              role="status"
-              className={`rounded-lg border px-4 py-3 text-sm font-medium ${
-                msg.ok
-                  ? "border-teal-200 bg-teal-50 text-teal-800"
-                  : "border-amber-200 bg-amber-50 text-amber-900"
-              }`}
-            >
-              {msg.text}
-            </p>
-          )}
-        </div>
-
         <form
           ref={formRef}
           onSubmit={handleSubmit}
-          className="mt-2 space-y-4 rounded-xl border bg-white p-5 shadow-sm"
+          className="mt-6 space-y-4 rounded-xl border bg-white p-5 shadow-sm"
           noValidate
         >
           <label className="block text-sm font-medium text-slate-700">
@@ -203,7 +264,11 @@ export default function ShopSettingsPage() {
 
           <div className="space-y-3 rounded-lg border border-teal-100 bg-teal-50/40 p-4">
             <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
-              <input name="vatRegistered" type="checkbox" className="h-4 w-4 accent-teal-600" />
+              <input
+                name="vatRegistered"
+                type="checkbox"
+                className="h-4 w-4 accent-teal-600"
+              />
               {t("vat.registered")}
             </label>
 
@@ -232,16 +297,40 @@ export default function ShopSettingsPage() {
 
           <button
             type="submit"
-            className="w-full rounded-lg bg-teal-700 py-3 text-base font-semibold text-white transition-colors hover:bg-teal-800 active:bg-teal-900"
+            disabled={btnState === "saving"}
+            className={`w-full rounded-lg py-3 text-base font-semibold text-white transition-colors ${
+              btnState === "saved"
+                ? "bg-emerald-600 hover:bg-emerald-700"
+                : btnState === "saving"
+                  ? "cursor-wait bg-teal-600"
+                  : "bg-teal-700 hover:bg-teal-800 active:bg-teal-900"
+            }`}
           >
-            {t("common.save")}
+            {saveLabel}
           </button>
+
+          <div
+            ref={statusRef}
+            role="status"
+            aria-live="polite"
+            className={`min-h-[3.25rem] rounded-lg px-4 py-3 text-sm font-medium ${
+              msg
+                ? msgClasses(msg.ok)
+                : "border border-dashed border-slate-200 bg-slate-50 text-slate-400"
+            }`}
+          >
+            {msg?.text ?? t("vat.save_status_hint")}
+          </div>
         </form>
 
         <p className="mt-6 text-center text-sm text-slate-500">
-          <Link href="/vat" className="text-teal-700 underline">{t("vat.view_return")}</Link>
+          <Link href="/vat" className="text-teal-700 underline">
+            {t("vat.view_return")}
+          </Link>
           {" · "}
-          <Link href="/dashboard" className="text-teal-700 underline">{t("nav.dashboard")}</Link>
+          <Link href="/dashboard" className="text-teal-700 underline">
+            {t("nav.dashboard")}
+          </Link>
         </p>
       </main>
     </div>
