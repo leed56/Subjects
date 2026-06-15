@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { SiteHeader } from "@/components/site-header";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
-import type { BusinessInfo } from "@/lib/invoice";
+import { defaultBusiness, type BusinessInfo } from "@/lib/invoice";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   getOrCreateOrgForUser,
@@ -23,105 +23,73 @@ const QUARTER_MONTHS = [
   { value: 10, key: "vat.month_oct" },
 ] as const;
 
+function readDraftFromStorage(): BusinessInfo {
+  return { ...loadAppData().business };
+}
+
 export default function ShopSettingsPage() {
-  const { ready, updateBusiness } = useAppStore();
-  const { org, refreshOrg } = useSubscription();
+  const { updateBusiness } = useAppStore();
+  const { org } = useSubscription();
   const { user } = useAuth();
   const { t } = useLocale();
-  const [form, setForm] = useState<BusinessInfo | null>(null);
+
+  // Match server + client first paint, then load localStorage once (avoids hydration flash)
+  const [draft, setDraft] = useState<BusinessInfo>(defaultBusiness);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saveMode, setSaveMode] = useState<"local" | "cloud" | null>(null);
-  const [cloudOrgId, setCloudOrgId] = useState<string | null>(null);
-  const initialized = useRef(false);
 
-  // Load once from localStorage — never re-fetch cloud into the form (that caused resets)
-  useEffect(() => {
-    if (!ready || initialized.current) return;
-    initialized.current = true;
-    setForm({ ...loadAppData().business });
-  }, [ready]);
+  const loaded = useRef(false);
 
   useEffect(() => {
-    if (org.id) setCloudOrgId(org.id);
-  }, [org.id]);
+    if (loaded.current) return;
+    loaded.current = true;
+    setDraft(readDraftFromStorage());
+  }, []);
 
-  if (!ready || !form) {
-    return (
-      <div className="min-h-full bg-slate-50">
-        <SiteHeader />
-        <main className="mx-auto max-w-lg px-4 py-10">{t("common.loading")}</main>
-      </div>
-    );
-  }
-
-  const activeOrgId = org.id ?? cloudOrgId;
+  const patch = useCallback((partial: Partial<BusinessInfo>) => {
+    setSaved(false);
+    setDraft((prev) => ({ ...prev, ...partial }));
+  }, []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError("");
-    setSaved(false);
-    setSaveMode(null);
 
     const payload: BusinessInfo = {
-      ...form,
-      vatRegistered: form.vatRegistered ?? false,
-      quarterStartMonth: form.quarterStartMonth ?? 4,
+      ...draft,
+      name: draft.name.trim() || "My Shop",
+      vatRegistered: draft.vatRegistered ?? false,
+      quarterStartMonth: draft.quarterStartMonth ?? 4,
     };
 
-    // Write localStorage synchronously first (guaranteed persist)
+    // 1) Persist locally first (sync) — survives refresh even if cloud fails
     const nextApp = mergeBusinessIntoApp(loadAppData(), payload);
     saveAppData(nextApp);
     updateBusiness(payload);
-    setForm(payload);
+    setDraft(payload);
 
-    let targetOrgId = activeOrgId;
-
+    // 2) Cloud sync in background — no refreshOrg, no form re-init
+    let cloudOk = false;
     if (user && isSupabaseConfigured()) {
+      let targetOrgId = org.id;
       if (!targetOrgId) {
-        const { orgId, error: createError } = await getOrCreateOrgForUser(
-          user.id,
-          payload,
-        );
-        if (createError) {
-          setError(t("vat.cloud_sync_note"));
-          setSaveMode("local");
-          setSaved(true);
-          setSaving(false);
-          return;
-        }
-        if (orgId) {
-          targetOrgId = orgId;
-          setCloudOrgId(orgId);
-          void refreshOrg();
-        }
+        const { orgId } = await getOrCreateOrgForUser(user.id, payload);
+        targetOrgId = orgId;
       }
-
       if (targetOrgId) {
         const cloudError = await saveOrgShopSettings(targetOrgId, payload);
-        if (cloudError) {
-          setError(t("vat.cloud_sync_note"));
-          setSaveMode("local");
-        } else {
-          setSaveMode("cloud");
-        }
-        setSaved(true);
-      } else {
-        setSaveMode("local");
-        setSaved(true);
+        cloudOk = !cloudError;
+        if (cloudError) setError(t("vat.cloud_sync_note"));
       }
-    } else {
-      setSaveMode("local");
-      setSaved(true);
-      if (!isSupabaseConfigured()) {
-        setError(t("vat.no_supabase_env"));
-      } else if (!user) {
-        setError(t("vat.sign_in_for_cloud"));
-      }
+    } else if (!user) {
+      setError(t("vat.sign_in_for_cloud"));
     }
 
+    setSaveMode(cloudOk ? "cloud" : "local");
+    setSaved(true);
     setSaving(false);
   };
 
@@ -154,33 +122,24 @@ export default function ShopSettingsPage() {
             {t("vat.shop_name")} *
             <input
               required
-              value={form.name}
-              onChange={(e) => {
-                setSaved(false);
-                setForm({ ...form, name: e.target.value });
-              }}
+              value={draft.name}
+              onChange={(e) => patch({ name: e.target.value })}
               className="mt-1 w-full rounded-lg border px-3 py-2"
             />
           </label>
           <label className="block text-sm">
             {t("common.phone")}
             <input
-              value={form.phone ?? ""}
-              onChange={(e) => {
-                setSaved(false);
-                setForm({ ...form, phone: e.target.value });
-              }}
+              value={draft.phone ?? ""}
+              onChange={(e) => patch({ phone: e.target.value })}
               className="mt-1 w-full rounded-lg border px-3 py-2"
             />
           </label>
           <label className="block text-sm">
             {t("common.address")}
             <input
-              value={form.address ?? ""}
-              onChange={(e) => {
-                setSaved(false);
-                setForm({ ...form, address: e.target.value });
-              }}
+              value={draft.address ?? ""}
+              onChange={(e) => patch({ address: e.target.value })}
               className="mt-1 w-full rounded-lg border px-3 py-2"
             />
           </label>
@@ -189,27 +148,21 @@ export default function ShopSettingsPage() {
             <label className="flex items-center gap-3 text-sm font-medium">
               <input
                 type="checkbox"
-                checked={form.vatRegistered ?? false}
-                onChange={(e) => {
-                  setSaved(false);
-                  setForm({ ...form, vatRegistered: e.target.checked });
-                }}
+                checked={draft.vatRegistered ?? false}
+                onChange={(e) => patch({ vatRegistered: e.target.checked })}
                 className="h-4 w-4 rounded border-teal-600"
               />
               {t("vat.registered")}
             </label>
             <p className="mt-2 text-xs text-slate-600">{t("vat.registered_hint")}</p>
 
-            {form.vatRegistered && (
+            {draft.vatRegistered && (
               <div className="mt-4 space-y-3">
                 <label className="block text-sm">
                   {t("vat.vat_number")}
                   <input
-                    value={form.vatNumber ?? ""}
-                    onChange={(e) => {
-                      setSaved(false);
-                      setForm({ ...form, vatNumber: e.target.value });
-                    }}
+                    value={draft.vatNumber ?? ""}
+                    onChange={(e) => patch({ vatNumber: e.target.value })}
                     placeholder="VAT-XXXXXXX"
                     className="mt-1 w-full rounded-lg border px-3 py-2"
                   />
@@ -217,14 +170,10 @@ export default function ShopSettingsPage() {
                 <label className="block text-sm">
                   {t("vat.quarter_start")}
                   <select
-                    value={form.quarterStartMonth ?? 4}
-                    onChange={(e) => {
-                      setSaved(false);
-                      setForm({
-                        ...form,
-                        quarterStartMonth: Number(e.target.value),
-                      });
-                    }}
+                    value={draft.quarterStartMonth ?? 4}
+                    onChange={(e) =>
+                      patch({ quarterStartMonth: Number(e.target.value) })
+                    }
                     className="mt-1 w-full rounded-lg border px-3 py-2"
                   >
                     {QUARTER_MONTHS.map((m) => (
@@ -248,7 +197,7 @@ export default function ShopSettingsPage() {
         </form>
 
         <p className="mt-4 text-center text-xs text-slate-500">
-          {user && activeOrgId
+          {user && org.id
             ? t("vat.save_hint_cloud")
             : user
               ? t("vat.save_hint_create_org")

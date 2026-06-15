@@ -195,10 +195,6 @@ export function SubscriptionProvider({
     ],
   );
 
-  if (!ready) {
-    return <>{children}</>;
-  }
-
   return (
     <SubscriptionContext.Provider value={value}>
       {children}
