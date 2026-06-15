@@ -1,5 +1,6 @@
 import type { AppData } from "./types";
-import { defaultBusiness } from "@/lib/invoice";
+import { defaultBusiness, type BusinessInfo } from "@/lib/invoice";
+import { calcInputVat, splitInclusiveTotal } from "@/lib/vat";
 
 const STORAGE_KEY_V2 = "lakbiz-app-data-v2";
 const STORAGE_KEY_V1 = "lakbiz-app-data-v1";
@@ -21,11 +22,40 @@ export const emptyAppData = (): AppData => ({
 });
 
 function normalizeSale(sale: AppData["sales"][number]): AppData["sales"][number] {
+  const split = splitInclusiveTotal(sale.total);
   return {
     ...sale,
     billNo: sale.billNo ?? `LB-${sale.id.slice(0, 8).toUpperCase()}`,
     creditAmount:
       sale.creditAmount ?? (sale.paymentMethod === "credit" ? sale.total : 0),
+    subtotal: sale.subtotal ?? split.subtotal,
+    outputVat: sale.outputVat ?? split.vat,
+  };
+}
+
+function normalizePurchase(
+  purchase: AppData["purchases"][number],
+): AppData["purchases"][number] {
+  const subtotal =
+    purchase.subtotal ??
+    purchase.lines.reduce((s, l) => s + l.unitCost * l.qty, 0);
+  return {
+    ...purchase,
+    subtotal,
+    inputVat: purchase.inputVat ?? calcInputVat(subtotal),
+    total: purchase.total ?? subtotal + (purchase.inputVat ?? calcInputVat(subtotal)),
+  };
+}
+
+function normalizeBusiness(
+  business: Partial<BusinessInfo> | undefined,
+): BusinessInfo {
+  const base = defaultBusiness();
+  return {
+    ...base,
+    ...business,
+    quarterStartMonth: business?.quarterStartMonth ?? 4,
+    vatRegistered: business?.vatRegistered ?? false,
   };
 }
 
@@ -38,7 +68,9 @@ export function loadAppData(): AppData {
       return {
         ...emptyAppData(),
         ...parsed,
+        business: normalizeBusiness(parsed.business),
         sales: (parsed.sales ?? []).map(normalizeSale),
+        purchases: (parsed.purchases ?? []).map(normalizePurchase),
       };
     }
 

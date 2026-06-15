@@ -1,5 +1,6 @@
 import { newId, todayKey } from "@/lib/format";
 import { generateBillNo, generateGrnNo, type BusinessInfo } from "@/lib/invoice";
+import { calcInputVat, isVatEnabled, splitInclusiveTotal } from "@/lib/vat";
 import { generateJobNo } from "@/lib/ac-jobs";
 import {
   daysInStock,
@@ -295,7 +296,14 @@ export function createPurchase(
     return data;
   }
 
-  const total = purchaseLines.reduce((s, l) => s + l.unitCost * l.qty, 0);
+  const subtotal = purchaseLines.reduce((s, l) => s + l.unitCost * l.qty, 0);
+  const inputVat =
+    input.inputVat != null
+      ? Math.max(0, input.inputVat)
+      : isVatEnabled(data.business)
+        ? calcInputVat(subtotal)
+        : 0;
+  const total = subtotal + inputVat;
   const purchaseId = newId();
   const date = new Date().toISOString();
 
@@ -325,6 +333,8 @@ export function createPurchase(
     supplierId: supplier.id,
     supplierName: supplier.name,
     lines: purchaseLines,
+    subtotal,
+    inputVat,
     total,
     paymentMethod: input.paymentMethod,
     creditAmount: input.paymentMethod === "credit" ? total : 0,
@@ -666,7 +676,11 @@ export function createSale(
 
   if (saleLines.length === 0) return data;
 
-  const total = saleLines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
+  const inclusiveTotal = saleLines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
+  const vatSplit = isVatEnabled(data.business)
+    ? splitInclusiveTotal(inclusiveTotal)
+    : { subtotal: inclusiveTotal, vat: 0, total: inclusiveTotal };
+  const total = vatSplit.total;
   const profit = saleLines.reduce(
     (s, l) => s + (l.unitPrice - l.buyPrice) * l.qty,
     0,
@@ -719,6 +733,8 @@ export function createSale(
     billNo: generateBillNo(data.sales.length),
     date: new Date().toISOString(),
     lines: saleLines,
+    subtotal: vatSplit.subtotal,
+    outputVat: vatSplit.vat,
     total,
     profit,
     paymentMethod,
@@ -785,6 +801,9 @@ export function updateBusiness(
       phone: business.phone?.trim() || undefined,
       address: business.address?.trim() || undefined,
       tin: business.tin?.trim() || undefined,
+      vatRegistered: business.vatRegistered ?? false,
+      vatNumber: business.vatNumber?.trim() || undefined,
+      quarterStartMonth: business.quarterStartMonth ?? 4,
     },
   };
 }

@@ -7,6 +7,7 @@ import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
+import { splitInclusiveTotal } from "@/lib/vat";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { PaymentMethod } from "@/lib/types";
 
@@ -37,6 +38,8 @@ export default function SalesPage() {
   }, [cart, data]);
 
   const total = lines.reduce((s, l) => s + l.product.sellPrice * l.qty, 0);
+  const vatEnabled = data?.business.vatRegistered === true;
+  const billVat = vatEnabled ? splitInclusiveTotal(total) : null;
 
   if (!ready || !data) {
     return (
@@ -181,6 +184,22 @@ export default function SalesPage() {
                   </li>
                 ))}
               </ul>
+              {billVat && (
+                <div className="mt-3 space-y-1 border-t pt-3 text-sm text-slate-600">
+                  <div className="flex justify-between">
+                    <span>{t("vat.subtotal")}</span>
+                    <span className="font-mono tabular-nums">
+                      {formatLkr(billVat.subtotal)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-teal-700">
+                    <span>{t("vat.output_vat")} (18%)</span>
+                    <span className="font-mono tabular-nums">
+                      {formatLkr(billVat.vat)}
+                    </span>
+                  </div>
+                </div>
+              )}
               <p className="mt-4 border-t pt-3 text-lg font-bold text-slate-900">
                 {t("common.total")}: {formatLkr(total)}
               </p>

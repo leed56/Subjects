@@ -11,9 +11,10 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 const navKeys = [
   { href: "/dashboard", key: "nav.dashboard" },
+  { href: "/sales", key: "nav.sales" },
+  { href: "/vat", key: "nav.vat" },
   { href: "/stock", key: "nav.stock" },
   { href: "/suppliers", key: "nav.suppliers" },
-  { href: "/sales", key: "nav.sales" },
   { href: "/jobs", key: "nav.jobs" },
   { href: "/vehicles", key: "nav.vehicles" },
   { href: "/bills", key: "nav.bills" },

@@ -121,6 +121,9 @@ export interface Sale {
   billNo?: string;
   date: string;
   lines: SaleLine[];
+  /** Ex-VAT amount (sell prices are VAT-inclusive) */
+  subtotal?: number;
+  outputVat?: number;
   total: number;
   profit: number;
   paymentMethod: PaymentMethod;
@@ -207,6 +210,9 @@ export interface Purchase {
   supplierId: string;
   supplierName: string;
   lines: PurchaseLine[];
+  /** Pre-VAT line sum */
+  subtotal?: number;
+  inputVat?: number;
   total: number;
   paymentMethod: PaymentMethod;
   creditAmount: number;
@@ -267,6 +273,8 @@ export type PurchaseInput = {
   supplierId: string;
   lines: { productId: string; qty: number; unitCost: number }[];
   paymentMethod: PaymentMethod;
+  /** Input VAT on supplier bill (defaults to 18% of subtotal when VAT registered) */
+  inputVat?: number;
   note?: string;
   chequeNo?: string;
   chequeBank?: string;

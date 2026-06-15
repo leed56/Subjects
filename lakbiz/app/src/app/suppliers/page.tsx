@@ -6,6 +6,7 @@ import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
+import { calcInputVat } from "@/lib/vat";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { Supplier } from "@/lib/store/types";
 import type { PaymentMethod } from "@/lib/types";
@@ -41,6 +42,7 @@ export default function SuppliersPage() {
     new Date().toISOString().slice(0, 10),
   );
   const [postDated, setPostDated] = useState(false);
+  const [purchaseInputVat, setPurchaseInputVat] = useState<number | "">("");
 
   const [paySupplierId, setPaySupplierId] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState(0);
@@ -53,6 +55,11 @@ export default function SuppliersPage() {
       return sum + line.qty * line.unitCost;
     }, 0);
   }, [purchaseLines, data]);
+
+  const vatRegistered = data?.business.vatRegistered === true;
+  const defaultInputVat = vatRegistered ? calcInputVat(purchaseTotal) : 0;
+  const effectiveInputVat =
+    purchaseInputVat === "" ? defaultInputVat : Number(purchaseInputVat);
 
   if (!ready || !data) {
     return (
@@ -99,6 +106,7 @@ export default function SuppliersPage() {
       supplierId: purchaseSupplierId,
       lines,
       paymentMethod: purchasePayment,
+      inputVat: vatRegistered ? effectiveInputVat : 0,
       chequeNo: purchasePayment === "cheque" ? chequeNo : undefined,
       chequeBank: purchasePayment === "cheque" ? chequeBank : undefined,
       chequeDate: purchasePayment === "cheque" ? chequeDate : undefined,
@@ -107,6 +115,7 @@ export default function SuppliersPage() {
     if (ok) {
       setShowPurchase(false);
       setPurchaseLines({});
+      setPurchaseInputVat("");
       setMessage(t("sup.saved"));
       setTimeout(() => setMessage(""), 3000);
     } else {
@@ -299,7 +308,29 @@ export default function SuppliersPage() {
               })}
             </div>
 
-            <p className="mt-4 font-semibold">{t("common.total")}: {formatLkr(purchaseTotal)}</p>
+            <p className="mt-4 font-semibold">
+              {t("vat.subtotal")}: {formatLkr(purchaseTotal)}
+            </p>
+            {vatRegistered && (
+              <label className="mt-3 block text-sm">
+                {t("vat.input_vat")} (18%)
+                <input
+                  type="number"
+                  min={0}
+                  value={purchaseInputVat === "" ? defaultInputVat : purchaseInputVat}
+                  onChange={(e) =>
+                    setPurchaseInputVat(
+                      e.target.value === "" ? "" : Number(e.target.value),
+                    )
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+            )}
+            <p className="mt-2 text-lg font-bold">
+              {t("common.total")}:{" "}
+              {formatLkr(purchaseTotal + (vatRegistered ? effectiveInputVat : 0))}
+            </p>
             <div className="mt-3 flex gap-2">
               <button
                 onClick={handlePurchase}

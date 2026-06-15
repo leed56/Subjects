@@ -7,6 +7,7 @@ import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { getDashboardStats } from "@/lib/store/actions";
 import { useAppStore } from "@/lib/store/use-app-store";
+import { getVatQuarterSummary } from "@/lib/vat";
 
 export default function DashboardPage() {
   const { data, ready, resetAll } = useAppStore();
@@ -22,11 +23,60 @@ export default function DashboardPage() {
   }
 
   const stats = getDashboardStats(data);
+  const vat = getVatQuarterSummary(data);
 
   return (
     <div className="min-h-full bg-slate-50">
       <SiteHeader />
       <main className="mx-auto max-w-6xl px-4 py-10">
+        <div className="mb-6 grid gap-3 sm:grid-cols-2">
+          <Link
+            href="/sales"
+            className="flex min-h-[4.5rem] items-center justify-center rounded-2xl bg-amber-500 px-6 py-4 text-center text-lg font-bold text-slate-950 shadow-lg shadow-amber-500/20 transition hover:bg-amber-400"
+          >
+            {t("dash.new_sale")}
+          </Link>
+          <Link
+            href="/suppliers"
+            className="flex min-h-[4.5rem] items-center justify-center rounded-2xl border-2 border-teal-600 bg-white px-6 py-4 text-center text-lg font-bold text-teal-800 transition hover:bg-teal-50"
+          >
+            {t("dash.add_purchase")}
+          </Link>
+        </div>
+
+        {vat.enabled ? (
+          <Link
+            href="/vat"
+            className="mb-8 block rounded-2xl border border-teal-500/40 bg-gradient-to-br from-slate-950 to-slate-900 p-6 text-white shadow-xl transition hover:border-teal-400/60"
+          >
+            <p className="text-xs font-bold uppercase tracking-[0.15em] text-teal-400">
+              {t("vat.meter_label")}
+            </p>
+            <p className="mt-1 text-sm text-slate-400">{vat.bounds.label}</p>
+            <p className="mt-3 font-mono text-4xl font-bold tabular-nums text-teal-400 sm:text-5xl">
+              {formatLkr(vat.netPayable)}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-500">
+              <span>
+                {t("vat.output_vat")}: {formatLkr(vat.outputVat)}
+              </span>
+              <span>
+                {t("vat.input_vat")}: {formatLkr(vat.inputVat)}
+              </span>
+            </div>
+          </Link>
+        ) : (
+          <div className="mb-8 rounded-2xl border border-dashed border-teal-300 bg-teal-50/50 p-5 text-center">
+            <p className="text-sm text-slate-700">{t("vat.enable_hint")}</p>
+            <Link
+              href="/settings/shop"
+              className="mt-3 inline-block rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white"
+            >
+              {t("vat.shop_settings")}
+            </Link>
+          </div>
+        )}
+
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">{t("dash.title")}</h1>

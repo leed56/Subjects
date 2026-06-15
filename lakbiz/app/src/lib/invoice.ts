@@ -7,11 +7,18 @@ export interface BusinessInfo {
   phone?: string;
   address?: string;
   tin?: string;
+  /** VAT registration (Salli-style compliance mode) */
+  vatRegistered?: boolean;
+  vatNumber?: string;
+  /** Fiscal quarter start month (1–12). Default 4 = April (IRD-style) */
+  quarterStartMonth?: number;
 }
 
 export const defaultBusiness = (): BusinessInfo => ({
   name: "My Shop",
   nameSi: "මගේ වෙළඳසැල",
+  vatRegistered: false,
+  quarterStartMonth: 4,
 });
 
 export function generateBillNo(existingSaleCount: number): string {
@@ -73,6 +80,13 @@ export function buildInvoiceText(
     "",
     lines,
     "",
+    ...(sale.outputVat && sale.outputVat > 0
+      ? [
+          `Subtotal: ${formatLkr(sale.subtotal ?? sale.total - sale.outputVat)}`,
+          `VAT (18%): ${formatLkr(sale.outputVat)}`,
+          "",
+        ]
+      : []),
     `*Total: ${formatLkr(sale.total)}*`,
     `Payment: ${formatPaymentLabel(sale.paymentMethod, t)}`,
     "",
