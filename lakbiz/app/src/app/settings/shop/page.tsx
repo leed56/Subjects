@@ -2,17 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useAuth } from "@/components/auth-provider";
 import { SiteHeader } from "@/components/site-header";
 import { useLocale } from "@/lib/i18n/locale-provider";
-import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { defaultBusiness, type BusinessInfo } from "@/lib/invoice";
-import { isSupabaseConfigured } from "@/lib/supabase/client";
-import {
-  getOrCreateOrgForUser,
-  saveOrgShopSettings,
-} from "@/lib/supabase/org-settings";
-import { useAppStore } from "@/lib/store/use-app-store";
 import {
   loadShopSettings,
   saveShopSettings,
@@ -26,65 +18,51 @@ const QUARTER_MONTHS = [
 ] as const;
 
 export default function ShopSettingsPage() {
-  const { updateBusiness } = useAppStore();
-  const { org } = useSubscription();
-  const { user } = useAuth();
   const { t } = useLocale();
-
-  const [form, setForm] = useState<BusinessInfo>(defaultBusiness);
-  const formRef = useRef(form);
-  formRef.current = form;
-
+  const initDone = useRef(false);
+  const [form, setForm] = useState<BusinessInfo | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [statusKind, setStatusKind] = useState<"ok" | "warn">("ok");
 
   useEffect(() => {
+    if (initDone.current) return;
+    initDone.current = true;
     setForm(loadShopSettings());
   }, []);
 
+  function patch(partial: Partial<BusinessInfo>) {
+    setStatus(null);
+    setForm((prev) => (prev ? { ...prev, ...partial } : prev));
+  }
+
   function handleSave() {
+    if (!form) return;
+
     const payload: BusinessInfo = {
-      ...formRef.current,
-      name: formRef.current.name.trim() || "My Shop",
-      vatRegistered: formRef.current.vatRegistered ?? false,
-      quarterStartMonth: formRef.current.quarterStartMonth ?? 4,
+      ...form,
+      name: form.name.trim() || "My Shop",
+      vatRegistered: form.vatRegistered ?? false,
+      quarterStartMonth: form.quarterStartMonth ?? 4,
     };
 
-    const ok = saveShopSettings(payload);
-    if (!ok) {
-      setStatusKind("warn");
-      setStatus("Save failed — browser storage blocked?");
-      return;
-    }
-
-    updateBusiness(payload);
-    setStatusKind("ok");
-    setStatus(`${t("vat.settings_saved_local")}: "${payload.name}"`);
-
-    if (user && isSupabaseConfigured()) {
-      void (async () => {
-        let targetOrgId = org.id;
-        if (!targetOrgId) {
-          const { orgId } = await getOrCreateOrgForUser(user.id, payload);
-          targetOrgId = orgId;
-        }
-        if (!targetOrgId) return;
-        const err = await saveOrgShopSettings(targetOrgId, payload);
-        if (!err) {
-          setStatusKind("ok");
-          setStatus(`${t("vat.settings_saved_cloud")}: "${payload.name}"`);
-        }
-      })();
+    try {
+      saveShopSettings(payload);
+      setStatus(`${t("vat.settings_saved_local")}: "${payload.name}"`);
+    } catch (err) {
+      setStatus(
+        err instanceof Error ? err.message : "Save failed",
+      );
     }
   }
 
-  function patch(partial: Partial<BusinessInfo>) {
-    setStatus(null);
-    setForm((prev) => {
-      const next = { ...prev, ...partial };
-      formRef.current = next;
-      return next;
-    });
+  if (!form) {
+    return (
+      <div className="min-h-full bg-slate-50">
+        <SiteHeader />
+        <main className="mx-auto max-w-lg px-4 py-10 text-slate-600">
+          {t("common.loading")}
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -96,13 +74,7 @@ export default function ShopSettingsPage() {
 
         <div className="mt-4 min-h-[3rem]">
           {status && (
-            <p
-              className={`rounded-lg px-4 py-3 text-sm ${
-                statusKind === "ok"
-                  ? "bg-teal-50 text-teal-800"
-                  : "bg-amber-50 text-amber-900"
-              }`}
-            >
+            <p className="rounded-lg bg-teal-50 px-4 py-3 text-sm text-teal-800">
               {status}
             </p>
           )}
@@ -144,14 +116,11 @@ export default function ShopSettingsPage() {
               />
               {t("vat.registered")}
             </label>
-            <p className="text-xs text-slate-600">{t("vat.registered_hint")}</p>
-
             <label className="block text-sm">
               {t("vat.vat_number")}
               <input
                 value={form.vatNumber ?? ""}
                 onChange={(e) => patch({ vatNumber: e.target.value })}
-                placeholder="VAT-XXXXXXX"
                 className="mt-1 w-full rounded-lg border px-3 py-2"
               />
             </label>
@@ -176,31 +145,15 @@ export default function ShopSettingsPage() {
           <button
             type="button"
             onClick={handleSave}
-            className="w-full rounded-lg bg-teal-700 py-2.5 text-sm font-medium text-white hover:bg-teal-800 active:scale-[0.99]"
+            className="w-full rounded-lg bg-teal-700 py-3 text-base font-semibold text-white hover:bg-teal-800"
           >
             {t("common.save")}
           </button>
         </div>
 
-        <p className="mt-4 text-center text-xs text-slate-500">
-          {user && org.id
-            ? t("vat.save_hint_cloud")
-            : user
-              ? t("vat.save_hint_create_org")
-              : t("vat.save_hint_local")}
-        </p>
-
         <p className="mt-6 text-center text-sm text-slate-500">
-          <Link href="/vat" className="text-teal-700 underline">
-            {t("vat.view_return")}
-          </Link>
-          {" · "}
           <Link href="/dashboard" className="text-teal-700 underline">
             {t("nav.dashboard")}
-          </Link>
-          {" · "}
-          <Link href="/settings/billing" className="text-teal-700 underline">
-            {t("nav.billing")}
           </Link>
         </p>
       </main>

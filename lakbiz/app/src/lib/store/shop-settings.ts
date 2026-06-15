@@ -24,9 +24,10 @@ export function loadShopSettings(): BusinessInfo {
   return { ...loadAppData().business };
 }
 
-/** Persist shop settings to dedicated key + main app blob. Returns false if write failed. */
-export function saveShopSettings(business: BusinessInfo): boolean {
-  if (typeof window === "undefined") return false;
+export function saveShopSettings(business: BusinessInfo): void {
+  if (typeof window === "undefined") {
+    throw new Error("Cannot save on server");
+  }
 
   const payload: BusinessInfo = {
     ...business,
@@ -40,16 +41,7 @@ export function saveShopSettings(business: BusinessInfo): boolean {
     quarterStartMonth: business.quarterStartMonth ?? 4,
   };
 
-  try {
-    localStorage.setItem(SHOP_SETTINGS_KEY, JSON.stringify(payload));
-    const app = mergeBusinessIntoApp(loadAppData(), payload);
-    saveAppData(app);
-
-    const check = localStorage.getItem(SHOP_SETTINGS_KEY);
-    if (!check) return false;
-    const parsed = JSON.parse(check) as BusinessInfo;
-    return parsed.name === payload.name;
-  } catch {
-    return false;
-  }
+  localStorage.setItem(SHOP_SETTINGS_KEY, JSON.stringify(payload));
+  const app = mergeBusinessIntoApp(loadAppData(), payload);
+  saveAppData(app);
 }
