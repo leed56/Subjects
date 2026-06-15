@@ -139,7 +139,11 @@ export function SubscriptionProvider({
       setReady(true);
     };
 
-    init();
+    void init().catch(() => {
+      setSubscription(loadDemoSubscription());
+      setOrg(loadDemoOrg());
+      setReady(true);
+    });
   }, [user, authLoading, loadFromCloud]);
 
   useEffect(() => {

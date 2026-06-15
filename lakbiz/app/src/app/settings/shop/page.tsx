@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { defaultBusiness, type BusinessInfo } from "@/lib/invoice";
@@ -19,24 +19,20 @@ const QUARTER_MONTHS = [
 
 export default function ShopSettingsPage() {
   const { t } = useLocale();
-  const initDone = useRef(false);
-  const [form, setForm] = useState<BusinessInfo | null>(null);
+  const [form, setForm] = useState<BusinessInfo>(defaultBusiness);
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    if (initDone.current) return;
-    initDone.current = true;
     setForm(loadShopSettings());
   }, []);
 
   function patch(partial: Partial<BusinessInfo>) {
     setStatus(null);
-    setForm((prev) => (prev ? { ...prev, ...partial } : prev));
+    setForm((prev) => ({ ...prev, ...partial }));
   }
 
-  function handleSave() {
-    if (!form) return;
-
+  // React 19 expects event handlers that may be async — must return a Promise
+  async function handleSave() {
     const payload: BusinessInfo = {
       ...form,
       name: form.name.trim() || "My Shop",
@@ -48,21 +44,8 @@ export default function ShopSettingsPage() {
       saveShopSettings(payload);
       setStatus(`${t("vat.settings_saved_local")}: "${payload.name}"`);
     } catch (err) {
-      setStatus(
-        err instanceof Error ? err.message : "Save failed",
-      );
+      setStatus(err instanceof Error ? err.message : "Save failed");
     }
-  }
-
-  if (!form) {
-    return (
-      <div className="min-h-full bg-slate-50">
-        <SiteHeader />
-        <main className="mx-auto max-w-lg px-4 py-10 text-slate-600">
-          {t("common.loading")}
-        </main>
-      </div>
-    );
   }
 
   return (
