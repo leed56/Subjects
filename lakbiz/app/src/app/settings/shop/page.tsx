@@ -75,13 +75,23 @@ function verifyLocalSave(expected: BusinessInfo): boolean {
 
 export default function ShopSettingsPage() {
   const formRef = useRef<HTMLFormElement>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
   const [status, setStatus] = useState<Status | null>(null);
 
   const { updateBusiness } = useAppStore();
   const { org } = useSubscription();
   const { user } = useAuth();
   const { t } = useLocale();
+
+  // stable refs so async cloud-save closure never goes stale
+  const orgIdRef = useRef(org.id);
+  const userRef = useRef(user);
+  const tRef = useRef(t);
+  const updateBusinessRef = useRef(updateBusiness);
+  orgIdRef.current = org.id;
+  userRef.current = user;
+  tRef.current = t;
+  updateBusinessRef.current = updateBusiness;
 
   // Fill from localStorage on mount
   useEffect(() => {
@@ -104,60 +114,82 @@ export default function ShopSettingsPage() {
     });
   }, [org.id]);
 
-  async function handleSave() {
+  // attach save to form submit — native listener so no React re-render on click
+  useEffect(() => {
     const form = formRef.current;
-    if (!form || isSaving) return;
+    if (!form) return;
 
-    setIsSaving(true);
-    try {
+    const onSubmit = (e: Event) => {
+      e.preventDefault();
+      if (savingRef.current) return;
+      savingRef.current = true;
+
       const payload = readForm(form);
 
-      saveShopSettings(payload);
-      updateBusiness(payload);
-
-      if (!verifyLocalSave(payload)) {
+      try {
+        saveShopSettings(payload);
+        updateBusinessRef.current(payload);
+      } catch (err) {
+        savingRef.current = false;
         setStatus({
           kind: "warn",
-          text: "Save failed — browser blocked storage. Check privacy settings.",
+          text: err instanceof Error ? err.message : "Save failed",
+        });
+        return;
+      }
+
+      if (!verifyLocalSave(payload)) {
+        savingRef.current = false;
+        setStatus({
+          kind: "warn",
+          text: "Save failed — browser storage blocked. Check privacy settings.",
         });
         return;
       }
 
       setStatus({
         kind: "ok",
-        text: `${t("vat.settings_saved_local")}: "${payload.name}"`,
+        text: `✓ ${tRef.current("vat.settings_saved_local")}: "${payload.name}"`,
       });
+      savingRef.current = false;
 
-      if (!user || !isSupabaseConfigured()) return;
+      const currentUser = userRef.current;
+      if (!currentUser || !isSupabaseConfigured()) return;
 
-      let targetOrgId = org.id;
-      if (!targetOrgId) {
-        const { orgId } = await getOrCreateOrgForUser(user.id, payload);
-        targetOrgId = orgId;
-      }
-      if (!targetOrgId) return;
+      void (async () => {
+        try {
+          let targetOrgId = orgIdRef.current;
+          if (!targetOrgId) {
+            const { orgId } = await getOrCreateOrgForUser(
+              currentUser.id,
+              payload,
+            );
+            targetOrgId = orgId;
+            orgIdRef.current = orgId;
+          }
+          if (!targetOrgId) return;
 
-      const cloudError = await saveOrgShopSettings(targetOrgId, payload);
-      setStatus(
-        cloudError
-          ? {
-              kind: "warn",
-              text: `${t("vat.settings_saved_local")} — ${t("vat.cloud_sync_note")}`,
-            }
-          : {
-              kind: "ok",
-              text: t("vat.settings_saved_cloud"),
-            },
-      );
-    } catch (err) {
-      setStatus({
-        kind: "warn",
-        text: err instanceof Error ? err.message : "Save failed",
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  }
+          const cloudError = await saveOrgShopSettings(targetOrgId, payload);
+          setStatus(
+            cloudError
+              ? {
+                  kind: "warn",
+                  text: `✓ ${tRef.current("vat.settings_saved_local")} — ${tRef.current("vat.cloud_sync_note")}`,
+                }
+              : {
+                  kind: "ok",
+                  text: `✓ ${tRef.current("vat.settings_saved_cloud")}`,
+                },
+          );
+        } catch {
+          /* cloud save errors don't undo the local save */
+        }
+      })();
+    };
+
+    form.addEventListener("submit", onSubmit);
+    return () => form.removeEventListener("submit", onSubmit);
+  }, []);
 
   return (
     <div className="min-h-full bg-slate-50">
@@ -171,7 +203,7 @@ export default function ShopSettingsPage() {
             <p
               role="status"
               aria-live="polite"
-              className={`rounded-lg px-4 py-3 text-sm ${
+              className={`rounded-lg px-4 py-3 text-sm font-medium ${
                 status.kind === "ok"
                   ? "bg-teal-50 text-teal-800"
                   : "bg-amber-50 text-amber-900"
@@ -190,10 +222,6 @@ export default function ShopSettingsPage() {
           ref={formRef}
           className="mt-2 space-y-4 rounded-xl border bg-white p-5 shadow-sm"
           noValidate
-          onSubmit={(e) => {
-            e.preventDefault();
-            void handleSave();
-          }}
         >
           <label className="block text-sm">
             {t("vat.shop_name")} *
@@ -255,10 +283,9 @@ export default function ShopSettingsPage() {
 
           <button
             type="submit"
-            disabled={isSaving}
-            className="w-full rounded-lg bg-teal-700 py-3 text-base font-semibold text-white hover:bg-teal-800 disabled:opacity-60"
+            className="w-full rounded-lg bg-teal-700 py-3 text-base font-semibold text-white hover:bg-teal-800 active:bg-teal-900"
           >
-            {isSaving ? t("common.loading") : t("common.save")}
+            {t("common.save")}
           </button>
         </form>
 
