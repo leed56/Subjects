@@ -1,8 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --lak-emerald: #0d9488;
+  --lak-emerald-light: #14b8a6;
+  --lak-gold: #d4a853;
+  --lak-navy: #0c1222;
+  --lak-navy-soft: #151d32;
 }
 
 @theme inline {
@@ -12,21 +17,75 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sinhala), var(--font-geist-sans), Arial, sans-serif;
+  font-family: var(--font-sinhala), var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 .font-sinhala {
-  font-family: var(--font-sinhala), var(--font-geist-sans), Arial, sans-serif;
+  font-family: var(--font-sinhala), var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Premium landing utilities */
+.lak-mesh {
+  background-color: var(--lak-navy);
+  background-image:
+    radial-gradient(ellipse 80% 60% at 10% -10%, rgba(13, 148, 136, 0.35), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 90% 10%, rgba(212, 168, 83, 0.12), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 50% 100%, rgba(20, 184, 166, 0.15), transparent 60%);
+}
+
+.lak-grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.04;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.lak-glass {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.lak-glass-light {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+}
+
+.lak-shine {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+@keyframes lak-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.lak-float {
+  animation: lak-float 5s ease-in-out infinite;
+}
+
+.safe-area-pb {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
 @media print {
