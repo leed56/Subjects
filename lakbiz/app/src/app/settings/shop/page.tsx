@@ -9,7 +9,9 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { BusinessInfo } from "@/lib/invoice";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
+  fetchOrgShopSettings,
   getOrCreateOrgForUser,
+  mergeBusinessSettings,
   saveOrgShopSettings,
 } from "@/lib/supabase/org-settings";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -91,11 +93,26 @@ export default function ShopSettingsPage() {
   tRef.current = t;
   updateBusinessRef.current = updateBusiness;
 
+  // Fill from localStorage on mount
   useEffect(() => {
     const form = formRef.current;
     if (!form) return;
     fillForm(form, loadShopSettings());
   }, []);
+
+  // Once org.id is known, pull from Supabase and merge — handles cross-device / cleared-storage
+  useEffect(() => {
+    if (!org.id || !isSupabaseConfigured()) return;
+    const form = formRef.current;
+    if (!form) return;
+    void fetchOrgShopSettings(org.id).then((cloud) => {
+      if (!cloud || !formRef.current) return;
+      const local = loadShopSettings();
+      const merged = mergeBusinessSettings(local, cloud);
+      fillForm(formRef.current, merged);
+      saveShopSettings(merged);
+    });
+  }, [org.id]);
 
   useEffect(() => {
     const btn = saveBtnRef.current;
