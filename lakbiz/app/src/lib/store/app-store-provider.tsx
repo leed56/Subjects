@@ -231,8 +231,8 @@ function useAppStoreState(): AppStoreValue {
       },
       updateBusiness: (business) => {
         setData((current) => {
-          if (!current) return current;
-          const next = mergeBusiness(current, business);
+          const base = current ?? loadAppData();
+          const next = mergeBusiness(base, business);
           saveAppData(next);
           return next;
         });

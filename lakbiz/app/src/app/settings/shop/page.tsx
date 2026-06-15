@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { SiteHeader } from "@/components/site-header";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -12,9 +12,11 @@ import {
   getOrCreateOrgForUser,
   saveOrgShopSettings,
 } from "@/lib/supabase/org-settings";
-import { updateBusiness as mergeBusinessIntoApp } from "@/lib/store/actions";
 import { useAppStore } from "@/lib/store/use-app-store";
-import { loadAppData, saveAppData } from "@/lib/store/storage";
+import {
+  loadShopSettings,
+  saveShopSettings,
+} from "@/lib/store/shop-settings";
 
 const QUARTER_MONTHS = [
   { value: 1, key: "vat.month_jan" },
@@ -23,20 +25,6 @@ const QUARTER_MONTHS = [
   { value: 10, key: "vat.month_oct" },
 ] as const;
 
-function normalizePayload(form: BusinessInfo): BusinessInfo {
-  return {
-    ...form,
-    name: form.name.trim() || "My Shop",
-    phone: form.phone?.trim() || undefined,
-    address: form.address?.trim() || undefined,
-    vatRegistered: form.vatRegistered ?? false,
-    vatNumber: form.vatRegistered
-      ? form.vatNumber?.trim() || undefined
-      : undefined,
-    quarterStartMonth: form.quarterStartMonth ?? 4,
-  };
-}
-
 export default function ShopSettingsPage() {
   const { updateBusiness } = useAppStore();
   const { org } = useSubscription();
@@ -44,70 +32,60 @@ export default function ShopSettingsPage() {
   const { t } = useLocale();
 
   const [form, setForm] = useState<BusinessInfo>(defaultBusiness);
-  const [loaded, setLoaded] = useState(false);
+  const formRef = useRef(form);
+  formRef.current = form;
+
   const [status, setStatus] = useState<string | null>(null);
   const [statusKind, setStatusKind] = useState<"ok" | "warn">("ok");
 
   useEffect(() => {
-    setForm({ ...loadAppData().business });
-    setLoaded(true);
+    setForm(loadShopSettings());
   }, []);
 
-  const patch = useCallback((partial: Partial<BusinessInfo>) => {
-    setStatus(null);
-    setForm((prev) => ({ ...prev, ...partial }));
-  }, []);
+  function handleSave() {
+    const payload: BusinessInfo = {
+      ...formRef.current,
+      name: formRef.current.name.trim() || "My Shop",
+      vatRegistered: formRef.current.vatRegistered ?? false,
+      quarterStartMonth: formRef.current.quarterStartMonth ?? 4,
+    };
 
-  const saveLocal = useCallback(
-    (payload: BusinessInfo) => {
-      saveAppData(mergeBusinessIntoApp(loadAppData(), payload));
-      updateBusiness(payload);
-    },
-    [updateBusiness],
-  );
-
-  const syncCloud = useCallback(
-    async (payload: BusinessInfo) => {
-      if (!user || !isSupabaseConfigured()) return false;
-
-      let targetOrgId = org.id;
-      if (!targetOrgId) {
-        const { orgId } = await getOrCreateOrgForUser(user.id, payload);
-        targetOrgId = orgId;
-      }
-      if (!targetOrgId) return false;
-
-      const err = await saveOrgShopSettings(targetOrgId, payload);
-      return !err;
-    },
-    [org.id, user],
-  );
-
-  const onSave = useCallback(() => {
-    const payload = normalizePayload(form);
-
-    try {
-      saveLocal(payload);
-      setStatusKind("ok");
-      setStatus(t("vat.settings_saved_local"));
-
-      void syncCloud(payload).then((cloudOk) => {
-        if (cloudOk) {
-          setStatusKind("ok");
-          setStatus(t("vat.settings_saved_cloud"));
-        } else if (user && isSupabaseConfigured()) {
-          setStatusKind("warn");
-          setStatus(`${t("vat.settings_saved_local")} — ${t("vat.cloud_sync_note")}`);
-        } else if (!user) {
-          setStatusKind("warn");
-          setStatus(`${t("vat.settings_saved_local")} — ${t("vat.sign_in_for_cloud")}`);
-        }
-      });
-    } catch (err) {
+    const ok = saveShopSettings(payload);
+    if (!ok) {
       setStatusKind("warn");
-      setStatus(err instanceof Error ? err.message : "Save failed");
+      setStatus("Save failed — browser storage blocked?");
+      return;
     }
-  }, [form, saveLocal, syncCloud, t, user]);
+
+    updateBusiness(payload);
+    setStatusKind("ok");
+    setStatus(`${t("vat.settings_saved_local")}: "${payload.name}"`);
+
+    if (user && isSupabaseConfigured()) {
+      void (async () => {
+        let targetOrgId = org.id;
+        if (!targetOrgId) {
+          const { orgId } = await getOrCreateOrgForUser(user.id, payload);
+          targetOrgId = orgId;
+        }
+        if (!targetOrgId) return;
+        const err = await saveOrgShopSettings(targetOrgId, payload);
+        if (!err) {
+          setStatusKind("ok");
+          setStatus(`${t("vat.settings_saved_cloud")}: "${payload.name}"`);
+        }
+      })();
+    }
+  }
+
+  function patch(partial: Partial<BusinessInfo>) {
+    setStatus(null);
+    setForm((prev) => {
+      const next = { ...prev, ...partial };
+      formRef.current = next;
+      return next;
+    });
+  }
 
   return (
     <div className="min-h-full bg-slate-50">
@@ -197,9 +175,8 @@ export default function ShopSettingsPage() {
 
           <button
             type="button"
-            onClick={onSave}
-            disabled={!loaded}
-            className="w-full rounded-lg bg-teal-700 py-2.5 text-sm font-medium text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={handleSave}
+            className="w-full rounded-lg bg-teal-700 py-2.5 text-sm font-medium text-white hover:bg-teal-800 active:scale-[0.99]"
           >
             {t("common.save")}
           </button>
