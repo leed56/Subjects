@@ -59,6 +59,11 @@ export type NotificationSettings = {
   preferredLanguage: "si" | "en";
   autoPromptOnJobStatus: boolean;
   smsSenderId: string;
+  /** Daily cron sends FitSMS for jobs due within N days (when enabled) */
+  autoSendServiceDueSms: boolean;
+  serviceDueRemindDaysBefore: number;
+  /** Skip resending the same job within this many days */
+  serviceDueRepeatDays: number;
 };
 
 export type NotificationLogEntry = {
