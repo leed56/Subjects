@@ -6,10 +6,18 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import { useAuth } from "@/components/auth-provider";
 import type { PaymentMethod } from "@/lib/types";
 import type { BusinessInfo } from "@/lib/invoice";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
+import {
+  pushBusinessData,
+  syncBusinessData,
+} from "@/lib/supabase/business-sync";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   addACJob,
   addBankAccount,
@@ -107,19 +115,83 @@ export type AppStoreValue = {
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
 
+const CLOUD_SYNC_DEBOUNCE_MS = 1500;
+
 function useAppStoreState(): AppStoreValue {
+  const { user } = useAuth();
+  const { org } = useSubscription();
   const [data, setData] = useState<AppData | null>(null);
   const [ready, setReady] = useState(false);
+  const cloudLoadedRef = useRef(false);
+  const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestDataRef = useRef<AppData | null>(null);
 
   useEffect(() => {
-    setData(loadAppData());
+    const initial = loadAppData();
+    setData(initial);
+    latestDataRef.current = initial;
     setReady(true);
   }, []);
 
-  const persist = useCallback((next: AppData) => {
-    setData(next);
-    saveAppData(next);
+  const scheduleCloudPush = useCallback(
+    (next: AppData) => {
+      if (!isSupabaseConfigured() || !user || !org.id || !org.isAuthenticated) {
+        return;
+      }
+
+      latestDataRef.current = next;
+      if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+      pushTimerRef.current = setTimeout(() => {
+        const payload = latestDataRef.current;
+        if (!payload || !org.id) return;
+        void pushBusinessData(org.id, payload);
+      }, CLOUD_SYNC_DEBOUNCE_MS);
+    },
+    [org.id, org.isAuthenticated, user],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!ready || !user || !org.id || !org.isAuthenticated) {
+      cloudLoadedRef.current = false;
+      return;
+    }
+
+    if (cloudLoadedRef.current) return;
+
+    let cancelled = false;
+    const local = loadAppData();
+
+    void syncBusinessData(org.id, local).then(({ data: synced, error }) => {
+      if (cancelled) return;
+      cloudLoadedRef.current = true;
+      setData(synced);
+      latestDataRef.current = synced;
+      saveAppData(synced);
+      if (error) {
+        console.warn("[LakBiz] Cloud sync on load:", error);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, user, org.id, org.isAuthenticated]);
+
+  const persist = useCallback(
+    (next: AppData) => {
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next);
+      scheduleCloudPush(next);
+    },
+    [scheduleCloudPush],
+  );
 
   return useMemo(() => {
     const store: AppStoreValue = {
@@ -233,7 +305,9 @@ function useAppStoreState(): AppStoreValue {
         setData((current) => {
           const base = current ?? loadAppData();
           const next = mergeBusiness(base, business);
+          latestDataRef.current = next;
           saveAppData(next);
+          scheduleCloudPush(next);
           return next;
         });
       },
@@ -279,7 +353,7 @@ function useAppStoreState(): AppStoreValue {
       },
     };
     return store;
-  }, [data, ready, persist]);
+  }, [data, ready, persist, scheduleCloudPush]);
 }
 
 export function AppStoreProvider({ children }: { children: React.ReactNode }) {

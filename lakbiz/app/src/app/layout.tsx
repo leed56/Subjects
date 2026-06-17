@@ -41,9 +41,9 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col font-sinhala">
         <LocaleProvider>
           <AuthProvider>
-            <AppStoreProvider>
-              <SubscriptionProvider>{children}</SubscriptionProvider>
-            </AppStoreProvider>
+            <SubscriptionProvider>
+              <AppStoreProvider>{children}</AppStoreProvider>
+            </SubscriptionProvider>
           </AuthProvider>
         </LocaleProvider>
       </body>
