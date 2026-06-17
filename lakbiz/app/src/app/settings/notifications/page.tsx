@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import {
@@ -14,26 +14,87 @@ import {
   type NotificationSettings,
 } from "@/lib/messaging";
 import { formatSlPhoneDisplay } from "@/lib/messaging";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
+import {
+  fetchOrgNotificationSettings,
+  saveOrgNotificationSettings,
+} from "@/lib/supabase/org-notification-settings";
 
 export default function NotificationsSettingsPage() {
   const { t } = useLocale();
+  const { org } = useSubscription();
   const [settings, setSettings] = useState<NotificationSettings>(
     defaultNotificationSettings(),
   );
   const [log, setLog] = useState<NotificationLogEntry[]>([]);
   const [saved, setSaved] = useState(false);
+  const [cloudError, setCloudError] = useState<string | null>(null);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchResult, setBatchResult] = useState<string | null>(null);
   const apiEnabled = process.env.NEXT_PUBLIC_SMS_API_ENABLED === "true";
 
   useEffect(() => {
-    setSettings(loadNotificationSettings());
+    const local = loadNotificationSettings();
+    setSettings(local);
     setLog(loadNotificationLog());
-  }, []);
 
-  const persist = (next: NotificationSettings) => {
-    setSettings(next);
-    saveNotificationSettings(next);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    if (!org.id) return;
+
+    fetchOrgNotificationSettings(org.id).then((cloud) => {
+      if (cloud) {
+        setSettings((prev) => ({ ...prev, ...cloud }));
+        saveNotificationSettings({ ...local, ...cloud });
+      }
+    });
+  }, [org.id]);
+
+  const persist = useCallback(
+    async (next: NotificationSettings) => {
+      setSettings(next);
+      saveNotificationSettings(next);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+
+      if (!org.id) return;
+
+      const err = await saveOrgNotificationSettings(org.id, next);
+      setCloudError(err);
+    },
+    [org.id],
+  );
+
+  const runBatchNow = async () => {
+    setBatchRunning(true);
+    setBatchResult(null);
+    try {
+      const res = await fetch("/api/cron/service-due-reminders", {
+        method: "POST",
+      });
+      const data = (await res.json()) as {
+        sent?: number;
+        failed?: number;
+        skippedDuplicate?: number;
+        skippedNoPhone?: number;
+        error?: string;
+        skippedReason?: string;
+      };
+      if (!res.ok) {
+        setBatchResult(data.error ?? data.skippedReason ?? "Failed");
+        return;
+      }
+      const skipped =
+        (data.skippedDuplicate ?? 0) + (data.skippedNoPhone ?? 0);
+      setBatchResult(
+        t("msg.send_service_due_result")
+          .replace("{{sent}}", String(data.sent ?? 0))
+          .replace("{{failed}}", String(data.failed ?? 0))
+          .replace("{{skipped}}", String(skipped)),
+      );
+    } catch {
+      setBatchResult("Network error");
+    } finally {
+      setBatchRunning(false);
+    }
   };
 
   return (
@@ -56,6 +117,11 @@ export default function NotificationsSettingsPage() {
         {saved && (
           <div className="mb-4 rounded-lg bg-teal-50 px-4 py-3 text-sm text-teal-800">
             {t("msg.settings_saved")}
+          </div>
+        )}
+        {cloudError && (
+          <div className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Cloud sync: {cloudError}
           </div>
         )}
 
@@ -116,6 +182,85 @@ export default function NotificationsSettingsPage() {
           </div>
         </section>
 
+        <section className="mb-8 rounded-2xl border border-cyan-200 bg-gradient-to-br from-cyan-50/80 to-white p-6 shadow-sm">
+          <h2 className="font-semibold text-slate-900">
+            {t("msg.auto_service_due_title")}
+          </h2>
+          <p className="mt-2 text-sm text-slate-600">
+            {t("msg.auto_service_due_desc")}
+          </p>
+          <div className="mt-4 space-y-4">
+            <label className="flex items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.autoSendServiceDueSms}
+                onChange={(e) =>
+                  persist({
+                    ...settings,
+                    autoSendServiceDueSms: e.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded border-slate-300"
+                disabled={!apiEnabled}
+              />
+              {t("msg.auto_send_service_due")}
+            </label>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm">
+                {t("msg.service_due_days_before")}
+                <input
+                  type="number"
+                  min={0}
+                  max={30}
+                  value={settings.serviceDueRemindDaysBefore}
+                  onChange={(e) =>
+                    persist({
+                      ...settings,
+                      serviceDueRemindDaysBefore: Number(e.target.value),
+                    })
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+              <label className="block text-sm">
+                {t("msg.service_due_repeat_days")}
+                <input
+                  type="number"
+                  min={1}
+                  max={90}
+                  value={settings.serviceDueRepeatDays}
+                  onChange={(e) =>
+                    persist({
+                      ...settings,
+                      serviceDueRepeatDays: Number(e.target.value),
+                    })
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                />
+              </label>
+            </div>
+
+            {apiEnabled && org.id && (
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={runBatchNow}
+                  disabled={batchRunning}
+                  className="rounded-lg bg-cyan-700 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-800 disabled:opacity-60"
+                >
+                  {batchRunning
+                    ? t("msg.send_service_due_running")
+                    : t("msg.send_service_due_now")}
+                </button>
+                {batchResult && (
+                  <span className="text-sm text-slate-600">{batchResult}</span>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+
         <section className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="font-semibold text-slate-900">{t("msg.api_title")}</h2>
           <p className="mt-2 text-sm text-slate-600">{t("msg.api_desc")}</p>
@@ -129,6 +274,15 @@ export default function NotificationsSettingsPage() {
             <li>
               <code className="rounded bg-slate-100 px-1">
                 NEXT_PUBLIC_SMS_API_ENABLED=true
+              </code>
+            </li>
+            <li>
+              <code className="rounded bg-slate-100 px-1">CRON_SECRET</code> (
+              Vercel Cron)
+            </li>
+            <li>
+              <code className="rounded bg-slate-100 px-1">
+                SUPABASE_SERVICE_ROLE_KEY
               </code>
             </li>
           </ul>

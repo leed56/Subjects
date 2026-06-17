@@ -15,7 +15,46 @@ export const defaultNotificationSettings = (): NotificationSettings => ({
   preferredLanguage: "si",
   autoPromptOnJobStatus: true,
   smsSenderId: "",
+  autoSendServiceDueSms: false,
+  serviceDueRemindDaysBefore: 3,
+  serviceDueRepeatDays: 7,
 });
+
+export function parseNotificationSettings(raw: unknown): NotificationSettings {
+  const defaults = defaultNotificationSettings();
+  if (!raw || typeof raw !== "object") return defaults;
+
+  const row = raw as Record<string, unknown>;
+  return {
+    ...defaults,
+    defaultChannel:
+      row.defaultChannel === "sms" ||
+      row.defaultChannel === "api_sms" ||
+      row.defaultChannel === "whatsapp"
+        ? row.defaultChannel
+        : defaults.defaultChannel,
+    preferredLanguage:
+      row.preferredLanguage === "en" ? "en" : defaults.preferredLanguage,
+    autoPromptOnJobStatus:
+      typeof row.autoPromptOnJobStatus === "boolean"
+        ? row.autoPromptOnJobStatus
+        : defaults.autoPromptOnJobStatus,
+    smsSenderId:
+      typeof row.smsSenderId === "string" ? row.smsSenderId : defaults.smsSenderId,
+    autoSendServiceDueSms:
+      typeof row.autoSendServiceDueSms === "boolean"
+        ? row.autoSendServiceDueSms
+        : defaults.autoSendServiceDueSms,
+    serviceDueRemindDaysBefore:
+      typeof row.serviceDueRemindDaysBefore === "number"
+        ? row.serviceDueRemindDaysBefore
+        : defaults.serviceDueRemindDaysBefore,
+    serviceDueRepeatDays:
+      typeof row.serviceDueRepeatDays === "number"
+        ? row.serviceDueRepeatDays
+        : defaults.serviceDueRepeatDays,
+  };
+}
 
 export function loadNotificationSettings(): NotificationSettings {
   if (typeof window === "undefined") return defaultNotificationSettings();
