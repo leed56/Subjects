@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { SiteHeader } from "@/components/site-header";
+import { MessageComposer } from "@/components/messaging/message-composer";
+import { MessageSendButton } from "@/components/messaging/message-send-button";
 import {
   AC_BRANDS,
   AC_BTU_OPTIONS,
@@ -13,6 +15,10 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { ACJob } from "@/lib/store/types";
 import type { ACJobStatus } from "@/lib/ac-jobs";
+import {
+  defaultTemplateForJob,
+  loadNotificationSettings,
+} from "@/lib/messaging";
 
 const UNIT_TYPES = [
   "Wall mounted",
@@ -30,6 +36,7 @@ export default function JobsPage() {
   const [editing, setEditing] = useState<ACJob | null>(null);
   const [filter, setFilter] = useState<ACJobStatus | "all">("all");
   const [message, setMessage] = useState("");
+  const [promptJob, setPromptJob] = useState<ACJob | null>(null);
 
   const [customerId, setCustomerId] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -127,6 +134,12 @@ export default function JobsPage() {
   const pending = data.acJobs.filter((j) =>
     ["quote", "deposit_received", "scheduled"].includes(j.status),
   );
+
+  const maybePromptMessage = (job: ACJob, nextStatus: ACJobStatus) => {
+    const settings = loadNotificationSettings();
+    if (!settings.autoPromptOnJobStatus || !job.phone) return;
+    setPromptJob({ ...job, status: nextStatus });
+  };
 
   return (
     <div className="min-h-full bg-slate-50">
@@ -385,6 +398,15 @@ export default function JobsPage() {
                     )}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
+                    {job.phone && (
+                      <MessageSendButton
+                        phone={job.phone}
+                        recipientName={job.customerName}
+                        context={{ type: "ac_job", job, business: data.business }}
+                        defaultTemplate={defaultTemplateForJob(job.status)}
+                        contextId={job.id}
+                      />
+                    )}
                     <button
                       onClick={() => loadJob(job)}
                       className="text-sm text-teal-700 hover:underline"
@@ -393,9 +415,10 @@ export default function JobsPage() {
                     </button>
                     {job.status === "deposit_received" && (
                       <button
-                        onClick={() =>
-                          updateACJob(job.id, { status: "scheduled" })
-                        }
+                        onClick={() => {
+                          updateACJob(job.id, { status: "scheduled" });
+                          maybePromptMessage(job, "scheduled");
+                        }}
                         className="text-sm text-teal-700 hover:underline"
                       >
                         {t("jobs.schedule")}
@@ -403,14 +426,15 @@ export default function JobsPage() {
                     )}
                     {job.status === "scheduled" && (
                       <button
-                        onClick={() =>
+                        onClick={() => {
                           updateACJob(job.id, {
                             status: "installed",
                             installedDate: new Date()
                               .toISOString()
                               .slice(0, 10),
-                          })
-                        }
+                          });
+                          maybePromptMessage(job, "installed");
+                        }}
                         className="text-sm text-teal-700 hover:underline"
                       >
                         {t("jobs.mark_installed")}
@@ -418,9 +442,10 @@ export default function JobsPage() {
                     )}
                     {job.status === "installed" && (
                       <button
-                        onClick={() =>
-                          updateACJob(job.id, { status: "completed" })
-                        }
+                        onClick={() => {
+                          updateACJob(job.id, { status: "completed" });
+                          maybePromptMessage(job, "completed");
+                        }}
                         className="text-sm text-teal-700 hover:underline"
                       >
                         {t("jobs.complete")}
@@ -443,6 +468,22 @@ export default function JobsPage() {
           </div>
         )}
       </main>
+
+      {promptJob && (
+        <MessageComposer
+          open
+          onClose={() => setPromptJob(null)}
+          phone={promptJob.phone}
+          recipientName={promptJob.customerName}
+          context={{
+            type: "ac_job",
+            job: promptJob,
+            business: data.business,
+          }}
+          defaultTemplate={defaultTemplateForJob(promptJob.status)}
+          contextId={promptJob.id}
+        />
+      )}
     </div>
   );
 }

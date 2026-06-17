@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SiteHeader } from "@/components/site-header";
+import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
@@ -165,6 +166,19 @@ export default function CustomersPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
+                        {c.phone && (
+                          <MessageSendButton
+                            phone={c.phone}
+                            recipientName={c.name}
+                            context={{
+                              type: "customer",
+                              customerName: c.name,
+                              creditBalance: c.creditBalance,
+                              business: data.business,
+                            }}
+                            contextId={c.id}
+                          />
+                        )}
                         {c.creditBalance > 0 && (
                           <button
                             onClick={() => {
