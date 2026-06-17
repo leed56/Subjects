@@ -3,6 +3,7 @@
 import type { Sale } from "@/lib/store/types";
 import type { BusinessInfo } from "@/lib/invoice";
 import { buildInvoiceText, whatsappShareUrl } from "@/lib/invoice";
+import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { paymentLabel } from "@/lib/i18n/payment";
@@ -43,6 +44,14 @@ export function InvoiceView({
           >
             {t("bills.whatsapp")}
           </a>
+          <MessageSendButton
+            phone={customerPhone}
+            recipientName={sale.customerName ?? t("common.customer")}
+            context={{ type: "sale", sale, business }}
+            defaultTemplate="bill_receipt"
+            contextId={sale.id}
+            variant="compact"
+          />
         </div>
       )}
 

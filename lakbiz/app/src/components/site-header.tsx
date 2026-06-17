@@ -81,6 +81,16 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
               {t("nav.lang")}
             </button>
             <Link
+              href="/settings/notifications"
+              className={`rounded-lg px-2 py-1 text-sm font-medium ${
+                pathname === "/settings/notifications"
+                  ? "text-teal-800"
+                  : "text-slate-600 hover:text-teal-700"
+              }`}
+            >
+              {t("nav.notifications")}
+            </Link>
+            <Link
               href="/settings/billing"
               className={`rounded-lg px-2 py-1 text-sm font-medium ${
                 pathname === "/settings/billing"
@@ -207,6 +217,13 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
           </nav>
 
           <div className="border-t border-slate-100 p-4 space-y-2">
+            <Link
+              href="/settings/notifications"
+              onClick={() => setOpen(false)}
+              className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              {t("nav.notifications")}
+            </Link>
             <Link
               href="/settings/billing"
               onClick={() => setOpen(false)}

@@ -1,5 +1,6 @@
 import type { Sale } from "@/lib/store/types";
 import { formatLkr } from "./format";
+import { whatsappShareUrl as buildWhatsappUrl } from "@/lib/messaging/channels";
 
 export interface BusinessInfo {
   name: string;
@@ -97,10 +98,5 @@ export function buildInvoiceText(
 }
 
 export function whatsappShareUrl(text: string, phone?: string): string {
-  const encoded = encodeURIComponent(text);
-  const digits = phone?.replace(/\D/g, "");
-  if (digits && digits.length >= 9) {
-    return `https://wa.me/${digits}?text=${encoded}`;
-  }
-  return `https://wa.me/?text=${encoded}`;
+  return buildWhatsappUrl(text, phone);
 }
