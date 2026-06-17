@@ -13,6 +13,7 @@ import { useAuth } from "@/components/auth-provider";
 import type { PaymentMethod } from "@/lib/types";
 import type { BusinessInfo } from "@/lib/invoice";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { getPlan } from "@/lib/subscription/plans";
 import {
   pushBusinessData,
   syncBusinessData,
@@ -66,6 +67,8 @@ import type {
 export type AppStoreValue = {
   data: AppData | null;
   ready: boolean;
+  cloudSyncing: boolean;
+  cloudSyncError: string | null;
   addProduct: (input: ProductInput) => void;
   updateProduct: (id: string, input: ProductInput) => void;
   deleteProduct: (id: string) => void;
@@ -121,9 +124,11 @@ const CLOUD_SYNC_DEBOUNCE_MS = 1500;
 
 function useAppStoreState(): AppStoreValue {
   const { user } = useAuth();
-  const { org } = useSubscription();
+  const { org, isReadOnly, subscription } = useSubscription();
   const [data, setData] = useState<AppData | null>(null);
   const [ready, setReady] = useState(false);
+  const [cloudSyncing, setCloudSyncing] = useState(false);
+  const [cloudSyncError, setCloudSyncError] = useState<string | null>(null);
   const cloudLoadedRef = useRef(false);
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestDataRef = useRef<AppData | null>(null);
@@ -146,7 +151,11 @@ function useAppStoreState(): AppStoreValue {
       pushTimerRef.current = setTimeout(() => {
         const payload = latestDataRef.current;
         if (!payload || !org.id) return;
-        void pushBusinessData(org.id, payload);
+        setCloudSyncing(true);
+        void pushBusinessData(org.id, payload).then((err) => {
+          setCloudSyncing(false);
+          setCloudSyncError(err);
+        });
       }, CLOUD_SYNC_DEBOUNCE_MS);
     },
     [org.id, org.isAuthenticated, user],
@@ -169,15 +178,17 @@ function useAppStoreState(): AppStoreValue {
     let cancelled = false;
     const local = loadAppData();
 
+    setCloudSyncing(true);
+    setCloudSyncError(null);
+
     void syncBusinessData(org.id, local).then(({ data: synced, error }) => {
       if (cancelled) return;
       cloudLoadedRef.current = true;
       setData(synced);
       latestDataRef.current = synced;
       saveAppData(synced);
-      if (error) {
-        console.warn("[LakBiz] Cloud sync on load:", error);
-      }
+      setCloudSyncing(false);
+      setCloudSyncError(error);
     });
 
     return () => {
@@ -187,64 +198,76 @@ function useAppStoreState(): AppStoreValue {
 
   const persist = useCallback(
     (next: AppData) => {
+      if (isReadOnly) return;
       setData(next);
       latestDataRef.current = next;
       saveAppData(next);
       scheduleCloudPush(next);
     },
-    [scheduleCloudPush],
+    [isReadOnly, scheduleCloudPush],
+  );
+
+  const canAddProduct = useCallback(
+    (current: AppData) => {
+      const plan = getPlan(subscription.planId);
+      if (plan.maxProducts == null) return true;
+      return current.products.length < plan.maxProducts;
+    },
+    [subscription.planId],
   );
 
   return useMemo(() => {
     const store: AppStoreValue = {
       data,
       ready,
+      cloudSyncing,
+      cloudSyncError,
       addProduct: (input) => {
-        if (!data) return;
+        if (!data || isReadOnly || !canAddProduct(data)) return;
         persist(addProduct(data, input));
       },
       updateProduct: (id, input) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(updateProduct(data, id, input));
       },
       deleteProduct: (id) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(deleteProduct(data, id));
       },
       stockIn: (productId, qty, note) => {
-        if (!data || qty <= 0) return;
+        if (!data || isReadOnly || qty <= 0) return;
         persist(adjustStock(data, productId, qty, "in", note));
       },
       stockOut: (productId, qty, note) => {
-        if (!data || qty <= 0) return;
+        if (!data || isReadOnly || qty <= 0) return;
         persist(adjustStock(data, productId, qty, "out", note));
       },
       addCustomer: (input) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(addCustomer(data, input));
       },
       updateCustomer: (id, input) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(updateCustomer(data, id, input));
       },
       deleteCustomer: (id) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(deleteCustomer(data, id));
       },
       addSupplier: (input) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(addSupplier(data, input));
       },
       updateSupplier: (id, input) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(updateSupplier(data, id, input));
       },
       deleteSupplier: (id) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(deleteSupplier(data, id));
       },
       createPurchase: (input) => {
-        if (!data) return false;
+        if (!data || isReadOnly) return false;
         const before = data.purchases.length;
         const next = createPurchase(data, input);
         if (next.purchases.length === before) return false;
@@ -252,7 +275,7 @@ function useAppStoreState(): AppStoreValue {
         return true;
       },
       recordSupplierPayment: (supplierId, amount, method, note) => {
-        if (!data) return false;
+        if (!data || isReadOnly) return false;
         const before = data.supplierPayments.length;
         const next = recordSupplierPayment(
           data,
@@ -266,7 +289,7 @@ function useAppStoreState(): AppStoreValue {
         return true;
       },
       recordCustomerPayment: (customerId, amount, method, note) => {
-        if (!data) return false;
+        if (!data || isReadOnly) return false;
         const before = data.customerPayments.length;
         const next = recordCustomerPayment(
           data,
@@ -280,23 +303,23 @@ function useAppStoreState(): AppStoreValue {
         return true;
       },
       addBankAccount: (input) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(addBankAccount(data, input));
       },
       deleteBankAccount: (id) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(deleteBankAccount(data, id));
       },
       addCheque: (input) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(addCheque(data, input));
       },
       updateChequeStatus: (chequeId, status, bankAccountId) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(updateChequeStatus(data, chequeId, status, bankAccountId));
       },
       createSale: (lines, paymentMethod, options) => {
-        if (!data) return false;
+        if (!data || isReadOnly) return false;
         const before = data.sales.length;
         const next = createSale(data, lines, paymentMethod, options);
         if (next.sales.length === before) return false;
@@ -304,6 +327,7 @@ function useAppStoreState(): AppStoreValue {
         return next.sales[0].id;
       },
       updateBusiness: (business) => {
+        if (isReadOnly) return;
         setData((current) => {
           const base = current ?? loadAppData();
           const next = mergeBusiness(base, business);
@@ -314,23 +338,23 @@ function useAppStoreState(): AppStoreValue {
         });
       },
       addACJob: (input) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(addACJob(data, input));
       },
       updateACJob: (id, input) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(updateACJob(data, id, input));
       },
       deleteACJob: (id) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(deleteACJob(data, id));
       },
       recordACService: (jobId) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(recordACService(data, jobId));
       },
       addVehicle: (input) => {
-        if (!data) return false;
+        if (!data || isReadOnly) return false;
         const before = data.vehicles.length;
         const next = addVehicle(data, input);
         if (next.vehicles.length === before) return false;
@@ -338,11 +362,11 @@ function useAppStoreState(): AppStoreValue {
         return true;
       },
       updateVehicle: (id, input) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(updateVehicle(data, id, input));
       },
       sellVehicle: (input) => {
-        if (!data) return false;
+        if (!data || isReadOnly) return false;
         const v = data.vehicles.find((x) => x.id === input.vehicleId);
         if (!v || v.status === "sold") return false;
         const next = sellVehicle(data, input);
@@ -350,7 +374,7 @@ function useAppStoreState(): AppStoreValue {
         return true;
       },
       deleteVehicle: (id) => {
-        if (!data) return;
+        if (!data || isReadOnly) return;
         persist(deleteVehicle(data, id));
       },
       resetAll: () => {
@@ -359,7 +383,16 @@ function useAppStoreState(): AppStoreValue {
       },
     };
     return store;
-  }, [data, ready, persist, scheduleCloudPush]);
+  }, [
+    data,
+    ready,
+    cloudSyncing,
+    cloudSyncError,
+    isReadOnly,
+    canAddProduct,
+    persist,
+    scheduleCloudPush,
+  ]);
 }
 
 export function AppStoreProvider({ children }: { children: React.ReactNode }) {

@@ -60,19 +60,23 @@ function normalizeBusiness(
   };
 }
 
+export function parseAppData(parsed: Partial<AppData>): AppData {
+  return {
+    ...emptyAppData(),
+    ...parsed,
+    business: normalizeBusiness(parsed.business),
+    sales: (parsed.sales ?? []).map(normalizeSale),
+    purchases: (parsed.purchases ?? []).map(normalizePurchase),
+  };
+}
+
 export function loadAppData(): AppData {
   if (typeof window === "undefined") return emptyAppData();
   try {
     const rawV2 = localStorage.getItem(STORAGE_KEY_V2);
     if (rawV2) {
       const parsed = JSON.parse(rawV2) as Partial<AppData>;
-      return syncAcJobServiceStatuses({
-        ...emptyAppData(),
-        ...parsed,
-        business: normalizeBusiness(parsed.business),
-        sales: (parsed.sales ?? []).map(normalizeSale),
-        purchases: (parsed.purchases ?? []).map(normalizePurchase),
-      });
+      return syncAcJobServiceStatuses(parseAppData(parsed));
     }
 
     const rawV1 = localStorage.getItem(STORAGE_KEY_V1);
