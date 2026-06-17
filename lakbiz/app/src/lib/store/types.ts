@@ -267,6 +267,8 @@ export type ProductInput = {
   stockQty: number;
   reorderLevel?: number;
   unit: string;
+  /** Sector-specific fields (BTU, brand, barcode, etc.) — unit is stored separately */
+  customFields?: Record<string, string | number | boolean>;
 };
 
 export type CustomerInput = {

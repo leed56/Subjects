@@ -7,6 +7,7 @@ import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
+import { formatProductFieldBadge } from "@/lib/sector-fields";
 import type { Product } from "@/lib/types";
 
 export default function StockPage() {
@@ -101,6 +102,7 @@ export default function StockPage() {
               <tbody>
                 {products.map((p) => {
                   const unit = String(p.customFields.unit ?? "pcs");
+                  const badge = formatProductFieldBadge(p);
                   const low =
                     p.reorderLevel != null && p.stockQty <= p.reorderLevel;
                   return (
@@ -112,6 +114,11 @@ export default function StockPage() {
                         <p className="font-medium text-slate-900">{p.name}</p>
                         {p.sku && (
                           <p className="text-xs text-slate-400">{p.sku}</p>
+                        )}
+                        {badge && (
+                          <span className="mt-1 inline-block rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                            {badge}
+                          </span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-600">{p.category}</td>

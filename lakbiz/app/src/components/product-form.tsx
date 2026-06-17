@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Product, SectorId } from "@/lib/types";
 import { sectors, defaultCategoryForSector } from "@/lib/sectors";
+import {
+  customFieldsFromProduct,
+  emptyCustomFieldsForSector,
+  sectorFormFields,
+} from "@/lib/sector-fields";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { ProductInput } from "@/lib/store/types";
 
@@ -17,7 +22,11 @@ const categories = [
 
 const units = ["pcs", "kg", "m", "box", "unit", "set"];
 
-const emptyForm = (sectorId: SectorId = "grocery"): ProductInput => ({
+type FormState = ProductInput & {
+  sectorCustom: Record<string, string>;
+};
+
+const emptyForm = (sectorId: SectorId = "grocery"): FormState => ({
   name: "",
   sku: "",
   category: defaultCategoryForSector(sectorId),
@@ -27,6 +36,12 @@ const emptyForm = (sectorId: SectorId = "grocery"): ProductInput => ({
   stockQty: 0,
   reorderLevel: 5,
   unit: "pcs",
+  sectorCustom: Object.fromEntries(
+    Object.entries(emptyCustomFieldsForSector(sectorId)).map(([k, v]) => [
+      k,
+      String(v),
+    ]),
+  ),
 });
 
 interface ProductFormProps {
@@ -44,8 +59,8 @@ export function ProductForm({
   onCancel,
   submitLabel,
 }: ProductFormProps) {
-  const { t } = useLocale();
-  const [form, setForm] = useState<ProductInput>(() =>
+  const { t, locale } = useLocale();
+  const [form, setForm] = useState<FormState>(() =>
     initial
       ? {
           name: initial.name,
@@ -57,17 +72,47 @@ export function ProductForm({
           stockQty: initial.stockQty,
           reorderLevel: initial.reorderLevel ?? 5,
           unit: String(initial.customFields.unit ?? "pcs"),
+          sectorCustom: customFieldsFromProduct(initial),
         }
       : emptyForm(defaultSectorId),
   );
 
-  const set = <K extends keyof ProductInput>(key: K, value: ProductInput[K]) =>
+  const sectorFields = useMemo(
+    () => sectorFormFields(form.sectorId),
+    [form.sectorId],
+  );
+
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  const setSectorField = (key: string, value: string) =>
+    setForm((f) => ({
+      ...f,
+      sectorCustom: { ...f.sectorCustom, [key]: value },
+    }));
+
+  const handleSectorChange = (sectorId: SectorId) => {
+    setForm((f) => ({
+      ...f,
+      sectorId,
+      category: defaultCategoryForSector(sectorId),
+      sectorCustom: Object.fromEntries(
+        Object.entries(emptyCustomFieldsForSector(sectorId)).map(([k, v]) => [
+          k,
+          String(v),
+        ]),
+      ),
+    }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) return;
-    onSubmit(form);
+    const { sectorCustom, ...rest } = form;
+    onSubmit({
+      ...rest,
+      customFields: sectorCustom,
+    });
     if (!initial) setForm(emptyForm(defaultSectorId));
   };
 
@@ -115,7 +160,7 @@ export function ProductForm({
           <span className="text-sm text-slate-600">{t("stock.sector")}</span>
           <select
             value={form.sectorId}
-            onChange={(e) => set("sectorId", e.target.value as SectorId)}
+            onChange={(e) => handleSectorChange(e.target.value as SectorId)}
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           >
             {sectors.map((s) => (
@@ -178,6 +223,32 @@ export function ProductForm({
           />
         </label>
       </div>
+
+      {sectorFields.length > 0 && (
+        <div className="mt-5 border-t border-slate-100 pt-5">
+          <h3 className="mb-3 text-sm font-medium text-slate-700">
+            {t("stock.sector_fields")}
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {sectorFields.map((field) => (
+              <label key={field.key} className="block">
+                <span className="text-sm text-slate-600">
+                  {locale === "si" ? field.labelSi : field.labelEn}
+                </span>
+                <input
+                  type={field.type === "number" ? "number" : field.type}
+                  min={field.type === "number" ? 0 : undefined}
+                  value={form.sectorCustom[field.key] ?? ""}
+                  placeholder={field.placeholder}
+                  onChange={(e) => setSectorField(field.key, e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-5 flex gap-3">
         <button
           type="submit"

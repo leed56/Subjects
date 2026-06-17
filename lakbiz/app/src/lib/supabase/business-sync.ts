@@ -307,6 +307,10 @@ export async function pullBusinessData(
       status: row.status as AppData["acJobs"][number]["status"],
       scheduledDate: row.scheduled_date ?? undefined,
       installedDate: row.installed_date ?? undefined,
+      serviceDueDate: row.service_due_date ?? undefined,
+      lastServiceDate: row.last_service_date ?? undefined,
+      serviceIntervalMonths: row.service_interval_months ?? undefined,
+      amcContract: row.amc_contract ?? undefined,
       notes: row.notes ?? undefined,
     })),
     vehicles: (vehiclesRes.data ?? []).map((row) => ({
@@ -584,6 +588,10 @@ export async function pushBusinessData(
     status: job.status,
     scheduled_date: job.scheduledDate ?? null,
     installed_date: job.installedDate ?? null,
+    service_due_date: job.serviceDueDate ?? null,
+    last_service_date: job.lastServiceDate ?? null,
+    service_interval_months: job.serviceIntervalMonths ?? null,
+    amc_contract: job.amcContract ?? null,
     notes: job.notes ?? null,
   }));
 

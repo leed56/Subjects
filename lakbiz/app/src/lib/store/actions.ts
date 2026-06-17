@@ -13,6 +13,7 @@ import {
   generateVehicleStockId,
   vehicleTotalCost,
 } from "@/lib/vehicles";
+import { sanitizeCustomFields } from "@/lib/sector-fields";
 import type { PaymentMethod, Product } from "@/lib/types";
 import type {
   AppData,
@@ -44,7 +45,10 @@ export function addProduct(data: AppData, input: ProductInput): AppData {
     sellPrice: input.sellPrice,
     stockQty: input.stockQty,
     reorderLevel: input.reorderLevel,
-    customFields: { unit: input.unit },
+    customFields: {
+      unit: input.unit,
+      ...sanitizeCustomFields(input.sectorId, input.customFields ?? {}),
+    },
   };
 
   const stockLogs: StockLog[] = [...data.stockLogs];
@@ -86,7 +90,10 @@ export function updateProduct(
             sellPrice: input.sellPrice,
             stockQty: input.stockQty,
             reorderLevel: input.reorderLevel,
-            customFields: { ...p.customFields, unit: input.unit },
+            customFields: {
+              unit: input.unit,
+              ...sanitizeCustomFields(input.sectorId, input.customFields ?? {}),
+            },
           }
         : p,
     ),
