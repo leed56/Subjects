@@ -27,6 +27,7 @@ import {
   deleteProduct,
   deleteSupplier,
   deleteVehicle,
+  recordACService,
   recordCustomerPayment,
   recordSupplierPayment,
   sellVehicle,
@@ -98,6 +99,7 @@ export type AppStoreValue = {
   addACJob: (input: ACJobInput) => void;
   updateACJob: (id: string, input: Partial<ACJobInput>) => void;
   deleteACJob: (id: string) => void;
+  recordACService: (jobId: string) => void;
   addVehicle: (input: VehicleInput) => boolean;
   updateVehicle: (id: string, input: Partial<VehicleInput>) => void;
   sellVehicle: (input: VehicleSaleInput) => boolean;
@@ -248,6 +250,10 @@ function useAppStoreState(): AppStoreValue {
       deleteACJob: (id) => {
         if (!data) return;
         persist(deleteACJob(data, id));
+      },
+      recordACService: (jobId) => {
+        if (!data) return;
+        persist(recordACService(data, jobId));
       },
       addVehicle: (input) => {
         if (!data) return false;

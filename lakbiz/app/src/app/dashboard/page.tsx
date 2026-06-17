@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AcServiceDuePanel } from "@/components/ac-service-due-panel";
 import { DashboardStat } from "@/components/dashboard-stat";
 import { SiteHeader } from "@/components/site-header";
 import { formatLkr } from "@/lib/format";
@@ -10,7 +11,7 @@ import { useAppStore } from "@/lib/store/use-app-store";
 import { getVatQuarterSummary } from "@/lib/vat";
 
 export default function DashboardPage() {
-  const { data, ready, resetAll } = useAppStore();
+  const { data, ready, resetAll, recordACService } = useAppStore();
   const { t } = useLocale();
 
   if (!ready || !data) {
@@ -188,6 +189,13 @@ export default function DashboardPage() {
             </ul>
           </div>
         )}
+
+        <AcServiceDuePanel
+          jobs={stats.acServiceDueSoon}
+          business={data.business}
+          overdueCount={stats.acServiceOverdueCount}
+          onServiceDone={recordACService}
+        />
 
         <div className="mt-10 grid gap-6 lg:grid-cols-3">
           <section className="rounded-xl border border-slate-200 bg-white p-5">

@@ -19,6 +19,7 @@ import {
   defaultTemplateForJob,
   loadNotificationSettings,
 } from "@/lib/messaging";
+import { serviceDueLabel } from "@/lib/ac-service";
 
 const UNIT_TYPES = [
   "Wall mounted",
@@ -30,7 +31,8 @@ const UNIT_TYPES = [
 ];
 
 export default function JobsPage() {
-  const { data, ready, addACJob, updateACJob, deleteACJob } = useAppStore();
+  const { data, ready, addACJob, updateACJob, deleteACJob, recordACService } =
+    useAppStore();
   const { t, locale } = useLocale();
   const [showForm, setShowForm] = useState(true);
   const [editing, setEditing] = useState<ACJob | null>(null);
@@ -52,6 +54,8 @@ export default function JobsPage() {
   const [pipeMeters, setPipeMeters] = useState(4);
   const [status, setStatus] = useState<ACJobStatus>("quote");
   const [scheduledDate, setScheduledDate] = useState("");
+  const [serviceIntervalMonths, setServiceIntervalMonths] = useState(6);
+  const [amcContract, setAmcContract] = useState(false);
   const [notes, setNotes] = useState("");
 
   if (!ready || !data) {
@@ -78,6 +82,8 @@ export default function JobsPage() {
     setPipeMeters(4);
     setStatus("quote");
     setScheduledDate("");
+    setServiceIntervalMonths(6);
+    setAmcContract(false);
     setNotes("");
     setEditing(null);
   };
@@ -98,6 +104,8 @@ export default function JobsPage() {
     setPipeMeters(job.pipeMeters ?? 4);
     setStatus(job.status);
     setScheduledDate(job.scheduledDate ?? "");
+    setServiceIntervalMonths(job.serviceIntervalMonths ?? 6);
+    setAmcContract(job.amcContract ?? false);
     setNotes(job.notes ?? "");
     setShowForm(true);
   };
@@ -119,6 +127,8 @@ export default function JobsPage() {
     pipeMeters,
     status,
     scheduledDate: scheduledDate || undefined,
+    serviceIntervalMonths,
+    amcContract,
     installedDate:
       status === "installed" && !editing?.installedDate
         ? new Date().toISOString().slice(0, 10)
@@ -311,6 +321,23 @@ export default function JobsPage() {
                 placeholder="Install date"
               />
               <input
+                type="number"
+                min={1}
+                max={24}
+                placeholder={t("jobs.service_interval")}
+                value={serviceIntervalMonths}
+                onChange={(e) => setServiceIntervalMonths(Number(e.target.value))}
+                className="rounded-lg border px-3 py-2 text-sm"
+              />
+              <label className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={amcContract}
+                  onChange={(e) => setAmcContract(e.target.checked)}
+                />
+                {t("jobs.amc")}
+              </label>
+              <input
                 placeholder={t("jobs.job_notes")}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -344,7 +371,7 @@ export default function JobsPage() {
           >
             {t("jobs.all")} ({data.acJobs.length})
           </button>
-          {AC_JOB_STATUSES.slice(0, 4).map((s) => (
+          {AC_JOB_STATUSES.map((s) => (
             <button
               key={s.value}
               onClick={() => setFilter(s.value)}
@@ -385,6 +412,7 @@ export default function JobsPage() {
                     </div>
                     <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium">
                       {jobStatusLabel(job.status, locale)}
+                      {job.amcContract && " · AMC"}
                     </span>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-600">
@@ -395,6 +423,12 @@ export default function JobsPage() {
                     </span>
                     {job.scheduledDate && (
                       <span>{t("jobs.install_label")}: {job.scheduledDate}</span>
+                    )}
+                    {job.serviceDueDate && (
+                      <span className="font-medium text-cyan-800">
+                        {t("jobs.service_due_label")}: {job.serviceDueDate} (
+                        {serviceDueLabel(job.serviceDueDate, locale)})
+                      </span>
                     )}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -407,6 +441,17 @@ export default function JobsPage() {
                         contextId={job.id}
                       />
                     )}
+                    {(job.status === "service_due" ||
+                      job.status === "installed") &&
+                      job.serviceDueDate && (
+                        <button
+                          type="button"
+                          onClick={() => recordACService(job.id)}
+                          className="rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-800"
+                        >
+                          {t("jobs.service_done")}
+                        </button>
+                      )}
                     <button
                       onClick={() => loadJob(job)}
                       className="text-sm text-teal-700 hover:underline"
