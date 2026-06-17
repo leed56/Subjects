@@ -5,12 +5,14 @@ import { SiteHeader } from "@/components/site-header";
 import { ProductForm } from "@/components/product-form";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { Product } from "@/lib/types";
 
 export default function StockPage() {
   const { data, ready, addProduct, updateProduct, deleteProduct, stockIn } =
     useAppStore();
+  const { org } = useSubscription();
   const { t } = useLocale();
   const [editing, setEditing] = useState<Product | null>(null);
   const [stockInId, setStockInId] = useState<string | null>(null);
@@ -55,6 +57,7 @@ export default function StockPage() {
         {showForm && !editing && (
           <div className="mb-8">
             <ProductForm
+              defaultSectorId={org.sector}
               onSubmit={(input) => {
                 addProduct(input);
                 setShowForm(false);

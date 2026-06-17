@@ -432,6 +432,8 @@ const si: Dict = {
   "sub.resend_email": "තහවුරු කිරීමේ ඊමේල් නැවත යවන්න",
   "sub.resend_ok": "ඊමේල් යවන ලදී — එන ලිපි, spam, සහ Promotions පරීක්ෂා කරන්න (noreply@mail.app.supabase.io)",
   "sub.email_required": "පළමුව ඔබේ ඊමේල් ලිපිනය ඇතුළත් කරන්න",
+  "sub.pick_sector": "ව්‍යාපාර වර්ගය",
+  "sub.pick_sector_hint": "ඔබේ වෙළඳසැලට ගැලපෙන ක්ෂේත්‍රය තෝරන්න — භාණ්ඩ පෝරමයේ අමතර ක්ෂේත්‍ර සකසයි",
 
   "vat.title": "VAT ආපසු සාරාංශය",
   "vat.meter_label": "මෙම කාලයේ ගෙවිය යුතු VAT",
@@ -888,6 +890,8 @@ const en: Dict = {
   "sub.resend_email": "Resend confirmation email",
   "sub.resend_ok": "Email sent — check inbox, spam, and Promotions (from noreply@mail.app.supabase.io)",
   "sub.email_required": "Enter your email address first",
+  "sub.pick_sector": "Business sector",
+  "sub.pick_sector_hint": "Pick the sector that matches your shop — product forms use the right fields",
 
   "vat.title": "VAT return summary",
   "vat.meter_label": "VAT owed this quarter",

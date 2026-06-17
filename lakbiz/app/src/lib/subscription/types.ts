@@ -1,3 +1,5 @@
+import type { SectorId } from "@/lib/types";
+
 export type PlanId = "starter" | "business" | "pro";
 
 export type SubscriptionStatus =
@@ -57,6 +59,7 @@ export interface SubscriptionState {
 export interface OrganizationState {
   id: string | null;
   name: string;
+  sector: SectorId;
   isAuthenticated: boolean;
 }
 

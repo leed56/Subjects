@@ -1,4 +1,5 @@
 import type { SectorTemplate } from "./types";
+import type { SectorId } from "./types";
 
 export const sectors: SectorTemplate[] = [
   {
@@ -79,6 +80,38 @@ export const sectors: SectorTemplate[] = [
     ],
   },
 ];
+
+const SECTOR_IDS: SectorId[] = [
+  "grocery",
+  "electronics",
+  "electricals",
+  "spare_parts",
+  "ac_hvac",
+  "car_sales",
+];
+
+export function parseSectorId(value: string | null | undefined): SectorId {
+  if (value && SECTOR_IDS.includes(value as SectorId)) {
+    return value as SectorId;
+  }
+  return "grocery";
+}
+
+export function sectorById(id: SectorId): SectorTemplate | undefined {
+  return sectors.find((s) => s.id === id);
+}
+
+export function defaultCategoryForSector(sectorId: SectorId): string {
+  const map: Record<SectorId, string> = {
+    grocery: "Grocery",
+    electronics: "Electronics",
+    electricals: "Electricals",
+    spare_parts: "Spare Parts",
+    ac_hvac: "Air Conditioning",
+    car_sales: "Other",
+  };
+  return map[sectorId];
+}
 
 export const bankingModules = {
   nameEn: "Banking & Payments",

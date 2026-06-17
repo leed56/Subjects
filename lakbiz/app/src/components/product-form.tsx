@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Product, SectorId } from "@/lib/types";
-import { sectors } from "@/lib/sectors";
+import { sectors, defaultCategoryForSector } from "@/lib/sectors";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { ProductInput } from "@/lib/store/types";
 
@@ -17,11 +17,11 @@ const categories = [
 
 const units = ["pcs", "kg", "m", "box", "unit", "set"];
 
-const emptyForm = (): ProductInput => ({
+const emptyForm = (sectorId: SectorId = "grocery"): ProductInput => ({
   name: "",
   sku: "",
-  category: "Grocery",
-  sectorId: "grocery",
+  category: defaultCategoryForSector(sectorId),
+  sectorId,
   buyPrice: 0,
   sellPrice: 0,
   stockQty: 0,
@@ -31,6 +31,7 @@ const emptyForm = (): ProductInput => ({
 
 interface ProductFormProps {
   initial?: Product;
+  defaultSectorId?: SectorId;
   onSubmit: (input: ProductInput) => void;
   onCancel?: () => void;
   submitLabel?: string;
@@ -38,6 +39,7 @@ interface ProductFormProps {
 
 export function ProductForm({
   initial,
+  defaultSectorId = "grocery",
   onSubmit,
   onCancel,
   submitLabel,
@@ -56,7 +58,7 @@ export function ProductForm({
           reorderLevel: initial.reorderLevel ?? 5,
           unit: String(initial.customFields.unit ?? "pcs"),
         }
-      : emptyForm(),
+      : emptyForm(defaultSectorId),
   );
 
   const set = <K extends keyof ProductInput>(key: K, value: ProductInput[K]) =>
@@ -66,7 +68,7 @@ export function ProductForm({
     e.preventDefault();
     if (!form.name.trim()) return;
     onSubmit(form);
-    if (!initial) setForm(emptyForm());
+    if (!initial) setForm(emptyForm(defaultSectorId));
   };
 
   const saveLabel = submitLabel ?? t("stock.save_item");

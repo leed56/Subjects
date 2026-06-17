@@ -8,6 +8,10 @@ import { SiteHeader } from "@/components/site-header";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { AuthFlowError, resendConfirmationEmail } from "@/lib/supabase/auth-actions";
+import { SectorPicker } from "@/components/sector-picker";
+import type { SectorId } from "@/lib/types";
+
+const DEMO_ORG_KEY = "lakbiz-org-demo";
 
 type Mode = "signin" | "signup";
 
@@ -20,6 +24,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [shopName, setShopName] = useState("");
   const [phone, setPhone] = useState("");
+  const [sector, setSector] = useState<SectorId>("grocery");
   const [message, setMessage] = useState("");
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -41,7 +46,7 @@ export default function LoginPage() {
           setMessage(t("sub.shop_required"));
           return;
         }
-        await signUp({ email, password, shopName, phone });
+        await signUp({ email, password, shopName, phone, sector });
         setMessage(t("sub.signup_ok"));
         router.push("/dashboard");
       } else {
@@ -81,13 +86,28 @@ export default function LoginPage() {
   };
 
   const continueDemo = () => {
+    if (mode === "signup") {
+      try {
+        localStorage.setItem(
+          DEMO_ORG_KEY,
+          JSON.stringify({
+            id: null,
+            name: shopName.trim() || "Demo Shop",
+            sector,
+            isAuthenticated: false,
+          }),
+        );
+      } catch {
+        /* ignore */
+      }
+    }
     router.push("/dashboard");
   };
 
   return (
     <div className="min-h-full bg-slate-50">
       <SiteHeader />
-      <main className="mx-auto flex max-w-md flex-col px-4 py-16">
+      <main className={`mx-auto flex flex-col px-4 py-16 ${mode === "signup" ? "max-w-2xl" : "max-w-md"}`}>
         <h1 className="text-2xl font-bold text-slate-900">
           {t("sub.login_title")}
         </h1>
@@ -141,6 +161,7 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           {mode === "signup" && (
             <>
+              <SectorPicker value={sector} onChange={setSector} />
               <label className="block text-sm">
                 {t("sub.shop_name")} *
                 <input

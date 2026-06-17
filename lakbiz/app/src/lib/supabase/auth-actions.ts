@@ -1,6 +1,8 @@
 "use client";
 
 import { createBrowserClient } from "./client";
+import { parseSectorId } from "@/lib/sectors";
+import type { SectorId } from "@/lib/types";
 
 export class AuthFlowError extends Error {
   constructor(
@@ -15,6 +17,7 @@ export class AuthFlowError extends Error {
 export type EnsureOrgInput = {
   shopName?: string;
   phone?: string;
+  sector?: string;
 };
 
 async function findUserOrgId(
@@ -46,6 +49,7 @@ export async function ensureUserOrg(
     .insert({
       name: shopName,
       phone: input.phone?.trim() || null,
+      sector: parseSectorId(input.sector),
     })
     .select("id")
     .single();
@@ -68,6 +72,7 @@ export async function signUpWithShop(input: {
   password: string;
   shopName: string;
   phone?: string;
+  sector: SectorId;
 }) {
   const supabase = createBrowserClient();
   if (!supabase) throw new Error("Supabase not configured");
@@ -85,6 +90,7 @@ export async function signUpWithShop(input: {
       data: {
         shop_name: input.shopName,
         phone: input.phone ?? null,
+        sector: input.sector,
       },
     },
   });
@@ -103,6 +109,7 @@ export async function signUpWithShop(input: {
   const orgId = await ensureUserOrg(supabase, authData.user.id, {
     shopName: input.shopName,
     phone: input.phone,
+    sector: input.sector,
   });
 
   return { user: authData.user, organizationId: orgId };
@@ -156,12 +163,14 @@ export async function signInWithEmail(email: string, password: string) {
   const meta = data.user?.user_metadata as {
     shop_name?: string;
     phone?: string;
+    sector?: string;
   };
   const emailPrefix = email.split("@")[0]?.trim();
 
   await ensureUserOrg(supabase, data.user!.id, {
     shopName: meta?.shop_name ?? emailPrefix,
     phone: meta?.phone,
+    sector: meta?.sector,
   });
 
   return data;
@@ -184,7 +193,7 @@ export async function fetchUserOrg() {
 
   const { data: member } = await supabase
     .from("org_members")
-    .select("organization_id, role, organizations(id, name, name_si, phone)")
+    .select("organization_id, role, organizations(id, name, name_si, phone, sector)")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -206,6 +215,7 @@ export async function fetchUserOrg() {
           id: orgRow.id as string,
           name: orgRow.name as string,
           phone: (orgRow.phone as string | null) ?? undefined,
+          sector: parseSectorId(orgRow.sector as string | null),
         }
       : null,
     subscription: subscription
