@@ -1,6 +1,7 @@
 import type { AppData } from "./types";
 import { defaultBusiness, type BusinessInfo } from "@/lib/invoice";
 import { calcInputVat, splitInclusiveTotal } from "@/lib/vat";
+import { syncAcJobServiceStatuses } from "@/lib/ac-service";
 
 const STORAGE_KEY_V2 = "lakbiz-app-data-v2";
 const STORAGE_KEY_V1 = "lakbiz-app-data-v1";
@@ -65,13 +66,13 @@ export function loadAppData(): AppData {
     const rawV2 = localStorage.getItem(STORAGE_KEY_V2);
     if (rawV2) {
       const parsed = JSON.parse(rawV2) as Partial<AppData>;
-      return {
+      return syncAcJobServiceStatuses({
         ...emptyAppData(),
         ...parsed,
         business: normalizeBusiness(parsed.business),
         sales: (parsed.sales ?? []).map(normalizeSale),
         purchases: (parsed.purchases ?? []).map(normalizePurchase),
-      };
+      });
     }
 
     const rawV1 = localStorage.getItem(STORAGE_KEY_V1);

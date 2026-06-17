@@ -22,6 +22,12 @@ export interface ACJob {
   status: ACJobStatus;
   scheduledDate?: string;
   installedDate?: string;
+  /** Next service/cleaning due (YYYY-MM-DD), set on install */
+  serviceDueDate?: string;
+  lastServiceDate?: string;
+  serviceIntervalMonths?: number;
+  /** Annual maintenance contract */
+  amcContract?: boolean;
   notes?: string;
 }
 
@@ -41,6 +47,12 @@ export interface ACJobInput {
   status: ACJobStatus;
   scheduledDate?: string;
   installedDate?: string;
+  /** Next service/cleaning due (YYYY-MM-DD), set on install */
+  serviceDueDate?: string;
+  lastServiceDate?: string;
+  serviceIntervalMonths?: number;
+  /** Annual maintenance contract */
+  amcContract?: boolean;
   notes?: string;
 }
 

@@ -3,6 +3,12 @@ import { generateBillNo, generateGrnNo, type BusinessInfo } from "@/lib/invoice"
 import { calcInputVat, isVatEnabled, splitInclusiveTotal } from "@/lib/vat";
 import { generateJobNo } from "@/lib/ac-jobs";
 import {
+  computeServiceDueDate,
+  DEFAULT_SERVICE_INTERVAL_MONTHS,
+  isServiceDueWithinDays,
+  isServiceOverdue,
+} from "@/lib/ac-service";
+import {
   daysInStock,
   generateVehicleStockId,
   vehicleTotalCost,
@@ -387,6 +393,15 @@ export function addACJob(data: AppData, input: ACJobInput): AppData {
     ? data.customers.find((c) => c.id === input.customerId)
     : undefined;
 
+  const interval =
+    input.serviceIntervalMonths ?? DEFAULT_SERVICE_INTERVAL_MONTHS;
+  const installedDate = input.installedDate;
+  const serviceDueDate =
+    input.serviceDueDate ??
+    (installedDate && input.status === "installed"
+      ? computeServiceDueDate(installedDate, interval)
+      : undefined);
+
   const job = {
     id: newId(),
     jobNo: generateJobNo(data.acJobs.length),
@@ -405,7 +420,11 @@ export function addACJob(data: AppData, input: ACJobInput): AppData {
     pipeMeters: input.pipeMeters,
     status: input.status,
     scheduledDate: input.scheduledDate,
-    installedDate: input.installedDate,
+    installedDate,
+    serviceDueDate,
+    lastServiceDate: input.lastServiceDate,
+    serviceIntervalMonths: interval,
+    amcContract: input.amcContract ?? false,
     notes: input.notes?.trim() || undefined,
   };
 
@@ -424,6 +443,36 @@ export function updateACJob(
       const customer = input.customerId
         ? data.customers.find((c) => c.id === input.customerId)
         : undefined;
+      const nextStatus = input.status ?? j.status;
+      const installedDate =
+        input.installedDate ??
+        (nextStatus === "installed" && !j.installedDate
+          ? new Date().toISOString().slice(0, 10)
+          : j.installedDate);
+      const interval =
+        input.serviceIntervalMonths ??
+        j.serviceIntervalMonths ??
+        DEFAULT_SERVICE_INTERVAL_MONTHS;
+
+      let serviceDueDate = input.serviceDueDate ?? j.serviceDueDate;
+      if (
+        nextStatus === "installed" &&
+        installedDate &&
+        (!serviceDueDate || input.installedDate || input.status === "installed")
+      ) {
+        serviceDueDate = computeServiceDueDate(installedDate, interval);
+      }
+
+      let status = nextStatus;
+      if (
+        serviceDueDate &&
+        (status === "installed" || status === "completed") &&
+        (isServiceOverdue(serviceDueDate) ||
+          isServiceDueWithinDays(serviceDueDate, 0))
+      ) {
+        status = "service_due";
+      }
+
       return {
         ...j,
         customerId: input.customerId ?? j.customerId,
@@ -440,9 +489,13 @@ export function updateACJob(
         quotedAmount: input.quotedAmount ?? j.quotedAmount,
         depositAmount: input.depositAmount ?? j.depositAmount,
         pipeMeters: input.pipeMeters ?? j.pipeMeters,
-        status: input.status ?? j.status,
+        status,
         scheduledDate: input.scheduledDate ?? j.scheduledDate,
-        installedDate: input.installedDate ?? j.installedDate,
+        installedDate,
+        serviceDueDate,
+        lastServiceDate: input.lastServiceDate ?? j.lastServiceDate,
+        serviceIntervalMonths: interval,
+        amcContract: input.amcContract ?? j.amcContract ?? false,
         notes: input.notes?.trim() ?? j.notes,
       };
     }),
@@ -451,6 +504,21 @@ export function updateACJob(
 
 export function deleteACJob(data: AppData, id: string): AppData {
   return { ...data, acJobs: data.acJobs.filter((j) => j.id !== id) };
+}
+
+/** Mark service visit complete and schedule next due date */
+export function recordACService(data: AppData, jobId: string): AppData {
+  const job = data.acJobs.find((j) => j.id === jobId);
+  if (!job) return data;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const interval = job.serviceIntervalMonths ?? DEFAULT_SERVICE_INTERVAL_MONTHS;
+
+  return updateACJob(data, jobId, {
+    lastServiceDate: today,
+    serviceDueDate: computeServiceDueDate(today, interval),
+    status: "completed",
+  });
 }
 
 export function addVehicle(data: AppData, input: VehicleInput): AppData {
@@ -849,6 +917,25 @@ export function getDashboardStats(data: AppData) {
     ["quote", "deposit_received", "scheduled"].includes(j.status),
   );
   const serviceDueJobs = data.acJobs.filter((j) => j.status === "service_due");
+  const acServiceDueSoon = data.acJobs
+    .filter(
+      (j) =>
+        j.serviceDueDate &&
+        isServiceDueWithinDays(j.serviceDueDate, 7) &&
+        !["cancelled", "quote", "deposit_received", "scheduled"].includes(
+          j.status,
+        ),
+    )
+    .sort(
+      (a, b) =>
+        daysUntil(a.serviceDueDate!) - daysUntil(b.serviceDueDate!),
+    );
+  const acServiceOverdue = data.acJobs.filter(
+    (j) =>
+      j.serviceDueDate &&
+      isServiceOverdue(j.serviceDueDate) &&
+      j.status !== "cancelled",
+  );
   const forSaleVehicles = data.vehicles.filter((v) => v.status === "for_sale");
   const aging60Vehicles = forSaleVehicles.filter(
     (v) => daysInStock(v.dateAdded) >= 60,
@@ -892,6 +979,10 @@ export function getDashboardStats(data: AppData) {
     pendingACJobCount: pendingACJobs.length,
     pendingACJobs: pendingACJobs.slice(0, 5),
     serviceDueCount: serviceDueJobs.length,
+    serviceDueJobs: serviceDueJobs.slice(0, 5),
+    acServiceDueSoonCount: acServiceDueSoon.length,
+    acServiceDueSoon: acServiceDueSoon.slice(0, 8),
+    acServiceOverdueCount: acServiceOverdue.length,
     forSaleVehicleCount: forSaleVehicles.length,
     aging60VehicleCount: aging60Vehicles.length,
     aging60Vehicles: aging60Vehicles.slice(0, 5),

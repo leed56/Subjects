@@ -284,6 +284,12 @@ const si: Dict = {
   "jobs.schedule": "→ අනුස්ථාපනය සැලසුම් කරන්න",
   "jobs.mark_installed": "→ අනුස්ථාපනය කළා ලෙස සලකුණු කරන්න",
   "jobs.complete": "→ සම්පූර්ණ කරන්න",
+  "jobs.service_interval": "සේවා අන්තර්වලය (මාස)",
+  "jobs.amc": "AMC ගිවිසුම",
+  "jobs.service_due_label": "සේවාව",
+  "jobs.service_due_week": "AC සේවා මෙම සතියේ",
+  "jobs.service_overdue": "ඉකුත් වූ සේවා",
+  "jobs.service_done": "සේවාව සම්පූර්ණ",
   "jobs.delete_confirm": "රැකියාව මකන්නද",
 
   // Vehicles
@@ -778,6 +784,12 @@ const en: Dict = {
   "jobs.schedule": "→ Schedule install",
   "jobs.mark_installed": "→ Mark installed",
   "jobs.complete": "→ Complete",
+  "jobs.service_interval": "Service interval (months)",
+  "jobs.amc": "AMC contract",
+  "jobs.service_due_label": "Service due",
+  "jobs.service_due_week": "AC services due this week",
+  "jobs.service_overdue": "overdue",
+  "jobs.service_done": "Service done",
   "jobs.delete_confirm": "Delete job",
 
   "veh.title": "Vehicles",

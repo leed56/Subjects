@@ -61,6 +61,7 @@ export function variablesFromContext(
       balance: formatLkr(job.quotedAmount - job.depositAmount),
       address: job.address,
       scheduledDate: job.scheduledDate ?? "TBC",
+      serviceDueDate: job.serviceDueDate ?? "TBC",
       brand: job.brand ?? "",
       btu: job.btu ? `${job.btu} BTU` : "",
     };
