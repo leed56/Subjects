@@ -44,27 +44,19 @@ export async function ensureUserOrg(
 
   const shopName = input.shopName?.trim() || "My Shop";
 
-  const { data: org, error: orgError } = await supabase
-    .from("organizations")
-    .insert({
-      name: shopName,
-      phone: input.phone?.trim() || null,
-      sector: parseSectorId(input.sector),
-    })
-    .select("id")
-    .single();
+  const { data: orgId, error: orgError } = await supabase.rpc(
+    "bootstrap_user_organization",
+    {
+      p_name: shopName,
+      p_phone: input.phone?.trim() || null,
+      p_sector: parseSectorId(input.sector),
+    },
+  );
 
   if (orgError) throw new AuthFlowError(orgError.message, "org");
+  if (!orgId) throw new AuthFlowError("Could not create shop", "org");
 
-  const { error: memberError } = await supabase.from("org_members").insert({
-    organization_id: org.id,
-    user_id: userId,
-    role: "owner",
-  });
-
-  if (memberError) throw new AuthFlowError(memberError.message, "org");
-
-  return org.id;
+  return orgId as string;
 }
 
 export async function signUpWithShop(input: {
