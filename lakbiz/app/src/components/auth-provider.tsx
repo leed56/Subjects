@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { User } from "@supabase/supabase-js";
+import type { SectorId } from "@/lib/types";
 import { createBrowserClient } from "@/lib/supabase/client";
 import {
   signInWithEmail,
@@ -24,6 +25,7 @@ type AuthContextValue = {
     password: string;
     shopName: string;
     phone?: string;
+    sector: SectorId;
   }) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -73,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string;
     shopName: string;
     phone?: string;
+    sector: SectorId;
   }) => {
     await signUpWithShop(input);
     await refresh();

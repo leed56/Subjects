@@ -49,15 +49,23 @@ function loadDemoSubscription(): SubscriptionState {
 
 function loadDemoOrg(): OrganizationState {
   if (typeof window === "undefined") {
-    return { id: null, name: "Demo Shop", isAuthenticated: false };
+    return { id: null, name: "Demo Shop", sector: "grocery", isAuthenticated: false };
   }
   try {
     const raw = localStorage.getItem(DEMO_ORG_KEY);
-    if (raw) return JSON.parse(raw) as OrganizationState;
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<OrganizationState>;
+      return {
+        id: parsed.id ?? null,
+        name: parsed.name ?? "Demo Shop",
+        sector: parsed.sector ?? "grocery",
+        isAuthenticated: parsed.isAuthenticated ?? false,
+      };
+    }
   } catch {
     /* use default */
   }
-  return { id: null, name: "Demo Shop", isAuthenticated: false };
+  return { id: null, name: "Demo Shop", sector: "grocery", isAuthenticated: false };
 }
 
 function toPlanId(id: string): PlanId {
@@ -79,6 +87,7 @@ export function SubscriptionProvider({
   const [org, setOrg] = useState<OrganizationState>({
     id: null,
     name: "Demo Shop",
+    sector: "grocery",
     isAuthenticated: false,
   });
 
@@ -106,6 +115,7 @@ export function SubscriptionProvider({
     setOrg({
       id: data.org.id,
       name: data.org.name,
+      sector: data.org.sector,
       isAuthenticated: true,
     });
 
@@ -212,7 +222,7 @@ export function useSubscription(): SubscriptionContextValue {
     const trial = defaultTrialSubscription();
     const sub: SubscriptionState = { ...trial, isDemo: true };
     return {
-      org: { id: null, name: "Demo Shop", isAuthenticated: false },
+      org: { id: null, name: "Demo Shop", sector: "grocery", isAuthenticated: false },
       subscription: sub,
       can: (feature) => canAccess(sub, feature),
       daysLeftInTrial: daysUntil(trial.trialEndsAt),
