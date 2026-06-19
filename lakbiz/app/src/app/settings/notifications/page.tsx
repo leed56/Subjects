@@ -438,10 +438,10 @@ export default function NotificationsSettingsPage() {
           <p className="mt-2 text-sm text-slate-600">{t("msg.api_desc")}</p>
           <ul className="mt-3 list-inside list-disc text-sm text-slate-600">
             <li>
-              <code className="rounded bg-slate-100 px-1">FITSMS_API_TOKEN</code>
+              <code className="rounded bg-slate-100 px-1">TEXTLK_API_TOKEN</code>
             </li>
             <li>
-              <code className="rounded bg-slate-100 px-1">FITSMS_SENDER_ID</code>
+              <code className="rounded bg-slate-100 px-1">TEXTLK_SENDER_ID</code>
             </li>
             <li>
               <code className="rounded bg-slate-100 px-1">
@@ -462,12 +462,12 @@ export default function NotificationsSettingsPage() {
             {apiEnabled ? t("msg.api_active") : t("msg.api_inactive")}
           </p>
           <a
-            href="https://fitsms.lk"
+            href="https://app.text.lk/senderid"
             target="_blank"
             rel="noopener noreferrer"
             className="mt-3 inline-block text-sm font-medium text-teal-700 hover:underline"
           >
-            FitSMS.lk →
+            Text.lk Sender ID →
           </a>
         </section>
 

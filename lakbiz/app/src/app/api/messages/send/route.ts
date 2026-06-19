@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { sendFitSms, isFitSmsConfigured } from "@/lib/messaging/fitsms-server";
+import { sendTextLkSms, isTextLkConfigured } from "@/lib/messaging/textlk-server";
 import { normalizeSlPhone } from "@/lib/messaging/phone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
-  if (!isFitSmsConfigured()) {
+  if (!isTextLkConfigured()) {
     return NextResponse.json(
       {
         ok: false,
         error:
-          "SMS API not configured. Add FITSMS_API_TOKEN and FITSMS_SENDER_ID to server environment.",
+          "SMS API not configured. Add TEXTLK_API_TOKEN and TEXTLK_SENDER_ID to server environment.",
       },
       { status: 503 },
     );
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const sms = await sendFitSms(phone, message);
+  const sms = await sendTextLkSms(phone, message);
   if (!sms.ok) {
     return NextResponse.json(
       { ok: false, error: sms.error },

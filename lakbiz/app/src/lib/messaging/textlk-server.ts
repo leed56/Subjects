@@ -1,24 +1,24 @@
 import { normalizeSlPhone } from "./phone";
 
-const FITSMS_URL = "https://app.fitsms.lk/api/v4/sms/send";
+const TEXTLK_URL = "https://app.text.lk/api/v3/sms/send";
 
-export type FitSmsSendResult =
+export type TextLkSendResult =
   | { ok: true; providerRef?: string }
   | { ok: false; error: string };
 
-export function isFitSmsConfigured(): boolean {
-  return Boolean(process.env.FITSMS_API_TOKEN && process.env.FITSMS_SENDER_ID);
+export function isTextLkConfigured(): boolean {
+  return Boolean(process.env.TEXTLK_API_TOKEN && process.env.TEXTLK_SENDER_ID);
 }
 
-export async function sendFitSms(
+export async function sendTextLkSms(
   phone: string,
   message: string,
-): Promise<FitSmsSendResult> {
-  const token = process.env.FITSMS_API_TOKEN;
-  const senderId = process.env.FITSMS_SENDER_ID;
+): Promise<TextLkSendResult> {
+  const token = process.env.TEXTLK_API_TOKEN;
+  const senderId = process.env.TEXTLK_SENDER_ID;
 
   if (!token || !senderId) {
-    return { ok: false, error: "FitSMS not configured" };
+    return { ok: false, error: "Text.lk not configured" };
   }
 
   const recipient = normalizeSlPhone(phone);
@@ -27,7 +27,7 @@ export async function sendFitSms(
   }
 
   try {
-    const res = await fetch(FITSMS_URL, {
+    const res = await fetch(TEXTLK_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -45,14 +45,14 @@ export async function sendFitSms(
     const data = (await res.json()) as {
       status?: string;
       message?: string;
-      data?: { ruid?: string };
+      data?: { uid?: string };
     };
 
     if (!res.ok || data.status === "error") {
       return { ok: false, error: data.message ?? "Provider rejected message" };
     }
 
-    return { ok: true, providerRef: data.data?.ruid };
+    return { ok: true, providerRef: data.data?.uid };
   } catch (err) {
     return {
       ok: false,
