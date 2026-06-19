@@ -1,4 +1,5 @@
 import { newId } from "@/lib/format";
+import { DEFAULT_SERVICE_DUE_REMIND_DAYS } from "@/lib/ac-service";
 import type {
   MessageChannel,
   MessageTemplateId,
@@ -17,10 +18,13 @@ export const defaultNotificationSettings = (): NotificationSettings => ({
   smsSenderId: "",
   autoSendServiceDueSms: false,
   serviceDueRemindDaysBefore: 3,
+  serviceDueRemindDays: [...DEFAULT_SERVICE_DUE_REMIND_DAYS],
   serviceDueRepeatDays: 7,
   ownerPhone: "",
   technicianPhone: "",
+  notifyCustomerOnServiceDue: true,
   notifyOwnerOnServiceDue: true,
+  notifyTechnicianOnServiceDue: true,
 });
 
 export function parseNotificationSettings(raw: unknown): NotificationSettings {
@@ -52,6 +56,7 @@ export function parseNotificationSettings(raw: unknown): NotificationSettings {
       typeof row.serviceDueRemindDaysBefore === "number"
         ? row.serviceDueRemindDaysBefore
         : defaults.serviceDueRemindDaysBefore,
+    serviceDueRemindDays: parseRemindDays(row, defaults),
     serviceDueRepeatDays:
       typeof row.serviceDueRepeatDays === "number"
         ? row.serviceDueRepeatDays
@@ -66,7 +71,34 @@ export function parseNotificationSettings(raw: unknown): NotificationSettings {
       typeof row.notifyOwnerOnServiceDue === "boolean"
         ? row.notifyOwnerOnServiceDue
         : defaults.notifyOwnerOnServiceDue,
+    notifyCustomerOnServiceDue:
+      typeof row.notifyCustomerOnServiceDue === "boolean"
+        ? row.notifyCustomerOnServiceDue
+        : defaults.notifyCustomerOnServiceDue,
+    notifyTechnicianOnServiceDue:
+      typeof row.notifyTechnicianOnServiceDue === "boolean"
+        ? row.notifyTechnicianOnServiceDue
+        : defaults.notifyTechnicianOnServiceDue,
   };
+}
+
+function parseRemindDays(
+  row: Record<string, unknown>,
+  defaults: NotificationSettings,
+): number[] {
+  if (Array.isArray(row.serviceDueRemindDays)) {
+    const days = row.serviceDueRemindDays.filter(
+      (d): d is number => typeof d === "number" && d >= 0 && d <= 90,
+    );
+    if (days.length > 0) {
+      return [...new Set(days)].sort((a, b) => b - a);
+    }
+  }
+  if (typeof row.serviceDueRemindDaysBefore === "number") {
+    const before = row.serviceDueRemindDaysBefore;
+    return [...new Set([before, 0])].sort((a, b) => b - a);
+  }
+  return defaults.serviceDueRemindDays;
 }
 
 export function loadNotificationSettings(): NotificationSettings {

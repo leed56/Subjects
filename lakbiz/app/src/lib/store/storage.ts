@@ -82,6 +82,7 @@ export function parseAppData(parsed: Partial<AppData>): AppData {
     acJobs: (parsed.acJobs ?? []).map((job) => ({
       ...job,
       jobType: job.jobType ?? "installation",
+      serviceDueManual: job.serviceDueManual ?? false,
     })),
   };
 }

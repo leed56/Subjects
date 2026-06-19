@@ -27,6 +27,8 @@ export interface ACJob {
   installedDate?: string;
   /** Next service/cleaning due (YYYY-MM-DD), set on install */
   serviceDueDate?: string;
+  /** When true, due date is owner-set and not auto-calculated from interval */
+  serviceDueManual?: boolean;
   lastServiceDate?: string;
   serviceIntervalMonths?: number;
   /** Annual maintenance contract */
@@ -54,6 +56,8 @@ export interface ACJobInput {
   installedDate?: string;
   /** Next service/cleaning due (YYYY-MM-DD), set on install */
   serviceDueDate?: string;
+  /** When true, due date is owner-set and not auto-calculated from interval */
+  serviceDueManual?: boolean;
   lastServiceDate?: string;
   serviceIntervalMonths?: number;
   /** Annual maintenance contract */

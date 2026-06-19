@@ -21,6 +21,12 @@ import {
 } from "@/lib/messaging";
 import { serviceDueLabel } from "@/lib/ac-service";
 import {
+  computeServiceDueDate,
+  DEFAULT_SERVICE_INTERVAL_MONTHS,
+  serviceDueUrgency,
+  serviceDueUrgencyClass,
+} from "@/lib/ac-service";
+import {
   AC_JOB_TYPES,
   defaultStatusForJobType,
   jobTypeLabel,
@@ -64,6 +70,8 @@ export default function JobsPage() {
   const [status, setStatus] = useState<ACJobStatus>("quote");
   const [scheduledDate, setScheduledDate] = useState("");
   const [serviceIntervalMonths, setServiceIntervalMonths] = useState(6);
+  const [serviceDueManual, setServiceDueManual] = useState(false);
+  const [serviceDueDate, setServiceDueDate] = useState("");
   const [amcContract, setAmcContract] = useState(false);
   const [notes, setNotes] = useState("");
 
@@ -92,6 +100,8 @@ export default function JobsPage() {
     setStatus("quote");
     setScheduledDate("");
     setServiceIntervalMonths(6);
+    setServiceDueManual(false);
+    setServiceDueDate("");
     setAmcContract(false);
     setJobType("installation");
     setAssignedTechnician("");
@@ -116,6 +126,8 @@ export default function JobsPage() {
     setStatus(job.status);
     setScheduledDate(job.scheduledDate ?? "");
     setServiceIntervalMonths(job.serviceIntervalMonths ?? 6);
+    setServiceDueManual(job.serviceDueManual ?? false);
+    setServiceDueDate(job.serviceDueDate ?? "");
     setAmcContract(job.amcContract ?? false);
     setJobType(job.jobType ?? "installation");
     setAssignedTechnician(job.assignedTechnician ?? "");
@@ -123,9 +135,33 @@ export default function JobsPage() {
     setShowForm(true);
   };
 
-  const buildInput = () => ({
+  const autoServiceDuePreview = (): string | undefined => {
+    const interval = serviceIntervalMonths || DEFAULT_SERVICE_INTERVAL_MONTHS;
+    const today = new Date().toISOString().slice(0, 10);
+    if (jobType === "installation") {
+      const base =
+        editing?.installedDate ??
+        (status === "installed" ? today : scheduledDate || today);
+      if (status === "installed" || scheduledDate) {
+        return computeServiceDueDate(base, interval);
+      }
+      return undefined;
+    }
+    const base = scheduledDate || today;
+    return computeServiceDueDate(base, interval);
+  };
+
+  const buildInput = () => {
+    const resolvedDue = serviceDueManual
+      ? serviceDueDate || undefined
+      : autoServiceDuePreview();
+
+    return {
     jobType,
     assignedTechnician: assignedTechnician || undefined,
+    serviceDueManual,
+    serviceDueDate: resolvedDue,
+    serviceIntervalMonths,
     customerId: customerId || undefined,
     customerName: customerName || "Customer",
     phone,
@@ -142,14 +178,14 @@ export default function JobsPage() {
     pipeMeters,
     status,
     scheduledDate: scheduledDate || undefined,
-    serviceIntervalMonths,
     amcContract,
     installedDate:
       status === "installed" && !editing?.installedDate
         ? new Date().toISOString().slice(0, 10)
         : editing?.installedDate,
     notes,
-  });
+  };
+  };
 
   const jobs = data.acJobs.filter((j) => {
     const type = j.jobType ?? "installation";
@@ -379,6 +415,51 @@ export default function JobsPage() {
                 onChange={(e) => setServiceIntervalMonths(Number(e.target.value))}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
+              <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {t("jobs.service_due_section")}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      checked={!serviceDueManual}
+                      onChange={() => {
+                        setServiceDueManual(false);
+                        setServiceDueDate("");
+                      }}
+                    />
+                    {t("jobs.service_due_auto")}
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      checked={serviceDueManual}
+                      onChange={() => {
+                        setServiceDueManual(true);
+                        setServiceDueDate(
+                          serviceDueDate || autoServiceDuePreview() || "",
+                        );
+                      }}
+                    />
+                    {t("jobs.service_due_manual")}
+                  </label>
+                </div>
+                {serviceDueManual ? (
+                  <input
+                    type="date"
+                    value={serviceDueDate}
+                    onChange={(e) => setServiceDueDate(e.target.value)}
+                    className="mt-2 w-full rounded-lg border bg-white px-3 py-2 text-sm"
+                  />
+                ) : (
+                  <p className="mt-2 text-sm text-teal-800">
+                    {autoServiceDuePreview()
+                      ? `${t("jobs.service_due_label")}: ${autoServiceDuePreview()}`
+                      : t("jobs.service_due_auto_hint")}
+                  </p>
+                )}
+              </div>
               <label className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
                 <input
                   type="checkbox"
@@ -501,9 +582,18 @@ export default function JobsPage() {
                       <span>{t("jobs.install_label")}: {job.scheduledDate}</span>
                     )}
                     {job.serviceDueDate && (
-                      <span className="font-medium text-cyan-800">
+                      <span
+                        className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${serviceDueUrgencyClass(
+                          serviceDueUrgency(job.serviceDueDate),
+                        )}`}
+                      >
                         {t("jobs.service_due_label")}: {job.serviceDueDate} (
                         {serviceDueLabel(job.serviceDueDate, locale)})
+                        {job.serviceDueManual && (
+                          <span className="ml-1 opacity-75">
+                            · {t("jobs.service_due_manual_short")}
+                          </span>
+                        )}
                       </span>
                     )}
                   </div>

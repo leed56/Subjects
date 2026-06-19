@@ -208,22 +208,6 @@ export default function NotificationsSettingsPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block text-sm">
-                {t("msg.service_due_days_before")}
-                <input
-                  type="number"
-                  min={0}
-                  max={30}
-                  value={settings.serviceDueRemindDaysBefore}
-                  onChange={(e) =>
-                    persist({
-                      ...settings,
-                      serviceDueRemindDaysBefore: Number(e.target.value),
-                    })
-                  }
-                  className="mt-1 w-full rounded-lg border px-3 py-2"
-                />
-              </label>
-              <label className="block text-sm">
                 {t("msg.service_due_repeat_days")}
                 <input
                   type="number"
@@ -239,6 +223,46 @@ export default function NotificationsSettingsPage() {
                   className="mt-1 w-full rounded-lg border px-3 py-2"
                 />
               </label>
+            </div>
+
+            <div className="pt-2">
+              <p className="text-sm font-medium text-slate-800">
+                {t("msg.remind_schedule")}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {[7, 3, 1, 0].map((day) => {
+                  const active = settings.serviceDueRemindDays.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => {
+                        const next = active
+                          ? settings.serviceDueRemindDays.filter((d) => d !== day)
+                          : [...settings.serviceDueRemindDays, day];
+                        persist({
+                          ...settings,
+                          serviceDueRemindDays: [...new Set(next)].sort(
+                            (a, b) => b - a,
+                          ),
+                        });
+                      }}
+                      className={`rounded-full px-3 py-1.5 text-sm ${
+                        active
+                          ? "bg-cyan-700 text-white"
+                          : "border border-slate-200 bg-white text-slate-700"
+                      }`}
+                    >
+                      {day === 0
+                        ? t("msg.remind_day_of")
+                        : t("msg.remind_days_before").replace(
+                            "{{days}}",
+                            String(day),
+                          )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 pt-2">
@@ -271,6 +295,21 @@ export default function NotificationsSettingsPage() {
             <label className="mt-4 flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
+                checked={settings.notifyCustomerOnServiceDue}
+                onChange={(e) =>
+                  persist({
+                    ...settings,
+                    notifyCustomerOnServiceDue: e.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              {t("msg.notify_customer_service_due")}
+            </label>
+
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
                 checked={settings.notifyOwnerOnServiceDue}
                 onChange={(e) =>
                   persist({
@@ -281,6 +320,21 @@ export default function NotificationsSettingsPage() {
                 className="h-4 w-4 rounded border-slate-300"
               />
               {t("msg.notify_owner_service_due")}
+            </label>
+
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.notifyTechnicianOnServiceDue}
+                onChange={(e) =>
+                  persist({
+                    ...settings,
+                    notifyTechnicianOnServiceDue: e.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              {t("msg.notify_technician_service_due")}
             </label>
 
             {apiEnabled && org.id && (

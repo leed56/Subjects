@@ -199,7 +199,12 @@ export default function DashboardPage() {
         )}
 
         <AcServiceDuePanel
-          jobs={stats.acServiceDueSoon}
+          dueTodayJobs={stats.acServiceDueToday}
+          upcomingJobs={stats.acServiceDueSoon.filter(
+            (j) =>
+              j.serviceDueDate &&
+              stats.acServiceDueToday.every((t) => t.id !== j.id),
+          )}
           business={data.business}
           overdueCount={stats.acServiceOverdueCount}
           onServiceDone={recordACService}

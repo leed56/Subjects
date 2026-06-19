@@ -13,7 +13,10 @@ export type MessageTemplateId =
   | "job_scheduled"
   | "job_installed"
   | "job_service_due"
+  | "job_service_due_upcoming"
+  | "job_service_due_today"
   | "job_service_due_owner"
+  | "job_service_due_technician"
   | "job_completed"
   | "custom";
 
@@ -62,15 +65,20 @@ export type NotificationSettings = {
   smsSenderId: string;
   /** Daily cron sends FitSMS for jobs due within N days (when enabled) */
   autoSendServiceDueSms: boolean;
+  /** @deprecated use serviceDueRemindDays */
   serviceDueRemindDaysBefore: number;
+  /** Days before due to send (0 = on service day) */
+  serviceDueRemindDays: number[];
   /** Skip resending the same job within this many days */
   serviceDueRepeatDays: number;
   /** Shop owner mobile — WhatsApp/SMS alerts for service due */
   ownerPhone: string;
   /** Default technician mobile for job alerts */
   technicianPhone: string;
+  notifyCustomerOnServiceDue: boolean;
   /** Notify owner when service is due (cron) */
   notifyOwnerOnServiceDue: boolean;
+  notifyTechnicianOnServiceDue: boolean;
 };
 
 export type NotificationLogEntry = {

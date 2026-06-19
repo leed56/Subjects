@@ -38,6 +38,32 @@ export function isServiceDueWithinDays(
   return d <= days;
 }
 
+export type ServiceDueUrgency = "ok" | "soon" | "today" | "overdue";
+
+export function serviceDueUrgency(serviceDueDate?: string): ServiceDueUrgency {
+  if (!serviceDueDate) return "ok";
+  const days = daysUntilDate(serviceDueDate);
+  if (days < 0) return "overdue";
+  if (days === 0) return "today";
+  if (days <= 7) return "soon";
+  return "ok";
+}
+
+export function serviceDueUrgencyClass(urgency: ServiceDueUrgency): string {
+  switch (urgency) {
+    case "overdue":
+      return "border-red-200 bg-red-50 text-red-800";
+    case "today":
+      return "border-amber-300 bg-amber-50 text-amber-900";
+    case "soon":
+      return "border-orange-200 bg-orange-50 text-orange-800";
+    default:
+      return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  }
+}
+
+export const DEFAULT_SERVICE_DUE_REMIND_DAYS: number[] = [7, 3, 1, 0];
+
 export function serviceDueLabel(
   serviceDueDate: string | undefined,
   locale: "si" | "en",
