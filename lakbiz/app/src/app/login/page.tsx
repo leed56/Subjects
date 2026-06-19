@@ -7,7 +7,12 @@ import { useAuth } from "@/components/auth-provider";
 import { SiteHeader } from "@/components/site-header";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { AuthFlowError, resendConfirmationEmail } from "@/lib/supabase/auth-actions";
+import {
+  AuthFlowError,
+  isPlatformAdminClient,
+  resendConfirmationEmail,
+} from "@/lib/supabase/auth-actions";
+import { createBrowserClient } from "@/lib/supabase/client";
 import { SectorPicker } from "@/components/sector-picker";
 import type { SectorId } from "@/lib/types";
 
@@ -56,8 +61,10 @@ export default function LoginPage() {
         router.push("/dashboard");
       } else {
         await signIn(email, password);
-        const adminRes = await fetch("/api/admin/me");
-        router.push(adminRes.ok ? "/admin" : "/dashboard");
+        const supabase = createBrowserClient();
+        const isAdmin =
+          !!supabase && (await isPlatformAdminClient(supabase));
+        router.push(isAdmin ? "/admin" : "/dashboard");
       }
     } catch (err) {
       if (err instanceof AuthFlowError && err.code === "email_confirmation") {
