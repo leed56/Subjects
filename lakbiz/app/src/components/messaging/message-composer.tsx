@@ -16,6 +16,7 @@ import {
   type MessageContext,
   type MessageTemplateId,
 } from "@/lib/messaging";
+import { useSmsApiConfigured } from "@/lib/messaging/use-sms-api-configured";
 
 type MessageComposerProps = {
   open: boolean;
@@ -76,7 +77,8 @@ export function MessageComposer({
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const templates = templatesForContext(context.type);
-  const apiEnabled = process.env.NEXT_PUBLIC_SMS_API_ENABLED === "true";
+  const smsApiConfigured = useSmsApiConfigured();
+  const apiEnabled = smsApiConfigured === true;
 
   useEffect(() => {
     if (!open) return;

@@ -527,7 +527,8 @@ const si: Dict = {
   "msg.api_title": "ස්වයංක්‍රීය SMS (Text.lk)",
   "msg.api_desc": "දුරකථන යෙදුම විවෘත නොකර සෘජුව SMS යැවීමට Vercel environment variables එක් කරන්න.",
   "msg.api_active": "✓ SMS API සක්‍රියයි — Auto SMS නාලිකාව ලබා ගත හැක",
-  "msg.api_inactive": "SMS API සකස නැත — WhatsApp සහ SMS deep link පමණක්",
+  "msg.api_checking": "SMS API පරීක්ෂා කරමින්…",
+  "msg.api_inactive": "Text.lk සකස නැත — Vercel වල TEXTLK_API_TOKEN සහ TEXTLK_SENDER_ID එක් කරන්න",
   "msg.log_title": "මෑත පණිවිඩ",
   "msg.log_empty": "තවම පණිවිඩ නැත. Jobs, Customers, Bills වලින් යවන්න.",
 
@@ -1081,7 +1082,8 @@ const en: Dict = {
   "msg.api_title": "Automatic SMS (Text.lk)",
   "msg.api_desc": "Add Vercel environment variables to send SMS without opening the phone app.",
   "msg.api_active": "✓ SMS API active — Auto SMS channel available",
-  "msg.api_inactive": "SMS API not configured — WhatsApp and SMS deep links only",
+  "msg.api_checking": "Checking SMS API…",
+  "msg.api_inactive": "Text.lk not configured — add TEXTLK_API_TOKEN and TEXTLK_SENDER_ID on Vercel",
   "msg.log_title": "Recent messages",
   "msg.log_empty": "No messages yet. Send from Jobs, Customers, or Bills.",
 

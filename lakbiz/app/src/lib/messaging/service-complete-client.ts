@@ -17,30 +17,26 @@ export async function sendServiceCompleteSms(
     return { ok: false, error: "SMS disabled or no customer phone" };
   }
 
-  if (process.env.NEXT_PUBLIC_SMS_API_ENABLED !== "true") {
-    return { ok: false, error: "SMS API not enabled" };
-  }
-
-  const message = composeMessage(
-    "job_service_complete_next",
-    settings.preferredLanguage,
-    {
-      customerName: job.customerName,
-      shopName: business.name,
-      shopPhone: business.phone ? `Tel: ${business.phone}` : "",
-      jobNo: job.jobNo,
-      address: job.address,
-      description: job.description,
-      serviceDueDate: nextDueDate,
-      intervalDays: String(intervalDays),
-      quotedAmount: "",
-      depositAmount: "",
-      balance: "",
-      scheduledDate: "",
-    },
-  );
-
   try {
+    const message = composeMessage(
+      "job_service_complete_next",
+      settings.preferredLanguage,
+      {
+        customerName: job.customerName,
+        shopName: business.name,
+        shopPhone: business.phone ? `Tel: ${business.phone}` : "",
+        jobNo: job.jobNo,
+        address: job.address,
+        description: job.description,
+        serviceDueDate: nextDueDate,
+        intervalDays: String(intervalDays),
+        quotedAmount: "",
+        depositAmount: "",
+        balance: "",
+        scheduledDate: "",
+      },
+    );
+
     const res = await fetch("/api/messages/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

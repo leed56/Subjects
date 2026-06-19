@@ -15,6 +15,7 @@ import {
 } from "@/lib/messaging";
 import { formatSlPhoneDisplay } from "@/lib/messaging";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { useSmsApiConfigured } from "@/lib/messaging/use-sms-api-configured";
 import {
   fetchOrgNotificationSettings,
   saveOrgNotificationSettings,
@@ -32,7 +33,8 @@ export default function NotificationsSettingsPage() {
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchResult, setBatchResult] = useState<string | null>(null);
-  const apiEnabled = process.env.NEXT_PUBLIC_SMS_API_ENABLED === "true";
+  const smsApiConfigured = useSmsApiConfigured();
+  const apiEnabled = smsApiConfigured === true;
 
   useEffect(() => {
     const local = loadNotificationSettings();
@@ -202,7 +204,7 @@ export default function NotificationsSettingsPage() {
                   })
                 }
                 className="h-4 w-4 rounded border-slate-300"
-                disabled={!apiEnabled}
+                disabled={smsApiConfigured !== true}
               />
               {t("msg.auto_send_service_due")}
             </label>
@@ -336,7 +338,7 @@ export default function NotificationsSettingsPage() {
                   })
                 }
                 className="h-4 w-4 rounded border-slate-300"
-                disabled={!apiEnabled}
+                disabled={smsApiConfigured !== true}
               />
               {t("msg.auto_send_on_service_complete")}
             </label>
@@ -446,7 +448,8 @@ export default function NotificationsSettingsPage() {
             <li>
               <code className="rounded bg-slate-100 px-1">
                 NEXT_PUBLIC_SMS_API_ENABLED=true
-              </code>
+              </code>{" "}
+              (optional legacy)
             </li>
             <li>
               <code className="rounded bg-slate-100 px-1">CRON_SECRET</code> (
@@ -459,7 +462,11 @@ export default function NotificationsSettingsPage() {
             </li>
           </ul>
           <p className="mt-3 text-xs text-slate-500">
-            {apiEnabled ? t("msg.api_active") : t("msg.api_inactive")}
+            {smsApiConfigured === null
+              ? t("msg.api_checking")
+              : apiEnabled
+                ? t("msg.api_active")
+                : t("msg.api_inactive")}
           </p>
           <a
             href="https://app.text.lk/senderid"

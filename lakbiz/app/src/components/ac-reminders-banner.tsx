@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { loadNotificationSettings } from "@/lib/messaging/settings";
+import { useSmsApiConfigured } from "@/lib/messaging/use-sms-api-configured";
 
 export function AcRemindersBanner() {
   const { t } = useLocale();
   const settings = loadNotificationSettings();
-  const apiEnabled = process.env.NEXT_PUBLIC_SMS_API_ENABLED === "true";
+  const smsApiConfigured = useSmsApiConfigured();
 
-  if (settings.autoSendServiceDueSms && apiEnabled) return null;
+  if (settings.autoSendServiceDueSms && smsApiConfigured) return null;
 
   return (
     <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">

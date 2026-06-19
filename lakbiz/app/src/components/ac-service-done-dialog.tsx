@@ -10,6 +10,7 @@ import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { loadNotificationSettings } from "@/lib/messaging/settings";
 import { sendServiceCompleteSms } from "@/lib/messaging/service-complete-client";
+import { useSmsApiConfigured } from "@/lib/messaging/use-sms-api-configured";
 import type { BusinessInfo } from "@/lib/invoice";
 import type { ACJob } from "@/lib/store/types";
 
@@ -29,6 +30,7 @@ export function AcServiceDoneDialog({
   onConfirm,
 }: AcServiceDoneDialogProps) {
   const { t } = useLocale();
+  const smsApiConfigured = useSmsApiConfigured();
   const [intervalDays, setIntervalDays] = useState(180);
   const [customDays, setCustomDays] = useState("");
   const [visitNotes, setVisitNotes] = useState("");
@@ -56,7 +58,7 @@ export function AcServiceDoneDialog({
   const smsEnabled =
     settings.autoSendOnServiceComplete &&
     !!job.phone &&
-    process.env.NEXT_PUBLIC_SMS_API_ENABLED === "true";
+    smsApiConfigured === true;
 
   const handleConfirm = async () => {
     setSaving(true);
