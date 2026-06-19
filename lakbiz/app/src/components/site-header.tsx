@@ -24,10 +24,11 @@ const navKeys = [
 
 export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
   const { locale, setLocale, t } = useLocale();
-  const { can } = useSubscription();
+  const { can, org } = useSubscription();
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
   const visibleNav = navKeys.filter((item) => {
     const feature = ROUTE_FEATURES[item.href];
@@ -41,6 +42,16 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
       document.body.style.overflow = "";
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!user) {
+      setIsPlatformAdmin(false);
+      return;
+    }
+    void fetch("/api/admin/me")
+      .then((r) => setIsPlatformAdmin(r.ok))
+      .catch(() => setIsPlatformAdmin(false));
+  }, [user]);
 
   useEffect(() => {
     setOpen(false);
@@ -100,6 +111,14 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
             >
               {t("nav.billing")}
             </Link>
+            {isPlatformAdmin && (
+              <Link
+                href="/admin"
+                className="rounded-lg bg-slate-900 px-2 py-1 text-sm font-medium text-teal-300 hover:bg-slate-800"
+              >
+                Admin
+              </Link>
+            )}
             <Link
               href="/login"
               className="rounded-lg px-2 py-1 text-sm font-medium text-slate-600 hover:text-teal-700"

@@ -48,7 +48,7 @@ import {
   updateSupplier,
   updateVehicle,
 } from "./actions";
-import { clearAppData, loadAppData, saveAppData } from "./storage";
+import { clearAppData, loadAppData, saveAppData, setStorageOrgId } from "./storage";
 import type {
   AppData,
   ACJobInput,
@@ -134,11 +134,23 @@ function useAppStoreState(): AppStoreValue {
   const latestDataRef = useRef<AppData | null>(null);
 
   useEffect(() => {
-    const initial = loadAppData();
+    setStorageOrgId(org.id);
+    const initial = loadAppData(org.id);
     setData(initial);
     latestDataRef.current = initial;
     setReady(true);
-  }, []);
+    cloudLoadedRef.current = false;
+    if (pushTimerRef.current) {
+      clearTimeout(pushTimerRef.current);
+      pushTimerRef.current = null;
+    }
+  }, [org.id]);
+
+  useEffect(() => {
+    if (!org.id) {
+      setStorageOrgId(null);
+    }
+  }, [org.id]);
 
   const scheduleCloudPush = useCallback(
     (next: AppData) => {
@@ -176,7 +188,7 @@ function useAppStoreState(): AppStoreValue {
     if (cloudLoadedRef.current) return;
 
     let cancelled = false;
-    const local = loadAppData();
+    const local = loadAppData(org.id);
 
     setCloudSyncing(true);
     setCloudSyncError(null);
@@ -186,7 +198,7 @@ function useAppStoreState(): AppStoreValue {
       cloudLoadedRef.current = true;
       setData(synced);
       latestDataRef.current = synced;
-      saveAppData(synced);
+      saveAppData(synced, org.id);
       setCloudSyncing(false);
       setCloudSyncError(error);
     });
@@ -201,10 +213,10 @@ function useAppStoreState(): AppStoreValue {
       if (isReadOnly) return;
       setData(next);
       latestDataRef.current = next;
-      saveAppData(next);
+      saveAppData(next, org.id);
       scheduleCloudPush(next);
     },
-    [isReadOnly, scheduleCloudPush],
+    [isReadOnly, org.id, scheduleCloudPush],
   );
 
   const canAddProduct = useCallback(
@@ -329,10 +341,10 @@ function useAppStoreState(): AppStoreValue {
       updateBusiness: (business) => {
         if (isReadOnly) return;
         setData((current) => {
-          const base = current ?? loadAppData();
+          const base = current ?? loadAppData(org.id);
           const next = mergeBusiness(base, business);
           latestDataRef.current = next;
-          saveAppData(next);
+          saveAppData(next, org.id);
           scheduleCloudPush(next);
           return next;
         });
@@ -378,8 +390,10 @@ function useAppStoreState(): AppStoreValue {
         persist(deleteVehicle(data, id));
       },
       resetAll: () => {
-        clearAppData();
-        setData(loadAppData());
+        clearAppData(org.id);
+        const fresh = loadAppData(org.id);
+        setData(fresh);
+        latestDataRef.current = fresh;
       },
     };
     return store;

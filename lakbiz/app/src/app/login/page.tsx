@@ -30,6 +30,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   const configured = isSupabaseConfigured();
+  const adminOnly = process.env.NEXT_PUBLIC_ADMIN_ONLY === "true";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +43,10 @@ export default function LoginPage() {
     setNeedsEmailConfirm(false);
     try {
       if (mode === "signup") {
+        if (adminOnly) {
+          setMessage("Public signup is disabled. Contact your LakBiz administrator.");
+          return;
+        }
         if (!shopName.trim()) {
           setMessage(t("sub.shop_required"));
           return;
@@ -137,7 +142,14 @@ export default function LoginPage() {
           </div>
         )}
 
-        <div className="mt-6 flex rounded-lg border border-slate-200 p-1">
+        {adminOnly && (
+          <p className="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">
+            Shops are created by the platform admin. Sign in with the credentials you
+            received.
+          </p>
+        )}
+
+        <div className={`mt-6 flex rounded-lg border border-slate-200 p-1 ${adminOnly ? "hidden" : ""}`}>
           <button
             type="button"
             onClick={() => setMode("signin")}

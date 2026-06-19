@@ -6,6 +6,18 @@ import { syncAcJobServiceStatuses } from "@/lib/ac-service";
 const STORAGE_KEY_V2 = "lakbiz-app-data-v2";
 const STORAGE_KEY_V1 = "lakbiz-app-data-v1";
 
+let activeOrgId: string | null = null;
+
+/** Scope localStorage per tenant so shops never clash on the same browser. */
+export function setStorageOrgId(orgId: string | null): void {
+  activeOrgId = orgId;
+}
+
+function storageKeyV2(orgId?: string | null): string {
+  const id = orgId ?? activeOrgId;
+  return id ? `${STORAGE_KEY_V2}-${id}` : STORAGE_KEY_V2;
+}
+
 export const emptyAppData = (): AppData => ({
   business: defaultBusiness(),
   products: [],
@@ -70,26 +82,47 @@ export function parseAppData(parsed: Partial<AppData>): AppData {
   };
 }
 
-export function loadAppData(): AppData {
-  if (typeof window === "undefined") return emptyAppData();
+function migrateLegacyGlobalKey(orgId: string | null): AppData | null {
+  if (!orgId || typeof window === "undefined") return null;
+  const orgKey = storageKeyV2(orgId);
+  if (localStorage.getItem(orgKey)) return null;
+  const legacy = localStorage.getItem(STORAGE_KEY_V2);
+  if (!legacy) return null;
   try {
-    const rawV2 = localStorage.getItem(STORAGE_KEY_V2);
+    const parsed = JSON.parse(legacy) as Partial<AppData>;
+    const businessName = parsed.business?.name?.trim();
+    if (!businessName || businessName === "My Shop") return null;
+    localStorage.setItem(orgKey, legacy);
+    return syncAcJobServiceStatuses(parseAppData(parsed));
+  } catch {
+    return null;
+  }
+}
+
+export function loadAppData(orgId?: string | null): AppData {
+  if (typeof window === "undefined") return emptyAppData();
+  const key = storageKeyV2(orgId);
+  try {
+    const rawV2 = localStorage.getItem(key);
     if (rawV2) {
       const parsed = JSON.parse(rawV2) as Partial<AppData>;
       return syncAcJobServiceStatuses(parseAppData(parsed));
     }
 
+    const migrated = migrateLegacyGlobalKey(orgId ?? activeOrgId);
+    if (migrated) return migrated;
+
     const rawV1 = localStorage.getItem(STORAGE_KEY_V1);
     if (rawV1) {
       const parsed = JSON.parse(rawV1) as Partial<AppData>;
-      const migrated: AppData = {
+      const migratedApp: AppData = {
         ...emptyAppData(),
         products: parsed.products ?? [],
         sales: (parsed.sales ?? []).map(normalizeSale),
         stockLogs: parsed.stockLogs ?? [],
       };
-      saveAppData(migrated);
-      return migrated;
+      saveAppData(migratedApp, orgId);
+      return migratedApp;
     }
 
     return emptyAppData();
@@ -98,13 +131,16 @@ export function loadAppData(): AppData {
   }
 }
 
-export function saveAppData(data: AppData): void {
+export function saveAppData(data: AppData, orgId?: string | null): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(data));
+  localStorage.setItem(storageKeyV2(orgId), JSON.stringify(data));
 }
 
-export function clearAppData(): void {
+export function clearAppData(orgId?: string | null): void {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(STORAGE_KEY_V2);
-  localStorage.removeItem(STORAGE_KEY_V1);
+  localStorage.removeItem(storageKeyV2(orgId));
+  if (!orgId && !activeOrgId) {
+    localStorage.removeItem(STORAGE_KEY_V2);
+    localStorage.removeItem(STORAGE_KEY_V1);
+  }
 }

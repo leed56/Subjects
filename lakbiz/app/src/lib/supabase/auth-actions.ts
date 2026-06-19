@@ -66,6 +66,13 @@ export async function signUpWithShop(input: {
   phone?: string;
   sector: SectorId;
 }) {
+  if (process.env.NEXT_PUBLIC_ADMIN_ONLY === "true") {
+    throw new AuthFlowError(
+      "Public signup is disabled. Contact your LakBiz administrator.",
+      "auth",
+    );
+  }
+
   const supabase = createBrowserClient();
   if (!supabase) throw new Error("Supabase not configured");
 
