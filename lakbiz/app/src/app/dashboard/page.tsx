@@ -10,9 +10,13 @@ import { getDashboardStats } from "@/lib/store/actions";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { getVatQuarterSummary } from "@/lib/vat";
 
+import { useSubscription } from "@/lib/subscription/subscription-provider";
+
 export default function DashboardPage() {
   const { data, ready, resetAll, recordACService } = useAppStore();
   const { t } = useLocale();
+  const { can } = useSubscription();
+  const showVehicles = can("vehicles");
 
   if (!ready || !data) {
     return (
@@ -139,17 +143,21 @@ export default function DashboardPage() {
             labelKey="dash.cheques_due"
             value={String(stats.chequesDueSoonCount)}
           />
-          <DashboardStat
-            labelKey="dash.vehicles_sale"
-            value={String(stats.forSaleVehicleCount)}
-          />
-          <DashboardStat
-            labelKey="dash.car_profit_month"
-            value={formatLkr(stats.vehicleProfitThisMonth)}
-          />
+          {showVehicles && (
+            <>
+              <DashboardStat
+                labelKey="dash.vehicles_sale"
+                value={String(stats.forSaleVehicleCount)}
+              />
+              <DashboardStat
+                labelKey="dash.car_profit_month"
+                value={formatLkr(stats.vehicleProfitThisMonth)}
+              />
+            </>
+          )}
         </div>
 
-        {stats.aging60VehicleCount > 0 && (
+        {showVehicles && stats.aging60VehicleCount > 0 && (
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="font-medium text-amber-900">

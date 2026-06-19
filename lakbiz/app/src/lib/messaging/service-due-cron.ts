@@ -245,6 +245,39 @@ export async function runServiceDueReminders(
         provider_ref: sms.providerRef ?? null,
       });
 
+      const ownerPhone = settings.ownerPhone?.trim();
+      if (settings.notifyOwnerOnServiceDue && ownerPhone) {
+        const ownerMsg = composeMessage("job_service_due_owner", locale, {
+          customerName: job.customerName,
+          customerPhone: row.phone ?? "",
+          shopName: business.name,
+          shopPhone: business.phone ?? "",
+          jobNo: job.jobNo,
+          address: job.address,
+          description: job.description,
+          serviceDueDate: job.serviceDueDate ?? "TBC",
+          quotedAmount: "",
+          depositAmount: "",
+          balance: "",
+          scheduledDate: "",
+        });
+        const ownerSms = await sendFitSms(ownerPhone, ownerMsg);
+        if (ownerSms.ok) {
+          await supabase.from("notification_log").insert({
+            organization_id: org.id,
+            channel: "api_sms",
+            template_id: "job_service_due_owner",
+            recipient_phone: ownerPhone,
+            recipient_name: business.name,
+            message_body: ownerMsg,
+            context_type: "ac_job",
+            context_id: row.id,
+            status: "sent",
+            provider_ref: ownerSms.providerRef ?? null,
+          });
+        }
+      }
+
       if (
         row.service_due_date &&
         row.service_due_date <= today &&

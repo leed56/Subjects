@@ -83,7 +83,7 @@ export function SubscriptionProvider({
   children: React.ReactNode;
 }) {
   const { user, loading: authLoading } = useAuth();
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(true);
   const [subscription, setSubscription] = useState<SubscriptionState>(() => ({
     ...defaultTrialSubscription(),
     isDemo: true,
@@ -166,22 +166,16 @@ export function SubscriptionProvider({
   useEffect(() => {
     if (authLoading) return;
 
-    const init = async () => {
-      if (user && (await loadFromCloud())) {
-        setReady(true);
-        return;
-      }
+    if (!user) {
       setIsPlatformAdmin(false);
       setSubscription(loadDemoSubscription());
       setOrg(loadDemoOrg());
-      setReady(true);
-    };
+      return;
+    }
 
-    void init().catch(() => {
-      setIsPlatformAdmin(false);
+    void loadFromCloud().catch(() => {
       setSubscription(loadDemoSubscription());
       setOrg(loadDemoOrg());
-      setReady(true);
     });
   }, [user, authLoading, loadFromCloud]);
 
@@ -204,8 +198,8 @@ export function SubscriptionProvider({
   }, []);
 
   const can = useCallback(
-    (feature: FeatureKey) => canAccess(subscription, feature),
-    [subscription],
+    (feature: FeatureKey) => canAccess(subscription, feature, org.sector),
+    [subscription, org.sector],
   );
 
   const daysLeftInTrial = useMemo(() => {
@@ -256,7 +250,7 @@ export function useSubscription(): SubscriptionContextValue {
       org: { id: null, name: "Demo Shop", sector: "grocery", isAuthenticated: false },
       subscription: sub,
       isPlatformAdmin: false,
-      can: (feature) => canAccess(sub, feature),
+      can: (feature) => canAccess(sub, feature, "grocery"),
       daysLeftInTrial: daysUntil(trial.trialEndsAt),
       isReadOnly: false,
       setDemoPlan: () => {},

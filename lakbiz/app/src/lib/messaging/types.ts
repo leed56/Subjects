@@ -13,6 +13,7 @@ export type MessageTemplateId =
   | "job_scheduled"
   | "job_installed"
   | "job_service_due"
+  | "job_service_due_owner"
   | "job_completed"
   | "custom";
 
@@ -64,6 +65,12 @@ export type NotificationSettings = {
   serviceDueRemindDaysBefore: number;
   /** Skip resending the same job within this many days */
   serviceDueRepeatDays: number;
+  /** Shop owner mobile — WhatsApp/SMS alerts for service due */
+  ownerPhone: string;
+  /** Default technician mobile for job alerts */
+  technicianPhone: string;
+  /** Notify owner when service is due (cron) */
+  notifyOwnerOnServiceDue: boolean;
 };
 
 export type NotificationLogEntry = {

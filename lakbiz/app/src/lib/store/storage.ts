@@ -79,6 +79,10 @@ export function parseAppData(parsed: Partial<AppData>): AppData {
     business: normalizeBusiness(parsed.business),
     sales: (parsed.sales ?? []).map(normalizeSale),
     purchases: (parsed.purchases ?? []).map(normalizePurchase),
+    acJobs: (parsed.acJobs ?? []).map((job) => ({
+      ...job,
+      jobType: job.jobType ?? "installation",
+    })),
   };
 }
 

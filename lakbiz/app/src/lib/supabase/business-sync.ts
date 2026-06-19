@@ -311,6 +311,8 @@ export async function pullBusinessData(
       lastServiceDate: row.last_service_date ?? undefined,
       serviceIntervalMonths: row.service_interval_months ?? undefined,
       amcContract: row.amc_contract ?? undefined,
+      jobType: (row.job_type as AppData["acJobs"][number]["jobType"]) ?? "installation",
+      assignedTechnician: row.assigned_technician ?? undefined,
       notes: row.notes ?? undefined,
     })),
     vehicles: (vehiclesRes.data ?? []).map((row) => ({
@@ -592,6 +594,8 @@ export async function pushBusinessData(
     last_service_date: job.lastServiceDate ?? null,
     service_interval_months: job.serviceIntervalMonths ?? null,
     amc_contract: job.amcContract ?? null,
+    job_type: job.jobType ?? "installation",
+    assigned_technician: job.assignedTechnician ?? null,
     notes: job.notes ?? null,
   }));
 

@@ -2,11 +2,14 @@ import type { PaymentMethod, Product, SectorId } from "@/lib/types";
 import type { BusinessInfo } from "@/lib/invoice";
 import { defaultBusiness } from "@/lib/invoice";
 import type { ACJobStatus } from "@/lib/ac-jobs";
+import type { ACJobType } from "@/lib/ac-job-types";
 
 export interface ACJob {
   id: string;
   jobNo: string;
   date: string;
+  jobType: ACJobType;
+  assignedTechnician?: string;
   customerId?: string;
   customerName: string;
   phone?: string;
@@ -32,6 +35,8 @@ export interface ACJob {
 }
 
 export interface ACJobInput {
+  jobType?: ACJobType;
+  assignedTechnician?: string;
   customerId?: string;
   customerName: string;
   phone?: string;

@@ -241,6 +241,48 @@ export default function NotificationsSettingsPage() {
               </label>
             </div>
 
+            <div className="grid gap-4 sm:grid-cols-2 pt-2">
+              <label className="block text-sm">
+                {t("msg.owner_phone")}
+                <input
+                  type="tel"
+                  value={settings.ownerPhone}
+                  onChange={(e) =>
+                    persist({ ...settings, ownerPhone: e.target.value })
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                  placeholder="07XXXXXXXX"
+                />
+              </label>
+              <label className="block text-sm">
+                {t("msg.technician_phone")}
+                <input
+                  type="tel"
+                  value={settings.technicianPhone}
+                  onChange={(e) =>
+                    persist({ ...settings, technicianPhone: e.target.value })
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                  placeholder="07XXXXXXXX"
+                />
+              </label>
+            </div>
+
+            <label className="mt-4 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.notifyOwnerOnServiceDue}
+                onChange={(e) =>
+                  persist({
+                    ...settings,
+                    notifyOwnerOnServiceDue: e.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              {t("msg.notify_owner_service_due")}
+            </label>
+
             {apiEnabled && org.id && (
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <button

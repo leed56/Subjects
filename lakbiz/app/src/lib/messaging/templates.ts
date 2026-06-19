@@ -75,6 +75,15 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     si: `ආයුබෝවන් {{customerName}}, {{address}} හි AC එකට *සේවාව/පිරිසිදු කිරීම* අවශ්‍යයි.\n\n*{{shopName}}* · Job {{jobNo}}\nවේලාවක් වෙන්කර ගන්න: {{shopPhone}}`,
   },
   {
+    id: "job_service_due_owner",
+    icon: "📲",
+    labelEn: "Service due (owner alert)",
+    labelSi: "සේවාව අවශ්‍ය (හිමිකරු)",
+    category: "jobs",
+    en: `*{{shopName}}* — AC service due\nJob {{jobNo}}\nCustomer: {{customerName}}\nPhone: {{customerPhone}}\nAddress: {{address}}\nDue: {{serviceDueDate}}`,
+    si: `*{{shopName}}* — AC සේවාව අවශ්‍ය\nJob {{jobNo}}\n{{customerName}} · {{customerPhone}}\n{{address}}\nDue: {{serviceDueDate}}`,
+  },
+  {
     id: "job_completed",
     icon: "✨",
     labelEn: "Job completed",

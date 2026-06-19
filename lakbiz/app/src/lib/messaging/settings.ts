@@ -18,6 +18,9 @@ export const defaultNotificationSettings = (): NotificationSettings => ({
   autoSendServiceDueSms: false,
   serviceDueRemindDaysBefore: 3,
   serviceDueRepeatDays: 7,
+  ownerPhone: "",
+  technicianPhone: "",
+  notifyOwnerOnServiceDue: true,
 });
 
 export function parseNotificationSettings(raw: unknown): NotificationSettings {
@@ -53,6 +56,16 @@ export function parseNotificationSettings(raw: unknown): NotificationSettings {
       typeof row.serviceDueRepeatDays === "number"
         ? row.serviceDueRepeatDays
         : defaults.serviceDueRepeatDays,
+    ownerPhone:
+      typeof row.ownerPhone === "string" ? row.ownerPhone : defaults.ownerPhone,
+    technicianPhone:
+      typeof row.technicianPhone === "string"
+        ? row.technicianPhone
+        : defaults.technicianPhone,
+    notifyOwnerOnServiceDue:
+      typeof row.notifyOwnerOnServiceDue === "boolean"
+        ? row.notifyOwnerOnServiceDue
+        : defaults.notifyOwnerOnServiceDue,
   };
 }
 

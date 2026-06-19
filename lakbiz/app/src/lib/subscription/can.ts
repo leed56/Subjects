@@ -1,4 +1,6 @@
 import { getPlan } from "./plans";
+import { sectorAllowsFeature } from "@/lib/sector-features";
+import type { SectorId } from "@/lib/types";
 import type {
   AddonType,
   FeatureKey,
@@ -24,11 +26,34 @@ function effectiveFeatures(
   };
 }
 
+const PLAN_MODULE_KEYS: (keyof PlanFeatures)[] = [
+  "sales",
+  "stock",
+  "bills",
+  "customers",
+  "suppliers",
+  "banking",
+  "ac_jobs",
+  "vehicles",
+  "export",
+  "offline",
+];
+
 export function canAccess(
   subscription: SubscriptionState,
   feature: FeatureKey,
+  sectorId?: SectorId | null,
 ): boolean {
   const { status, planId, addons } = subscription;
+
+  if (
+    sectorId &&
+    feature !== "write" &&
+    PLAN_MODULE_KEYS.includes(feature as keyof PlanFeatures) &&
+    !sectorAllowsFeature(sectorId, feature as keyof PlanFeatures)
+  ) {
+    return false;
+  }
 
   if (status === "canceled") {
     return feature === "bills"; // view-only billing/export path later

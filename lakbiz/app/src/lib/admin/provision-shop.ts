@@ -94,7 +94,7 @@ export async function provisionShop(
   const trialEnd = new Date();
   trialEnd.setDate(trialEnd.getDate() + trialDays);
 
-  const { error: subError } = await admin
+  const { data: subRows, error: subError } = await admin
     .from("subscriptions")
     .update({
       plan_id: planId,
@@ -104,13 +104,28 @@ export async function provisionShop(
       current_period_end: trialDays > 0 ? trialEnd.toISOString() : null,
       updated_at: new Date().toISOString(),
     })
-    .eq("organization_id", org.id);
+    .eq("organization_id", org.id)
+    .select("id");
 
-  if (subError) {
-    await admin.from("org_members").delete().eq("organization_id", org.id);
-    await admin.from("organizations").delete().eq("id", org.id);
-    await admin.auth.admin.deleteUser(userId);
-    return { data: null, error: subError.message };
+  if (subError || !subRows?.length) {
+    const { error: upsertError } = await admin.from("subscriptions").upsert(
+      {
+        organization_id: org.id,
+        plan_id: planId,
+        status: trialDays > 0 ? "trialing" : "active",
+        trial_ends_at: trialDays > 0 ? trialEnd.toISOString() : null,
+        current_period_start: new Date().toISOString(),
+        current_period_end: trialDays > 0 ? trialEnd.toISOString() : null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "organization_id" },
+    );
+    if (upsertError) {
+      await admin.from("org_members").delete().eq("organization_id", org.id);
+      await admin.from("organizations").delete().eq("id", org.id);
+      await admin.auth.admin.deleteUser(userId);
+      return { data: null, error: upsertError.message };
+    }
   }
 
   return {

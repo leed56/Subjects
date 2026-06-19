@@ -8,6 +8,7 @@ import {
   isServiceDueWithinDays,
   isServiceOverdue,
 } from "@/lib/ac-service";
+import { defaultStatusForJobType, type ACJobType } from "@/lib/ac-job-types";
 import {
   daysInStock,
   generateVehicleStockId,
@@ -400,19 +401,30 @@ export function addACJob(data: AppData, input: ACJobInput): AppData {
     ? data.customers.find((c) => c.id === input.customerId)
     : undefined;
 
+  const jobType: ACJobType = input.jobType ?? "installation";
   const interval =
     input.serviceIntervalMonths ?? DEFAULT_SERVICE_INTERVAL_MONTHS;
+  const status = input.status ?? defaultStatusForJobType(jobType);
   const installedDate = input.installedDate;
-  const serviceDueDate =
-    input.serviceDueDate ??
-    (installedDate && input.status === "installed"
-      ? computeServiceDueDate(installedDate, interval)
-      : undefined);
+  let serviceDueDate = input.serviceDueDate;
+
+  if (!serviceDueDate && status === "installed" && installedDate) {
+    serviceDueDate = computeServiceDueDate(installedDate, interval);
+  } else if (
+    !serviceDueDate &&
+    (jobType === "service" || jobType === "repair")
+  ) {
+    const base =
+      input.scheduledDate ?? new Date().toISOString().slice(0, 10);
+    serviceDueDate = computeServiceDueDate(base, interval);
+  }
 
   const job = {
     id: newId(),
     jobNo: generateJobNo(data.acJobs.length),
     date: new Date().toISOString(),
+    jobType,
+    assignedTechnician: input.assignedTechnician?.trim() || undefined,
     customerId: input.customerId,
     customerName: customer?.name ?? input.customerName.trim(),
     phone: input.phone?.trim() || customer?.phone || undefined,
@@ -425,7 +437,7 @@ export function addACJob(data: AppData, input: ACJobInput): AppData {
     quotedAmount: input.quotedAmount,
     depositAmount: input.depositAmount,
     pipeMeters: input.pipeMeters,
-    status: input.status,
+    status,
     scheduledDate: input.scheduledDate,
     installedDate,
     serviceDueDate,
@@ -482,6 +494,9 @@ export function updateACJob(
 
       return {
         ...j,
+        jobType: input.jobType ?? j.jobType,
+        assignedTechnician:
+          input.assignedTechnician?.trim() ?? j.assignedTechnician,
         customerId: input.customerId ?? j.customerId,
         customerName:
           customer?.name ??

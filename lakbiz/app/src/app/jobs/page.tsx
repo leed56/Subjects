@@ -20,6 +20,12 @@ import {
   loadNotificationSettings,
 } from "@/lib/messaging";
 import { serviceDueLabel } from "@/lib/ac-service";
+import {
+  AC_JOB_TYPES,
+  defaultStatusForJobType,
+  jobTypeLabel,
+  type ACJobType,
+} from "@/lib/ac-job-types";
 
 const UNIT_TYPES = [
   "Wall mounted",
@@ -37,6 +43,9 @@ export default function JobsPage() {
   const [showForm, setShowForm] = useState(true);
   const [editing, setEditing] = useState<ACJob | null>(null);
   const [filter, setFilter] = useState<ACJobStatus | "all">("all");
+  const [typeFilter, setTypeFilter] = useState<ACJobType | "all">("all");
+  const [jobType, setJobType] = useState<ACJobType>("installation");
+  const [assignedTechnician, setAssignedTechnician] = useState("");
   const [message, setMessage] = useState("");
   const [promptJob, setPromptJob] = useState<ACJob | null>(null);
 
@@ -84,6 +93,8 @@ export default function JobsPage() {
     setScheduledDate("");
     setServiceIntervalMonths(6);
     setAmcContract(false);
+    setJobType("installation");
+    setAssignedTechnician("");
     setNotes("");
     setEditing(null);
   };
@@ -106,11 +117,15 @@ export default function JobsPage() {
     setScheduledDate(job.scheduledDate ?? "");
     setServiceIntervalMonths(job.serviceIntervalMonths ?? 6);
     setAmcContract(job.amcContract ?? false);
+    setJobType(job.jobType ?? "installation");
+    setAssignedTechnician(job.assignedTechnician ?? "");
     setNotes(job.notes ?? "");
     setShowForm(true);
   };
 
   const buildInput = () => ({
+    jobType,
+    assignedTechnician: assignedTechnician || undefined,
     customerId: customerId || undefined,
     customerName: customerName || "Customer",
     phone,
@@ -136,10 +151,12 @@ export default function JobsPage() {
     notes,
   });
 
-  const jobs =
-    filter === "all"
-      ? data.acJobs
-      : data.acJobs.filter((j) => j.status === filter);
+  const jobs = data.acJobs.filter((j) => {
+    const type = j.jobType ?? "installation";
+    if (typeFilter !== "all" && type !== typeFilter) return false;
+    if (filter === "all") return true;
+    return j.status === filter;
+  });
 
   const pending = data.acJobs.filter((j) =>
     ["quote", "deposit_received", "scheduled"].includes(j.status),
@@ -202,8 +219,31 @@ export default function JobsPage() {
             className="mb-8 rounded-xl border bg-white p-5"
           >
             <h2 className="font-semibold">
-              {editing ? `${t("jobs.edit_job")} ${editing.jobNo}` : t("jobs.new_job")}
+              {editing
+                ? `${t("jobs.edit_job")} ${editing.jobNo}`
+                : t("jobs.new_job")}
             </h2>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {AC_JOB_TYPES.map((tpe) => (
+                <button
+                  key={tpe.value}
+                  type="button"
+                  onClick={() => {
+                    setJobType(tpe.value);
+                    if (!editing) {
+                      setStatus(defaultStatusForJobType(tpe.value));
+                    }
+                  }}
+                  className={`rounded-full px-3 py-1.5 text-sm ${
+                    jobType === tpe.value
+                      ? "bg-teal-700 text-white"
+                      : "border border-slate-200 bg-white text-slate-700"
+                  }`}
+                >
+                  {locale === "si" ? tpe.labelSi : tpe.labelEn}
+                </button>
+              ))}
+            </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <select
                 value={customerId}
@@ -289,19 +329,29 @@ export default function JobsPage() {
                 className="rounded-lg border px-3 py-2 text-sm"
               />
               <input
-                type="number"
-                placeholder={t("jobs.deposit")}
-                value={depositAmount || ""}
-                onChange={(e) => setDepositAmount(Number(e.target.value))}
+                placeholder={t("jobs.technician")}
+                value={assignedTechnician}
+                onChange={(e) => setAssignedTechnician(e.target.value)}
                 className="rounded-lg border px-3 py-2 text-sm"
               />
-              <input
-                type="number"
-                placeholder={t("jobs.pipe_est")}
-                value={pipeMeters || ""}
-                onChange={(e) => setPipeMeters(Number(e.target.value))}
-                className="rounded-lg border px-3 py-2 text-sm"
-              />
+              {jobType === "installation" && (
+                <>
+                  <input
+                    type="number"
+                    placeholder={t("jobs.deposit")}
+                    value={depositAmount || ""}
+                    onChange={(e) => setDepositAmount(Number(e.target.value))}
+                    className="rounded-lg border px-3 py-2 text-sm"
+                  />
+                  <input
+                    type="number"
+                    placeholder={t("jobs.pipe_est")}
+                    value={pipeMeters || ""}
+                    onChange={(e) => setPipeMeters(Number(e.target.value))}
+                    className="rounded-lg border px-3 py-2 text-sm"
+                  />
+                </>
+              )}
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as ACJobStatus)}
@@ -366,6 +416,24 @@ export default function JobsPage() {
 
         <div className="mb-4 flex flex-wrap gap-2">
           <button
+            onClick={() => setTypeFilter("all")}
+            className={`rounded-full px-3 py-1 text-xs ${typeFilter === "all" ? "bg-slate-800 text-white" : "bg-white border"}`}
+          >
+            {t("jobs.all_types")}
+          </button>
+          {AC_JOB_TYPES.map((tpe) => (
+            <button
+              key={tpe.value}
+              onClick={() => setTypeFilter(tpe.value)}
+              className={`rounded-full px-3 py-1 text-xs ${typeFilter === tpe.value ? "bg-slate-800 text-white" : "bg-white border"}`}
+            >
+              {locale === "si" ? tpe.labelSi : tpe.labelEn}
+            </button>
+          ))}
+        </div>
+
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button
             onClick={() => setFilter("all")}
             className={`rounded-full px-3 py-1 text-xs ${filter === "all" ? "bg-teal-700 text-white" : "bg-white border"}`}
           >
@@ -402,7 +470,15 @@ export default function JobsPage() {
                       </p>
                       <p className="font-semibold text-slate-900">
                         {job.customerName}
+                        <span className="ml-2 text-xs font-normal text-slate-500">
+                          {jobTypeLabel(job.jobType ?? "installation", locale)}
+                        </span>
                       </p>
+                      {job.assignedTechnician && (
+                        <p className="text-xs text-violet-700">
+                          {t("jobs.technician")}: {job.assignedTechnician}
+                        </p>
+                      )}
                       <p className="text-sm text-slate-500">{job.address}</p>
                       <p className="mt-1 text-sm text-slate-600">
                         {job.description}
