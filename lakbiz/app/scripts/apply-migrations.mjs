@@ -37,6 +37,40 @@ const files = readdirSync(migrationsDir)
   .filter((f) => f.endsWith(".sql"))
   .sort();
 
+async function ensureMigrationTable(client) {
+  await client.query(`
+    create table if not exists public.schema_migrations (
+      filename text primary key,
+      applied_at timestamptz not null default now()
+    );
+  `);
+}
+
+async function bootstrapPriorMigrations(client) {
+  const { rows } = await client.query(
+    "select count(*)::int as n from public.schema_migrations",
+  );
+  if (rows[0].n > 0) return;
+
+  const { rows: orgAppData } = await client.query(`
+    select 1
+    from information_schema.tables
+    where table_schema = 'public' and table_name = 'org_app_data'
+    limit 1
+  `);
+  if (orgAppData.length === 0) return;
+
+  for (const file of files) {
+    if (file === "20250620000001_platform_admin.sql") continue;
+    await client.query(
+      "insert into public.schema_migrations (filename) values ($1) on conflict do nothing",
+      [file],
+    );
+  }
+
+  console.log("Bootstrapped prior migrations (schema already present).");
+}
+
 const client = new pg.Client({
   connectionString: connectionString(),
   ssl: { rejectUnauthorized: false },
@@ -44,23 +78,63 @@ const client = new pg.Client({
 
 try {
   await client.connect();
-  console.log(`Connected to ${PROJECT_REF}. Applying ${files.length} migration(s)…`);
+  console.log(`Connected to ${PROJECT_REF}.`);
 
+  await ensureMigrationTable(client);
+  await bootstrapPriorMigrations(client);
+
+  const { rows: appliedRows } = await client.query(
+    "select filename from public.schema_migrations",
+  );
+  const applied = new Set(appliedRows.map((row) => row.filename));
+
+  let appliedCount = 0;
   for (const file of files) {
+    if (applied.has(file)) {
+      console.log(`skip ${file}`);
+      continue;
+    }
+
     const sql = readFileSync(join(migrationsDir, file), "utf8");
     console.log(`→ ${file}`);
-    await client.query(sql);
+    await client.query("begin");
+    try {
+      await client.query(sql);
+      await client.query(
+        "insert into public.schema_migrations (filename) values ($1)",
+        [file],
+      );
+      await client.query("commit");
+      appliedCount += 1;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    }
   }
 
-  const { rows } = await client.query(`
+  const { rows: tables } = await client.query(`
     select table_name
     from information_schema.tables
     where table_schema = 'public'
-      and table_name in ('plans','organizations','org_members','subscriptions','org_app_data')
+      and table_name in (
+        'plans', 'organizations', 'org_members', 'subscriptions',
+        'org_app_data', 'platform_admins', 'business_templates'
+      )
     order by table_name
   `);
 
-  console.log("LakBiz tables:", rows.map((r) => r.table_name).join(", ") || "(none)");
+  const { rows: templates } = await client.query(
+    "select count(*)::int as n from public.business_templates",
+  );
+
+  console.log(
+    "LakBiz tables:",
+    tables.map((row) => row.table_name).join(", ") || "(none)",
+  );
+  console.log(`Business templates: ${templates[0]?.n ?? 0}`);
+  console.log(
+    appliedCount === 0 ? "No new migrations." : `Applied ${appliedCount} migration(s).`,
+  );
   console.log("Done.");
 } finally {
   await client.end().catch(() => {});

@@ -20,6 +20,16 @@ export type EnsureOrgInput = {
   sector?: string;
 };
 
+export async function isPlatformAdminClient(
+  supabase: NonNullable<ReturnType<typeof createBrowserClient>>,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("platform_admins")
+    .select("user_id")
+    .maybeSingle();
+  return !!data;
+}
+
 async function findUserOrgId(
   supabase: NonNullable<ReturnType<typeof createBrowserClient>>,
   userId: string,
@@ -164,13 +174,15 @@ export async function signInWithEmail(email: string, password: string) {
     phone?: string;
     sector?: string;
   };
-  const emailPrefix = email.split("@")[0]?.trim();
-
-  await ensureUserOrg(supabase, data.user!.id, {
-    shopName: meta?.shop_name ?? emailPrefix,
-    phone: meta?.phone,
-    sector: meta?.sector,
-  });
+  const isPlatformAdmin = await isPlatformAdminClient(supabase);
+  if (!isPlatformAdmin) {
+    const emailPrefix = email.split("@")[0]?.trim();
+    await ensureUserOrg(supabase, data.user!.id, {
+      shopName: meta?.shop_name ?? emailPrefix,
+      phone: meta?.phone,
+      sector: meta?.sector,
+    });
+  }
 
   return data;
 }

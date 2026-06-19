@@ -66,6 +66,7 @@ export interface OrganizationState {
 export interface SubscriptionContextValue {
   org: OrganizationState;
   subscription: SubscriptionState;
+  isPlatformAdmin: boolean;
   can: (feature: FeatureKey) => boolean;
   daysLeftInTrial: number | null;
   isReadOnly: boolean;

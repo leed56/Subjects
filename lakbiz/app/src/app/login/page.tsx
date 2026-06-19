@@ -56,7 +56,8 @@ export default function LoginPage() {
         router.push("/dashboard");
       } else {
         await signIn(email, password);
-        router.push("/dashboard");
+        const adminRes = await fetch("/api/admin/me");
+        router.push(adminRes.ok ? "/admin" : "/dashboard");
       }
     } catch (err) {
       if (err instanceof AuthFlowError && err.code === "email_confirmation") {

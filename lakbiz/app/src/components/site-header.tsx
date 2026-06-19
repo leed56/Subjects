@@ -24,11 +24,10 @@ const navKeys = [
 
 export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
   const { locale, setLocale, t } = useLocale();
-  const { can, org } = useSubscription();
+  const { can, org, isPlatformAdmin } = useSubscription();
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
   const visibleNav = navKeys.filter((item) => {
     const feature = ROUTE_FEATURES[item.href];
@@ -42,16 +41,6 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
       document.body.style.overflow = "";
     };
   }, [open]);
-
-  useEffect(() => {
-    if (!user) {
-      setIsPlatformAdmin(false);
-      return;
-    }
-    void fetch("/api/admin/me")
-      .then((r) => setIsPlatformAdmin(r.ok))
-      .catch(() => setIsPlatformAdmin(false));
-  }, [user]);
 
   useEffect(() => {
     setOpen(false);

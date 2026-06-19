@@ -6,7 +6,10 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 export function TrialBanner() {
   const { t } = useLocale();
-  const { subscription, daysLeftInTrial, isReadOnly } = useSubscription();
+  const { subscription, daysLeftInTrial, isReadOnly, isPlatformAdmin } =
+    useSubscription();
+
+  if (isPlatformAdmin) return null;
 
   if (subscription.status === "active") return null;
 

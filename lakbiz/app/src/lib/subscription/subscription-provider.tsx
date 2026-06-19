@@ -9,7 +9,11 @@ import {
   useState,
 } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { ensureUserOrg, fetchUserOrg } from "@/lib/supabase/auth-actions";
+import {
+  ensureUserOrg,
+  fetchUserOrg,
+  isPlatformAdminClient,
+} from "@/lib/supabase/auth-actions";
 import { createBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { canAccess, daysUntil, isReadOnlyStatus } from "./can";
 import { defaultTrialSubscription } from "./plans";
@@ -90,13 +94,36 @@ export function SubscriptionProvider({
     sector: "grocery",
     isAuthenticated: false,
   });
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
   const loadFromCloud = useCallback(async () => {
     if (!isSupabaseConfigured() || !user) return false;
 
+    const supabase = createBrowserClient();
+    if (supabase && (await isPlatformAdminClient(supabase))) {
+      setIsPlatformAdmin(true);
+      setOrg({
+        id: null,
+        name: "LakBiz Platform",
+        sector: "grocery",
+        isAuthenticated: true,
+      });
+      setSubscription({
+        planId: "pro",
+        status: "active",
+        billingCycle: "monthly",
+        trialEndsAt: null,
+        currentPeriodEnd: null,
+        addons: [],
+        isDemo: false,
+      });
+      return true;
+    }
+
+    setIsPlatformAdmin(false);
+
     let data = await fetchUserOrg();
     if (!data?.org) {
-      const supabase = createBrowserClient();
       if (supabase) {
         const emailPrefix = user.email?.split("@")[0]?.trim();
         try {
@@ -144,12 +171,14 @@ export function SubscriptionProvider({
         setReady(true);
         return;
       }
+      setIsPlatformAdmin(false);
       setSubscription(loadDemoSubscription());
       setOrg(loadDemoOrg());
       setReady(true);
     };
 
     void init().catch(() => {
+      setIsPlatformAdmin(false);
       setSubscription(loadDemoSubscription());
       setOrg(loadDemoOrg());
       setReady(true);
@@ -190,6 +219,7 @@ export function SubscriptionProvider({
     () => ({
       org,
       subscription,
+      isPlatformAdmin,
       can,
       daysLeftInTrial,
       isReadOnly,
@@ -200,6 +230,7 @@ export function SubscriptionProvider({
     [
       org,
       subscription,
+      isPlatformAdmin,
       can,
       daysLeftInTrial,
       isReadOnly,
@@ -224,6 +255,7 @@ export function useSubscription(): SubscriptionContextValue {
     return {
       org: { id: null, name: "Demo Shop", sector: "grocery", isAuthenticated: false },
       subscription: sub,
+      isPlatformAdmin: false,
       can: (feature) => canAccess(sub, feature),
       daysLeftInTrial: daysUntil(trial.trialEndsAt),
       isReadOnly: false,
