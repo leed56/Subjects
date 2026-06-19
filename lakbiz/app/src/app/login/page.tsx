@@ -64,7 +64,11 @@ export default function LoginPage() {
         const supabase = createBrowserClient();
         const isAdmin =
           !!supabase && (await isPlatformAdminClient(supabase));
-        router.push(isAdmin ? "/admin" : "/dashboard");
+        if (isAdmin) {
+          window.location.href = "/admin";
+          return;
+        }
+        router.push("/dashboard");
       }
     } catch (err) {
       if (err instanceof AuthFlowError && err.code === "email_confirmation") {

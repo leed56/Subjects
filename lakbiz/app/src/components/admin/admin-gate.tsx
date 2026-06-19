@@ -4,6 +4,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { AdminNav } from "@/components/admin/admin-nav";
 
+async function fetchAdminMe(retry = 0): Promise<Response> {
+  const res = await fetch("/api/admin/me", { credentials: "same-origin" });
+  if (res.status === 401 && retry < 4) {
+    await new Promise((r) => setTimeout(r, 200 * (retry + 1)));
+    return fetchAdminMe(retry + 1);
+  }
+  return res;
+}
+
 export function AdminGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [state, setState] = useState<"loading" | "ok" | "denied">("loading");
@@ -12,7 +21,7 @@ export function AdminGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
-    void fetch("/api/admin/me")
+    void fetchAdminMe()
       .then(async (res) => {
         const json = (await res.json()) as {
           ok?: boolean;
