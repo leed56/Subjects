@@ -3,6 +3,16 @@ import type { AppData } from "@/lib/store/types";
 /** AC maintenance scheduling helpers */
 
 export const DEFAULT_SERVICE_INTERVAL_MONTHS = 6;
+export const DEFAULT_SERVICE_INTERVAL_DAYS = 180;
+
+/** Common AC service cycles in Sri Lanka */
+export const SERVICE_INTERVAL_DAY_PRESETS = [90, 180, 365] as const;
+
+export function addDaysToDate(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate.slice(0, 10)}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 export function addMonths(isoDate: string, months: number): string {
   const d = new Date(`${isoDate.slice(0, 10)}T12:00:00`);
@@ -10,11 +20,32 @@ export function addMonths(isoDate: string, months: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+export function computeServiceDueFromDays(
+  baseDate: string,
+  intervalDays = DEFAULT_SERVICE_INTERVAL_DAYS,
+): string {
+  return addDaysToDate(baseDate, intervalDays);
+}
+
+/** @deprecated prefer computeServiceDueFromDays */
 export function computeServiceDueDate(
   installedDate: string,
   intervalMonths = DEFAULT_SERVICE_INTERVAL_MONTHS,
 ): string {
   return addMonths(installedDate, intervalMonths);
+}
+
+export function resolveServiceIntervalDays(job: {
+  serviceIntervalDays?: number;
+  serviceIntervalMonths?: number;
+}): number {
+  if (job.serviceIntervalDays != null && job.serviceIntervalDays > 0) {
+    return job.serviceIntervalDays;
+  }
+  if (job.serviceIntervalMonths != null && job.serviceIntervalMonths > 0) {
+    return job.serviceIntervalMonths * 30;
+  }
+  return DEFAULT_SERVICE_INTERVAL_DAYS;
 }
 
 export function daysUntilDate(dateStr: string): number {
@@ -62,7 +93,8 @@ export function serviceDueUrgencyClass(urgency: ServiceDueUrgency): string {
   }
 }
 
-export const DEFAULT_SERVICE_DUE_REMIND_DAYS: number[] = [7, 3, 1, 0];
+/** Default: 14, 7, 2 days before + on service day */
+export const DEFAULT_SERVICE_DUE_REMIND_DAYS: number[] = [14, 7, 2, 0];
 
 export function serviceDueLabel(
   serviceDueDate: string | undefined,
@@ -82,6 +114,30 @@ export function serviceDueLabel(
     return locale === "si" ? "හෙට" : "Tomorrow";
   }
   return locale === "si" ? `${days} දිනයි` : `In ${days} days`;
+}
+
+/** Jobs eligible for "Service done" workflow */
+export function canMarkServiceDone(job: {
+  status: string;
+  jobType?: string;
+}): boolean {
+  if (
+    job.status === "cancelled" ||
+    job.status === "quote" ||
+    job.status === "deposit_received"
+  ) {
+    return false;
+  }
+  if (["service_due", "installed", "completed"].includes(job.status)) {
+    return true;
+  }
+  if (
+    (job.jobType === "service" || job.jobType === "repair") &&
+    job.status === "scheduled"
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /** Bump jobs to service_due when their due date has arrived */

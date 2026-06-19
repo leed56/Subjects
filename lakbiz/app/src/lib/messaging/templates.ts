@@ -111,6 +111,15 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     si: `*{{shopName}}* සේවා රැකියාව\nJob {{jobNo}}\n{{customerName}} · {{customerPhone}}\n{{address}}\nDue: {{serviceDueDate}}`,
   },
   {
+    id: "job_service_complete_next",
+    icon: "✅",
+    labelEn: "Service done + next due",
+    labelSi: "සේවාව සම්පූර්ණ + ඊළඟ දිනය",
+    category: "jobs",
+    en: `Hi {{customerName}}, your AC service at {{address}} is complete today.\n\n*{{shopName}}* · Job {{jobNo}}\nNext service due: *{{serviceDueDate}}* (in {{intervalDays}} days).\n\n{{shopPhone}}`,
+    si: `ආයුබෝවන් {{customerName}}, {{address}} හි AC සේවාව අද සම්පූර්ණයි.\n\n*{{shopName}}* · Job {{jobNo}}\nඊළඟ සේවාව: *{{serviceDueDate}}* (දින {{intervalDays}}).\n\n{{shopPhone}}`,
+  },
+  {
     id: "job_completed",
     icon: "✨",
     labelEn: "Job completed",

@@ -16,7 +16,7 @@ type AcServiceDuePanelProps = {
   upcomingJobs: ACJob[];
   business: BusinessInfo;
   overdueCount: number;
-  onServiceDone?: (jobId: string) => void;
+  onServiceDone?: (job: ACJob) => void;
 };
 
 function JobRow({
@@ -27,7 +27,7 @@ function JobRow({
 }: {
   job: ACJob;
   business: BusinessInfo;
-  onServiceDone?: (jobId: string) => void;
+  onServiceDone?: (job: ACJob) => void;
   highlight?: "today" | "default";
 }) {
   const { t, locale } = useLocale();
@@ -75,7 +75,7 @@ function JobRow({
         {onServiceDone && (
           <button
             type="button"
-            onClick={() => onServiceDone(job.id)}
+            onClick={() => onServiceDone(job)}
             className="rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-800 hover:bg-teal-100"
           >
             {t("jobs.service_done")}

@@ -31,6 +31,8 @@ export interface ACJob {
   serviceDueManual?: boolean;
   lastServiceDate?: string;
   serviceIntervalMonths?: number;
+  /** Days until next service after each visit (90, 180, 365…) */
+  serviceIntervalDays?: number;
   /** Annual maintenance contract */
   amcContract?: boolean;
   notes?: string;
@@ -60,10 +62,17 @@ export interface ACJobInput {
   serviceDueManual?: boolean;
   lastServiceDate?: string;
   serviceIntervalMonths?: number;
+  /** Days until next service after each visit (90, 180, 365…) */
+  serviceIntervalDays?: number;
   /** Annual maintenance contract */
   amcContract?: boolean;
   notes?: string;
 }
+
+export type RecordACServiceInput = {
+  intervalDays?: number;
+  visitNotes?: string;
+};
 
 export type VehicleStatus =
   | "incoming"

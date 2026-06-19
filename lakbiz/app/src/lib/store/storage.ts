@@ -83,6 +83,11 @@ export function parseAppData(parsed: Partial<AppData>): AppData {
       ...job,
       jobType: job.jobType ?? "installation",
       serviceDueManual: job.serviceDueManual ?? false,
+      serviceIntervalDays:
+        job.serviceIntervalDays ??
+        (job.serviceIntervalMonths != null
+          ? job.serviceIntervalMonths * 30
+          : undefined),
     })),
   };
 }

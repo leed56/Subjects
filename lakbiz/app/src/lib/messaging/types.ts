@@ -17,6 +17,7 @@ export type MessageTemplateId =
   | "job_service_due_today"
   | "job_service_due_owner"
   | "job_service_due_technician"
+  | "job_service_complete_next"
   | "job_completed"
   | "custom";
 
@@ -79,6 +80,10 @@ export type NotificationSettings = {
   /** Notify owner when service is due (cron) */
   notifyOwnerOnServiceDue: boolean;
   notifyTechnicianOnServiceDue: boolean;
+  /** Default days until next service when marking service done */
+  defaultServiceIntervalDays: number;
+  /** SMS customer immediately after service done with next due date */
+  autoSendOnServiceComplete: boolean;
 };
 
 export type NotificationLogEntry = {

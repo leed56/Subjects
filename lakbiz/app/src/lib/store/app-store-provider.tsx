@@ -60,6 +60,7 @@ import type {
   PurchaseInput,
   SaleOptions,
   SupplierInput,
+  RecordACServiceInput,
   VehicleInput,
   VehicleSaleInput,
 } from "./types";
@@ -110,7 +111,7 @@ export type AppStoreValue = {
   addACJob: (input: ACJobInput) => void;
   updateACJob: (id: string, input: Partial<ACJobInput>) => void;
   deleteACJob: (id: string) => void;
-  recordACService: (jobId: string) => void;
+  recordACService: (jobId: string, input?: RecordACServiceInput) => void;
   addVehicle: (input: VehicleInput) => boolean;
   updateVehicle: (id: string, input: Partial<VehicleInput>) => void;
   sellVehicle: (input: VehicleSaleInput) => boolean;
@@ -363,9 +364,9 @@ function useAppStoreState(): AppStoreValue {
         if (!data || isReadOnly) return;
         persist(deleteACJob(data, id));
       },
-      recordACService: (jobId) => {
+      recordACService: (jobId, input) => {
         if (!data || isReadOnly) return;
-        persist(recordACService(data, jobId));
+        persist(recordACService(data, jobId, input));
       },
       addVehicle: (input) => {
         if (!data || isReadOnly) return false;

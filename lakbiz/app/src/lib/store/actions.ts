@@ -3,10 +3,11 @@ import { generateBillNo, generateGrnNo, type BusinessInfo } from "@/lib/invoice"
 import { calcInputVat, isVatEnabled, splitInclusiveTotal } from "@/lib/vat";
 import { generateJobNo } from "@/lib/ac-jobs";
 import {
-  computeServiceDueDate,
-  DEFAULT_SERVICE_INTERVAL_MONTHS,
+  computeServiceDueFromDays,
+  DEFAULT_SERVICE_INTERVAL_DAYS,
   isServiceDueWithinDays,
   isServiceOverdue,
+  resolveServiceIntervalDays,
 } from "@/lib/ac-service";
 import { defaultStatusForJobType, type ACJobType } from "@/lib/ac-job-types";
 import {
@@ -19,6 +20,7 @@ import type { PaymentMethod, Product } from "@/lib/types";
 import type {
   AppData,
   ACJobInput,
+  RecordACServiceInput,
   BankAccountInput,
   ChequeInput,
   ChequeStatus,
@@ -402,8 +404,11 @@ export function addACJob(data: AppData, input: ACJobInput): AppData {
     : undefined;
 
   const jobType: ACJobType = input.jobType ?? "installation";
-  const interval =
-    input.serviceIntervalMonths ?? DEFAULT_SERVICE_INTERVAL_MONTHS;
+  const intervalDays =
+    input.serviceIntervalDays ??
+    (input.serviceIntervalMonths != null
+      ? input.serviceIntervalMonths * 30
+      : DEFAULT_SERVICE_INTERVAL_DAYS);
   const status = input.status ?? defaultStatusForJobType(jobType);
   const installedDate = input.installedDate;
   const serviceDueManual = input.serviceDueManual ?? false;
@@ -411,14 +416,14 @@ export function addACJob(data: AppData, input: ACJobInput): AppData {
 
   if (!serviceDueManual) {
     if (!serviceDueDate && status === "installed" && installedDate) {
-      serviceDueDate = computeServiceDueDate(installedDate, interval);
+      serviceDueDate = computeServiceDueFromDays(installedDate, intervalDays);
     } else if (
       !serviceDueDate &&
       (jobType === "service" || jobType === "repair")
     ) {
       const base =
         input.scheduledDate ?? new Date().toISOString().slice(0, 10);
-      serviceDueDate = computeServiceDueDate(base, interval);
+      serviceDueDate = computeServiceDueFromDays(base, intervalDays);
     }
   }
 
@@ -446,7 +451,8 @@ export function addACJob(data: AppData, input: ACJobInput): AppData {
     serviceDueDate,
     serviceDueManual,
     lastServiceDate: input.lastServiceDate,
-    serviceIntervalMonths: interval,
+    serviceIntervalDays: intervalDays,
+    serviceIntervalMonths: Math.max(1, Math.round(intervalDays / 30)),
     amcContract: input.amcContract ?? false,
     notes: input.notes?.trim() || undefined,
   };
@@ -472,10 +478,12 @@ export function updateACJob(
         (nextStatus === "installed" && !j.installedDate
           ? new Date().toISOString().slice(0, 10)
           : j.installedDate);
-      const interval =
-        input.serviceIntervalMonths ??
-        j.serviceIntervalMonths ??
-        DEFAULT_SERVICE_INTERVAL_MONTHS;
+      const intervalDays =
+        input.serviceIntervalDays ??
+        j.serviceIntervalDays ??
+        (input.serviceIntervalMonths != null
+          ? input.serviceIntervalMonths * 30
+          : resolveServiceIntervalDays(j));
 
       const serviceDueManual =
         input.serviceDueManual ?? j.serviceDueManual ?? false;
@@ -489,9 +497,10 @@ export function updateACJob(
             input.installedDate ||
             input.status === "installed")
         ) {
-          serviceDueDate = computeServiceDueDate(installedDate, interval);
+          serviceDueDate = computeServiceDueFromDays(installedDate, intervalDays);
         } else if (
-          input.serviceIntervalMonths != null &&
+          (input.serviceIntervalDays != null ||
+            input.serviceIntervalMonths != null) &&
           input.serviceDueDate === undefined &&
           input.serviceDueManual === undefined
         ) {
@@ -500,7 +509,7 @@ export function updateACJob(
             base &&
             ["installed", "completed", "service_due"].includes(nextStatus)
           ) {
-            serviceDueDate = computeServiceDueDate(base, interval);
+            serviceDueDate = computeServiceDueFromDays(base, intervalDays);
           }
         }
       } else if (input.serviceDueDate !== undefined) {
@@ -542,7 +551,8 @@ export function updateACJob(
         serviceDueDate,
         serviceDueManual,
         lastServiceDate: input.lastServiceDate ?? j.lastServiceDate,
-        serviceIntervalMonths: interval,
+        serviceIntervalDays: intervalDays,
+        serviceIntervalMonths: Math.max(1, Math.round(intervalDays / 30)),
         amcContract: input.amcContract ?? j.amcContract ?? false,
         notes: input.notes?.trim() ?? j.notes,
       };
@@ -554,19 +564,32 @@ export function deleteACJob(data: AppData, id: string): AppData {
   return { ...data, acJobs: data.acJobs.filter((j) => j.id !== id) };
 }
 
-/** Mark service visit complete and schedule next due date */
-export function recordACService(data: AppData, jobId: string): AppData {
+/** Mark service visit complete and schedule next due date (days-based) */
+export function recordACService(
+  data: AppData,
+  jobId: string,
+  input: RecordACServiceInput = {},
+): AppData {
   const job = data.acJobs.find((j) => j.id === jobId);
   if (!job) return data;
 
   const today = new Date().toISOString().slice(0, 10);
-  const interval = job.serviceIntervalMonths ?? DEFAULT_SERVICE_INTERVAL_MONTHS;
+  const intervalDays =
+    input.intervalDays ?? resolveServiceIntervalDays(job);
+  const nextDue = computeServiceDueFromDays(today, intervalDays);
+  const visitNote = input.visitNotes?.trim();
+  const notes = visitNote
+    ? [job.notes, `${today}: ${visitNote}`].filter(Boolean).join("\n")
+    : job.notes;
 
   return updateACJob(data, jobId, {
     lastServiceDate: today,
-    serviceDueDate: computeServiceDueDate(today, interval),
+    serviceDueDate: nextDue,
     serviceDueManual: false,
+    serviceIntervalDays: intervalDays,
+    serviceIntervalMonths: Math.max(1, Math.round(intervalDays / 30)),
     status: "completed",
+    notes,
   });
 }
 

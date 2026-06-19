@@ -26,6 +26,7 @@ export default function NotificationsSettingsPage() {
   const [settings, setSettings] = useState<NotificationSettings>(
     defaultNotificationSettings(),
   );
+  const [customRemindDay, setCustomRemindDay] = useState("");
   const [log, setLog] = useState<NotificationLogEntry[]>([]);
   const [saved, setSaved] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
@@ -230,7 +231,7 @@ export default function NotificationsSettingsPage() {
                 {t("msg.remind_schedule")}
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {[7, 3, 1, 0].map((day) => {
+                {[14, 7, 2, 0].map((day) => {
                   const active = settings.serviceDueRemindDays.includes(day);
                   return (
                     <button
@@ -263,7 +264,82 @@ export default function NotificationsSettingsPage() {
                   );
                 })}
               </div>
+              <div className="mt-3 flex flex-wrap items-end gap-2">
+                <label className="block text-sm">
+                  {t("msg.remind_custom_days")}
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={customRemindDay}
+                    onChange={(e) => setCustomRemindDay(e.target.value)}
+                    placeholder="2"
+                    className="mt-1 w-24 rounded-lg border px-3 py-2"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const day = Number(customRemindDay);
+                    if (day < 1 || day > 365) return;
+                    if (settings.serviceDueRemindDays.includes(day)) return;
+                    persist({
+                      ...settings,
+                      serviceDueRemindDays: [
+                        ...settings.serviceDueRemindDays,
+                        day,
+                      ].sort((a, b) => b - a),
+                    });
+                    setCustomRemindDay("");
+                  }}
+                  className="rounded-lg border px-3 py-2 text-sm hover:bg-slate-50"
+                >
+                  {t("msg.remind_add_day")}
+                </button>
+              </div>
+              {settings.serviceDueRemindDays.length > 0 && (
+                <p className="mt-2 text-xs text-slate-500">
+                  {t("msg.remind_active")}:{" "}
+                  {settings.serviceDueRemindDays.join(", ")}
+                </p>
+              )}
             </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 pt-2">
+              <label className="block text-sm">
+                {t("msg.default_service_interval")}
+                <select
+                  value={settings.defaultServiceIntervalDays}
+                  onChange={(e) =>
+                    persist({
+                      ...settings,
+                      defaultServiceIntervalDays: Number(e.target.value),
+                    })
+                  }
+                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                >
+                  <option value={90}>90 {t("jobs.days")}</option>
+                  <option value={180}>180 {t("jobs.days")}</option>
+                  <option value={365}>365 {t("jobs.days")}</option>
+                </select>
+              </label>
+            </div>
+
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.autoSendOnServiceComplete}
+                onChange={(e) =>
+                  persist({
+                    ...settings,
+                    autoSendOnServiceComplete: e.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded border-slate-300"
+                disabled={!apiEnabled}
+              />
+              {t("msg.auto_send_on_service_complete")}
+            </label>
 
             <div className="grid gap-4 sm:grid-cols-2 pt-2">
               <label className="block text-sm">

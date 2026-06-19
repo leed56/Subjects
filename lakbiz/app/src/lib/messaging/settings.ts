@@ -25,6 +25,8 @@ export const defaultNotificationSettings = (): NotificationSettings => ({
   notifyCustomerOnServiceDue: true,
   notifyOwnerOnServiceDue: true,
   notifyTechnicianOnServiceDue: true,
+  defaultServiceIntervalDays: 180,
+  autoSendOnServiceComplete: true,
 });
 
 export function parseNotificationSettings(raw: unknown): NotificationSettings {
@@ -79,6 +81,14 @@ export function parseNotificationSettings(raw: unknown): NotificationSettings {
       typeof row.notifyTechnicianOnServiceDue === "boolean"
         ? row.notifyTechnicianOnServiceDue
         : defaults.notifyTechnicianOnServiceDue,
+    defaultServiceIntervalDays:
+      typeof row.defaultServiceIntervalDays === "number"
+        ? row.defaultServiceIntervalDays
+        : defaults.defaultServiceIntervalDays,
+    autoSendOnServiceComplete:
+      typeof row.autoSendOnServiceComplete === "boolean"
+        ? row.autoSendOnServiceComplete
+        : defaults.autoSendOnServiceComplete,
   };
 }
 
@@ -88,7 +98,7 @@ function parseRemindDays(
 ): number[] {
   if (Array.isArray(row.serviceDueRemindDays)) {
     const days = row.serviceDueRemindDays.filter(
-      (d): d is number => typeof d === "number" && d >= 0 && d <= 90,
+      (d): d is number => typeof d === "number" && d >= 0 && d <= 365,
     );
     if (days.length > 0) {
       return [...new Set(days)].sort((a, b) => b - a);

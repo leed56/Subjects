@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { AcServiceDoneDialog } from "@/components/ac-service-done-dialog";
 import { AcServiceDuePanel } from "@/components/ac-service-due-panel";
 import { DashboardStat } from "@/components/dashboard-stat";
 import { SiteHeader } from "@/components/site-header";
@@ -8,6 +10,7 @@ import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { getDashboardStats } from "@/lib/store/actions";
 import { useAppStore } from "@/lib/store/use-app-store";
+import type { ACJob } from "@/lib/store/types";
 import { getVatQuarterSummary } from "@/lib/vat";
 
 import { useSubscription } from "@/lib/subscription/subscription-provider";
@@ -17,6 +20,7 @@ export default function DashboardPage() {
   const { t } = useLocale();
   const { can } = useSubscription();
   const showVehicles = can("vehicles");
+  const [serviceDoneJob, setServiceDoneJob] = useState<ACJob | null>(null);
 
   if (!ready || !data) {
     return (
@@ -207,7 +211,17 @@ export default function DashboardPage() {
           )}
           business={data.business}
           overdueCount={stats.acServiceOverdueCount}
-          onServiceDone={recordACService}
+          onServiceDone={setServiceDoneJob}
+        />
+
+        <AcServiceDoneDialog
+          job={serviceDoneJob}
+          business={data.business}
+          open={!!serviceDoneJob}
+          onClose={() => setServiceDoneJob(null)}
+          onConfirm={(input) => {
+            if (serviceDoneJob) recordACService(serviceDoneJob.id, input);
+          }}
         />
 
         <div className="mt-10 grid gap-6 lg:grid-cols-3">

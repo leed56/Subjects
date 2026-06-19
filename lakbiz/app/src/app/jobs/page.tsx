@@ -19,10 +19,14 @@ import {
   defaultTemplateForJob,
   loadNotificationSettings,
 } from "@/lib/messaging";
-import { serviceDueLabel } from "@/lib/ac-service";
+import { AcServiceDoneDialog } from "@/components/ac-service-done-dialog";
 import {
-  computeServiceDueDate,
-  DEFAULT_SERVICE_INTERVAL_MONTHS,
+  canMarkServiceDone,
+  computeServiceDueFromDays,
+  DEFAULT_SERVICE_INTERVAL_DAYS,
+  resolveServiceIntervalDays,
+  SERVICE_INTERVAL_DAY_PRESETS,
+  serviceDueLabel,
   serviceDueUrgency,
   serviceDueUrgencyClass,
 } from "@/lib/ac-service";
@@ -54,6 +58,7 @@ export default function JobsPage() {
   const [assignedTechnician, setAssignedTechnician] = useState("");
   const [message, setMessage] = useState("");
   const [promptJob, setPromptJob] = useState<ACJob | null>(null);
+  const [serviceDoneJob, setServiceDoneJob] = useState<ACJob | null>(null);
 
   const [customerId, setCustomerId] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -69,7 +74,7 @@ export default function JobsPage() {
   const [pipeMeters, setPipeMeters] = useState(4);
   const [status, setStatus] = useState<ACJobStatus>("quote");
   const [scheduledDate, setScheduledDate] = useState("");
-  const [serviceIntervalMonths, setServiceIntervalMonths] = useState(6);
+  const [serviceIntervalDays, setServiceIntervalDays] = useState(180);
   const [serviceDueManual, setServiceDueManual] = useState(false);
   const [serviceDueDate, setServiceDueDate] = useState("");
   const [amcContract, setAmcContract] = useState(false);
@@ -99,7 +104,7 @@ export default function JobsPage() {
     setPipeMeters(4);
     setStatus("quote");
     setScheduledDate("");
-    setServiceIntervalMonths(6);
+    setServiceIntervalDays(180);
     setServiceDueManual(false);
     setServiceDueDate("");
     setAmcContract(false);
@@ -125,7 +130,7 @@ export default function JobsPage() {
     setPipeMeters(job.pipeMeters ?? 4);
     setStatus(job.status);
     setScheduledDate(job.scheduledDate ?? "");
-    setServiceIntervalMonths(job.serviceIntervalMonths ?? 6);
+    setServiceIntervalDays(resolveServiceIntervalDays(job));
     setServiceDueManual(job.serviceDueManual ?? false);
     setServiceDueDate(job.serviceDueDate ?? "");
     setAmcContract(job.amcContract ?? false);
@@ -136,19 +141,19 @@ export default function JobsPage() {
   };
 
   const autoServiceDuePreview = (): string | undefined => {
-    const interval = serviceIntervalMonths || DEFAULT_SERVICE_INTERVAL_MONTHS;
+    const interval = serviceIntervalDays || DEFAULT_SERVICE_INTERVAL_DAYS;
     const today = new Date().toISOString().slice(0, 10);
     if (jobType === "installation") {
       const base =
         editing?.installedDate ??
         (status === "installed" ? today : scheduledDate || today);
       if (status === "installed" || scheduledDate) {
-        return computeServiceDueDate(base, interval);
+        return computeServiceDueFromDays(base, interval);
       }
       return undefined;
     }
     const base = scheduledDate || today;
-    return computeServiceDueDate(base, interval);
+    return computeServiceDueFromDays(base, interval);
   };
 
   const buildInput = () => {
@@ -161,7 +166,7 @@ export default function JobsPage() {
     assignedTechnician: assignedTechnician || undefined,
     serviceDueManual,
     serviceDueDate: resolvedDue,
-    serviceIntervalMonths,
+    serviceIntervalDays,
     customerId: customerId || undefined,
     customerName: customerName || "Customer",
     phone,
@@ -406,15 +411,37 @@ export default function JobsPage() {
                 className="rounded-lg border px-3 py-2 text-sm"
                 placeholder="Install date"
               />
-              <input
-                type="number"
-                min={1}
-                max={24}
-                placeholder={t("jobs.service_interval")}
-                value={serviceIntervalMonths}
-                onChange={(e) => setServiceIntervalMonths(Number(e.target.value))}
-                className="rounded-lg border px-3 py-2 text-sm"
-              />
+              <div className="sm:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {t("jobs.service_interval_days")}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {SERVICE_INTERVAL_DAY_PRESETS.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setServiceIntervalDays(d)}
+                      className={`rounded-full px-3 py-1 text-xs ${
+                        serviceIntervalDays === d
+                          ? "bg-teal-700 text-white"
+                          : "border bg-white"
+                      }`}
+                    >
+                      {d} {t("jobs.days")}
+                    </button>
+                  ))}
+                  <input
+                    type="number"
+                    min={14}
+                    max={730}
+                    value={serviceIntervalDays}
+                    onChange={(e) =>
+                      setServiceIntervalDays(Number(e.target.value) || 180)
+                    }
+                    className="w-24 rounded-lg border px-2 py-1 text-sm"
+                  />
+                </div>
+              </div>
               <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   {t("jobs.service_due_section")}
@@ -607,12 +634,10 @@ export default function JobsPage() {
                         contextId={job.id}
                       />
                     )}
-                    {(job.status === "service_due" ||
-                      job.status === "installed") &&
-                      job.serviceDueDate && (
+                    {canMarkServiceDone(job) && (
                         <button
                           type="button"
-                          onClick={() => recordACService(job.id)}
+                          onClick={() => setServiceDoneJob(job)}
                           className="rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-800"
                         >
                           {t("jobs.service_done")}
@@ -695,6 +720,20 @@ export default function JobsPage() {
           contextId={promptJob.id}
         />
       )}
+
+      <AcServiceDoneDialog
+        job={serviceDoneJob}
+        business={data.business}
+        open={!!serviceDoneJob}
+        onClose={() => setServiceDoneJob(null)}
+        onConfirm={(input) => {
+          if (serviceDoneJob) {
+            recordACService(serviceDoneJob.id, input);
+            setMessage(t("jobs.service_done_saved"));
+            setTimeout(() => setMessage(""), 2500);
+          }
+        }}
+      />
     </div>
   );
 }
