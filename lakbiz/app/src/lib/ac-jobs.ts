@@ -53,3 +53,23 @@ export function jobStatusLabel(
   if (!row) return status;
   return locale === "si" ? row.labelSi : row.labelEn;
 }
+
+export function jobStatusClass(status: ACJobStatus): string {
+  switch (status) {
+    case "quote":
+    case "deposit_received":
+      return "bg-slate-100 text-slate-700";
+    case "scheduled":
+      return "bg-blue-50 text-blue-800";
+    case "installed":
+      return "bg-teal-50 text-teal-800";
+    case "service_due":
+      return "bg-amber-50 text-amber-900 ring-1 ring-amber-200";
+    case "completed":
+      return "bg-emerald-50 text-emerald-800";
+    case "cancelled":
+      return "bg-red-50 text-red-700";
+    default:
+      return "bg-slate-100 text-slate-700";
+  }
+}

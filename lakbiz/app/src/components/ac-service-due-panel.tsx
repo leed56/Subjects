@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { AcJobReminderTimeline } from "@/components/ac-job-reminder-timeline";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import {
   serviceDueLabel,
   serviceDueUrgency,
   serviceDueUrgencyClass,
 } from "@/lib/ac-service";
-import type { BusinessInfo } from "@/lib/invoice";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import type { BusinessInfo } from "@/lib/invoice";
+import type { NotificationLogEntry } from "@/lib/messaging/types";
 import type { ACJob } from "@/lib/store/types";
 
 type AcServiceDuePanelProps = {
@@ -16,17 +18,20 @@ type AcServiceDuePanelProps = {
   upcomingJobs: ACJob[];
   business: BusinessInfo;
   overdueCount: number;
+  logs: NotificationLogEntry[];
   onServiceDone?: (job: ACJob) => void;
 };
 
 function JobRow({
   job,
   business,
+  logs,
   onServiceDone,
   highlight,
 }: {
   job: ACJob;
   business: BusinessInfo;
+  logs: NotificationLogEntry[];
   onServiceDone?: (job: ACJob) => void;
   highlight?: "today" | "default";
 }) {
@@ -37,50 +42,53 @@ function JobRow({
 
   return (
     <li
-      className={`flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm ${
+      className={`rounded-lg px-3 py-2 text-sm ${
         highlight === "today"
           ? "border border-amber-300 bg-amber-50"
           : "bg-white/80"
       }`}
     >
-      <div className="min-w-0 flex-1">
-        <p className="font-medium text-slate-900">{job.customerName}</p>
-        <p className="truncate text-xs text-slate-500">
-          {job.jobNo} · {job.address}
-          {job.assignedTechnician && ` · ${job.assignedTechnician}`}
-        </p>
-        {job.serviceDueDate && (
-          <p
-            className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${serviceDueUrgencyClass(urgency)}`}
-          >
-            {job.serviceDueDate} — {serviceDueLabel(job.serviceDueDate, locale)}
-            {job.amcContract && (
-              <span className="ml-2 rounded bg-violet-100 px-1.5 text-violet-700">
-                AMC
-              </span>
-            )}
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-slate-900">{job.customerName}</p>
+          <p className="truncate text-xs text-slate-500">
+            {job.jobNo} · {job.address}
+            {job.assignedTechnician && ` · ${job.assignedTechnician}`}
           </p>
-        )}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        {job.phone && (
-          <MessageSendButton
-            phone={job.phone}
-            recipientName={job.customerName}
-            context={{ type: "ac_job", job, business }}
-            defaultTemplate={template}
-            contextId={job.id}
-          />
-        )}
-        {onServiceDone && (
-          <button
-            type="button"
-            onClick={() => onServiceDone(job)}
-            className="rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-800 hover:bg-teal-100"
-          >
-            {t("jobs.service_done")}
-          </button>
-        )}
+          {job.serviceDueDate && (
+            <p
+              className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${serviceDueUrgencyClass(urgency)}`}
+            >
+              {job.serviceDueDate} — {serviceDueLabel(job.serviceDueDate, locale)}
+              {job.amcContract && (
+                <span className="ml-2 rounded bg-violet-100 px-1.5 text-violet-700">
+                  AMC
+                </span>
+              )}
+            </p>
+          )}
+          <AcJobReminderTimeline job={job} logs={logs} compact />
+        </div>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-col sm:items-end">
+          {job.phone && (
+            <MessageSendButton
+              phone={job.phone}
+              recipientName={job.customerName}
+              context={{ type: "ac_job", job, business }}
+              defaultTemplate={template}
+              contextId={job.id}
+            />
+          )}
+          {onServiceDone && (
+            <button
+              type="button"
+              onClick={() => onServiceDone(job)}
+              className="rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-800 hover:bg-teal-100"
+            >
+              {t("jobs.service_done")}
+            </button>
+          )}
+        </div>
       </div>
     </li>
   );
@@ -91,6 +99,7 @@ export function AcServiceDuePanel({
   upcomingJobs,
   business,
   overdueCount,
+  logs,
   onServiceDone,
 }: AcServiceDuePanelProps) {
   const { t } = useLocale();
@@ -123,6 +132,7 @@ export function AcServiceDuePanel({
                 key={job.id}
                 job={job}
                 business={business}
+                logs={logs}
                 onServiceDone={onServiceDone}
                 highlight="today"
               />
@@ -157,6 +167,7 @@ export function AcServiceDuePanel({
                 key={job.id}
                 job={job}
                 business={business}
+                logs={logs}
                 onServiceDone={onServiceDone}
               />
             ))}

@@ -13,12 +13,14 @@ import { useAppStore } from "@/lib/store/use-app-store";
 import type { ACJob } from "@/lib/store/types";
 import { getVatQuarterSummary } from "@/lib/vat";
 
+import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 export default function DashboardPage() {
   const { data, ready, resetAll, recordACService } = useAppStore();
   const { t } = useLocale();
-  const { can } = useSubscription();
+  const { can, org } = useSubscription();
+  const notificationLogs = useNotificationLogs(org.id);
   const showVehicles = can("vehicles");
   const [serviceDoneJob, setServiceDoneJob] = useState<ACJob | null>(null);
 
@@ -211,6 +213,7 @@ export default function DashboardPage() {
           )}
           business={data.business}
           overdueCount={stats.acServiceOverdueCount}
+          logs={notificationLogs}
           onServiceDone={setServiceDoneJob}
         />
 

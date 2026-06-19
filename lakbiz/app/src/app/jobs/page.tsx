@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { AcJobReminderTimeline } from "@/components/ac-job-reminder-timeline";
+import { AcRemindersBanner } from "@/components/ac-reminders-banner";
+import { AcServiceDoneDialog } from "@/components/ac-service-done-dialog";
 import { SiteHeader } from "@/components/site-header";
 import { MessageComposer } from "@/components/messaging/message-composer";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
@@ -9,6 +12,7 @@ import {
   AC_BTU_OPTIONS,
   AC_JOB_STATUSES,
   jobStatusLabel,
+  jobStatusClass,
 } from "@/lib/ac-jobs";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -19,7 +23,6 @@ import {
   defaultTemplateForJob,
   loadNotificationSettings,
 } from "@/lib/messaging";
-import { AcServiceDoneDialog } from "@/components/ac-service-done-dialog";
 import {
   canMarkServiceDone,
   computeServiceDueFromDays,
@@ -30,6 +33,8 @@ import {
   serviceDueUrgency,
   serviceDueUrgencyClass,
 } from "@/lib/ac-service";
+import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 import {
   AC_JOB_TYPES,
   defaultStatusForJobType,
@@ -50,6 +55,9 @@ export default function JobsPage() {
   const { data, ready, addACJob, updateACJob, deleteACJob, recordACService } =
     useAppStore();
   const { t, locale } = useLocale();
+  const { org } = useSubscription();
+  const notificationLogs = useNotificationLogs(org.id);
+  const notifySettings = loadNotificationSettings();
   const [showForm, setShowForm] = useState(true);
   const [editing, setEditing] = useState<ACJob | null>(null);
   const [filter, setFilter] = useState<ACJobStatus | "all">("all");
@@ -236,6 +244,8 @@ export default function JobsPage() {
             {message}
           </div>
         )}
+
+        <AcRemindersBanner />
 
         {showForm && (
           <form
@@ -594,7 +604,9 @@ export default function JobsPage() {
                         {job.pipeMeters != null && ` · ${job.pipeMeters}m pipe`}
                       </p>
                     </div>
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium">
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs font-medium ${jobStatusClass(job.status)}`}
+                    >
                       {jobStatusLabel(job.status, locale)}
                       {job.amcContract && " · AMC"}
                     </span>
@@ -624,6 +636,11 @@ export default function JobsPage() {
                       </span>
                     )}
                   </div>
+                  <AcJobReminderTimeline
+                    job={job}
+                    logs={notificationLogs}
+                    settings={notifySettings}
+                  />
                   <div className="mt-3 flex flex-wrap gap-2">
                     {job.phone && (
                       <MessageSendButton
