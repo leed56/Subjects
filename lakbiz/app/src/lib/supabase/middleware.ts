@@ -32,7 +32,11 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  await supabase.auth.getUser();
+  try {
+    await supabase.auth.getUser();
+  } catch {
+    // Ignore transient network failures — page can still render in demo mode.
+  }
 
   return supabaseResponse;
 }

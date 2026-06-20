@@ -465,44 +465,31 @@ export default function NotificationsSettingsPage() {
         <section className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="font-semibold text-slate-900">{t("msg.api_title")}</h2>
           <p className="mt-2 text-sm text-slate-600">{t("msg.api_desc")}</p>
-          <ul className="mt-3 list-inside list-disc text-sm text-slate-600">
-            <li>
-              <code className="rounded bg-slate-100 px-1">TEXTLK_API_TOKEN</code>
-            </li>
-            <li>
-              <code className="rounded bg-slate-100 px-1">TEXTLK_SENDER_ID</code>
-            </li>
-            <li>
-              <code className="rounded bg-slate-100 px-1">
-                NEXT_PUBLIC_SMS_API_ENABLED=true
-              </code>{" "}
-              (optional legacy)
-            </li>
-            <li>
-              <code className="rounded bg-slate-100 px-1">CRON_SECRET</code> (
-              Vercel Cron)
-            </li>
-            <li>
-              <code className="rounded bg-slate-100 px-1">
-                SUPABASE_SERVICE_ROLE_KEY
-              </code>
-            </li>
-          </ul>
-          <p className="mt-3 text-xs text-slate-500">
+          <p
+            className={`mt-3 text-sm ${
+              smsApiConfigured === null
+                ? "text-slate-500"
+                : apiEnabled
+                  ? "text-emerald-700"
+                  : "text-amber-700"
+            }`}
+          >
             {smsApiConfigured === null
               ? t("msg.api_checking")
               : apiEnabled
                 ? t("msg.api_active")
                 : t("msg.api_inactive")}
           </p>
-          <a
-            href="https://app.text.lk/senderid"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-block text-sm font-medium text-teal-700 hover:underline"
-          >
-            Text.lk Sender ID →
-          </a>
+          {apiEnabled && (
+            <a
+              href="https://app.text.lk/senderid"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-block text-sm font-medium text-teal-700 hover:underline"
+            >
+              Text.lk Sender ID →
+            </a>
+          )}
         </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

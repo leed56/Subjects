@@ -44,11 +44,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
-    const {
-      data: { user: u },
-    } = await supabase.auth.getUser();
-    setUser(u);
-    setLoading(false);
+    try {
+      const {
+        data: { user: u },
+      } = await supabase.auth.getUser();
+      setUser(u);
+    } catch {
+      // Network/CORS blocks to Supabase should not break local demo mode.
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

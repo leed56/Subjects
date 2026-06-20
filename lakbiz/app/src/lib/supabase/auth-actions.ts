@@ -23,11 +23,15 @@ export type EnsureOrgInput = {
 export async function isPlatformAdminClient(
   supabase: NonNullable<ReturnType<typeof createBrowserClient>>,
 ): Promise<boolean> {
-  const { data } = await supabase
-    .from("platform_admins")
-    .select("user_id")
-    .maybeSingle();
-  return !!data;
+  try {
+    const { data } = await supabase
+      .from("platform_admins")
+      .select("user_id")
+      .maybeSingle();
+    return !!data;
+  } catch {
+    return false;
+  }
 }
 
 async function findUserOrgId(
@@ -197,46 +201,50 @@ export async function fetchUserOrg() {
   const supabase = createBrowserClient();
   if (!supabase) return null;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
 
-  const { data: member } = await supabase
-    .from("org_members")
-    .select("organization_id, role, organizations(id, name, name_si, phone, sector)")
-    .eq("user_id", user.id)
-    .maybeSingle();
+    const { data: member } = await supabase
+      .from("org_members")
+      .select("organization_id, role, organizations(id, name, name_si, phone, sector)")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-  if (!member) return { user, org: null, subscription: null };
+    if (!member) return { user, org: null, subscription: null };
 
-  const { data: subscription } = await supabase
-    .from("subscriptions")
-    .select("plan_id, status, billing_cycle, trial_ends_at, current_period_end")
-    .eq("organization_id", member.organization_id)
-    .maybeSingle();
+    const { data: subscription } = await supabase
+      .from("subscriptions")
+      .select("plan_id, status, billing_cycle, trial_ends_at, current_period_end")
+      .eq("organization_id", member.organization_id)
+      .maybeSingle();
 
-  const orgRaw = member.organizations;
-  const orgRow = Array.isArray(orgRaw) ? orgRaw[0] : orgRaw;
+    const orgRaw = member.organizations;
+    const orgRow = Array.isArray(orgRaw) ? orgRaw[0] : orgRaw;
 
-  return {
-    user,
-    org: orgRow
-      ? {
-          id: orgRow.id as string,
-          name: orgRow.name as string,
-          phone: (orgRow.phone as string | null) ?? undefined,
-          sector: parseSectorId(orgRow.sector as string | null),
-        }
-      : null,
-    subscription: subscription
-      ? {
-          planId: subscription.plan_id,
-          status: subscription.status,
-          billingCycle: subscription.billing_cycle,
-          trialEndsAt: subscription.trial_ends_at,
-          currentPeriodEnd: subscription.current_period_end,
-        }
-      : null,
-  };
+    return {
+      user,
+      org: orgRow
+        ? {
+            id: orgRow.id as string,
+            name: orgRow.name as string,
+            phone: (orgRow.phone as string | null) ?? undefined,
+            sector: parseSectorId(orgRow.sector as string | null),
+          }
+        : null,
+      subscription: subscription
+        ? {
+            planId: subscription.plan_id,
+            status: subscription.status,
+            billingCycle: subscription.billing_cycle,
+            trialEndsAt: subscription.trial_ends_at,
+            currentPeriodEnd: subscription.current_period_end,
+          }
+        : null,
+    };
+  } catch {
+    return null;
+  }
 }
