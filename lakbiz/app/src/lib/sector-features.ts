@@ -1,7 +1,11 @@
 import type { SectorId } from "@/lib/types";
 import type { PlanFeatures } from "@/lib/subscription/types";
 
-/** Module flags per sector — matches business_templates seed in Supabase. */
+/**
+ * Client mirror of the authoritative `public.sector_modules` table in Supabase
+ * (migration 20250620000013). The DB is the source of truth and is RLS-enforced;
+ * these values MUST stay identical so the UI and the database agree exactly.
+ */
 const SECTOR_FEATURES: Record<SectorId, PlanFeatures> = {
   grocery: {
     sales: true,
