@@ -196,18 +196,6 @@ export default function LoginPage() {
           <SignedInBanner redirectAfterSignOut="/login" />
         )}
 
-        {configured && (
-          <p
-            className={`mt-2 rounded-lg px-3 py-2 text-xs ${
-              adminLogin
-                ? "border border-teal-800 bg-teal-950/50 text-teal-200"
-                : "bg-green-50 text-green-800"
-            }`}
-          >
-            {t("sub.db_connected")}
-          </p>
-        )}
-
         {message && (
           <div className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
             {message}

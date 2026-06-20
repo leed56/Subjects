@@ -166,7 +166,7 @@ export async function signInWithEmail(email: string, password: string) {
   if (error) {
     if (error.message.toLowerCase().includes("email not confirmed")) {
       throw new AuthFlowError(
-        "Email not confirmed yet. Use Resend email below, or check spam for mail from noreply@mail.app.supabase.io",
+        "Email not confirmed yet. Use Resend email below, or check your spam and Promotions folders for the confirmation email.",
         "email_confirmation",
       );
     }
