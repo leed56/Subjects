@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { TrialBanner } from "@/components/trial-banner";
 import { useAuth } from "@/components/auth-provider";
@@ -27,7 +27,13 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
   const { can, org, isPlatformAdmin } = useSubscription();
   const { user, logout } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+
+  const handleLogout = async () => {
+    await logout();
+    router.push("/login");
+  };
 
   const visibleNav = navKeys.filter((item) => {
     const feature = ROUTE_FEATURES[item.href];
@@ -109,7 +115,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
               </Link>
             )}
             <Link
-              href="/login"
+              href={user ? "/settings/shop" : "/login"}
               className="rounded-lg px-2 py-1 text-sm font-medium text-slate-600 hover:text-teal-700"
             >
               {user ? user.email?.split("@")[0] : t("nav.login")}
@@ -117,7 +123,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
             {user && (
               <button
                 type="button"
-                onClick={() => logout()}
+                onClick={handleLogout}
                 className="rounded-lg px-2 py-1 text-xs text-slate-500 hover:text-red-600"
               >
                 {t("sub.sign_out")}
@@ -240,7 +246,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
               {t("nav.billing")}
             </Link>
             <Link
-              href="/login"
+              href={user ? "/settings/shop" : "/login"}
               onClick={() => setOpen(false)}
               className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
@@ -251,7 +257,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
                 type="button"
                 onClick={() => {
                   setOpen(false);
-                  logout();
+                  void handleLogout();
                 }}
                 className="w-full rounded-xl px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50"
               >
