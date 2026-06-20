@@ -161,4 +161,4 @@ begin
   end loop;
 end $$;
 
--- is_org_member kept for org_app_data / notification_log policies (see 20250620000008)
+-- is_org_member kept for notification_log policies (see 20250620000008)

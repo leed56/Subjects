@@ -19,6 +19,19 @@ const PROJECT_REF = "zestppstpwjxriwcuykc";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, "..", "..", "supabase", "migrations");
 
+/** Renamed migrations — treat legacy filename as already applied. */
+const LEGACY_ALIASES = {
+  "20250617000003_ac_service_lifecycle.sql":
+    "20250617000002_ac_service_lifecycle.sql",
+  "20250617000004_repair_org_policies.sql":
+    "20250617000002_repair_and_org_app_data.sql",
+};
+
+/** Removed migrations — no longer in repo but may exist in schema_migrations. */
+const REMOVED_MIGRATIONS = new Set([
+  "20250617000001_org_app_data.sql",
+]);
+
 function connectionString() {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
   const password = process.env.SUPABASE_DB_PASSWORD;
@@ -36,6 +49,13 @@ function connectionString() {
 const files = readdirSync(migrationsDir)
   .filter((f) => f.endsWith(".sql"))
   .sort();
+
+function isMigrationApplied(filename, applied) {
+  if (applied.has(filename)) return true;
+  const legacy = LEGACY_ALIASES[filename];
+  if (legacy && applied.has(legacy)) return true;
+  return false;
+}
 
 async function ensureMigrationTable(client) {
   await client.query(`
@@ -55,7 +75,7 @@ async function bootstrapPriorMigrations(client) {
   const { rows: orgAppData } = await client.query(`
     select 1
     from information_schema.tables
-    where table_schema = 'public' and table_name = 'org_app_data'
+    where table_schema = 'public' and table_name = 'organizations'
     limit 1
   `);
   if (orgAppData.length === 0) return;
@@ -68,7 +88,23 @@ async function bootstrapPriorMigrations(client) {
     );
   }
 
+  for (const removed of REMOVED_MIGRATIONS) {
+    await client.query(
+      "insert into public.schema_migrations (filename) values ($1) on conflict do nothing",
+      [removed],
+    );
+  }
+
   console.log("Bootstrapped prior migrations (schema already present).");
+}
+
+async function recordLegacyAliases(client, filename) {
+  const legacy = LEGACY_ALIASES[filename];
+  if (!legacy) return;
+  await client.query(
+    "insert into public.schema_migrations (filename) values ($1) on conflict do nothing",
+    [legacy],
+  );
 }
 
 const client = new pg.Client({
@@ -90,7 +126,7 @@ try {
 
   let appliedCount = 0;
   for (const file of files) {
-    if (applied.has(file)) {
+    if (isMigrationApplied(file, applied)) {
       console.log(`skip ${file}`);
       continue;
     }
@@ -104,6 +140,7 @@ try {
         "insert into public.schema_migrations (filename) values ($1)",
         [file],
       );
+      await recordLegacyAliases(client, file);
       await client.query("commit");
       appliedCount += 1;
     } catch (error) {
@@ -118,7 +155,7 @@ try {
     where table_schema = 'public'
       and table_name in (
         'plans', 'organizations', 'org_members', 'subscriptions',
-        'org_app_data', 'platform_admins', 'business_templates'
+        'platform_admins', 'business_templates'
       )
     order by table_name
   `);
