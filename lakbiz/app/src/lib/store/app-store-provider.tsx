@@ -126,10 +126,8 @@ const CLOUD_SYNC_DEBOUNCE_MS = 1500;
 function useAppStoreState(): AppStoreValue {
   const { user } = useAuth();
   const { org, isReadOnly, subscription, can } = useSubscription();
-  const [data, setData] = useState<AppData | null>(() =>
-    typeof window !== "undefined" ? loadAppData(null) : null,
-  );
-  const [ready, setReady] = useState(() => typeof window !== "undefined");
+  const [data, setData] = useState<AppData | null>(null);
+  const [ready, setReady] = useState(false);
   const [cloudSyncing, setCloudSyncing] = useState(false);
   const [cloudSyncError, setCloudSyncError] = useState<string | null>(null);
   const cloudLoadedRef = useRef(false);

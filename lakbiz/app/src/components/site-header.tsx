@@ -52,6 +52,8 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
     setOpen(false);
   }, [pathname]);
 
+  const logoHref = isPlatformAdmin ? "/admin" : "/dashboard";
+
   return (
     <>
       <header
@@ -63,7 +65,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
       >
         <TrialBanner />
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:py-4">
-          <Link href={isPlatformAdmin ? "/admin" : "/"} className="flex min-w-0 items-center gap-2">
+          <Link href={logoHref} className="flex min-w-0 items-center gap-2">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-teal-700 text-xs font-bold text-white">
               L
             </span>
