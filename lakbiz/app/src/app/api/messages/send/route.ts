@@ -3,6 +3,8 @@ import { sendTextLkSms, isTextLkConfigured } from "@/lib/messaging/textlk-server
 import { normalizeSlPhone } from "@/lib/messaging/phone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
+const MAX_SMS_LENGTH = 640;
+
 export async function POST(request: Request) {
   if (!isTextLkConfigured()) {
     return NextResponse.json(
@@ -22,6 +24,20 @@ export async function POST(request: Request) {
 
   if (!user) {
     return NextResponse.json({ ok: false, error: "Sign in required" }, { status: 401 });
+  }
+
+  const { data: member } = await supabase
+    .from("org_members")
+    .select("organization_id, role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!member?.organization_id) {
+    return NextResponse.json({ ok: false, error: "No shop found" }, { status: 404 });
+  }
+
+  if (member.role !== "owner" && member.role !== "manager") {
+    return NextResponse.json({ ok: false, error: "Owner or manager only" }, { status: 403 });
   }
 
   let body: {
@@ -49,6 +65,13 @@ export async function POST(request: Request) {
     );
   }
 
+  if (message.length > MAX_SMS_LENGTH) {
+    return NextResponse.json(
+      { ok: false, error: `Message too long (max ${MAX_SMS_LENGTH} characters)` },
+      { status: 400 },
+    );
+  }
+
   const sms = await sendTextLkSms(phone, message);
   if (!sms.ok) {
     return NextResponse.json(
@@ -57,26 +80,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: member } = await supabase
-    .from("org_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (member?.organization_id) {
-    await supabase.from("notification_log").insert({
-      organization_id: member.organization_id,
-      channel: "api_sms",
-      template_id: body.templateId ?? null,
-      recipient_phone: phone,
-      recipient_name: body.recipientName ?? null,
-      message_body: message,
-      context_type: body.contextType ?? null,
-      context_id: body.contextId ?? null,
-      status: "sent",
-      provider_ref: sms.providerRef ?? null,
-    });
-  }
+  await supabase.from("notification_log").insert({
+    organization_id: member.organization_id,
+    channel: "api_sms",
+    template_id: body.templateId ?? null,
+    recipient_phone: phone,
+    recipient_name: body.recipientName ?? null,
+    message_body: message,
+    context_type: body.contextType ?? null,
+    context_id: body.contextId ?? null,
+    status: "sent",
+    provider_ref: sms.providerRef ?? null,
+  });
 
   return NextResponse.json({
     ok: true,

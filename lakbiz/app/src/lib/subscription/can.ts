@@ -59,27 +59,27 @@ export function canAccess(
     return feature === "bills"; // view-only billing/export path later
   }
 
-  const readOnly = status === "past_due" || status === "read_only";
+  const readOnly = isReadOnlyStatus(status);
   if (readOnly && feature === "write") {
     return false;
-  }
-  if (readOnly && feature !== "bills" && feature !== "export") {
-    // read-only: can view dashboards/lists but not write
-    if (feature === "write") return false;
   }
 
   const plan = getPlan(planId);
   const features = effectiveFeatures(plan.features, addons);
 
   if (feature === "write") {
-    return status === "trialing" || status === "active" || !readOnly;
+    return status === "trialing" || status === "active";
   }
 
   return features[feature as keyof PlanFeatures] ?? false;
 }
 
 export function isReadOnlyStatus(status: SubscriptionState["status"]): boolean {
-  return status === "past_due" || status === "read_only";
+  return (
+    status === "past_due" ||
+    status === "read_only" ||
+    status === "canceled"
+  );
 }
 
 export function daysUntil(isoDate: string | null): number | null {

@@ -161,5 +161,4 @@ begin
   end loop;
 end $$;
 
--- Remove SECURITY DEFINER helper exposed via PostgREST
-drop function if exists public.is_org_member(uuid);
+-- is_org_member kept for org_app_data / notification_log policies (see 20250620000008)

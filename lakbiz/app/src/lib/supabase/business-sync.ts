@@ -369,35 +369,7 @@ export async function pullBusinessData(
   return data;
 }
 
-async function deleteOrgRows(
-  table:
-    | "products"
-    | "customers"
-    | "suppliers"
-    | "sales"
-    | "purchases"
-    | "customer_payments"
-    | "supplier_payments"
-    | "stock_logs"
-    | "bank_accounts"
-    | "cheques"
-    | "ac_jobs"
-    | "vehicles"
-    | "sale_lines"
-    | "purchase_lines",
-  organizationId: string,
-): Promise<string | null> {
-  const supabase = createBrowserClient();
-  if (!supabase) return "Supabase not configured";
-
-  const { error } = await supabase
-    .from(table)
-    .delete()
-    .eq("organization_id", organizationId);
-  return error?.message ?? null;
-}
-
-async function insertOrgRows(
+async function upsertOrgRows(
   table:
     | "products"
     | "customers"
@@ -419,8 +391,77 @@ async function insertOrgRows(
   const supabase = createBrowserClient();
   if (!supabase) return "Supabase not configured";
 
-  const { error } = await supabase.from(table).insert(rows);
+  const { error } = await supabase.from(table).upsert(rows, { onConflict: "id" });
   return error?.message ?? null;
+}
+
+async function deleteOrgRowsNotIn(
+  table:
+    | "products"
+    | "customers"
+    | "suppliers"
+    | "sales"
+    | "purchases"
+    | "customer_payments"
+    | "supplier_payments"
+    | "stock_logs"
+    | "bank_accounts"
+    | "cheques"
+    | "ac_jobs"
+    | "vehicles",
+  organizationId: string,
+  keepIds: string[],
+): Promise<string | null> {
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  let query = supabase.from(table).delete().eq("organization_id", organizationId);
+  if (keepIds.length > 0) {
+    query = query.not("id", "in", `(${keepIds.join(",")})`);
+  }
+
+  const { error } = await query;
+  return error?.message ?? null;
+}
+
+async function replaceSaleLines(
+  organizationId: string,
+  saleId: string,
+  rows: Record<string, unknown>[],
+): Promise<string | null> {
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const { error: delErr } = await supabase
+    .from("sale_lines")
+    .delete()
+    .eq("organization_id", organizationId)
+    .eq("sale_id", saleId);
+  if (delErr) return delErr.message;
+
+  if (rows.length === 0) return null;
+  const { error: insErr } = await supabase.from("sale_lines").insert(rows);
+  return insErr?.message ?? null;
+}
+
+async function replacePurchaseLines(
+  organizationId: string,
+  purchaseId: string,
+  rows: Record<string, unknown>[],
+): Promise<string | null> {
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const { error: delErr } = await supabase
+    .from("purchase_lines")
+    .delete()
+    .eq("organization_id", organizationId)
+    .eq("purchase_id", purchaseId);
+  if (delErr) return delErr.message;
+
+  if (rows.length === 0) return null;
+  const { error: insErr } = await supabase.from("purchase_lines").insert(rows);
+  return insErr?.message ?? null;
 }
 
 export async function pushBusinessData(
@@ -641,44 +682,7 @@ export async function pushBusinessData(
     notes: v.notes ?? null,
   }));
 
-  const deleteSteps: Array<
-    | "sale_lines"
-    | "purchase_lines"
-    | "sales"
-    | "purchases"
-    | "customer_payments"
-    | "supplier_payments"
-    | "stock_logs"
-    | "cheques"
-    | "ac_jobs"
-    | "vehicles"
-    | "products"
-    | "customers"
-    | "suppliers"
-    | "bank_accounts"
-  > = [
-    "sale_lines",
-    "purchase_lines",
-    "sales",
-    "purchases",
-    "customer_payments",
-    "supplier_payments",
-    "stock_logs",
-    "cheques",
-    "ac_jobs",
-    "vehicles",
-    "products",
-    "customers",
-    "suppliers",
-    "bank_accounts",
-  ];
-
-  for (const table of deleteSteps) {
-    const err = await deleteOrgRows(table, organizationId);
-    if (err) return err;
-  }
-
-  const insertSteps: Array<{
+  const upsertSteps: Array<{
     table:
       | "products"
       | "customers"
@@ -686,8 +690,6 @@ export async function pushBusinessData(
       | "bank_accounts"
       | "sales"
       | "purchases"
-      | "sale_lines"
-      | "purchase_lines"
       | "customer_payments"
       | "supplier_payments"
       | "stock_logs"
@@ -702,8 +704,6 @@ export async function pushBusinessData(
     { table: "bank_accounts", rows: bankRows },
     { table: "sales", rows: saleRows },
     { table: "purchases", rows: purchaseRows },
-    { table: "sale_lines", rows: saleLineRows },
-    { table: "purchase_lines", rows: purchaseLineRows },
     { table: "customer_payments", rows: customerPaymentRows },
     { table: "supplier_payments", rows: supplierPaymentRows },
     { table: "stock_logs", rows: stockLogRows },
@@ -712,8 +712,55 @@ export async function pushBusinessData(
     { table: "vehicles", rows: vehicleRows },
   ];
 
-  for (const step of insertSteps) {
-    const err = await insertOrgRows(step.table, step.rows);
+  for (const step of upsertSteps) {
+    const err = await upsertOrgRows(step.table, step.rows);
+    if (err) return err;
+  }
+
+  for (const sale of data.sales) {
+    const lines = saleLineRows.filter((row) => row.sale_id === sale.id);
+    const err = await replaceSaleLines(organizationId, sale.id, lines);
+    if (err) return err;
+  }
+
+  for (const purchase of data.purchases) {
+    const lines = purchaseLineRows.filter((row) => row.purchase_id === purchase.id);
+    const err = await replacePurchaseLines(organizationId, purchase.id, lines);
+    if (err) return err;
+  }
+
+  const pruneSteps: Array<{
+    table:
+      | "sales"
+      | "purchases"
+      | "customer_payments"
+      | "supplier_payments"
+      | "stock_logs"
+      | "cheques"
+      | "ac_jobs"
+      | "vehicles"
+      | "products"
+      | "customers"
+      | "suppliers"
+      | "bank_accounts";
+    ids: string[];
+  }> = [
+    { table: "sales", ids: data.sales.map((s) => s.id) },
+    { table: "purchases", ids: data.purchases.map((p) => p.id) },
+    { table: "customer_payments", ids: data.customerPayments.map((p) => p.id) },
+    { table: "supplier_payments", ids: data.supplierPayments.map((p) => p.id) },
+    { table: "stock_logs", ids: data.stockLogs.map((l) => l.id) },
+    { table: "cheques", ids: data.cheques.map((c) => c.id) },
+    { table: "ac_jobs", ids: data.acJobs.map((j) => j.id) },
+    { table: "vehicles", ids: data.vehicles.map((v) => v.id) },
+    { table: "products", ids: data.products.map((p) => p.id) },
+    { table: "customers", ids: data.customers.map((c) => c.id) },
+    { table: "suppliers", ids: data.suppliers.map((s) => s.id) },
+    { table: "bank_accounts", ids: data.bankAccounts.map((b) => b.id) },
+  ];
+
+  for (const step of pruneSteps) {
+    const err = await deleteOrgRowsNotIn(step.table, organizationId, step.ids);
     if (err) return err;
   }
 

@@ -180,12 +180,15 @@ export async function signInWithEmail(email: string, password: string) {
   };
   const isPlatformAdmin = await isPlatformAdminClient(supabase);
   if (!isPlatformAdmin) {
-    const emailPrefix = email.split("@")[0]?.trim();
-    await ensureUserOrg(supabase, data.user!.id, {
-      shopName: meta?.shop_name ?? emailPrefix,
-      phone: meta?.phone,
-      sector: meta?.sector,
-    });
+    const existingOrgId = await findUserOrgId(supabase, data.user!.id);
+    if (!existingOrgId) {
+      const emailPrefix = email.split("@")[0]?.trim();
+      await ensureUserOrg(supabase, data.user!.id, {
+        shopName: meta?.shop_name ?? emailPrefix,
+        phone: meta?.phone,
+        sector: meta?.sector,
+      });
+    }
   }
 
   return data;

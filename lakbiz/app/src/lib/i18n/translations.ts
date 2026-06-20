@@ -463,6 +463,9 @@ const si: Dict = {
 
   // Subscription
   "sub.title": "ගෙවීම් සහ සැලසුම්",
+  "sub.upgrade_required": "මෙම විශේෂාංගය ඔබේ සැලසුමේ නැත",
+  "sub.upgrade_required_hint":
+    "මෙම පිටුවට ප්‍රවේශ වීමට ඔබේ LakBiz සැලසුම උසස් කරන්න, හෝ LakBiz සහාය සම්බන්ධ කරන්න.",
   "sub.subtitle": "ඔබේ ව්‍යාපාරයට ගැලපෙන සැලසුම තෝරන්න",
   "sub.trial_banner": "නොමිලේ අත්හදා බැලීම — දින ඉතිරිය:",
   "sub.read_only": "ගෙවීම් අවශ්‍යයි — දැන් බැලීම පමණි",
@@ -1054,6 +1057,9 @@ const en: Dict = {
   "home.footer": "© LakBiz — built for Sri Lankan small businesses",
 
   "sub.title": "Billing & plans",
+  "sub.upgrade_required": "This feature is not on your plan",
+  "sub.upgrade_required_hint":
+    "Upgrade your LakBiz plan to access this page, or contact LakBiz support.",
   "sub.subtitle": "Choose the plan that fits your business",
   "sub.trial_banner": "Free trial — days left:",
   "sub.read_only": "Payment required — view only mode",

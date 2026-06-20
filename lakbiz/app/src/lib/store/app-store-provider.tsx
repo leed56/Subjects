@@ -125,7 +125,7 @@ const CLOUD_SYNC_DEBOUNCE_MS = 1500;
 
 function useAppStoreState(): AppStoreValue {
   const { user } = useAuth();
-  const { org, isReadOnly, subscription } = useSubscription();
+  const { org, isReadOnly, subscription, can } = useSubscription();
   const [data, setData] = useState<AppData | null>(() =>
     typeof window !== "undefined" ? loadAppData(null) : null,
   );
@@ -213,13 +213,13 @@ function useAppStoreState(): AppStoreValue {
 
   const persist = useCallback(
     (next: AppData) => {
-      if (isReadOnly) return;
+      if (isReadOnly || !can("write")) return;
       setData(next);
       latestDataRef.current = next;
       saveAppData(next, org.id);
       scheduleCloudPush(next);
     },
-    [isReadOnly, org.id, scheduleCloudPush],
+    [isReadOnly, can, org.id, scheduleCloudPush],
   );
 
   const canAddProduct = useCallback(
@@ -342,7 +342,7 @@ function useAppStoreState(): AppStoreValue {
         return next.sales[0].id;
       },
       updateBusiness: (business) => {
-        if (isReadOnly) return;
+        if (isReadOnly || !can("write")) return;
         setData((current) => {
           const base = current ?? loadAppData(org.id);
           const next = mergeBusiness(base, business);
@@ -406,6 +406,7 @@ function useAppStoreState(): AppStoreValue {
     cloudSyncing,
     cloudSyncError,
     isReadOnly,
+    can,
     canAddProduct,
     persist,
     scheduleCloudPush,
