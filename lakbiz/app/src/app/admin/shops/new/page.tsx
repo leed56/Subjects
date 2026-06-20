@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { BusinessTemplate } from "@/lib/admin/templates";
 import { BUSINESS_TEMPLATES } from "@/lib/admin/templates";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import type { PlanId } from "@/lib/subscription/types";
 
 const PLANS: PlanId[] = ["starter", "business", "pro"];
 
 export default function AdminCreateShopPage() {
   const router = useRouter();
+  const { t } = useLocale();
   const [templates, setTemplates] = useState<BusinessTemplate[]>(BUSINESS_TEMPLATES);
   const [templateId, setTemplateId] = useState("grocery");
   const [shopName, setShopName] = useState("");
@@ -39,8 +41,8 @@ export default function AdminCreateShopPage() {
   }, []);
 
   useEffect(() => {
-    const t = templates.find((x) => x.id === templateId);
-    if (t) setPlanId(t.defaultPlanId);
+    const template = templates.find((x) => x.id === templateId);
+    if (template) setPlanId(template.defaultPlanId);
   }, [templateId, templates]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,7 +78,7 @@ export default function AdminCreateShopPage() {
     setLoading(false);
 
     if (!res.ok || !json.ok || !json.shop) {
-      setError(json.error ?? "Could not create shop");
+      setError(json.error ?? t("admin.create_error"));
       return;
     }
 
@@ -92,26 +94,23 @@ export default function AdminCreateShopPage() {
     return (
       <main className="mx-auto max-w-lg px-4 py-10">
         <div className="rounded-2xl border border-teal-800 bg-teal-950/40 p-6">
-          <h2 className="text-xl font-bold text-white">Shop created</h2>
-          <p className="mt-2 text-sm text-teal-100">
-            Give these login details to the customer. Each shop has its own isolated
-            data.
-          </p>
+          <h2 className="text-xl font-bold text-white">{t("admin.shop_created")}</h2>
+          <p className="mt-2 text-sm text-teal-100">{t("admin.shop_created_sub")}</p>
           <dl className="mt-6 space-y-3 text-sm">
             <div>
-              <dt className="text-slate-400">Login URL</dt>
+              <dt className="text-slate-400">{t("admin.login_url")}</dt>
               <dd className="font-mono text-white">{window.location.origin}/login</dd>
             </div>
             <div>
-              <dt className="text-slate-400">Email</dt>
+              <dt className="text-slate-400">{t("admin.email")}</dt>
               <dd className="font-mono text-white">{created.email}</dd>
             </div>
             <div>
-              <dt className="text-slate-400">Password</dt>
+              <dt className="text-slate-400">{t("admin.password")}</dt>
               <dd className="font-mono text-white">{created.password}</dd>
             </div>
             <div>
-              <dt className="text-slate-400">Business type</dt>
+              <dt className="text-slate-400">{t("admin.business_type")}</dt>
               <dd className="capitalize text-white">{created.sector.replace("_", " ")}</dd>
             </div>
           </dl>
@@ -121,7 +120,7 @@ export default function AdminCreateShopPage() {
               onClick={() => router.push("/admin/shops")}
               className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white"
             >
-              Back to shops
+              {t("admin.back_to_shops")}
             </button>
             <button
               type="button"
@@ -134,7 +133,7 @@ export default function AdminCreateShopPage() {
               }}
               className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200"
             >
-              Create another
+              {t("admin.create_another")}
             </button>
           </div>
         </div>
@@ -145,33 +144,31 @@ export default function AdminCreateShopPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
       <Link href="/admin/shops" className="text-sm text-teal-400 hover:underline">
-        ← All shops
+        {t("admin.back_shops")}
       </Link>
-      <h2 className="mt-4 text-2xl font-bold text-white">Create shop</h2>
-      <p className="mt-2 text-slate-400">
-        Select a business template, set login details, and provision an isolated tenant.
-      </p>
+      <h2 className="mt-4 text-2xl font-bold text-white">{t("admin.create_shop_title")}</h2>
+      <p className="mt-2 text-slate-400">{t("admin.create_shop_sub")}</p>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-6">
         <fieldset>
           <legend className="mb-3 text-sm font-medium text-slate-200">
-            Business template *
+            {t("admin.business_template")}
           </legend>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {templates.map((t) => (
+            {templates.map((template) => (
               <button
-                key={t.id}
+                key={template.id}
                 type="button"
-                onClick={() => setTemplateId(t.id)}
+                onClick={() => setTemplateId(template.id)}
                 className={`rounded-xl border p-3 text-left transition ${
-                  templateId === t.id
+                  templateId === template.id
                     ? "border-teal-500 bg-teal-950 ring-2 ring-teal-500"
                     : "border-slate-700 bg-slate-900 hover:border-slate-600"
                 }`}
               >
-                <span className="text-xl">{t.icon}</span>
+                <span className="text-xl">{template.icon}</span>
                 <span className="mt-1 block text-xs font-semibold text-white">
-                  {t.nameEn}
+                  {template.nameEn}
                 </span>
               </button>
             ))}
@@ -179,7 +176,7 @@ export default function AdminCreateShopPage() {
         </fieldset>
 
         <label className="block text-sm text-slate-200">
-          Shop name *
+          {t("admin.shop_name")}
           <input
             required
             value={shopName}
@@ -189,7 +186,7 @@ export default function AdminCreateShopPage() {
         </label>
 
         <label className="block text-sm text-slate-200">
-          Owner email (login) *
+          {t("admin.owner_email")}
           <input
             type="email"
             required
@@ -200,7 +197,7 @@ export default function AdminCreateShopPage() {
         </label>
 
         <label className="block text-sm text-slate-200">
-          Password *
+          {t("admin.password")}
           <input
             type="text"
             required
@@ -212,7 +209,7 @@ export default function AdminCreateShopPage() {
         </label>
 
         <label className="block text-sm text-slate-200">
-          Phone
+          {t("admin.phone")}
           <input
             type="tel"
             value={phone}
@@ -223,7 +220,7 @@ export default function AdminCreateShopPage() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block text-sm text-slate-200">
-            Plan
+            {t("admin.plan")}
             <select
               value={planId}
               onChange={(e) => setPlanId(e.target.value as PlanId)}
@@ -237,7 +234,7 @@ export default function AdminCreateShopPage() {
             </select>
           </label>
           <label className="block text-sm text-slate-200">
-            Trial days
+            {t("admin.trial_days")}
             <input
               type="number"
               min={0}
@@ -260,7 +257,7 @@ export default function AdminCreateShopPage() {
           disabled={loading}
           className="w-full rounded-xl bg-teal-600 py-3 text-sm font-semibold text-white hover:bg-teal-500 disabled:opacity-50"
         >
-          {loading ? "Creating…" : "Create shop & login"}
+          {loading ? t("admin.creating") : t("admin.create_submit")}
         </button>
       </form>
     </main>

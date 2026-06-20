@@ -11,6 +11,13 @@ function isCronAuthorized(request: Request): boolean {
 
 /** Vercel Cron — daily batch SMS for AC service-due jobs */
 export async function GET(request: Request) {
+  if (!process.env.CRON_SECRET) {
+    return NextResponse.json(
+      { ok: false, error: "CRON_SECRET environment variable is not configured" },
+      { status: 503 },
+    );
+  }
+
   if (!isCronAuthorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }

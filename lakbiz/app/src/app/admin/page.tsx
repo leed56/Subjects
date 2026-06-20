@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 type ShopRow = {
   id: string;
@@ -12,6 +13,7 @@ type ShopRow = {
 };
 
 export default function AdminDashboardPage() {
+  const { t } = useLocale();
   const [shops, setShops] = useState<ShopRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,26 +22,24 @@ export default function AdminDashboardPage() {
       .then((r) => r.json())
       .then((json: { ok?: boolean; shops?: ShopRow[]; error?: string }) => {
         if (json.ok && json.shops) setShops(json.shops);
-        else setError(json.error ?? "Could not load shops");
+        else setError(json.error ?? t("admin.load_shops_error"));
       });
-  }, []);
+  }, [t]);
 
   const active = shops.filter((s) => s.status === "active" || s.status === "trialing").length;
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
-      <h2 className="text-2xl font-bold text-white">Platform dashboard</h2>
-      <p className="mt-2 text-slate-400">
-        Create shops, assign business templates, and hand login details to customers.
-      </p>
+      <h2 className="text-2xl font-bold text-white">{t("admin.platform_dashboard")}</h2>
+      <p className="mt-2 text-slate-400">{t("admin.platform_subtitle")}</p>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Total shops" value={String(shops.length)} />
-        <StatCard label="Active / trial" value={String(active)} />
+        <StatCard label={t("admin.total_shops")} value={String(shops.length)} />
+        <StatCard label={t("admin.active_trial")} value={String(active)} />
         <StatCard
-          label="Templates"
+          label={t("admin.templates")}
           value="6"
-          hint="Grocery, AC, cars, etc."
+          hint={t("admin.templates_hint")}
         />
       </div>
 
@@ -54,13 +54,13 @@ export default function AdminDashboardPage() {
           href="/admin/shops/new"
           className="rounded-xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white hover:bg-teal-500"
         >
-          + Create new shop
+          {t("admin.create_new_shop")}
         </Link>
         <Link
           href="/admin/shops"
           className="rounded-xl border border-slate-700 px-5 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-900"
         >
-          View all shops
+          {t("admin.view_all_shops")}
         </Link>
       </div>
     </main>

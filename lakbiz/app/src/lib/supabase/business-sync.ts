@@ -7,6 +7,7 @@ import { emptyAppData } from "@/lib/store/storage";
 import type { AppData } from "@/lib/store/types";
 import { businessFromOrg, fetchOrgShopSettings } from "./org-settings";
 import { createBrowserClient } from "./client";
+import { localDataWatermark } from "./sync-watermark";
 
 function num(value: number | string | null | undefined, fallback = 0): number {
   if (value == null) return fallback;
@@ -415,13 +416,66 @@ async function deleteOrgRowsNotIn(
   const supabase = createBrowserClient();
   if (!supabase) return "Supabase not configured";
 
-  let query = supabase.from(table).delete().eq("organization_id", organizationId);
-  if (keepIds.length > 0) {
-    query = query.not("id", "in", `(${keepIds.join(",")})`);
+  const { data: rows, error: fetchError } = await supabase
+    .from(table)
+    .select("id")
+    .eq("organization_id", organizationId);
+
+  if (fetchError) return fetchError.message;
+
+  const keep = new Set(keepIds);
+  const toDelete = (rows ?? []).map((row) => row.id).filter((id) => !keep.has(id));
+  if (toDelete.length === 0) return null;
+
+  const batchSize = 50;
+  for (let i = 0; i < toDelete.length; i += batchSize) {
+    const batch = toDelete.slice(i, i + batchSize);
+    const { error } = await supabase.from(table).delete().in("id", batch);
+    if (error) return error.message;
   }
 
-  const { error } = await query;
-  return error?.message ?? null;
+  return null;
+}
+
+async function latestTimestamp(
+  supabase: NonNullable<ReturnType<typeof createBrowserClient>>,
+  table: string,
+  organizationId: string,
+  column: string,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from(table)
+    .select(column)
+    .eq("organization_id", organizationId)
+    .order(column, { ascending: false })
+    .limit(1);
+
+  if (error || !data?.[0]) return 0;
+  const row = data[0] as unknown as Record<string, string | null | undefined>;
+  const value = row[column];
+  return value ? Date.parse(value) || 0 : 0;
+}
+
+async function fetchCloudWatermark(organizationId: string): Promise<number> {
+  const supabase = createBrowserClient();
+  if (!supabase) return 0;
+
+  const stamps = await Promise.all([
+    latestTimestamp(supabase, "products", organizationId, "updated_at"),
+    latestTimestamp(supabase, "customers", organizationId, "updated_at"),
+    latestTimestamp(supabase, "suppliers", organizationId, "updated_at"),
+    latestTimestamp(supabase, "bank_accounts", organizationId, "updated_at"),
+    latestTimestamp(supabase, "cheques", organizationId, "updated_at"),
+    latestTimestamp(supabase, "ac_jobs", organizationId, "updated_at"),
+    latestTimestamp(supabase, "vehicles", organizationId, "updated_at"),
+    latestTimestamp(supabase, "sales", organizationId, "sale_date"),
+    latestTimestamp(supabase, "purchases", organizationId, "purchase_date"),
+    latestTimestamp(supabase, "customer_payments", organizationId, "payment_date"),
+    latestTimestamp(supabase, "supplier_payments", organizationId, "payment_date"),
+    latestTimestamp(supabase, "stock_logs", organizationId, "log_date"),
+  ]);
+
+  return Math.max(0, ...stamps);
 }
 
 async function replaceSaleLines(
@@ -772,15 +826,31 @@ export async function syncBusinessData(
   local: AppData,
 ): Promise<{ data: AppData; error: string | null }> {
   const cloud = await pullBusinessData(organizationId, local.business);
+  const cloudHasData = cloud != null && !isEmptyBusinessData(cloud);
+  const localHasData = !isEmptyBusinessData(local);
 
-  if (cloud && !isEmptyBusinessData(cloud)) {
-    return { data: cloud, error: null };
-  }
-
-  if (!isEmptyBusinessData(local)) {
+  if (!cloudHasData && localHasData) {
     const pushError = await pushBusinessData(organizationId, local);
     return { data: local, error: pushError };
   }
 
-  return { data: cloud ?? emptyAppData(), error: null };
+  if (cloudHasData && !localHasData) {
+    return { data: cloud, error: null };
+  }
+
+  if (!cloudHasData && !localHasData) {
+    return { data: cloud ?? emptyAppData(), error: null };
+  }
+
+  const [cloudTs, localTs] = await Promise.all([
+    fetchCloudWatermark(organizationId),
+    Promise.resolve(localDataWatermark(local, organizationId)),
+  ]);
+
+  if (localTs > cloudTs) {
+    const pushError = await pushBusinessData(organizationId, local);
+    return { data: local, error: pushError };
+  }
+
+  return { data: cloud!, error: null };
 }

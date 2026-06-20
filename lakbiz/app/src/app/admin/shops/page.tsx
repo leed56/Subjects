@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { sectorById } from "@/lib/sectors";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import type { SectorId } from "@/lib/types";
 
 type ShopRow = {
@@ -18,6 +19,7 @@ type ShopRow = {
 };
 
 export default function AdminShopsPage() {
+  const { t } = useLocale();
   const [shops, setShops] = useState<ShopRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
@@ -28,12 +30,12 @@ export default function AdminShopsPage() {
       .then((r) => r.json())
       .then((json: { ok?: boolean; shops?: ShopRow[]; error?: string }) => {
         if (json.ok && json.shops) setShops(json.shops);
-        else setMessage(json.error ?? "Failed to load");
+        else setMessage(json.error ?? t("admin.failed"));
       })
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  useEffect(load, [t]);
 
   const suspend = async (id: string) => {
     const res = await fetch(`/api/admin/shops/${id}`, {
@@ -42,7 +44,7 @@ export default function AdminShopsPage() {
       body: JSON.stringify({ status: "read_only" }),
     });
     const json = (await res.json()) as { ok?: boolean; error?: string };
-    setMessage(json.ok ? "Shop suspended (read-only)" : (json.error ?? "Failed"));
+    setMessage(json.ok ? t("admin.suspended_msg") : (json.error ?? t("admin.failed")));
     load();
   };
 
@@ -53,7 +55,7 @@ export default function AdminShopsPage() {
       body: JSON.stringify({ status: "active" }),
     });
     const json = (await res.json()) as { ok?: boolean; error?: string };
-    setMessage(json.ok ? "Shop activated" : (json.error ?? "Failed"));
+    setMessage(json.ok ? t("admin.activated_msg") : (json.error ?? t("admin.failed")));
     load();
   };
 
@@ -61,14 +63,14 @@ export default function AdminShopsPage() {
     <main className="mx-auto max-w-6xl px-4 py-10">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white">All shops</h2>
-          <p className="mt-1 text-slate-400">Each shop is an isolated tenant.</p>
+          <h2 className="text-2xl font-bold text-white">{t("admin.all_shops")}</h2>
+          <p className="mt-1 text-slate-400">{t("admin.all_shops_sub")}</p>
         </div>
         <Link
           href="/admin/shops/new"
           className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500"
         >
-          + Create shop
+          {t("admin.create_shop_btn")}
         </Link>
       </div>
 
@@ -79,18 +81,18 @@ export default function AdminShopsPage() {
       )}
 
       {loading ? (
-        <p className="mt-8 text-slate-400">Loading…</p>
+        <p className="mt-8 text-slate-400">{t("common.loading")}</p>
       ) : (
         <div className="mt-8 overflow-x-auto rounded-2xl border border-slate-800">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-900 text-slate-400">
               <tr>
-                <th className="px-4 py-3">Shop</th>
-                <th className="px-4 py-3">Template</th>
-                <th className="px-4 py-3">Owner login</th>
-                <th className="px-4 py-3">Plan</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Actions</th>
+                <th className="px-4 py-3">{t("admin.shop_col")}</th>
+                <th className="px-4 py-3">{t("admin.template_col")}</th>
+                <th className="px-4 py-3">{t("admin.owner_login_col")}</th>
+                <th className="px-4 py-3">{t("admin.plan_col")}</th>
+                <th className="px-4 py-3">{t("admin.status_col")}</th>
+                <th className="px-4 py-3">{t("admin.actions_col")}</th>
               </tr>
             </thead>
             <tbody>
@@ -123,7 +125,7 @@ export default function AdminShopsPage() {
                             onClick={() => activate(shop.id)}
                             className="rounded-lg bg-teal-800 px-2 py-1 text-xs text-white"
                           >
-                            Activate
+                            {t("admin.activate")}
                           </button>
                         ) : (
                           <button
@@ -131,7 +133,7 @@ export default function AdminShopsPage() {
                             onClick={() => suspend(shop.id)}
                             className="rounded-lg bg-amber-900 px-2 py-1 text-xs text-amber-100"
                           >
-                            Suspend
+                            {t("admin.suspend")}
                           </button>
                         )}
                       </div>
@@ -142,7 +144,7 @@ export default function AdminShopsPage() {
             </tbody>
           </table>
           {shops.length === 0 && (
-            <p className="px-4 py-8 text-center text-slate-500">No shops yet.</p>
+            <p className="px-4 py-8 text-center text-slate-500">{t("admin.no_shops")}</p>
           )}
         </div>
       )}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sendTextLkSms, isTextLkConfigured } from "@/lib/messaging/textlk-server";
 import { normalizeSlPhone } from "@/lib/messaging/phone";
+import { checkOrgSmsQuota } from "@/lib/messaging/sms-quota-server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const MAX_SMS_LENGTH = 640;
@@ -70,6 +71,11 @@ export async function POST(request: Request) {
       { ok: false, error: `Message too long (max ${MAX_SMS_LENGTH} characters)` },
       { status: 400 },
     );
+  }
+
+  const quota = await checkOrgSmsQuota(supabase, member.organization_id);
+  if (!quota.ok) {
+    return NextResponse.json({ ok: false, error: quota.error }, { status: 429 });
   }
 
   const sms = await sendTextLkSms(phone, message);

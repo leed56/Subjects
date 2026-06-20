@@ -2,24 +2,26 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const links = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/shops", label: "Shops" },
-  { href: "/admin/shops/new", label: "Create shop" },
-];
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 export function AdminNav() {
   const pathname = usePathname();
+  const { t } = useLocale();
+
+  const links = [
+    { href: "/admin", label: t("admin.nav_dashboard") },
+    { href: "/admin/shops", label: t("admin.nav_shops") },
+    { href: "/admin/shops/new", label: t("admin.nav_create") },
+  ];
 
   return (
     <header className="border-b border-slate-800 bg-slate-950 text-white">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-teal-400">
-            LakBiz Platform
+            {t("admin.platform")}
           </p>
-          <h1 className="text-lg font-bold">Super Admin</h1>
+          <h1 className="text-lg font-bold">{t("admin.super_admin")}</h1>
         </div>
         <nav className="flex flex-wrap items-center gap-2">
           {links.map((link) => {
@@ -45,7 +47,7 @@ export function AdminNav() {
             href="/dashboard"
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800"
           >
-            Shop app
+            {t("admin.shop_app")}
           </Link>
         </nav>
       </div>

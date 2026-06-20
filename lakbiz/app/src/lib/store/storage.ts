@@ -2,6 +2,7 @@ import type { AppData } from "./types";
 import { defaultBusiness, type BusinessInfo } from "@/lib/invoice";
 import { calcInputVat, splitInclusiveTotal } from "@/lib/vat";
 import { syncAcJobServiceStatuses } from "@/lib/ac-service";
+import { touchLocalSyncWatermark } from "@/lib/supabase/sync-watermark";
 
 const STORAGE_KEY_V2 = "lakbiz-app-data-v2";
 const STORAGE_KEY_V1 = "lakbiz-app-data-v1";
@@ -143,7 +144,9 @@ export function loadAppData(orgId?: string | null): AppData {
 
 export function saveAppData(data: AppData, orgId?: string | null): void {
   if (typeof window === "undefined") return;
+  const scopedOrgId = orgId ?? activeOrgId;
   localStorage.setItem(storageKeyV2(orgId), JSON.stringify(data));
+  touchLocalSyncWatermark(scopedOrgId);
 }
 
 export function clearAppData(orgId?: string | null): void {

@@ -30,15 +30,40 @@ export default function BillingPage() {
 
   const currentPlan = getPlan(subscription.planId);
 
-  const handleSelectPlan = (planId: PlanId) => {
+  const handleSelectPlan = async (planId: PlanId) => {
     setDemoPlan(planId);
     setDemoBillingCycle(cycle);
-    setMessage(
-      isSupabaseConfigured()
-        ? "Plan selected — PayHere checkout will open here."
-        : t("sub.demo_mode"),
-    );
-    setTimeout(() => setMessage(""), 4000);
+
+    if (!cloudConnected || !org.isAuthenticated || subscription.isDemo) {
+      setMessage(t("sub.demo_mode"));
+      setTimeout(() => setMessage(""), 4000);
+      return;
+    }
+
+    setMessage(t("common.loading"));
+    try {
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId, billingCycle: cycle }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        checkoutUrl?: string;
+        error?: string;
+        code?: string;
+      };
+
+      if (json.ok && json.checkoutUrl) {
+        window.location.href = json.checkoutUrl;
+        return;
+      }
+
+      setMessage(json.error ?? t("sub.checkout_error"));
+    } catch {
+      setMessage(t("sub.checkout_error"));
+    }
+    setTimeout(() => setMessage(""), 6000);
   };
 
   const statusLabel =

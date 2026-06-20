@@ -322,7 +322,7 @@ export default function DashboardPage() {
         )}
 
         <p className="mt-8 text-center text-xs text-slate-400">
-          {t("common.saved_browser")}{" "}
+          {t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}{" "}
           <button
             onClick={() => {
               if (confirm(t("common.confirm_delete"))) resetAll();
