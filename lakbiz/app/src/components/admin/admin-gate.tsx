@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { AdminNav } from "@/components/admin/admin-nav";
+import { SignedInBanner } from "@/components/sign-out-button";
+import { useAuth } from "@/components/auth-provider";
 import { useLocale } from "@/lib/i18n/locale-provider";
 
 async function fetchAdminMe(retry = 0): Promise<Response> {
@@ -17,6 +19,7 @@ async function fetchAdminMe(retry = 0): Promise<Response> {
 export function AdminGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { t } = useLocale();
+  const { user } = useAuth();
   const [state, setState] = useState<"loading" | "ok" | "denied">("loading");
   const [email, setEmail] = useState<string | null>(null);
 
@@ -36,8 +39,12 @@ export function AdminGate({ children }: { children: ReactNode }) {
           setState("ok");
           return;
         }
+        if (res.status === 401) {
+          router.replace("/login?next=/admin");
+          return;
+        }
         setState("denied");
-        if (res.status === 401) router.replace("/login?next=/admin");
+        setEmail(json.admin?.email ?? user?.email ?? null);
       })
       .catch(() => {
         if (!cancelled) setState("denied");
@@ -64,6 +71,9 @@ export function AdminGate({ children }: { children: ReactNode }) {
         <main className="mx-auto max-w-lg px-4 py-16 text-center">
           <h2 className="text-xl font-bold text-white">{t("admin.access_denied")}</h2>
           <p className="mt-3 text-slate-400">{t("admin.not_platform_admin")}</p>
+          <div className="mx-auto mt-6 max-w-sm text-left">
+            <SignedInBanner adminMode redirectAfterSignOut="/login?next=/admin" />
+          </div>
         </main>
       </div>
     );

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { TrialBanner } from "@/components/trial-banner";
 import { useAuth } from "@/components/auth-provider";
@@ -27,12 +27,11 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
   const { can, org, isPlatformAdmin } = useSubscription();
   const { user, logout } = useAuth();
   const pathname = usePathname();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   const handleLogout = async () => {
     await logout();
-    router.push("/login");
+    window.location.href = "/login";
   };
 
   const visibleNav = navKeys.filter((item) => {

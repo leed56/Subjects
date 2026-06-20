@@ -19,7 +19,6 @@ export const defaultNotificationSettings = (): NotificationSettings => ({
   autoSendServiceDueSms: false,
   serviceDueRemindDaysBefore: 3,
   serviceDueRemindDays: [...DEFAULT_SERVICE_DUE_REMIND_DAYS],
-  serviceDueRepeatDays: 7,
   ownerPhone: "",
   technicianPhone: "",
   notifyCustomerOnServiceDue: true,
@@ -59,10 +58,6 @@ export function parseNotificationSettings(raw: unknown): NotificationSettings {
         ? row.serviceDueRemindDaysBefore
         : defaults.serviceDueRemindDaysBefore,
     serviceDueRemindDays: parseRemindDays(row, defaults),
-    serviceDueRepeatDays:
-      typeof row.serviceDueRepeatDays === "number"
-        ? row.serviceDueRepeatDays
-        : defaults.serviceDueRepeatDays,
     ownerPhone:
       typeof row.ownerPhone === "string" ? row.ownerPhone : defaults.ownerPhone,
     technicianPhone:

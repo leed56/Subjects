@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { sendTextLkSms, isTextLkConfigured } from "@/lib/messaging/textlk-server";
 import { normalizeSlPhone } from "@/lib/messaging/phone";
 import { checkOrgSmsQuota } from "@/lib/messaging/sms-quota-server";
+import { fetchPlatformMessagingPolicy } from "@/lib/messaging/platform-policy-server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-
-const MAX_SMS_LENGTH = 640;
 
 export async function POST(request: Request) {
   if (!isTextLkConfigured()) {
@@ -41,6 +40,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Owner or manager only" }, { status: 403 });
   }
 
+  const platformPolicy = await fetchPlatformMessagingPolicy(supabase);
+  const maxSmsLength = platformPolicy.maxSmsLength;
+
   let body: {
     phone?: string;
     message?: string;
@@ -66,9 +68,9 @@ export async function POST(request: Request) {
     );
   }
 
-  if (message.length > MAX_SMS_LENGTH) {
+  if (message.length > maxSmsLength) {
     return NextResponse.json(
-      { ok: false, error: `Message too long (max ${MAX_SMS_LENGTH} characters)` },
+      { ok: false, error: `Message too long (max ${maxSmsLength} characters)` },
       { status: 400 },
     );
   }

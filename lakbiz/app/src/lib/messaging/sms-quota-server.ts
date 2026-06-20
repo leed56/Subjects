@@ -1,12 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-/** Max outbound API SMS per org per calendar day (UTC). */
-export const DAILY_SMS_LIMIT = 100;
+import { DEFAULT_PLATFORM_MESSAGING_POLICY } from "./platform-policy";
+import { fetchPlatformMessagingPolicy } from "./platform-policy-server";
 
 export async function checkOrgSmsQuota(
   supabase: SupabaseClient,
   organizationId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const policy = await fetchPlatformMessagingPolicy(supabase);
+  const dailyLimit = policy.dailySmsLimitPerOrg;
+
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
   const end = new Date(start);
@@ -25,12 +28,15 @@ export async function checkOrgSmsQuota(
     return { ok: false, error: error.message };
   }
 
-  if ((count ?? 0) >= DAILY_SMS_LIMIT) {
+  if ((count ?? 0) >= dailyLimit) {
     return {
       ok: false,
-      error: `Daily SMS limit reached (${DAILY_SMS_LIMIT} per shop). Try again tomorrow.`,
+      error: `Daily SMS limit reached (${dailyLimit} per shop). Try again tomorrow.`,
     };
   }
 
   return { ok: true };
 }
+
+/** @deprecated use fetchPlatformMessagingPolicy().dailySmsLimitPerOrg */
+export const DAILY_SMS_LIMIT = DEFAULT_PLATFORM_MESSAGING_POLICY.dailySmsLimitPerOrg;

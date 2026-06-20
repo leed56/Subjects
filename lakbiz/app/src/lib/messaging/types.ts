@@ -70,8 +70,8 @@ export type NotificationSettings = {
   serviceDueRemindDaysBefore: number;
   /** Days before due to send (0 = on service day) */
   serviceDueRemindDays: number[];
-  /** Skip resending the same job within this many days */
-  serviceDueRepeatDays: number;
+  /** @deprecated platform policy — use PlatformMessagingPolicy.serviceDueRepeatDays */
+  serviceDueRepeatDays?: number;
   /** Shop owner mobile — WhatsApp/SMS alerts for service due */
   ownerPhone: string;
   /** Default technician mobile for job alerts */

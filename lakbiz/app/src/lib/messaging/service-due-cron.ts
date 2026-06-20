@@ -5,6 +5,7 @@ import type { ACJobStatus } from "@/lib/ac-jobs";
 import { formatLkr } from "@/lib/format";
 import type { BusinessInfo } from "@/lib/invoice";
 import { parseNotificationSettings } from "@/lib/messaging/settings";
+import { fetchPlatformMessagingPolicy } from "@/lib/messaging/platform-policy-server";
 
 import { composeMessage } from "./compose";
 import { sendTextLkSms, isTextLkConfigured } from "./textlk-server";
@@ -89,14 +90,17 @@ function jobVars(row: AcJobRow, business: BusinessInfo) {
   };
 }
 
-async function wasSentToday(
+async function wasSentWithinRepeatWindow(
   supabase: SupabaseClient,
   organizationId: string,
   jobId: string,
   templateId: MessageTemplateId,
   recipientPhone: string,
+  repeatDays: number,
 ): Promise<boolean> {
-  const today = todayIso();
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - repeatDays);
+
   const { data } = await supabase
     .from("notification_log")
     .select("id")
@@ -106,8 +110,7 @@ async function wasSentToday(
     .eq("template_id", templateId)
     .eq("recipient_phone", recipientPhone)
     .eq("status", "sent")
-    .gte("created_at", `${today}T00:00:00Z`)
-    .lt("created_at", `${addDays(today, 1)}T00:00:00Z`)
+    .gte("created_at", since.toISOString())
     .limit(1);
 
   return (data?.length ?? 0) > 0;
@@ -123,8 +126,18 @@ async function sendSmsReminder(
   locale: NotificationSettings["preferredLanguage"],
   business: BusinessInfo,
   result: ServiceDueCronResult,
+  repeatDays: number,
 ): Promise<void> {
-  if (await wasSentToday(supabase, orgId, job.id, templateId, phone)) {
+  if (
+    await wasSentWithinRepeatWindow(
+      supabase,
+      orgId,
+      job.id,
+      templateId,
+      phone,
+      repeatDays,
+    )
+  ) {
     result.skippedDuplicate += 1;
     return;
   }
@@ -186,6 +199,18 @@ export async function runServiceDueReminders(
       skippedReason: "Text.lk not configured",
     };
   }
+
+  const platformPolicy = await fetchPlatformMessagingPolicy(supabase);
+
+  if (!platformPolicy.cronEnabled) {
+    return {
+      ...result,
+      ok: false,
+      skippedReason: "Service-due cron disabled by platform admin",
+    };
+  }
+
+  const repeatDays = platformPolicy.serviceDueRepeatDays;
 
   let orgQuery = supabase
     .from("organizations")
@@ -257,6 +282,7 @@ export async function runServiceDueReminders(
             locale,
             business,
             result,
+            repeatDays,
           );
         }
       }
@@ -273,6 +299,7 @@ export async function runServiceDueReminders(
           locale,
           business,
           result,
+          repeatDays,
         );
       }
 
@@ -288,6 +315,7 @@ export async function runServiceDueReminders(
           locale,
           business,
           result,
+          repeatDays,
         );
       }
 

@@ -62,6 +62,12 @@ export default function AdminDashboardPage() {
         >
           {t("admin.view_all_shops")}
         </Link>
+        <Link
+          href="/admin/messaging"
+          className="rounded-xl border border-slate-700 px-5 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-900"
+        >
+          {t("admin.nav_messaging")}
+        </Link>
       </div>
     </main>
   );

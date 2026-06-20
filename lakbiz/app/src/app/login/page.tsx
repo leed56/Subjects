@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { SiteHeader } from "@/components/site-header";
+import { SignedInBanner, SignOutButton } from "@/components/sign-out-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
@@ -23,7 +24,7 @@ type Mode = "signin" | "signup";
 export default function LoginPage() {
   const { t } = useLocale();
   const router = useRouter();
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, user, loading: authLoading } = useAuth();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,9 +34,33 @@ export default function LoginPage() {
   const [message, setMessage] = useState("");
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [adminLogin, setAdminLogin] = useState(false);
 
   const configured = isSupabaseConfigured();
   const adminOnly = process.env.NEXT_PUBLIC_ADMIN_ONLY === "true";
+
+  useEffect(() => {
+    const next = new URLSearchParams(window.location.search).get("next");
+    setAdminLogin(next === "/admin");
+  }, []);
+
+  useEffect(() => {
+    if (!adminLogin || !configured || authLoading) return;
+    if (!user) return;
+    const supabase = createBrowserClient();
+    if (!supabase) return;
+
+    void isPlatformAdminClient(supabase).then((isAdmin) => {
+      if (isAdmin) window.location.replace("/admin");
+    });
+  }, [adminLogin, configured, authLoading, user]);
+
+  const safeNextPath = (): string | null => {
+    if (typeof window === "undefined") return null;
+    const next = new URLSearchParams(window.location.search).get("next");
+    if (!next?.startsWith("/") || next.startsWith("//")) return null;
+    return next;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,11 +89,16 @@ export default function LoginPage() {
         const supabase = createBrowserClient();
         const isAdmin =
           !!supabase && (await isPlatformAdminClient(supabase));
-        if (isAdmin) {
-          window.location.href = "/admin";
+        const nextPath = safeNextPath();
+
+        if (nextPath === "/admin" && !isAdmin) {
+          setMessage(t("admin.not_platform_admin"));
           return;
         }
-        router.push("/dashboard");
+
+        const destination = nextPath ?? (isAdmin ? "/admin" : "/dashboard");
+        window.location.assign(destination);
+        return;
       }
     } catch (err) {
       if (err instanceof AuthFlowError && err.code === "email_confirmation") {
@@ -122,18 +152,58 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-full bg-slate-50">
-      <SiteHeader />
-      <main className={`mx-auto flex flex-col px-4 py-16 ${mode === "signup" ? "max-w-2xl" : "max-w-md"}`}>
-        <h1 className="text-2xl font-bold text-slate-900">
-          {t("sub.login_title")}
-        </h1>
-        <p className="mt-2 text-slate-600">
-          {configured ? t("sub.login_email_hint") : t("sub.login_subtitle")}
-        </p>
+    <div className={`min-h-full ${adminLogin ? "bg-slate-950" : "bg-slate-50"}`}>
+      {adminLogin ? (
+        <header className="border-b border-slate-800 bg-slate-950 text-white">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wider text-teal-400">
+                LakBiz Platform
+              </p>
+              <p className="text-lg font-bold">{t("admin.login_title")}</p>
+            </div>
+            <SignOutButton
+              redirectTo="/login?next=/admin"
+              className="rounded-lg bg-slate-800 px-3 py-2 text-sm font-medium text-red-300 hover:bg-slate-700"
+            />
+          </div>
+        </header>
+      ) : (
+        <SiteHeader sticky={false} />
+      )}
+      <main className={`mx-auto flex flex-col px-4 py-10 sm:py-16 ${mode === "signup" && !adminLogin ? "max-w-2xl" : "max-w-md"}`}>
+        {!adminLogin && (
+          <>
+            <h1 className="text-2xl font-bold text-slate-900">{t("sub.login_title")}</h1>
+            <p className="mt-2 text-slate-600">
+              {configured ? t("sub.login_email_hint") : t("sub.login_subtitle")}
+            </p>
+          </>
+        )}
+
+        {adminLogin && (
+          <>
+            <h1 className="text-2xl font-bold text-white">{t("admin.login_title")}</h1>
+            <p className="mt-2 text-slate-400">{t("admin.login_hint")}</p>
+          </>
+        )}
+
+        {adminLogin && user && !authLoading && (
+          <SignedInBanner adminMode redirectAfterSignOut="/login?next=/admin" />
+        )}
+
+        {!adminLogin && user && !authLoading && (
+          <SignedInBanner redirectAfterSignOut="/login" />
+        )}
 
         {configured && (
-          <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-800">
+          <p
+            className={`mt-2 rounded-lg px-3 py-2 text-xs ${
+              adminLogin
+                ? "border border-teal-800 bg-teal-950/50 text-teal-200"
+                : "bg-green-50 text-green-800"
+            }`}
+          >
             {t("sub.db_connected")}
           </p>
         )}
@@ -161,7 +231,7 @@ export default function LoginPage() {
           </p>
         )}
 
-        <div className={`mt-6 flex rounded-lg border border-slate-200 p-1 ${adminOnly ? "hidden" : ""}`}>
+        <div className={`mt-6 flex rounded-lg border border-slate-200 p-1 ${adminOnly || adminLogin ? "hidden" : ""}`}>
           <button
             type="button"
             onClick={() => setMode("signin")}
@@ -214,7 +284,12 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+              className={`mt-1 w-full rounded-lg border px-3 py-2 ${
+                adminLogin
+                  ? "border-slate-700 bg-slate-900 text-white placeholder:text-slate-500"
+                  : "border-slate-300"
+              }`}
+              placeholder={adminLogin ? "admin@lakbiz.lk" : undefined}
             />
           </label>
           <label className="block text-sm">
@@ -225,14 +300,22 @@ export default function LoginPage() {
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+              className={`mt-1 w-full rounded-lg border px-3 py-2 ${
+                adminLogin
+                  ? "border-slate-700 bg-slate-900 text-white"
+                  : "border-slate-300"
+              }`}
             />
           </label>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-teal-700 py-2.5 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-50"
+            className={`w-full rounded-lg py-2.5 text-sm font-medium text-white disabled:opacity-50 ${
+              adminLogin
+                ? "bg-teal-600 hover:bg-teal-500"
+                : "bg-teal-700 hover:bg-teal-800"
+            }`}
           >
             {loading
               ? "..."
@@ -245,15 +328,27 @@ export default function LoginPage() {
         <button
           type="button"
           onClick={continueDemo}
-          className="mt-4 w-full rounded-lg border border-slate-300 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
+          className={`mt-4 w-full rounded-lg border border-slate-300 py-2.5 text-sm text-slate-700 hover:bg-slate-50 ${adminLogin ? "hidden" : ""}`}
         >
           {t("sub.login_demo")}
         </button>
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          <Link href="/settings/billing" className="text-teal-700 underline">
-            {t("sub.title")}
-          </Link>
+          {!adminLogin ? (
+            <>
+              <Link href="/login?next=/admin" className="text-teal-700 underline">
+                {t("admin.login_title")}
+              </Link>
+              {" · "}
+              <Link href="/settings/billing" className="text-teal-700 underline">
+                {t("sub.title")}
+              </Link>
+            </>
+          ) : (
+            <Link href="/login" className="text-teal-400 underline">
+              {t("sub.login_title")}
+            </Link>
+          )}
         </p>
       </main>
     </div>

@@ -33,8 +33,14 @@ export default function NotificationsSettingsPage() {
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchResult, setBatchResult] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
   const smsApiConfigured = useSmsApiConfigured();
   const apiEnabled = smsApiConfigured === true;
+  const smsInputsDisabled = mounted && smsApiConfigured !== true;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const local = loadNotificationSettings();
@@ -231,29 +237,10 @@ export default function NotificationsSettingsPage() {
                   })
                 }
                 className="h-4 w-4 rounded border-slate-300"
-                disabled={smsApiConfigured !== true}
+                disabled={smsInputsDisabled}
               />
               {t("msg.auto_send_service_due")}
             </label>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm">
-                {t("msg.service_due_repeat_days")}
-                <input
-                  type="number"
-                  min={1}
-                  max={90}
-                  value={settings.serviceDueRepeatDays}
-                  onChange={(e) =>
-                    persist({
-                      ...settings,
-                      serviceDueRepeatDays: Number(e.target.value),
-                    })
-                  }
-                  className="mt-1 w-full rounded-lg border px-3 py-2"
-                />
-              </label>
-            </div>
 
             <div className="pt-2">
               <p className="text-sm font-medium text-slate-800">
@@ -365,7 +352,7 @@ export default function NotificationsSettingsPage() {
                   })
                 }
                 className="h-4 w-4 rounded border-slate-300"
-                disabled={smsApiConfigured !== true}
+                disabled={smsInputsDisabled}
               />
               {t("msg.auto_send_on_service_complete")}
             </label>
@@ -467,14 +454,14 @@ export default function NotificationsSettingsPage() {
           <p className="mt-2 text-sm text-slate-600">{t("msg.api_desc")}</p>
           <p
             className={`mt-3 text-sm ${
-              smsApiConfigured === null
+              !mounted || smsApiConfigured === null
                 ? "text-slate-500"
                 : apiEnabled
                   ? "text-emerald-700"
                   : "text-amber-700"
             }`}
           >
-            {smsApiConfigured === null
+            {!mounted || smsApiConfigured === null
               ? t("msg.api_checking")
               : apiEnabled
                 ? t("msg.api_active")
