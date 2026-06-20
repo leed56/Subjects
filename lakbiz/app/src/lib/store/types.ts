@@ -154,6 +154,8 @@ export interface Sale {
   /** Ex-VAT amount (sell prices are VAT-inclusive) */
   subtotal?: number;
   outputVat?: number;
+  /** Bill-level discount in LKR applied to the inclusive total */
+  discount?: number;
   total: number;
   profit: number;
   paymentMethod: PaymentMethod;
@@ -334,9 +336,18 @@ export type ChequeInput = {
   note?: string;
 };
 
+export type SaleLineInput = {
+  productId: string;
+  qty: number;
+  /** Optional per-line price override (negotiated price) */
+  unitPrice?: number;
+};
+
 export type SaleOptions = {
   customerId?: string;
   customerName?: string;
+  /** Bill-level discount in LKR */
+  discount?: number;
   chequeNo?: string;
   chequeBank?: string;
   chequeDate?: string;

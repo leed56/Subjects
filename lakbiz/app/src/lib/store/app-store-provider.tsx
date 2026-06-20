@@ -103,7 +103,7 @@ export type AppStoreValue = {
     bankAccountId?: string,
   ) => void;
   createSale: (
-    lines: { productId: string; qty: number }[],
+    lines: { productId: string; qty: number; unitPrice?: number }[],
     paymentMethod: PaymentMethod,
     options?: SaleOptions,
   ) => string | false;

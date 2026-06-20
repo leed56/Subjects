@@ -33,6 +33,8 @@ export function InvoiceView({
     sale.outputVat != null &&
     sale.outputVat > 0;
   const subtotal = sale.subtotal ?? sale.total - (sale.outputVat ?? 0);
+  const discount = sale.discount ?? 0;
+  const gross = sale.lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
 
   return (
     <div>
@@ -167,6 +169,18 @@ export function InvoiceView({
         </table>
 
         <div className="mt-4 space-y-1 border-t border-dashed border-slate-300 pt-3 text-sm">
+          {discount > 0 && (
+            <>
+              <div className="flex justify-between text-slate-600">
+                <span>{t("sales.gross")}</span>
+                <span className="tabular-nums">{formatLkr(gross)}</span>
+              </div>
+              <div className="flex justify-between text-emerald-700">
+                <span>{t("sales.discount")}</span>
+                <span className="tabular-nums">-{formatLkr(discount)}</span>
+              </div>
+            </>
+          )}
           {hasVat && (
             <>
               <div className="flex justify-between text-slate-600">

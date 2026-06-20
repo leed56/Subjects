@@ -93,6 +93,9 @@ export function buildInvoiceText(
     "",
     lines,
     "",
+    ...(sale.discount && sale.discount > 0
+      ? [`Discount: -${formatLkr(sale.discount)}`]
+      : []),
     ...(sale.outputVat && sale.outputVat > 0
       ? [
           `Subtotal: ${formatLkr(sale.subtotal ?? sale.total - sale.outputVat)}`,

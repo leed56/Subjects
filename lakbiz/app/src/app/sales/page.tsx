@@ -15,6 +15,12 @@ export default function SalesPage() {
   const { data, ready, createSale } = useAppStore();
   const { t } = useLocale();
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>(
+    {},
+  );
+  const [search, setSearch] = useState("");
+  const [discount, setDiscount] = useState(0);
+  const [cashReceived, setCashReceived] = useState<number | "">("");
   const [payment, setPayment] = useState<PaymentMethod>("cash");
   const [customerId, setCustomerId] = useState("");
   const [walkInName, setWalkInName] = useState("");
@@ -33,13 +39,18 @@ export default function SalesPage() {
       .filter(([, qty]) => qty > 0)
       .map(([productId, qty]) => {
         const p = data.products.find((x) => x.id === productId)!;
-        return { product: p, qty };
+        const unitPrice = priceOverrides[productId] ?? p.sellPrice;
+        return { product: p, qty, unitPrice };
       });
-  }, [cart, data]);
+  }, [cart, priceOverrides, data]);
 
-  const total = lines.reduce((s, l) => s + l.product.sellPrice * l.qty, 0);
+  const gross = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
+  const discountClamped = Math.min(Math.max(0, discount), gross);
+  const netTotal = gross - discountClamped;
   const vatEnabled = data?.business.vatRegistered === true;
-  const billVat = vatEnabled ? splitInclusiveTotal(total) : null;
+  const billVat = vatEnabled ? splitInclusiveTotal(netTotal) : null;
+  const changeDue =
+    cashReceived === "" ? 0 : Math.max(0, Number(cashReceived) - netTotal);
 
   if (!ready || !data) {
     return (
@@ -50,8 +61,23 @@ export default function SalesPage() {
     );
   }
 
-  const setQty = (id: string, qty: number) => {
-    setCart((c) => ({ ...c, [id]: Math.max(0, qty) }));
+  const setQty = (id: string, qty: number, max: number) => {
+    const clamped = Math.max(0, Math.min(max, Number.isFinite(qty) ? qty : 0));
+    setCart((c) => ({ ...c, [id]: clamped }));
+  };
+
+  const setOverride = (id: string, value: number) => {
+    setPriceOverrides((o) => ({ ...o, [id]: Math.max(0, value) }));
+  };
+
+  const resetAfterSale = () => {
+    setCart({});
+    setPriceOverrides({});
+    setWalkInName("");
+    setChequeNo("");
+    setDiscount(0);
+    setCashReceived("");
+    setSearch("");
   };
 
   const handleSale = () => {
@@ -65,11 +91,16 @@ export default function SalesPage() {
     }
 
     const saleId = createSale(
-      lines.map((l) => ({ productId: l.product.id, qty: l.qty })),
+      lines.map((l) => ({
+        productId: l.product.id,
+        qty: l.qty,
+        unitPrice: l.unitPrice,
+      })),
       payment,
       {
         customerId: customerId || undefined,
         customerName: walkInName || undefined,
+        discount: discountClamped || undefined,
         chequeNo: payment === "cheque" ? chequeNo : undefined,
         chequeBank: payment === "cheque" ? chequeBank : undefined,
         chequeDate: payment === "cheque" ? chequeDate : undefined,
@@ -78,9 +109,7 @@ export default function SalesPage() {
     );
 
     if (saleId) {
-      setCart({});
-      setWalkInName("");
-      setChequeNo("");
+      resetAfterSale();
       setLastBillId(saleId);
       setMessage(
         payment === "credit"
@@ -96,6 +125,15 @@ export default function SalesPage() {
   };
 
   const inStock = data.products.filter((p) => p.stockQty > 0);
+  const query = search.trim().toLowerCase();
+  const filtered = query
+    ? inStock.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          (p.sku ?? "").toLowerCase().includes(query) ||
+          p.category.toLowerCase().includes(query),
+      )
+    : inStock;
 
   return (
     <div className="min-h-full bg-slate-50">
@@ -135,32 +173,53 @@ export default function SalesPage() {
         ) : (
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="space-y-3 lg:col-span-2">
-              {inStock.map((p) => {
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t("sales.search_placeholder")}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              />
+              {filtered.length === 0 && (
+                <p className="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-center text-sm text-slate-500">
+                  {t("sales.no_match")}
+                </p>
+              )}
+              {filtered.map((p) => {
                 const unit = String(p.customFields.unit ?? "pcs");
                 const qty = cart[p.id] ?? 0;
                 return (
                   <div
                     key={p.id}
-                    className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4"
                   >
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-medium text-slate-900">{p.name}</p>
                       <p className="text-sm text-slate-500">
-                        {p.stockQty} {unit} {t("sales.left")}
+                        {formatLkr(p.sellPrice)} · {p.stockQty} {unit}{" "}
+                        {t("sales.left")}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => setQty(p.id, qty - 1)}
+                        onClick={() => setQty(p.id, qty - 1, p.stockQty)}
                         className="h-8 w-8 rounded border text-lg"
                       >
                         −
                       </button>
-                      <span className="w-8 text-center font-medium">{qty}</span>
-                      <button
-                        onClick={() =>
-                          setQty(p.id, Math.min(p.stockQty, qty + 1))
+                      <input
+                        type="number"
+                        min={0}
+                        max={p.stockQty}
+                        step="any"
+                        value={qty || ""}
+                        onChange={(e) =>
+                          setQty(p.id, Number(e.target.value), p.stockQty)
                         }
+                        className="w-16 rounded border px-2 py-1 text-center text-sm"
+                      />
+                      <button
+                        onClick={() => setQty(p.id, qty + 1, p.stockQty)}
                         className="h-8 w-8 rounded border text-lg"
                       >
                         +
@@ -172,36 +231,75 @@ export default function SalesPage() {
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="font-semibold text-slate-900">{t("sales.bill_summary")}</h2>
-              <ul className="mt-3 space-y-2 text-sm text-slate-600">
+              <h2 className="font-semibold text-slate-900">
+                {t("sales.bill_summary")}
+              </h2>
+              <ul className="mt-3 space-y-3 text-sm text-slate-600">
                 {lines.length === 0 && <li>{t("sales.no_selected")}</li>}
                 {lines.map((l) => (
-                  <li key={l.product.id} className="flex justify-between">
-                    <span>
-                      {l.product.name} × {l.qty}
-                    </span>
-                    <span>{formatLkr(l.product.sellPrice * l.qty)}</span>
+                  <li key={l.product.id} className="space-y-1">
+                    <div className="flex justify-between">
+                      <span className="truncate pr-2">
+                        {l.product.name} × {l.qty}
+                      </span>
+                      <span className="tabular-nums">
+                        {formatLkr(l.unitPrice * l.qty)}
+                      </span>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-slate-400">
+                      {t("sales.unit_price")}
+                      <input
+                        type="number"
+                        min={0}
+                        step="any"
+                        value={l.unitPrice}
+                        onChange={(e) =>
+                          setOverride(l.product.id, Number(e.target.value))
+                        }
+                        className="w-24 rounded border px-2 py-1 text-right text-xs text-slate-700"
+                      />
+                    </label>
                   </li>
                 ))}
               </ul>
-              {billVat && (
-                <div className="mt-3 space-y-1 border-t pt-3 text-sm text-slate-600">
-                  <div className="flex justify-between">
-                    <span>{t("vat.subtotal")}</span>
-                    <span className="font-mono tabular-nums">
-                      {formatLkr(billVat.subtotal)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-teal-700">
-                    <span>{t("vat.output_vat")} (18%)</span>
-                    <span className="font-mono tabular-nums">
-                      {formatLkr(billVat.vat)}
-                    </span>
-                  </div>
+
+              <div className="mt-3 space-y-1 border-t pt-3 text-sm text-slate-600">
+                <div className="flex justify-between">
+                  <span>{t("sales.gross")}</span>
+                  <span className="tabular-nums">{formatLkr(gross)}</span>
                 </div>
-              )}
-              <p className="mt-4 border-t pt-3 text-lg font-bold text-slate-900">
-                {t("common.total")}: {formatLkr(total)}
+                <label className="flex items-center justify-between gap-2">
+                  <span>{t("sales.discount")}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={discount || ""}
+                    onChange={(e) => setDiscount(Number(e.target.value))}
+                    placeholder="0"
+                    className="w-28 rounded border px-2 py-1 text-right text-sm"
+                  />
+                </label>
+                {billVat && (
+                  <>
+                    <div className="flex justify-between">
+                      <span>{t("vat.subtotal")}</span>
+                      <span className="tabular-nums">
+                        {formatLkr(billVat.subtotal)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-teal-700">
+                      <span>{t("vat.output_vat")} (18%)</span>
+                      <span className="tabular-nums">
+                        {formatLkr(billVat.vat)}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <p className="mt-3 border-t pt-3 text-lg font-bold text-slate-900">
+                {t("common.total")}: {formatLkr(netTotal)}
               </p>
 
               <label className="mt-4 block text-sm">
@@ -248,6 +346,34 @@ export default function SalesPage() {
                   ))}
                 </select>
               </label>
+
+              {payment === "cash" && netTotal > 0 && (
+                <div className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3">
+                  <label className="flex items-center justify-between gap-2 text-sm">
+                    <span>{t("sales.cash_received")}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={cashReceived}
+                      onChange={(e) =>
+                        setCashReceived(
+                          e.target.value === "" ? "" : Number(e.target.value),
+                        )
+                      }
+                      className="w-28 rounded border px-2 py-1 text-right text-sm"
+                    />
+                  </label>
+                  {cashReceived !== "" && (
+                    <div className="flex items-center justify-between text-sm font-medium text-teal-800">
+                      <span>{t("sales.change_due")}</span>
+                      <span className="tabular-nums">
+                        {formatLkr(changeDue)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {payment === "credit" && data.customers.length === 0 && (
                 <p className="mt-2 text-xs text-amber-700">

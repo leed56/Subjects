@@ -796,19 +796,21 @@ export function updateChequeStatus(
 
 export function createSale(
   data: AppData,
-  lines: { productId: string; qty: number }[],
+  lines: { productId: string; qty: number; unitPrice?: number }[],
   paymentMethod: Sale["paymentMethod"],
   options: SaleOptions = {},
 ): AppData {
   const saleLines = lines
-    .map(({ productId, qty }) => {
+    .map(({ productId, qty, unitPrice }) => {
       const product = data.products.find((p) => p.id === productId);
       if (!product || qty <= 0 || product.stockQty < qty) return null;
+      const price =
+        unitPrice != null && unitPrice >= 0 ? unitPrice : product.sellPrice;
       return {
         productId,
         productName: product.name,
         qty,
-        unitPrice: product.sellPrice,
+        unitPrice: price,
         buyPrice: product.buyPrice,
       };
     })
@@ -816,15 +818,19 @@ export function createSale(
 
   if (saleLines.length === 0) return data;
 
-  const inclusiveTotal = saleLines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
+  const grossInclusive = saleLines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
+  const discount = Math.min(
+    Math.max(0, Math.round((options.discount ?? 0) * 100) / 100),
+    grossInclusive,
+  );
+  const inclusiveTotal = grossInclusive - discount;
   const vatSplit = isVatEnabled(data.business)
     ? splitInclusiveTotal(inclusiveTotal)
     : { subtotal: inclusiveTotal, vat: 0, total: inclusiveTotal };
   const total = vatSplit.total;
-  const profit = saleLines.reduce(
-    (s, l) => s + (l.unitPrice - l.buyPrice) * l.qty,
-    0,
-  );
+  const profit =
+    saleLines.reduce((s, l) => s + (l.unitPrice - l.buyPrice) * l.qty, 0) -
+    discount;
 
   const customer = options.customerId
     ? data.customers.find((c) => c.id === options.customerId)
@@ -875,6 +881,7 @@ export function createSale(
     lines: saleLines,
     subtotal: vatSplit.subtotal,
     outputVat: vatSplit.vat,
+    discount: discount > 0 ? discount : undefined,
     total,
     profit,
     paymentMethod,

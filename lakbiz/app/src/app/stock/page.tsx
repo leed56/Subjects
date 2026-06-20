@@ -19,6 +19,7 @@ export default function StockPage() {
   const [stockInId, setStockInId] = useState<string | null>(null);
   const [stockInQty, setStockInQty] = useState(1);
   const [showForm, setShowForm] = useState(true);
+  const [search, setSearch] = useState("");
 
   if (!ready || !data) {
     return (
@@ -31,7 +32,15 @@ export default function StockPage() {
     );
   }
 
-  const products = data.products;
+  const query = search.trim().toLowerCase();
+  const products = query
+    ? data.products.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          (p.sku ?? "").toLowerCase().includes(query) ||
+          p.category.toLowerCase().includes(query),
+      )
+    : data.products;
 
   return (
     <div className="min-h-full bg-slate-50">
@@ -81,10 +90,24 @@ export default function StockPage() {
           </div>
         )}
 
-        {products.length === 0 ? (
+        {data.products.length > 0 && (
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("stock.search_placeholder")}
+            className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm sm:max-w-sm"
+          />
+        )}
+
+        {data.products.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
             <p className="text-lg font-medium text-slate-700">{t("stock.no_stock")}</p>
             <p className="mt-2 text-sm text-slate-500">{t("stock.no_stock_hint")}</p>
+          </div>
+        ) : products.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
+            {t("sales.no_match")}
           </div>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
