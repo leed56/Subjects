@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { formatLkr } from "@/lib/format";
+import { buildLedger } from "@/lib/ledger";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -24,10 +25,12 @@ export default function CustomersPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [creditLimit, setCreditLimit] = useState<number | "">("");
   const [editing, setEditing] = useState<Customer | null>(null);
   const [payCustomerId, setPayCustomerId] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState(0);
   const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
+  const [ledgerCustomer, setLedgerCustomer] = useState<Customer | null>(null);
   const [message, setMessage] = useState("");
 
   if (!ready || !data) {
@@ -43,18 +46,20 @@ export default function CustomersPage() {
     setName("");
     setPhone("");
     setAddress("");
+    setCreditLimit("");
     setEditing(null);
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+    const limit = creditLimit === "" ? undefined : Number(creditLimit);
     if (editing) {
-      updateCustomer(editing.id, { name, phone, address });
+      updateCustomer(editing.id, { name, phone, address, creditLimit: limit });
       resetForm();
       setMessage(t("cust.updated"));
     } else {
-      addCustomer({ name, phone, address });
+      addCustomer({ name, phone, address, creditLimit: limit });
       resetForm();
       setMessage(t("cust.added"));
     }
@@ -62,6 +67,27 @@ export default function CustomersPage() {
   };
 
   const totalCredit = data.customers.reduce((s, c) => s + c.creditBalance, 0);
+
+  const ledgerEntries = ledgerCustomer
+    ? buildLedger(
+        data.sales
+          .filter(
+            (s) => s.customerId === ledgerCustomer.id && s.creditAmount > 0,
+          )
+          .map((s) => ({
+            date: s.date,
+            label: `${t("sales.bill")} ${s.billNo ?? s.id.slice(0, 8)}`,
+            amount: s.creditAmount,
+          })),
+        data.customerPayments
+          .filter((p) => p.customerId === ledgerCustomer.id)
+          .map((p) => ({
+            date: p.date,
+            label: `${t("cust.record_payment")} (${paymentLabel(t, p.method)})`,
+            amount: -p.amount,
+          })),
+      )
+    : [];
 
   return (
     <div className="min-h-full bg-slate-50">
@@ -88,7 +114,7 @@ export default function CustomersPage() {
           <h2 className="font-semibold text-slate-900">
             {editing ? t("cust.edit") : t("cust.add")}
           </h2>
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <input
               required
               placeholder={`${t("common.name")} *`}
@@ -106,6 +132,19 @@ export default function CustomersPage() {
               placeholder={t("common.address")}
               value={address}
               onChange={(e) => setAddress(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+            <input
+              type="number"
+              min={0}
+              step="any"
+              placeholder={t("cust.credit_limit")}
+              value={creditLimit}
+              onChange={(e) =>
+                setCreditLimit(
+                  e.target.value === "" ? "" : Number(e.target.value),
+                )
+              }
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
           </div>
@@ -163,6 +202,19 @@ export default function CustomersPage() {
                       >
                         {formatLkr(c.creditBalance)}
                       </span>
+                      {c.creditLimit != null && (
+                        <span
+                          className={`mt-0.5 block text-xs ${
+                            c.creditBalance > c.creditLimit
+                              ? "font-medium text-red-600"
+                              : "text-slate-400"
+                          }`}
+                        >
+                          {t("cust.limit")}: {formatLkr(c.creditLimit)}
+                          {c.creditBalance > c.creditLimit &&
+                            ` · ${t("cust.over_limit")}`}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
@@ -191,11 +243,18 @@ export default function CustomersPage() {
                           </button>
                         )}
                         <button
+                          onClick={() => setLedgerCustomer(c)}
+                          className="text-teal-700 hover:underline"
+                        >
+                          {t("cust.ledger")}
+                        </button>
+                        <button
                           onClick={() => {
                             setEditing(c);
                             setName(c.name);
                             setPhone(c.phone ?? "");
                             setAddress(c.address ?? "");
+                            setCreditLimit(c.creditLimit ?? "");
                           }}
                           className="text-teal-700 hover:underline"
                         >
@@ -278,6 +337,69 @@ export default function CustomersPage() {
                 >
                   {t("common.cancel")}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {ledgerCustomer && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl bg-white p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-semibold text-slate-900">
+                    {t("cust.ledger")} — {ledgerCustomer.name}
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    {t("cust.credit_owed")}: {formatLkr(ledgerCustomer.creditBalance)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setLedgerCustomer(null)}
+                  className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="mt-4 flex-1 overflow-y-auto">
+                {ledgerEntries.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-slate-500">
+                    {t("cust.ledger_empty")}
+                  </p>
+                ) : (
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b text-slate-500">
+                      <tr>
+                        <th className="py-2">{t("common.date")}</th>
+                        <th className="py-2">{t("common.details")}</th>
+                        <th className="py-2 text-right">{t("bills.amount")}</th>
+                        <th className="py-2 text-right">{t("cust.balance")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ledgerEntries.map((e, i) => (
+                        <tr key={i} className="border-b last:border-0">
+                          <td className="py-2 text-slate-500">
+                            {new Date(e.date).toLocaleDateString("en-LK")}
+                          </td>
+                          <td className="py-2">{e.label}</td>
+                          <td
+                            className={`py-2 text-right tabular-nums ${
+                              e.amount < 0 ? "text-emerald-700" : "text-slate-800"
+                            }`}
+                          >
+                            {e.amount < 0 ? "−" : "+"}
+                            {formatLkr(Math.abs(e.amount))}
+                          </td>
+                          <td className="py-2 text-right font-medium tabular-nums">
+                            {formatLkr(e.balance)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           </div>

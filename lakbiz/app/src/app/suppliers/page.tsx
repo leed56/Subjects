@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
+import { buildLedger } from "@/lib/ledger";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { calcInputVat } from "@/lib/vat";
@@ -26,7 +27,10 @@ export default function SuppliersPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [vatNumber, setVatNumber] = useState("");
+  const [contactPerson, setContactPerson] = useState("");
   const [editing, setEditing] = useState<Supplier | null>(null);
+  const [ledgerSupplier, setLedgerSupplier] = useState<Supplier | null>(null);
   const [message, setMessage] = useState("");
 
   const [showPurchase, setShowPurchase] = useState(false);
@@ -76,8 +80,31 @@ export default function SuppliersPage() {
     setName("");
     setPhone("");
     setAddress("");
+    setVatNumber("");
+    setContactPerson("");
     setEditing(null);
   };
+
+  const ledgerEntries = ledgerSupplier
+    ? buildLedger(
+        data.purchases
+          .filter(
+            (p) => p.supplierId === ledgerSupplier.id && p.creditAmount > 0,
+          )
+          .map((p) => ({
+            date: p.date,
+            label: `GRN ${p.grnNo}`,
+            amount: p.creditAmount,
+          })),
+        data.supplierPayments
+          .filter((p) => p.supplierId === ledgerSupplier.id)
+          .map((p) => ({
+            date: p.date,
+            label: `${t("sup.pay_supplier")} (${paymentLabel(t, p.method)})`,
+            amount: -p.amount,
+          })),
+      )
+    : [];
 
   const setLine = (productId: string, qty: number, unitCost: number) => {
     setPurchaseLines((prev) => ({
@@ -160,10 +187,16 @@ export default function SuppliersPage() {
             e.preventDefault();
             if (!name.trim()) return;
             if (editing) {
-              updateSupplier(editing.id, { name, phone, address });
+              updateSupplier(editing.id, {
+                name,
+                phone,
+                address,
+                vatNumber,
+                contactPerson,
+              });
               resetSupplierForm();
             } else {
-              addSupplier({ name, phone, address });
+              addSupplier({ name, phone, address, vatNumber, contactPerson });
               resetSupplierForm();
             }
           }}
@@ -172,7 +205,7 @@ export default function SuppliersPage() {
           <h2 className="font-semibold">
             {editing ? t("sup.edit") : t("sup.add")}
           </h2>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <input
               required
               placeholder={t("sup.name")}
@@ -190,6 +223,18 @@ export default function SuppliersPage() {
               placeholder={t("common.address")}
               value={address}
               onChange={(e) => setAddress(e.target.value)}
+              className="rounded-lg border px-3 py-2 text-sm"
+            />
+            <input
+              placeholder={t("sup.contact_person")}
+              value={contactPerson}
+              onChange={(e) => setContactPerson(e.target.value)}
+              className="rounded-lg border px-3 py-2 text-sm"
+            />
+            <input
+              placeholder={t("sup.vat_number")}
+              value={vatNumber}
+              onChange={(e) => setVatNumber(e.target.value)}
               className="rounded-lg border px-3 py-2 text-sm"
             />
           </div>
@@ -366,7 +411,19 @@ export default function SuppliersPage() {
               <tbody>
                 {data.suppliers.map((s) => (
                   <tr key={s.id} className="border-b last:border-0">
-                    <td className="px-4 py-3 font-medium">{s.name}</td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium">{s.name}</p>
+                      {s.contactPerson && (
+                        <p className="text-xs text-slate-400">
+                          {s.contactPerson}
+                        </p>
+                      )}
+                      {s.vatNumber && (
+                        <p className="text-xs text-slate-400">
+                          {t("sup.vat_number")}: {s.vatNumber}
+                        </p>
+                      )}
+                    </td>
                     <td className="px-4 py-3">{s.phone || "—"}</td>
                     <td className="px-4 py-3">
                       <span
@@ -393,11 +450,19 @@ export default function SuppliersPage() {
                           </button>
                         )}
                         <button
+                          onClick={() => setLedgerSupplier(s)}
+                          className="text-teal-700 hover:underline"
+                        >
+                          {t("cust.ledger")}
+                        </button>
+                        <button
                           onClick={() => {
                             setEditing(s);
                             setName(s.name);
                             setPhone(s.phone ?? "");
                             setAddress(s.address ?? "");
+                            setVatNumber(s.vatNumber ?? "");
+                            setContactPerson(s.contactPerson ?? "");
                           }}
                           className="text-teal-700 hover:underline"
                         >
@@ -496,6 +561,69 @@ export default function SuppliersPage() {
                 >
                   {t("common.cancel")}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {ledgerSupplier && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl bg-white p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-semibold text-slate-900">
+                    {t("cust.ledger")} — {ledgerSupplier.name}
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    {t("sup.you_owe_col")}: {formatLkr(ledgerSupplier.payableBalance)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setLedgerSupplier(null)}
+                  className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="mt-4 flex-1 overflow-y-auto">
+                {ledgerEntries.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-slate-500">
+                    {t("cust.ledger_empty")}
+                  </p>
+                ) : (
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b text-slate-500">
+                      <tr>
+                        <th className="py-2">{t("common.date")}</th>
+                        <th className="py-2">{t("common.details")}</th>
+                        <th className="py-2 text-right">{t("bills.amount")}</th>
+                        <th className="py-2 text-right">{t("cust.balance")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ledgerEntries.map((e, i) => (
+                        <tr key={i} className="border-b last:border-0">
+                          <td className="py-2 text-slate-500">
+                            {new Date(e.date).toLocaleDateString("en-LK")}
+                          </td>
+                          <td className="py-2">{e.label}</td>
+                          <td
+                            className={`py-2 text-right tabular-nums ${
+                              e.amount < 0 ? "text-emerald-700" : "text-slate-800"
+                            }`}
+                          >
+                            {e.amount < 0 ? "−" : "+"}
+                            {formatLkr(Math.abs(e.amount))}
+                          </td>
+                          <td className="py-2 text-right font-medium tabular-nums">
+                            {formatLkr(e.balance)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           </div>

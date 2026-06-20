@@ -178,12 +178,15 @@ export async function pullBusinessData(
       phone: row.phone ?? undefined,
       address: row.address ?? undefined,
       creditBalance: num(row.credit_balance),
+      creditLimit: row.credit_limit != null ? num(row.credit_limit) : undefined,
     })),
     suppliers: (suppliersRes.data ?? []).map((row) => ({
       id: row.id,
       name: row.name,
       phone: row.phone ?? undefined,
       address: row.address ?? undefined,
+      vatNumber: row.vat_number ?? undefined,
+      contactPerson: row.contact_person ?? undefined,
       payableBalance: num(row.payable_balance),
     })),
     sales: (salesRes.data ?? []).map((row) => {
@@ -446,6 +449,7 @@ export async function pushBusinessData(
     phone: c.phone ?? null,
     address: c.address ?? null,
     credit_balance: c.creditBalance,
+    credit_limit: c.creditLimit ?? null,
   }));
 
   const supplierRows = data.suppliers.map((s) => ({
@@ -454,6 +458,8 @@ export async function pushBusinessData(
     name: s.name,
     phone: s.phone ?? null,
     address: s.address ?? null,
+    vat_number: s.vatNumber ?? null,
+    contact_person: s.contactPerson ?? null,
     payable_balance: s.payableBalance,
   }));
 

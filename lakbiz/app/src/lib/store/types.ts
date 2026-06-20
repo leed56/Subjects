@@ -181,6 +181,8 @@ export interface Customer {
   phone?: string;
   address?: string;
   creditBalance: number;
+  /** Max outstanding credit allowed (LKR); undefined = no limit */
+  creditLimit?: number;
 }
 
 export interface CustomerPayment {
@@ -225,6 +227,9 @@ export interface Supplier {
   name: string;
   phone?: string;
   address?: string;
+  /** Supplier VAT/BR number — needed for input VAT claims */
+  vatNumber?: string;
+  contactPerson?: string;
   payableBalance: number;
 }
 
@@ -295,12 +300,15 @@ export type CustomerInput = {
   name: string;
   phone?: string;
   address?: string;
+  creditLimit?: number;
 };
 
 export type SupplierInput = {
   name: string;
   phone?: string;
   address?: string;
+  vatNumber?: string;
+  contactPerson?: string;
 };
 
 export type PurchaseInput = {

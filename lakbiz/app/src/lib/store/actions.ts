@@ -148,6 +148,10 @@ export function addCustomer(data: AppData, input: CustomerInput): AppData {
     name: input.name.trim(),
     phone: input.phone?.trim() || undefined,
     address: input.address?.trim() || undefined,
+    creditLimit:
+      input.creditLimit != null && input.creditLimit > 0
+        ? input.creditLimit
+        : undefined,
     creditBalance: 0,
   };
   return { ...data, customers: [customer, ...data.customers] };
@@ -167,6 +171,10 @@ export function updateCustomer(
             name: input.name.trim(),
             phone: input.phone?.trim() || undefined,
             address: input.address?.trim() || undefined,
+            creditLimit:
+              input.creditLimit != null && input.creditLimit > 0
+                ? input.creditLimit
+                : undefined,
           }
         : c,
     ),
@@ -218,6 +226,8 @@ export function addSupplier(data: AppData, input: SupplierInput): AppData {
     name: input.name.trim(),
     phone: input.phone?.trim() || undefined,
     address: input.address?.trim() || undefined,
+    vatNumber: input.vatNumber?.trim() || undefined,
+    contactPerson: input.contactPerson?.trim() || undefined,
     payableBalance: 0,
   };
   return { ...data, suppliers: [supplier, ...data.suppliers] };
@@ -237,6 +247,8 @@ export function updateSupplier(
             name: input.name.trim(),
             phone: input.phone?.trim() || undefined,
             address: input.address?.trim() || undefined,
+            vatNumber: input.vatNumber?.trim() || undefined,
+            contactPerson: input.contactPerson?.trim() || undefined,
           }
         : s,
     ),

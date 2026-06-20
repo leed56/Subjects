@@ -85,6 +85,20 @@ export default function SalesPage() {
       setMessage(t("sales.credit_need_customer"));
       return;
     }
+    if (payment === "credit" && customerId) {
+      const cust = data.customers.find((c) => c.id === customerId);
+      if (
+        cust?.creditLimit != null &&
+        cust.creditBalance + netTotal > cust.creditLimit
+      ) {
+        setMessage(
+          t("sales.credit_limit_exceeded")
+            .replace("{{limit}}", formatLkr(cust.creditLimit))
+            .replace("{{balance}}", formatLkr(cust.creditBalance + netTotal)),
+        );
+        return;
+      }
+    }
     if (payment === "cheque" && (!chequeNo || !chequeDate)) {
       setMessage(t("sales.cheque_need"));
       return;
