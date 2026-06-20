@@ -56,6 +56,7 @@ export default function BillDetailPage() {
             sale={sale}
             business={data.business}
             customerPhone={customer?.phone}
+            customerAddress={customer?.address}
           />
         </div>
       </main>

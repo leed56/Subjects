@@ -6,8 +6,16 @@ export interface BusinessInfo {
   name: string;
   nameSi?: string;
   phone?: string;
+  /** Second contact / WhatsApp number */
+  email?: string;
   address?: string;
   tin?: string;
+  /** Business Registration (BR) number */
+  brNumber?: string;
+  /** Small downscaled logo as a data URL, printed on the invoice header */
+  logoDataUrl?: string;
+  /** Footer / terms note printed at the bottom of each invoice */
+  invoiceFooter?: string;
   /** VAT registration (Salli-style compliance mode) */
   vatRegistered?: boolean;
   vatNumber?: string;
@@ -73,7 +81,11 @@ export function buildInvoiceText(
   return [
     `*${business.name}*`,
     business.nameSi ? `_${business.nameSi}_` : "",
+    business.address ? business.address : "",
     business.phone ? `Tel: ${business.phone}` : "",
+    business.vatRegistered && business.vatNumber
+      ? `VAT: ${business.vatNumber}`
+      : "",
     "",
     `Bill: ${sale.billNo ?? sale.id.slice(0, 8)}`,
     `Date: ${new Date(sale.date).toLocaleString("en-LK")}`,
@@ -92,6 +104,7 @@ export function buildInvoiceText(
     `Payment: ${formatPaymentLabel(sale.paymentMethod, t)}`,
     "",
     t ? t("bills.thank_you") : "Thank you! / ස්තූතියි",
+    business.invoiceFooter ? business.invoiceFooter : "",
   ]
     .filter(Boolean)
     .join("\n");
