@@ -5,7 +5,12 @@ import { PlanCard } from "@/components/plan-card";
 import { SiteHeader } from "@/components/site-header";
 import { TrialBanner } from "@/components/trial-banner";
 import { useLocale } from "@/lib/i18n/locale-provider";
-import { ADDONS, PLANS, formatLkrPrice, getPlan } from "@/lib/subscription/plans";
+import {
+  PLANS,
+  formatLkrPrice,
+  getPlan,
+  relevantAddons,
+} from "@/lib/subscription/plans";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { BillingCycle, PlanId } from "@/lib/subscription/types";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
@@ -113,6 +118,7 @@ export default function BillingPage() {
               plan={plan}
               cycle={cycle}
               currentPlanId={subscription.planId}
+              sectorId={org.sector}
               onSelect={handleSelectPlan}
             />
           ))}
@@ -123,7 +129,7 @@ export default function BillingPage() {
             {t("sub.addons")}
           </h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {ADDONS.map((addon) => (
+            {relevantAddons(org.sector, subscription.planId).map((addon) => (
               <div
                 key={addon.id}
                 className="rounded-lg border border-slate-200 bg-white p-4 text-sm"

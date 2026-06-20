@@ -1,13 +1,16 @@
 "use client";
 
-import { formatLkrPrice, getPlan, planPrice, type PlanDefinition } from "@/lib/subscription/plans";
+import { formatLkrPrice, planPrice, type PlanDefinition } from "@/lib/subscription/plans";
+import { sectorAllowsFeature } from "@/lib/sector-features";
 import type { BillingCycle, PlanId } from "@/lib/subscription/types";
+import type { SectorId } from "@/lib/types";
 import { useLocale } from "@/lib/i18n/locale-provider";
 
 interface PlanCardProps {
   plan: PlanDefinition;
   cycle: BillingCycle;
   currentPlanId: PlanId;
+  sectorId: SectorId;
   onSelect: (planId: PlanId) => void;
 }
 
@@ -25,6 +28,7 @@ export function PlanCard({
   plan,
   cycle,
   currentPlanId,
+  sectorId,
   onSelect,
 }: PlanCardProps) {
   const { t, locale } = useLocale();
@@ -76,6 +80,12 @@ export function PlanCard({
             );
           }
           if (key === "sales") return null;
+          if (
+            (key === "ac_jobs" || key === "vehicles") &&
+            !sectorAllowsFeature(sectorId, key)
+          ) {
+            return null;
+          }
           const label =
             key === "customers"
               ? t("nav.customers")

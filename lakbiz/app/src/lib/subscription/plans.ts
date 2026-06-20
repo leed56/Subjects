@@ -1,3 +1,5 @@
+import { sectorAllowsFeature } from "@/lib/sector-features";
+import type { SectorId } from "@/lib/types";
 import type { AddonType, BillingCycle, PlanFeatures, PlanId, SubscriptionStatus } from "./types";
 
 export interface PlanDefinition {
@@ -112,6 +114,29 @@ export function planPrice(
   cycle: BillingCycle,
 ): number {
   return cycle === "annual" ? plan.priceAnnualLkr : plan.priceMonthlyLkr;
+}
+
+/**
+ * Add-ons relevant to a shop's sector + current plan.
+ * Hides module add-ons the sector doesn't use (e.g. Vehicles for an AC shop)
+ * and ones the current plan already includes.
+ */
+export function relevantAddons(
+  sectorId: SectorId,
+  planId: PlanId,
+): typeof ADDONS {
+  const plan = getPlan(planId);
+  return ADDONS.filter((addon) => {
+    if (addon.id === "extra_user" || addon.id === "extra_branch") return true;
+    if (addon.id === "sector_pack") {
+      return (
+        sectorAllowsFeature(sectorId, "ac_jobs") &&
+        sectorAllowsFeature(sectorId, "vehicles")
+      );
+    }
+    const feature = addon.id as "ac_jobs" | "vehicles";
+    return sectorAllowsFeature(sectorId, feature) && !plan.features[feature];
+  });
 }
 
 export function defaultTrialSubscription(): {
