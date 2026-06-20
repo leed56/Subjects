@@ -70,6 +70,15 @@ export default function NotificationsSettingsPage() {
     setBatchRunning(true);
     setBatchResult(null);
     try {
+      if (org.id) {
+        const syncErr = await saveOrgNotificationSettings(org.id, settings);
+        if (syncErr) {
+          setCloudError(syncErr);
+          setBatchResult(t("msg.send_service_due_sync_failed"));
+          return;
+        }
+      }
+
       const res = await fetch("/api/cron/service-due-reminders", {
         method: "POST",
       });
@@ -78,6 +87,9 @@ export default function NotificationsSettingsPage() {
         failed?: number;
         skippedDuplicate?: number;
         skippedNoPhone?: number;
+        jobsMatched?: number;
+        orgsScanned?: number;
+        errors?: string[];
         error?: string;
         skippedReason?: string;
       };
@@ -87,12 +99,27 @@ export default function NotificationsSettingsPage() {
       }
       const skipped =
         (data.skippedDuplicate ?? 0) + (data.skippedNoPhone ?? 0);
-      setBatchResult(
-        t("msg.send_service_due_result")
-          .replace("{{sent}}", String(data.sent ?? 0))
-          .replace("{{failed}}", String(data.failed ?? 0))
-          .replace("{{skipped}}", String(skipped)),
-      );
+      const matched = data.jobsMatched ?? 0;
+      let message = t("msg.send_service_due_result")
+        .replace("{{sent}}", String(data.sent ?? 0))
+        .replace("{{failed}}", String(data.failed ?? 0))
+        .replace("{{skipped}}", String(skipped));
+
+      message += ` · ${t("msg.send_service_due_matched").replace("{{matched}}", String(matched))}`;
+
+      if (matched === 0 && (data.sent ?? 0) === 0) {
+        const remindDays =
+          settings.serviceDueRemindDays.length > 0
+            ? settings.serviceDueRemindDays.join(", ")
+            : "—";
+        message += `. ${t("msg.send_service_due_none").replace("{{days}}", remindDays)}`;
+      }
+
+      if ((data.errors?.length ?? 0) > 0) {
+        message += ` ${data.errors![0]}`;
+      }
+
+      setBatchResult(message);
     } catch {
       setBatchResult("Network error");
     } finally {
