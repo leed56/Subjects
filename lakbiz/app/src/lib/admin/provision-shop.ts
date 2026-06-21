@@ -2,7 +2,8 @@ import { parseSectorId } from "@/lib/sectors";
 import type { PlanId } from "@/lib/subscription/types";
 import type { SectorId } from "@/lib/types";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { getTemplate } from "./templates";
+import { resolveTemplate } from "./templates";
+import { normalizeProvisionInput } from "./validate-provision";
 
 export type ProvisionShopInput = {
   shopName: string;
@@ -27,27 +28,37 @@ export async function provisionShop(
 ): Promise<{ data: ProvisionShopResult | null; error: string | null }> {
   const admin = createAdminSupabaseClient();
   if (!admin) {
-    return { data: null, error: "SUPABASE_SERVICE_ROLE_KEY not configured on server" };
+    return {
+      data: null,
+      error:
+        "SUPABASE_SERVICE_ROLE_KEY is not configured. Shop creation requires the service role key on the server.",
+    };
   }
 
-  const template = getTemplate(input.templateId);
+  const normalized = normalizeProvisionInput(input);
+  if ("error" in normalized) {
+    return { data: null, error: normalized.error };
+  }
+
+  const {
+    shopName,
+    ownerEmail: email,
+    password,
+    phone,
+    templateId,
+    planId: planOverride,
+    trialDays,
+  } = normalized.data;
+
+  const template = await resolveTemplate(admin, templateId);
   if (!template) {
     return { data: null, error: "Invalid business template" };
   }
 
-  const shopName = input.shopName.trim();
-  const email = input.ownerEmail.trim().toLowerCase();
-  const password = input.password;
-
-  if (!shopName || !email || password.length < 6) {
-    return { data: null, error: "Shop name, valid email, and password (6+ chars) required" };
-  }
-
-  const planId = input.planId ?? template.defaultPlanId;
-  const trialDays = input.trialDays ?? 14;
+  const planId = planOverride ?? template.defaultPlanId;
   const sector = parseSectorId(template.sectorId);
 
-  // 1. Create the owner auth user.
+  // Shop owners are never added to platform_admins — separate LakBiz admin accounts only.
   const { data: authData, error: authError } = await admin.auth.admin.createUser({
     email,
     password,
@@ -74,7 +85,7 @@ export async function provisionShop(
   const { data: orgId, error: provisionError } = await admin.rpc("provision_shop", {
     p_owner_id: userId,
     p_name: shopName,
-    p_phone: input.phone?.trim() || null,
+    p_phone: phone ?? null,
     p_sector: sector,
     p_plan_id: planId,
     p_status: trialing ? "trialing" : "active",

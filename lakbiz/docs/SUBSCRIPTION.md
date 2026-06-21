@@ -60,6 +60,17 @@ Browser → Next.js → Supabase Auth (email/password)
                  → Platform admin panel → subscription status
 ```
 
+### Shop provisioning (admin panel)
+
+New shops are created only via **Platform admin → Create shop** (`POST /api/admin/shops`):
+
+1. `auth.admin.createUser` — owner account (`email_confirm: true`)
+2. `provision_shop` RPC (service role) — atomic `organizations` + `org_members` + `subscriptions`
+3. Template resolved from `business_templates` (DB), with local fallback
+4. Shop owners are **never** added to `platform_admins` — use separate LakBiz admin accounts
+
+Self-signup (`bootstrap_user_organization`) is disabled when `NEXT_PUBLIC_ADMIN_ONLY=true`.
+
 ### Tenant model
 
 - **Organization** = one paying business (shop, yard, AC company).

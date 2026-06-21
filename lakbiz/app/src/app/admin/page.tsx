@@ -15,6 +15,7 @@ type ShopRow = {
 export default function AdminDashboardPage() {
   const { t } = useLocale();
   const [shops, setShops] = useState<ShopRow[]>([]);
+  const [templateCount, setTemplateCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -25,6 +26,14 @@ export default function AdminDashboardPage() {
         else setError(json.error ?? t("admin.load_shops_error"));
       });
   }, [t]);
+
+  useEffect(() => {
+    void fetch("/api/admin/templates")
+      .then((r) => r.json())
+      .then((json: { ok?: boolean; templates?: unknown[] }) => {
+        if (json.ok && json.templates) setTemplateCount(json.templates.length);
+      });
+  }, []);
 
   const active = shops.filter((s) => s.status === "active" || s.status === "trialing").length;
 
@@ -38,7 +47,7 @@ export default function AdminDashboardPage() {
         <StatCard label={t("admin.active_trial")} value={String(active)} />
         <StatCard
           label={t("admin.templates")}
-          value="6"
+          value={templateCount != null ? String(templateCount) : "—"}
           hint={t("admin.templates_hint")}
         />
       </div>

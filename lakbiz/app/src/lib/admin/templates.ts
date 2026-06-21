@@ -1,6 +1,7 @@
 import type { PlanId } from "@/lib/subscription/types";
 import type { SectorId } from "@/lib/types";
 import { sectorById } from "@/lib/sectors";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type BusinessTemplate = {
   id: string;
@@ -70,6 +71,25 @@ export function getTemplate(id: string): BusinessTemplate | undefined {
     return { ...local, icon: sector?.icon ?? local.icon };
   }
   return undefined;
+}
+
+/** Same source as GET /api/admin/templates: DB first, local fallback. */
+export async function resolveTemplate(
+  admin: SupabaseClient,
+  id: string,
+): Promise<BusinessTemplate | undefined> {
+  const { data, error } = await admin
+    .from("business_templates")
+    .select("id, name_en, name_si, sector_id, default_plan_id")
+    .eq("id", id)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (!error && data) {
+    return templateFromDbRow(data);
+  }
+
+  return getTemplate(id);
 }
 
 export function templateFromDbRow(row: {

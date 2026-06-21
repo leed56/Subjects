@@ -21,7 +21,11 @@ if (existsSync(envPath)) {
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const dbPassword = process.env.SUPABASE_DB_PASSWORD ?? "Cyber657886";
+const dbPassword = process.env.SUPABASE_DB_PASSWORD;
+if (!dbPassword) {
+  console.error("Set SUPABASE_DB_PASSWORD in app/.env.local or the environment.");
+  process.exit(1);
+}
 
 const admin = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },

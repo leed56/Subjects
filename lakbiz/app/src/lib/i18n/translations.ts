@@ -187,7 +187,7 @@ const si: Dict = {
   "admin.messaging_daily_limit": "Daily SMS limit per shop",
   "admin.messaging_max_length": "Max SMS characters",
   "admin.messaging_new_shop_defaults": "Defaults for new shops",
-  "admin.messaging_defaults_hint": "Applied when provisioning a new tenant (shops can customize their own schedule later).",
+  "admin.messaging_defaults_hint": "Platform-wide defaults for new shops (each shop can customize later in settings).",
 
   // POS payment methods
   "pay.cash": "මුදල්",
@@ -991,7 +991,7 @@ const en: Dict = {
   "admin.messaging_daily_limit": "Daily SMS limit per shop",
   "admin.messaging_max_length": "Max SMS characters",
   "admin.messaging_new_shop_defaults": "Defaults for new shops",
-  "admin.messaging_defaults_hint": "Applied when provisioning a new tenant (shops can customize their own schedule later).",
+  "admin.messaging_defaults_hint": "Platform-wide defaults for new shops (each shop can customize later in settings).",
 
   "pay.cash": "Cash",
   "pay.bank": "Bank transfer",

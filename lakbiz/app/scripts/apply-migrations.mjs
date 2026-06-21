@@ -25,6 +25,8 @@ const LEGACY_ALIASES = {
     "20250617000002_ac_service_lifecycle.sql",
   "20250617000004_repair_org_policies.sql":
     "20250617000002_repair_and_org_app_data.sql",
+  "20250621000006_remove_payment_provider.sql":
+    "20250621000005_remove_payment_provider.sql",
 };
 
 /** Removed migrations — no longer in repo but may exist in schema_migrations. */
@@ -81,7 +83,6 @@ async function bootstrapPriorMigrations(client) {
   if (orgAppData.length === 0) return;
 
   for (const file of files) {
-    if (file === "20250620000001_platform_admin.sql") continue;
     await client.query(
       "insert into public.schema_migrations (filename) values ($1) on conflict do nothing",
       [file],
