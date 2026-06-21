@@ -3,6 +3,17 @@
 import Link from "next/link";
 import { useState } from "react";
 import { SiteHeader } from "@/components/site-header";
+import {
+  ProBadge,
+  ProButton,
+  ProCard,
+  ProEmptyState,
+  ProLoadingState,
+  ProMain,
+  ProPageHeader,
+  ProPageShell,
+  ProStatCard,
+} from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { paymentLabel } from "@/lib/i18n/payment";
@@ -17,13 +28,16 @@ export default function BillsPage() {
   const [bizPhone, setBizPhone] = useState("");
   const [bizAddress, setBizAddress] = useState("");
   const [bizTin, setBizTin] = useState("");
+  const [search, setSearch] = useState("");
 
   if (!ready || !data) {
     return (
-      <div className="min-h-full bg-slate-50">
+      <ProPageShell>
         <SiteHeader />
-        <main className="mx-auto max-w-6xl px-4 py-10">{t("common.loading")}</main>
-      </div>
+        <ProMain>
+          <ProLoadingState label={t("common.loading")} />
+        </ProMain>
+      </ProPageShell>
     );
   }
 
@@ -36,153 +50,180 @@ export default function BillsPage() {
     setEditBiz(true);
   };
 
-  return (
-    <div className="min-h-full bg-slate-50">
-      <SiteHeader />
-      <main className="mx-auto max-w-6xl px-4 py-10">
-        <div className="mb-6 flex flex-wrap justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">{t("bills.title")}</h1>
-            <p className="text-slate-600">
-              {t("bills.subtitle")} · {data.sales.length} {t("bills.count")}
-            </p>
-          </div>
-          <button
-            onClick={openBizEdit}
-            className="rounded-lg border border-teal-700 px-4 py-2 text-sm text-teal-700"
-          >
-            {t("bills.shop_details")}
-          </button>
-        </div>
+  const salesTotal = data.sales.reduce((sum, s) => sum + s.total, 0);
+  const profitTotal = data.sales.reduce((sum, s) => sum + s.profit, 0);
+  const creditTotal = data.sales
+    .filter((s) => s.paymentMethod === "credit")
+    .reduce((sum, s) => sum + s.total, 0);
+  const query = search.trim().toLowerCase();
+  const bills = query
+    ? data.sales.filter(
+        (s) =>
+          (s.billNo ?? s.id).toLowerCase().includes(query) ||
+          (s.customerName ?? "").toLowerCase().includes(query) ||
+          paymentLabel(t, s.paymentMethod).toLowerCase().includes(query),
+      )
+    : data.sales;
 
-        {editBiz && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              updateBusiness({
-                ...data.business,
-                name: bizName,
-                nameSi: bizNameSi,
-                phone: bizPhone,
-                address: bizAddress,
-                tin: bizTin,
-              });
-              setEditBiz(false);
-            }}
-            className="mb-8 rounded-xl border bg-white p-5"
-          >
-            <h2 className="font-semibold">{t("bills.shop_header")}</h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <input
-                required
-                placeholder={t("bills.shop_name")}
-                value={bizName}
-                onChange={(e) => setBizName(e.target.value)}
-                className="rounded-lg border px-3 py-2 text-sm"
-              />
-              <input
-                placeholder={t("bills.shop_name_si")}
-                value={bizNameSi}
-                onChange={(e) => setBizNameSi(e.target.value)}
-                className="rounded-lg border px-3 py-2 text-sm"
-              />
-              <input
-                placeholder={t("bills.phone_wa")}
-                value={bizPhone}
-                onChange={(e) => setBizPhone(e.target.value)}
-                className="rounded-lg border px-3 py-2 text-sm"
-              />
-              <input
-                placeholder={t("bills.tin")}
-                value={bizTin}
-                onChange={(e) => setBizTin(e.target.value)}
-                className="rounded-lg border px-3 py-2 text-sm"
-              />
-              <input
-                placeholder={t("common.address")}
-                value={bizAddress}
-                onChange={(e) => setBizAddress(e.target.value)}
-                className="col-span-full rounded-lg border px-3 py-2 text-sm"
-              />
-            </div>
-            <div className="mt-4 flex gap-2">
-              <button
-                type="submit"
-                className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
-              >
-                {t("common.save")}
-              </button>
+  return (
+    <ProPageShell>
+      <SiteHeader />
+      <ProMain>
+        <ProPageHeader
+          eyebrow="Billing archive"
+          title={t("bills.title")}
+          description={`${t("bills.subtitle")} · ${data.sales.length} ${t("bills.count")}`}
+          actions={
+            <>
+              <ProButton href="/sales">{t("bills.create_sale")}</ProButton>
               <button
                 type="button"
-                onClick={() => setEditBiz(false)}
-                className="rounded-lg border px-4 py-2 text-sm"
+                onClick={openBizEdit}
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98]"
               >
-                {t("common.cancel")}
+                {t("bills.shop_details")}
               </button>
+            </>
+          }
+        />
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <ProStatCard label={t("bills.count")} value={String(data.sales.length)} hint="Invoices issued" icon="🧾" tone="teal" />
+          <ProStatCard label={t("common.total")} value={formatLkr(salesTotal)} hint="Total billed value" icon="💸" tone="emerald" />
+          <ProStatCard label={t("common.profit")} value={formatLkr(profitTotal)} hint="Recorded sale profit" icon="📈" tone="blue" />
+          <ProStatCard label="Credit bills" value={formatLkr(creditTotal)} hint="Customer credit sales" icon="🤝" tone="amber" />
+        </section>
+
+        {editBiz && (
+          <section className="mt-6">
+            <ProCard eyebrow="Invoice branding" title={t("bills.shop_header")}>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  updateBusiness({
+                    ...data.business,
+                    name: bizName,
+                    nameSi: bizNameSi,
+                    phone: bizPhone,
+                    address: bizAddress,
+                    tin: bizTin,
+                  });
+                  setEditBiz(false);
+                }}
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <input required placeholder={t("bills.shop_name")} value={bizName} onChange={(e) => setBizName(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                  <input placeholder={t("bills.shop_name_si")} value={bizNameSi} onChange={(e) => setBizNameSi(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                  <input placeholder={t("bills.phone_wa")} value={bizPhone} onChange={(e) => setBizPhone(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                  <input placeholder={t("bills.tin")} value={bizTin} onChange={(e) => setBizTin(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                  <input placeholder={t("common.address")} value={bizAddress} onChange={(e) => setBizAddress(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 sm:col-span-2" />
+                </div>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">
+                    {t("common.save")}
+                  </button>
+                  <button type="button" onClick={() => setEditBiz(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
+                    {t("common.cancel")}
+                  </button>
+                </div>
+              </form>
+            </ProCard>
+          </section>
+        )}
+
+        <section className="mt-6 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+          <ProCard eyebrow="Invoice identity" title={data.business.name || "LakBiz"} action={<ProBadge tone={data.business.tin ? "emerald" : "slate"}>{data.business.tin ? "TIN ready" : "Basic"}</ProBadge>}>
+            <div className="space-y-3 text-sm font-semibold text-slate-600">
+              {data.business.nameSi && <p>{data.business.nameSi}</p>}
+              {data.business.phone && <p>{t("bills.tel")}: {data.business.phone}</p>}
+              {data.business.address && <p>{data.business.address}</p>}
+              {data.business.tin && <p>{t("bills.tin")}: {data.business.tin}</p>}
+              {!data.business.phone && !data.business.address && !data.business.tin && (
+                <p className="text-slate-500">Add shop contact, address and TIN to make printed invoices look more professional.</p>
+              )}
             </div>
-          </form>
-        )}
+          </ProCard>
 
-        <div className="mb-4 rounded-lg bg-white border border-slate-200 p-4 text-sm">
-          <p className="font-medium text-slate-800">{data.business.name}</p>
-          {data.business.phone && (
-            <p className="text-slate-500">
-              {t("bills.tel")}: {data.business.phone}
-            </p>
-          )}
-        </div>
+          <ProCard title="Find invoices" eyebrow="Search archive" action={<ProBadge tone={bills.length === data.sales.length ? "slate" : "teal"}>{bills.length} shown</ProBadge>}>
+            <div className="relative">
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search bill number, customer, or payment type..."
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pl-11 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
+              />
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
+            </div>
+          </ProCard>
+        </section>
 
-        {data.sales.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-            <p className="text-slate-600">{t("bills.no_bills")}</p>
-            <Link href="/sales" className="mt-2 inline-block text-teal-700 underline">
-              {t("bills.create_sale")}
-            </Link>
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b bg-slate-50 text-slate-600">
-                <tr>
-                  <th className="px-4 py-3">{t("bills.bill_no")}</th>
-                  <th className="px-4 py-3">{t("common.date")}</th>
-                  <th className="px-4 py-3">{t("common.customer")}</th>
-                  <th className="px-4 py-3">{t("common.total")}</th>
-                  <th className="px-4 py-3">{t("common.payment")}</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.sales.map((s) => (
-                  <tr key={s.id} className="border-b last:border-0">
-                    <td className="px-4 py-3 font-mono text-xs">
-                      {s.billNo ?? s.id.slice(0, 8)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {new Date(s.date).toLocaleString("en-LK")}
-                    </td>
-                    <td className="px-4 py-3">{s.customerName || "—"}</td>
-                    <td className="px-4 py-3 font-medium">
-                      {formatLkr(s.total)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {paymentLabel(t, s.paymentMethod)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/bills/${s.id}`}
-                        className="font-medium text-teal-700 hover:underline"
-                      >
-                        {t("common.view_print")}
-                      </Link>
-                    </td>
-                  </tr>
+        <section className="mt-6">
+          {data.sales.length === 0 ? (
+            <ProCard>
+              <ProEmptyState
+                title={t("bills.no_bills")}
+                description="Create a sale first, then invoices will appear here for print, sharing and records."
+                action={<ProButton href="/sales">{t("bills.create_sale")}</ProButton>}
+              />
+            </ProCard>
+          ) : bills.length === 0 ? (
+            <ProCard>
+              <ProEmptyState title={t("sales.no_match")} description="Try searching by bill number, customer or payment type." />
+            </ProCard>
+          ) : (
+            <ProCard title="Invoice history" action={<ProBadge tone="teal">{bills.length} invoices</ProBadge>}>
+              <div className="hidden overflow-hidden rounded-2xl border border-slate-200 lg:block">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">{t("bills.bill_no")}</th>
+                      <th className="px-4 py-3">{t("common.date")}</th>
+                      <th className="px-4 py-3">{t("common.customer")}</th>
+                      <th className="px-4 py-3">{t("common.total")}</th>
+                      <th className="px-4 py-3">{t("common.payment")}</th>
+                      <th className="px-4 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bills.map((s) => (
+                      <tr key={s.id} className="border-b last:border-0">
+                        <td className="px-4 py-3 font-mono text-xs font-black text-slate-700">{s.billNo ?? s.id.slice(0, 8)}</td>
+                        <td className="px-4 py-3 font-semibold text-slate-600">{new Date(s.date).toLocaleString("en-LK")}</td>
+                        <td className="px-4 py-3 font-black text-slate-900">{s.customerName || "—"}</td>
+                        <td className="px-4 py-3 font-mono font-black text-slate-950">{formatLkr(s.total)}</td>
+                        <td className="px-4 py-3"><ProBadge tone="slate">{paymentLabel(t, s.paymentMethod)}</ProBadge></td>
+                        <td className="px-4 py-3 text-right">
+                          <Link href={`/bills/${s.id}`} className="font-black text-teal-700 hover:underline">{t("common.view_print")}</Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="grid gap-3 lg:hidden">
+                {bills.map((s) => (
+                  <Link key={s.id} href={`/bills/${s.id}`} className="block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-white">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-mono text-xs font-black uppercase tracking-wide text-teal-700">{s.billNo ?? s.id.slice(0, 8)}</p>
+                        <p className="mt-2 text-base font-black text-slate-950">{s.customerName || "Walk-in customer"}</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">{new Date(s.date).toLocaleString("en-LK")}</p>
+                      </div>
+                      <ProBadge tone="slate">{paymentLabel(t, s.paymentMethod)}</ProBadge>
+                    </div>
+                    <div className="mt-4 flex items-end justify-between border-t border-slate-200 pt-3">
+                      <p className="font-mono text-xl font-black text-slate-950">{formatLkr(s.total)}</p>
+                      <p className="text-xs font-black text-teal-700">{t("common.view_print")} →</p>
+                    </div>
+                  </Link>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </main>
-    </div>
+              </div>
+            </ProCard>
+          )}
+        </section>
+      </ProMain>
+    </ProPageShell>
   );
 }
