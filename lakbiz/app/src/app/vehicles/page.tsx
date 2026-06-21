@@ -19,6 +19,7 @@ import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { VehicleRecord, VehicleStatus } from "@/lib/store/types";
 import type { PaymentMethod } from "@/lib/types";
+import { useCanWrite } from "@/lib/subscription/use-can-write";
 import {
   agingLabel,
   CAR_MAKES,
@@ -31,6 +32,7 @@ import {
 export default function VehiclesPage() {
   const { data, ready, addVehicle, updateVehicle, sellVehicle, deleteVehicle } = useAppStore();
   const { t } = useLocale();
+  const canWrite = useCanWrite();
 
   const [showForm, setShowForm] = useState(true);
   const [editing, setEditing] = useState<VehicleRecord | null>(null);
@@ -153,11 +155,13 @@ export default function VehiclesPage() {
             <>
               <ProButton href="/customers" variant="secondary">{t("nav.customers")}</ProButton>
               <button
+                type="button"
+                disabled={!canWrite}
                 onClick={() => {
                   resetForm();
                   setShowForm((v) => !v);
                 }}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98]"
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {showForm ? t("common.hide_form") : t("veh.add")}
               </button>
@@ -212,16 +216,22 @@ export default function VehiclesPage() {
                     notes,
                   };
                   if (editing) {
-                    updateVehicle(editing.id, input);
-                    setMessage(t("veh.updated"));
-                    resetForm();
-                    setShowForm(false);
+                    const ok = updateVehicle(editing.id, input);
+                    if (!ok) {
+                      setMessage(t("common.save_failed"));
+                    } else {
+                      setMessage(t("veh.updated"));
+                      resetForm();
+                      setShowForm(false);
+                    }
                   } else {
                     const ok = addVehicle(input);
                     if (ok) {
                       setMessage(t("veh.added"));
                       resetForm();
                       setShowForm(false);
+                    } else if (!canWrite) {
+                      setMessage(t("common.save_failed"));
                     } else {
                       setMessage(t("veh.duplicate_chassis"));
                     }
@@ -275,7 +285,7 @@ export default function VehiclesPage() {
                 </div>
 
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">
+                  <button type="submit" disabled={!canWrite} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
                     {editing ? t("common.update") : t("veh.add")}
                   </button>
                   {editing && (
@@ -308,7 +318,24 @@ export default function VehiclesPage() {
         <section className="mt-6">
           {vehicles.length === 0 ? (
             <ProCard>
-              <ProEmptyState title={t("veh.no_vehicles")} description={t("veh.no_vehicles_hint")} />
+              <ProEmptyState
+                title={t("veh.no_vehicles")}
+                description={t("veh.no_vehicles_hint")}
+                action={
+                  data.vehicles.length === 0 && canWrite ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetForm();
+                        setShowForm(true);
+                      }}
+                      className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20"
+                    >
+                      {t("veh.add")}
+                    </button>
+                  ) : undefined
+                }
+              />
             </ProCard>
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">

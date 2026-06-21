@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { TrialBanner } from "@/components/trial-banner";
+import { CloudSyncBanner } from "@/components/cloud-sync-banner";
 import { useAuth } from "@/components/auth-provider";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { ROUTE_FEATURES } from "@/lib/subscription/can";
@@ -64,6 +65,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
         }
       >
         <TrialBanner />
+        <CloudSyncBanner />
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:py-4">
           <Link href={logoHref} className="flex min-w-0 items-center gap-2">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-teal-700 text-xs font-bold text-white">

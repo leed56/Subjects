@@ -22,6 +22,7 @@ import { buildLedger } from "@/lib/ledger";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { Customer } from "@/lib/store/types";
 import type { PaymentMethod } from "@/lib/types";
+import { useCanWrite } from "@/lib/subscription/use-can-write";
 
 export default function CustomersPage() {
   const {
@@ -33,6 +34,7 @@ export default function CustomersPage() {
     recordCustomerPayment,
   } = useAppStore();
   const { t } = useLocale();
+  const canWrite = useCanWrite();
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -195,7 +197,7 @@ export default function CustomersPage() {
                 />
               </div>
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">
+                <button type="submit" disabled={!canWrite} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
                   {editing ? t("common.update") : t("cust.add")}
                 </button>
                 {editing && (

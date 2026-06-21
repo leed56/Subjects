@@ -78,6 +78,8 @@ const si: Dict = {
   // Common
   "common.save": "සුරකින්න",
   "common.save_failed": "සුරකින්න බැර — ගිණුම read-only හෝ සීමාවක් ඇත",
+  "common.cloud_syncing": "වලාකුළට sync වෙමින්…",
+  "common.cloud_sync_error": "වලාකුළ sync අසාර්ථක — දත්ත මෙම උපකරණයේ පමණක් සුරකින ලදී",
   "common.cancel": "අවලංගු",
   "common.add": "එකතු කරන්න",
   "common.edit": "සංස්කරණය",
@@ -885,6 +887,8 @@ const en: Dict = {
 
   "common.save": "Save",
   "common.save_failed": "Could not save — account may be read-only or a limit was reached",
+  "common.cloud_syncing": "Syncing to cloud…",
+  "common.cloud_sync_error": "Cloud save failed — data is kept on this device only",
   "common.cancel": "Cancel",
   "common.add": "Add",
   "common.edit": "Edit",

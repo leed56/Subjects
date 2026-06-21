@@ -15,6 +15,7 @@ import {
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { useCanWrite } from "@/lib/subscription/use-can-write";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type {
   Contractor,
@@ -73,7 +74,7 @@ export default function WorkforcePage() {
   } = useAppStore();
   const { t } = useLocale();
   const { isReadOnly, can } = useSubscription();
-  const canWrite = !isReadOnly && can("write");
+  const canWrite = useCanWrite();
 
   const specialtyLabels: Record<WorkSpecialty, string> = {
     installation: t("work.spec.installation"),

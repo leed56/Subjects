@@ -50,6 +50,7 @@ import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { ACJob, JobAssigneeType, JobItem, JobItemType, JobItemInput, JobStatusEntry } from "@/lib/store/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { useCanWrite } from "@/lib/subscription/use-can-write";
 
 const UNIT_TYPES = ["Wall mounted", "Cassette", "Ducted", "Ceiling suspended", "Portable", "Window"];
 
@@ -57,6 +58,7 @@ export default function JobsPage() {
   const { data, ready, addACJob, updateACJob, deleteACJob, recordACService, addJobItem, deleteJobItem } = useAppStore();
   const { t, locale } = useLocale();
   const { org } = useSubscription();
+  const canWrite = useCanWrite();
   const notificationLogs = useNotificationLogs(org.id);
   const notifySettings = loadNotificationSettings();
   const [showForm, setShowForm] = useState(true);
@@ -206,7 +208,7 @@ export default function JobsPage() {
           eyebrow="AC service operations"
           title={t("jobs.title")}
           description={`${t("jobs.subtitle")} — ${pending.length} ${t("jobs.pending")}`}
-          actions={<><ProButton href="/customers" variant="secondary">{t("nav.customers")}</ProButton><button onClick={() => { resetForm(); setShowForm((v) => !v); }} className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700">{showForm ? t("common.hide_form") : t("jobs.new")}</button></>}
+          actions={<><ProButton href="/customers" variant="secondary">{t("nav.customers")}</ProButton><button type="button" disabled={!canWrite} onClick={() => { resetForm(); setShowForm((v) => !v); }} className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{showForm ? t("common.hide_form") : t("jobs.new")}</button></>}
         />
         {message && <div className="mb-5 rounded-[1.25rem] border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900 shadow-sm">{message}</div>}
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -257,7 +259,7 @@ export default function JobsPage() {
                   <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-black uppercase tracking-wide text-slate-500">{t("jobs.service_due_section")}</p><div className="mt-3 flex flex-wrap gap-3"><label className="flex items-center gap-2 text-sm font-bold text-slate-700"><input type="radio" checked={!serviceDueManual} onChange={() => { setServiceDueManual(false); setServiceDueDate(""); }} />{t("jobs.service_due_auto")}</label><label className="flex items-center gap-2 text-sm font-bold text-slate-700"><input type="radio" checked={serviceDueManual} onChange={() => { setServiceDueManual(true); setServiceDueDate(serviceDueDate || autoServiceDuePreview() || ""); }} />{t("jobs.service_due_manual")}</label></div>{serviceDueManual ? <input type="date" value={serviceDueDate} onChange={(e) => setServiceDueDate(e.target.value)} className="mt-3 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none" /> : <p className="mt-3 text-sm font-bold text-teal-800">{autoServiceDuePreview() ? `${t("jobs.service_due_label")}: ${autoServiceDuePreview()}` : t("jobs.service_due_auto_hint")}</p>}</div>
                 </div>
                 <label className="mt-4 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700"><input type="checkbox" checked={amcContract} onChange={(e) => setAmcContract(e.target.checked)} />{t("jobs.amc")}</label>
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row"><button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{editing ? t("jobs.update_job") : t("jobs.create")}</button>{editing && <button type="button" onClick={resetForm} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>}</div>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row"><button type="submit" disabled={!canWrite} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{editing ? t("jobs.update_job") : t("jobs.create")}</button>{editing && <button type="button" onClick={resetForm} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>}</div>
               </form>
             </ProCard>
           </section>
@@ -267,7 +269,30 @@ export default function JobsPage() {
           <ProCard title={t("jobs.all")} eyebrow="Status filter" action={<ProBadge tone="teal">{jobs.length} shown</ProBadge>}><div className="flex flex-wrap gap-2"><button onClick={() => setFilter("all")} className={`rounded-full px-3 py-2 text-xs font-black ${filter === "all" ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{t("jobs.all")} ({data.acJobs.length})</button>{AC_JOB_STATUSES.map((s) => <button key={s.value} onClick={() => setFilter(s.value)} className={`rounded-full px-3 py-2 text-xs font-black ${filter === s.value ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{locale === "si" ? s.labelSi : s.labelEn}</button>)}</div></ProCard>
         </section>
         <section className="mt-6">
-          {jobs.length === 0 ? <ProCard><ProEmptyState title={t("jobs.no_jobs")} description={t("jobs.no_jobs_hint")} /></ProCard> : <div className="grid gap-4 xl:grid-cols-2">{jobs.map((job) => <JobCard key={job.id} job={job} assigneePhone={job.assigneeType === "team" ? data.technicians.find((x) => x.id === job.assigneeId)?.phone : job.assigneeType === "contractor" ? data.contractors.find((x) => x.id === job.assigneeId)?.phone : undefined} locale={locale} business={data.business} notificationLogs={notificationLogs} notifySettings={notifySettings} onServiceDone={() => setServiceDoneJob(job)} onJobSheet={() => setSheetJob(job)} onEdit={() => loadJob(job)} onSchedule={() => updateACJob(job.id, { status: "scheduled" })} onInstalled={() => updateACJob(job.id, { status: "installed", installedDate: new Date().toISOString().slice(0, 10) })} onComplete={() => updateACJob(job.id, { status: "completed" })} onDelete={() => { if (confirm(`${t("jobs.delete_confirm")} ${job.jobNo}?`)) deleteACJob(job.id); }} />)}</div>}
+          {jobs.length === 0 ? (
+            <ProCard>
+              <ProEmptyState
+                title={t("jobs.no_jobs")}
+                description={t("jobs.no_jobs_hint")}
+                action={
+                  data.acJobs.length === 0 && canWrite ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetForm();
+                        setShowForm(true);
+                      }}
+                      className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20"
+                    >
+                      {t("jobs.new")}
+                    </button>
+                  ) : undefined
+                }
+              />
+            </ProCard>
+          ) : (
+            <div className="grid gap-4 xl:grid-cols-2">{jobs.map((job) => <JobCard key={job.id} job={job} assigneePhone={job.assigneeType === "team" ? data.technicians.find((x) => x.id === job.assigneeId)?.phone : job.assigneeType === "contractor" ? data.contractors.find((x) => x.id === job.assigneeId)?.phone : undefined} locale={locale} business={data.business} notificationLogs={notificationLogs} notifySettings={notifySettings} onServiceDone={() => setServiceDoneJob(job)} onJobSheet={() => setSheetJob(job)} onEdit={() => loadJob(job)} onSchedule={() => updateACJob(job.id, { status: "scheduled" })} onInstalled={() => updateACJob(job.id, { status: "installed", installedDate: new Date().toISOString().slice(0, 10) })} onComplete={() => updateACJob(job.id, { status: "completed" })} onDelete={() => { if (confirm(`${t("jobs.delete_confirm")} ${job.jobNo}?`)) deleteACJob(job.id); }} />)}</div>
+          )}
         </section>
       </ProMain>
       <AcServiceDoneDialog

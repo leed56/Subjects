@@ -19,12 +19,14 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { formatProductFieldBadge } from "@/lib/sector-fields";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { getPlan } from "@/lib/subscription/plans";
+import { useCanWrite } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { Product } from "@/lib/types";
 
 export default function StockPage() {
   const { data, ready, addProduct, updateProduct, deleteProduct, stockIn } = useAppStore();
   const { org, subscription } = useSubscription();
+  const canWrite = useCanWrite();
   const { t } = useLocale();
   const [editing, setEditing] = useState<Product | null>(null);
   const [stockInId, setStockInId] = useState<string | null>(null);
@@ -80,8 +82,9 @@ export default function StockPage() {
               <ProButton href="/sales" variant="secondary">{t("nav.sales")}</ProButton>
               <button
                 type="button"
+                disabled={!canWrite}
                 onClick={openCreate}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98]"
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {showForm && !editing ? t("common.hide_form") : t("stock.add_item")}
               </button>

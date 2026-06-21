@@ -16,6 +16,7 @@ import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { useCanWrite } from "@/lib/subscription/use-can-write";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type {
   BankTransactionType,
@@ -45,7 +46,7 @@ export default function BankingPage() {
   } = useAppStore();
   const { t } = useLocale();
   const { isReadOnly, can } = useSubscription();
-  const canWrite = !isReadOnly && can("write");
+  const canWrite = useCanWrite();
 
   const statusLabels: Record<ChequeStatus, string> = {
     pending: t("bank.status.pending"),

@@ -66,7 +66,7 @@ export default function DashboardPage() {
               {t("dash.live")} · {stats.productCount} {t("dash.products")} · {stats.saleCount} {t("dash.sales_today")}
               {isReadOnly && (
                 <span className="mt-2 block font-bold text-amber-700">
-                  Read-only access is active. Editing actions are disabled for this workspace.
+                  {t("sub.read_only")}
                 </span>
               )}
             </span>

@@ -12,6 +12,7 @@ const SHOP_ROUTE_PREFIXES = [
   "/stock",
   "/suppliers",
   "/jobs",
+  "/workforce",
   "/vehicles",
   "/bills",
   "/customers",

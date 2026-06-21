@@ -147,7 +147,7 @@ export type AppStoreValue = {
     note?: string,
   ) => boolean;
   addVehicle: (input: VehicleInput) => boolean;
-  updateVehicle: (id: string, input: Partial<VehicleInput>) => void;
+  updateVehicle: (id: string, input: Partial<VehicleInput>) => boolean;
   sellVehicle: (input: VehicleSaleInput) => boolean;
   deleteVehicle: (id: string) => void;
   resetAll: () => void;
@@ -479,8 +479,8 @@ function useAppStoreState(): AppStoreValue {
         return persist(next);
       },
       updateVehicle: (id, input) => {
-        if (!data || isReadOnly) return;
-        persist(updateVehicle(data, id, input));
+        if (!data) return false;
+        return persist(updateVehicle(data, id, input));
       },
       sellVehicle: (input) => {
         if (!data || !can("write")) return false;
