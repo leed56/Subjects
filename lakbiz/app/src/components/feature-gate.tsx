@@ -33,10 +33,10 @@ export function FeatureGate({ children, feature }: FeatureGateProps) {
         <h1 className="text-xl font-bold text-slate-900">{t("sub.upgrade_required")}</h1>
         <p className="mt-3 text-sm text-slate-600">{t("sub.upgrade_required_hint")}</p>
         <Link
-          href="/settings/billing"
+          href="/settings/plans"
           className="mt-6 inline-block rounded-lg bg-teal-700 px-5 py-2.5 text-sm font-medium text-white"
         >
-          {t("nav.billing")}
+          {t("nav.plans")}
         </Link>
       </main>
     </div>

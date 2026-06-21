@@ -24,9 +24,9 @@ Sri Lanka–focused SaaS pricing and technical design for LakBiz.
 | Vehicles module | 790 |
 | Both sector pack | 1,290 |
 
-**Trial:** 14 days, Business-level features, no credit card. Phone OTP signup.
+**Trial:** 14 days, Business-level features, no credit card. Email signup.
 
-**After trial:** 7-day read-only grace (view data, no new sales), then billing required.
+**After trial:** 7-day read-only grace (view data, no new sales), then contact LakBiz to activate.
 
 ---
 
@@ -55,9 +55,9 @@ Enforcement: server-side `can(org, feature)` + client UI gates.
 ## Technical architecture
 
 ```
-Browser → Next.js → Supabase Auth (phone OTP)
+Browser → Next.js → Supabase Auth (email/password)
                  → Postgres (org-scoped data, RLS)
-                 → PayHere webhook → subscription status
+                 → Platform admin panel → subscription status
 ```
 
 ### Tenant model
@@ -84,41 +84,42 @@ See `lakbiz/supabase/migrations/20250614000001_subscription_schema.sql`.
 |--------|--------|
 | `trialing` | Full plan features until `trial_ends_at` |
 | `active` | Paid, full access |
-| `past_due` | Read-only + pay banner |
-| `canceled` | Billing page only; export window |
+| `past_due` | Read-only + contact banner |
+| `read_only` | View only until LakBiz activates |
+| `canceled` | Plans page only; export window |
 
-### Payments (phased)
+### Billing (manual only)
 
-1. **Manual** — bank transfer, admin activates in Supabase.
-2. **PayHere** — monthly payment links + webhook.
-3. **Recurring** — saved card / auto-renew (later).
+All subscription billing is handled **outside the app**:
+
+1. Customer pays LakBiz via bank transfer or agreed method.
+2. Platform admin activates or extends the subscription in the admin panel / Supabase.
+3. Customers see a **read-only plans page** at `/settings/plans` — no checkout, no PayHere, no Stripe.
+
+Business payments (customer credit, supplier payables, contractor payouts, POS cash/cheque) remain in-app — those are operational ledger features, not SaaS billing.
 
 ---
 
 ## Implementation roadmap
 
-### Phase A — Foundation (in progress)
+### Phase A — Foundation (done)
 
 - [x] Subscription doc + SQL migration in repo
 - [x] Plan definitions + `can()` feature gate in app
-- [x] `/settings/billing` UI
-- [x] `/login` UI scaffold
-- [ ] Create Supabase project + run migration
-- [ ] Phone OTP auth
-- [ ] Migrate localStorage data → org tables
+- [x] `/settings/plans` read-only UI (Sinhala + English)
+- [x] `/login` email signup
+- [x] Supabase org + subscription provisioning
+- [x] Gate write actions per plan
 
-### Phase B — Billing live
+### Phase B — Platform ops
 
-- [ ] Trial on org signup
-- [ ] PayHere checkout + webhook
-- [ ] Admin: manual activate / extend trial
-- [ ] Gate write actions per plan
+- [ ] Admin: manual activate / extend trial / change plan
+- [ ] Renewal WhatsApp/SMS reminders (optional)
 
 ### Phase C — Growth
 
-- [ ] Annual checkout
 - [ ] Referral credits
-- [ ] Renewal WhatsApp/SMS reminders
+- [ ] Annual billing discounts (manual invoicing)
 
 ---
 
@@ -133,7 +134,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-4. Enable Phone auth in Supabase dashboard.
+4. Enable Email auth in Supabase dashboard.
 
 Until Supabase is connected, the app runs in **demo mode** with a simulated Business trial.
 
@@ -146,7 +147,7 @@ Until Supabase is connected, the app runs in **demo mode** with a simulated Busi
 | `app/src/lib/subscription/plans.ts` | Plan limits and LKR prices |
 | `app/src/lib/subscription/can.ts` | Feature gate helper |
 | `app/src/lib/subscription/subscription-provider.tsx` | React context |
-| `app/src/app/settings/billing/page.tsx` | Plan picker UI |
+| `app/src/app/settings/plans/page.tsx` | Read-only plan summary |
 | `supabase/migrations/*.sql` | Database schema |
 
 ---

@@ -26,7 +26,7 @@ export function MarketingHeader() {
   const links = [
     { href: "#sectors", label: t("home.sectors_title") },
     { href: "#features", label: t("home.features_title") },
-    { href: "/settings/billing", label: t("nav.billing") },
+    { href: "/settings/plans", label: t("nav.plans") },
     { href: "/login", label: t("nav.login") },
   ];
 

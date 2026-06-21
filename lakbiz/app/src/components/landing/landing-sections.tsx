@@ -75,7 +75,7 @@ export function LandingCta() {
                 {t("home.cta_free")}
               </Link>
               <Link
-                href="/settings/billing"
+                href="/settings/plans"
                 className="rounded-2xl border border-white/30 px-8 py-3.5 text-sm font-semibold text-white transition hover:bg-white/10"
               >
                 {t("home.cta_plans")}

@@ -9,7 +9,7 @@ Inventory, sales, and **business banking** for Sri Lankan SMEs — grocery, elec
 | [PRODUCT_BRIEF.md](./PRODUCT_BRIEF.md) | Market research, MVP, go-to-market |
 | [docs/SECTORS.md](./docs/SECTORS.md) | **AC, car sales, banking** + all sector fields |
 | [docs/DATA_MODEL.md](./docs/DATA_MODEL.md) | Database / types design |
-| [docs/SUBSCRIPTION.md](./docs/SUBSCRIPTION.md) | **Pricing tiers, billing roadmap, Supabase schema** |
+| [docs/SUBSCRIPTION.md](./docs/SUBSCRIPTION.md) | **Pricing tiers, manual billing, Supabase schema** |
 
 ## App (starter)
 
@@ -40,7 +40,7 @@ Schema migration is in `lakbiz/supabase/migrations/` (already applied if using s
 - `/bills` — view, **print**, **WhatsApp share** bills
 - `/customers` — credit ledger, record payments
 - `/banking` — bank accounts, cheque register, PDC
-- `/settings/billing` — **subscription plans** (LKR pricing, trial)
+- `/settings/plans` — **subscription plans** (read-only, LKR reference pricing)
 - `/login` — phone OTP scaffold (Supabase)
 - `/dashboard` — live sales, profit, credit, bank balance
 

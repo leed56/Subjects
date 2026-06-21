@@ -17,7 +17,7 @@ export function TrialBanner() {
     return (
       <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900">
         {t("sub.read_only")}{" "}
-        <Link href="/settings/billing" className="font-semibold underline">
+        <Link href="/settings/plans" className="font-semibold underline">
           {t("sub.upgrade_now")}
         </Link>
       </div>
@@ -28,7 +28,7 @@ export function TrialBanner() {
     return (
       <div className="border-b border-teal-200 bg-teal-50 px-4 py-2 text-center text-sm text-teal-900">
         {t("sub.trial_banner")} {daysLeftInTrial}.{" "}
-        <Link href="/settings/billing" className="font-semibold underline">
+        <Link href="/settings/plans" className="font-semibold underline">
           {t("sub.choose_plan")}
         </Link>
       </div>

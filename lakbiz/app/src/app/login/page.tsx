@@ -303,7 +303,7 @@ export default function LoginPage() {
                 {t("admin.login_title")}
               </Link>
               {" · "}
-              <Link href="/settings/billing" className="text-teal-700 underline">
+              <Link href="/settings/plans" className="text-teal-700 underline">
                 {t("sub.title")}
               </Link>
             </>

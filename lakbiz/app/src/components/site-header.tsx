@@ -99,14 +99,14 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
               {t("nav.notifications")}
             </Link>
             <Link
-              href="/settings/billing"
+              href="/settings/plans"
               className={`rounded-lg px-2 py-1 text-sm font-medium ${
-                pathname === "/settings/billing"
+                pathname === "/settings/plans" || pathname === "/settings/billing"
                   ? "text-teal-800"
                   : "text-slate-600 hover:text-teal-700"
               }`}
             >
-              {t("nav.billing")}
+              {t("nav.plans")}
             </Link>
             {isPlatformAdmin && (
               <Link
@@ -241,11 +241,11 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
               {t("nav.notifications")}
             </Link>
             <Link
-              href="/settings/billing"
+              href="/settings/plans"
               onClick={() => setOpen(false)}
               className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-              {t("nav.billing")}
+              {t("nav.plans")}
             </Link>
             <Link
               href={user ? "/settings/shop" : "/login"}

@@ -139,10 +139,10 @@ export default function NotificationsSettingsPage() {
       <main className="mx-auto max-w-3xl px-4 py-10">
         <div className="mb-6">
           <Link
-            href="/settings/billing"
+            href="/settings/plans"
             className="text-sm text-teal-700 hover:underline"
           >
-            ← {t("nav.billing")}
+            ← {t("nav.plans")}
           </Link>
           <h1 className="mt-2 text-2xl font-bold text-slate-900">
             {t("msg.settings_title")}
