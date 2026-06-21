@@ -4,12 +4,20 @@ import { defaultBusiness } from "@/lib/invoice";
 import type { ACJobStatus } from "@/lib/ac-jobs";
 import type { ACJobType } from "@/lib/ac-job-types";
 
+export type JobAssigneeType = "team" | "contractor";
+
 export interface ACJob {
   id: string;
   jobNo: string;
   date: string;
   jobType: ACJobType;
   assignedTechnician?: string;
+  /** Who does the work: in-house team member or external contractor */
+  assigneeType?: JobAssigneeType;
+  /** Workforce id (technician or contractor) */
+  assigneeId?: string;
+  /** Amount paid to the contractor for this job (contractor jobs only) */
+  subcontractCost?: number;
   customerId?: string;
   customerName: string;
   phone?: string;
@@ -41,6 +49,9 @@ export interface ACJob {
 export interface ACJobInput {
   jobType?: ACJobType;
   assignedTechnician?: string;
+  assigneeType?: JobAssigneeType;
+  assigneeId?: string;
+  subcontractCost?: number;
   customerId?: string;
   customerName: string;
   phone?: string;

@@ -359,6 +359,11 @@ export async function pullBusinessData(
       amcContract: row.amc_contract ?? undefined,
       jobType: (row.job_type as AppData["acJobs"][number]["jobType"]) ?? "installation",
       assignedTechnician: row.assigned_technician ?? undefined,
+      assigneeType:
+        (row.assignee_type as AppData["acJobs"][number]["assigneeType"]) ?? undefined,
+      assigneeId: row.assignee_id ?? undefined,
+      subcontractCost:
+        row.subcontract_cost != null ? num(row.subcontract_cost) : undefined,
       notes: row.notes ?? undefined,
     })),
     technicians: (techniciansRes.data ?? []).map((row) => ({
@@ -800,6 +805,9 @@ export async function pushBusinessData(
     amc_contract: job.amcContract ?? null,
     job_type: job.jobType ?? "installation",
     assigned_technician: job.assignedTechnician ?? null,
+    assignee_type: job.assigneeType ?? null,
+    assignee_id: job.assigneeId ?? null,
+    subcontract_cost: job.subcontractCost ?? null,
     notes: job.notes ?? null,
   }));
 

@@ -48,7 +48,7 @@ import type { BusinessInfo } from "@/lib/invoice";
 import { defaultTemplateForJob, loadNotificationSettings } from "@/lib/messaging";
 import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useAppStore } from "@/lib/store/use-app-store";
-import type { ACJob } from "@/lib/store/types";
+import type { ACJob, JobAssigneeType } from "@/lib/store/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 const UNIT_TYPES = ["Wall mounted", "Cassette", "Ducted", "Ceiling suspended", "Portable", "Window"];
@@ -64,7 +64,8 @@ export default function JobsPage() {
   const [filter, setFilter] = useState<ACJobStatus | "all">("all");
   const [typeFilter, setTypeFilter] = useState<ACJobType | "all">("all");
   const [jobType, setJobType] = useState<ACJobType>("installation");
-  const [assignedTechnician, setAssignedTechnician] = useState("");
+  const [assigneeKey, setAssigneeKey] = useState("");
+  const [subcontractCost, setSubcontractCost] = useState(0);
   const [message, setMessage] = useState("");
   const [serviceDoneJob, setServiceDoneJob] = useState<ACJob | null>(null);
   const [customerId, setCustomerId] = useState("");
@@ -101,7 +102,7 @@ export default function JobsPage() {
     setBtu(18000); setUnitType(UNIT_TYPES[0]); setUnitCount(1); setDescription("");
     setQuotedAmount(0); setDepositAmount(0); setPipeMeters(4); setStatus("quote"); setScheduledDate("");
     setServiceIntervalDays(180); setServiceDueManual(false); setServiceDueDate(""); setAmcContract(false);
-    setJobType("installation"); setAssignedTechnician(""); setNotes(""); setEditing(null);
+    setJobType("installation"); setAssigneeKey(""); setSubcontractCost(0); setNotes(""); setEditing(null);
   };
 
   const loadJob = (job: ACJob) => {
@@ -112,7 +113,8 @@ export default function JobsPage() {
     setStatus(job.status); setScheduledDate(job.scheduledDate ?? ""); setServiceIntervalDays(resolveServiceIntervalDays(job));
     setServiceDueManual(job.serviceDueManual ?? false); setServiceDueDate(job.serviceDueDate ?? "");
     setAmcContract(job.amcContract ?? false); setJobType(job.jobType ?? "installation");
-    setAssignedTechnician(job.assignedTechnician ?? ""); setNotes(job.notes ?? ""); setShowForm(true);
+    setAssigneeKey(job.assigneeId ? `${job.assigneeType}:${job.assigneeId}` : "");
+    setSubcontractCost(job.subcontractCost ?? 0); setNotes(job.notes ?? ""); setShowForm(true);
   };
 
   const autoServiceDuePreview = (): string | undefined => {
@@ -123,9 +125,22 @@ export default function JobsPage() {
     return computeServiceDueFromDays(base, interval);
   };
 
-  const buildInput = () => ({
+  const buildInput = () => {
+    const [aType, aId] = assigneeKey
+      ? (assigneeKey.split(":") as [JobAssigneeType, string])
+      : [undefined, undefined];
+    const assigneeName =
+      aType === "team"
+        ? data.technicians.find((x) => x.id === aId)?.name
+        : aType === "contractor"
+          ? data.contractors.find((x) => x.id === aId)?.name
+          : undefined;
+    return {
     jobType,
-    assignedTechnician: assignedTechnician || undefined,
+    assignedTechnician: assigneeName,
+    assigneeType: aType,
+    assigneeId: aId,
+    subcontractCost: aType === "contractor" ? subcontractCost : undefined,
     serviceDueManual,
     serviceDueDate: serviceDueManual ? serviceDueDate || undefined : autoServiceDuePreview(),
     serviceIntervalDays,
@@ -146,7 +161,8 @@ export default function JobsPage() {
     amcContract,
     installedDate: status === "installed" && !editing?.installedDate ? new Date().toISOString().slice(0, 10) : editing?.installedDate,
     notes,
-  });
+    };
+  };
 
   const jobs = data.acJobs.filter((j) => {
     const type = j.jobType ?? "installation";
@@ -194,7 +210,20 @@ export default function JobsPage() {
                   <select value={unitType} onChange={(e) => setUnitType(e.target.value)} className="h-12 rounded-2xl border border-slate-200 px-4 text-sm font-semibold outline-none focus:border-teal-300">{UNIT_TYPES.map((item) => <option key={item}>{item}</option>)}</select>
                   <input type="number" min={1} placeholder={t("jobs.units")} value={unitCount} onChange={(e) => setUnitCount(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 px-4 text-sm font-semibold outline-none focus:border-teal-300" />
                   <input type="number" placeholder={t("jobs.quote")} value={quotedAmount || ""} onChange={(e) => setQuotedAmount(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 px-4 text-sm font-semibold outline-none focus:border-teal-300" />
-                  <input placeholder={t("jobs.technician")} value={assignedTechnician} onChange={(e) => setAssignedTechnician(e.target.value)} className="h-12 rounded-2xl border border-slate-200 px-4 text-sm font-semibold outline-none focus:border-teal-300" />
+                  <select value={assigneeKey} onChange={(e) => setAssigneeKey(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300">
+                    <option value="">{t("jobs.assignee_unassigned")}</option>
+                    {data.technicians.filter((x) => x.active).length > 0 && (
+                      <optgroup label={t("work.team")}>
+                        {data.technicians.filter((x) => x.active).map((x) => <option key={x.id} value={`team:${x.id}`}>{x.name}</option>)}
+                      </optgroup>
+                    )}
+                    {data.contractors.filter((x) => x.active).length > 0 && (
+                      <optgroup label={t("work.contractors")}>
+                        {data.contractors.filter((x) => x.active).map((x) => <option key={x.id} value={`contractor:${x.id}`}>{x.name}{x.company ? ` (${x.company})` : ""}</option>)}
+                      </optgroup>
+                    )}
+                  </select>
+                  {assigneeKey.startsWith("contractor:") && <input type="number" placeholder={t("jobs.subcontract_cost")} value={subcontractCost || ""} onChange={(e) => setSubcontractCost(Number(e.target.value))} className="h-12 rounded-2xl border border-amber-200 bg-amber-50 px-4 text-sm font-semibold outline-none focus:border-amber-300" />}
                   {jobType === "installation" && <><input type="number" placeholder={t("jobs.deposit")} value={depositAmount || ""} onChange={(e) => setDepositAmount(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 px-4 text-sm font-semibold outline-none focus:border-teal-300" /><input type="number" placeholder={t("jobs.pipe_est")} value={pipeMeters || ""} onChange={(e) => setPipeMeters(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 px-4 text-sm font-semibold outline-none focus:border-teal-300" /></>}
                   <select value={status} onChange={(e) => setStatus(e.target.value as ACJobStatus)} className="h-12 rounded-2xl border border-slate-200 px-4 text-sm font-semibold outline-none focus:border-teal-300">{AC_JOB_STATUSES.map((s) => <option key={s.value} value={s.value}>{locale === "si" ? s.labelSi : s.labelEn}</option>)}</select>
                   <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} className="h-12 rounded-2xl border border-slate-200 px-4 text-sm font-semibold outline-none focus:border-teal-300" />
@@ -226,14 +255,25 @@ export default function JobsPage() {
 function JobCard({ job, locale, business, notificationLogs, notifySettings, onServiceDone, onEdit, onSchedule, onInstalled, onComplete, onDelete }: { job: ACJob; locale: Locale; business: BusinessInfo; notificationLogs: ReturnType<typeof useNotificationLogs>; notifySettings: ReturnType<typeof loadNotificationSettings>; onServiceDone: () => void; onEdit: () => void; onSchedule: () => void; onInstalled: () => void; onComplete: () => void; onDelete: () => void }) {
   const { t } = useLocale();
   const balance = job.quotedAmount - job.depositAmount;
+  const isContractor = job.assigneeType === "contractor";
+  const margin =
+    isContractor && job.subcontractCost != null
+      ? job.quotedAmount - job.subcontractCost
+      : null;
   return (
     <article className="overflow-hidden rounded-[1.75rem] border border-white bg-white shadow-lg shadow-slate-950/5 ring-1 ring-slate-200/60">
       <div className="bg-gradient-to-br from-slate-950 to-slate-800 p-5 text-white"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-mono text-xs font-black uppercase tracking-wide text-teal-300">{job.jobNo}</p><h2 className="mt-2 truncate text-xl font-black tracking-tight">{job.customerName}</h2><p className="mt-1 text-sm font-semibold text-slate-400">{jobTypeLabel(job.jobType ?? "installation", locale)}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-black ${jobStatusClass(job.status)}`}>{jobStatusLabel(job.status, locale)}{job.amcContract && " · AMC"}</span></div></div>
       <div className="p-5">
-        {job.assignedTechnician && <p className="text-xs font-black text-violet-700">{t("jobs.technician")}: {job.assignedTechnician}</p>}
+        {job.assignedTechnician && (
+          <p className="flex items-center gap-2 text-xs font-black text-violet-700">
+            {t("jobs.assignee")}: {job.assignedTechnician}
+            {job.assigneeType === "contractor" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">{t("work.contractors")}</span>}
+            {job.assigneeType === "team" && <span className="rounded-full bg-teal-100 px-2 py-0.5 text-teal-800">{t("work.team")}</span>}
+          </p>
+        )}
         <p className="mt-2 text-sm font-semibold text-slate-500">{job.address}</p>
         <p className="mt-2 text-sm font-semibold text-slate-700">{job.description}{job.btu && ` · ${job.btu} BTU`}{job.pipeMeters != null && ` · ${job.pipeMeters}m pipe`}</p>
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3"><Metric label={t("jobs.quote_label")} value={formatLkr(job.quotedAmount)} /><Metric label={t("jobs.deposit_label")} value={formatLkr(job.depositAmount)} /><Metric label={t("jobs.balance_label")} value={formatLkr(balance)} /></div>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3"><Metric label={t("jobs.quote_label")} value={formatLkr(job.quotedAmount)} /><Metric label={t("jobs.deposit_label")} value={formatLkr(job.depositAmount)} /><Metric label={t("jobs.balance_label")} value={formatLkr(balance)} />{isContractor && job.subcontractCost != null && <Metric label={t("jobs.subcontract_cost")} value={formatLkr(job.subcontractCost)} />}{margin != null && <Metric label={t("jobs.margin")} value={formatLkr(margin)} />}</div>
         {(job.scheduledDate || job.serviceDueDate) && <div className="mt-4 flex flex-wrap gap-2 text-xs font-black">{job.scheduledDate && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{t("jobs.install_label")}: {job.scheduledDate}</span>}{job.serviceDueDate && <span className={`rounded-full border px-2.5 py-1 ${serviceDueUrgencyClass(serviceDueUrgency(job.serviceDueDate))}`}>{t("jobs.service_due_label")}: {job.serviceDueDate} ({serviceDueLabel(job.serviceDueDate, locale)}){job.serviceDueManual && ` · ${t("jobs.service_due_manual_short")}`}</span>}</div>}
         <div className="mt-4"><AcJobReminderTimeline job={job} logs={notificationLogs} settings={notifySettings} /></div>
         <div className="mt-4 flex flex-wrap gap-2">

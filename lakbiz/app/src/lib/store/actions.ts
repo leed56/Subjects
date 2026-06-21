@@ -455,6 +455,10 @@ export function addACJob(data: AppData, input: ACJobInput): AppData {
     date: new Date().toISOString(),
     jobType,
     assignedTechnician: input.assignedTechnician?.trim() || undefined,
+    assigneeType: input.assigneeType,
+    assigneeId: input.assigneeId,
+    subcontractCost:
+      input.assigneeType === "contractor" ? input.subcontractCost : undefined,
     customerId: input.customerId,
     customerName: customer?.name ?? input.customerName.trim(),
     phone: input.phone?.trim() || customer?.phone || undefined,
@@ -553,6 +557,16 @@ export function updateACJob(
         jobType: input.jobType ?? j.jobType,
         assignedTechnician:
           input.assignedTechnician?.trim() ?? j.assignedTechnician,
+        assigneeType: "assigneeType" in input ? input.assigneeType : j.assigneeType,
+        assigneeId: "assigneeId" in input ? input.assigneeId : j.assigneeId,
+        subcontractCost:
+          "subcontractCost" in input
+            ? input.assigneeType === "contractor"
+              ? input.subcontractCost
+              : "assigneeType" in input
+                ? undefined
+                : input.subcontractCost
+            : j.subcontractCost,
         customerId: input.customerId ?? j.customerId,
         customerName:
           customer?.name ??
