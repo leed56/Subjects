@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 import { AcJobReminderTimeline } from "@/components/ac-job-reminder-timeline";
 import { AcRemindersBanner } from "@/components/ac-reminders-banner";
 import { AcServiceDoneDialog } from "@/components/ac-service-done-dialog";
@@ -165,6 +165,28 @@ export default function JobsPage() {
     };
   };
 
+  const handleJobSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!address.trim()) {
+      setMessage(t("jobs.address_required"));
+      setTimeout(() => setMessage(""), 2500);
+      return;
+    }
+    const input = buildInput();
+    const ok = editing ? updateACJob(editing.id, input) : addACJob(input);
+    if (!ok) {
+      setMessage(t("common.save_failed"));
+      setTimeout(() => setMessage(""), 2500);
+      return;
+    }
+    setMessage(editing ? t("jobs.updated") : t("jobs.created"));
+    if (!editing) {
+      resetForm();
+      setShowForm(false);
+    }
+    setTimeout(() => setMessage(""), 2500);
+  };
+
   const jobs = data.acJobs.filter((j) => {
     const type = j.jobType ?? "installation";
     if (typeFilter !== "all" && type !== typeFilter) return false;
@@ -197,7 +219,7 @@ export default function JobsPage() {
         {showForm && (
           <section className="mt-6">
             <ProCard eyebrow={editing ? "Edit AC job" : "Create AC job"} title={editing ? `${t("jobs.edit_job")} ${editing.jobNo}` : t("jobs.new_job")} action={<ProBadge tone="teal">{formatLkr(quotedAmount)}</ProBadge>}>
-              <form onSubmit={(e) => { e.preventDefault(); if (!address.trim()) { setMessage(t("jobs.address_required")); return; } const input = buildInput(); if (editing) { updateACJob(editing.id, input); setMessage(t("jobs.updated")); } else { addACJob(input); setMessage(t("jobs.created")); resetForm(); setShowForm(false); } setTimeout(() => setMessage(""), 2500); }}>
+              <form onSubmit={handleJobSubmit}>
                 <div className="flex flex-wrap gap-2">
                   {AC_JOB_TYPES.map((tpe) => <button key={tpe.value} type="button" onClick={() => { setJobType(tpe.value); if (!editing) setStatus(defaultStatusForJobType(tpe.value)); }} className={`rounded-full px-3 py-2 text-xs font-black ${jobType === tpe.value ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{locale === "si" ? tpe.labelSi : tpe.labelEn}</button>)}
                 </div>
@@ -248,7 +270,22 @@ export default function JobsPage() {
           {jobs.length === 0 ? <ProCard><ProEmptyState title={t("jobs.no_jobs")} description={t("jobs.no_jobs_hint")} /></ProCard> : <div className="grid gap-4 xl:grid-cols-2">{jobs.map((job) => <JobCard key={job.id} job={job} assigneePhone={job.assigneeType === "team" ? data.technicians.find((x) => x.id === job.assigneeId)?.phone : job.assigneeType === "contractor" ? data.contractors.find((x) => x.id === job.assigneeId)?.phone : undefined} locale={locale} business={data.business} notificationLogs={notificationLogs} notifySettings={notifySettings} onServiceDone={() => setServiceDoneJob(job)} onJobSheet={() => setSheetJob(job)} onEdit={() => loadJob(job)} onSchedule={() => updateACJob(job.id, { status: "scheduled" })} onInstalled={() => updateACJob(job.id, { status: "installed", installedDate: new Date().toISOString().slice(0, 10) })} onComplete={() => updateACJob(job.id, { status: "completed" })} onDelete={() => { if (confirm(`${t("jobs.delete_confirm")} ${job.jobNo}?`)) deleteACJob(job.id); }} />)}</div>}
         </section>
       </ProMain>
-      <AcServiceDoneDialog job={serviceDoneJob} business={data.business} open={!!serviceDoneJob} onClose={() => setServiceDoneJob(null)} onConfirm={(input) => { if (serviceDoneJob) { recordACService(serviceDoneJob.id, input); setMessage(t("jobs.service_done_saved")); setTimeout(() => setMessage(""), 2500); } }} />
+      <AcServiceDoneDialog
+        job={serviceDoneJob}
+        business={data.business}
+        open={!!serviceDoneJob}
+        onClose={() => setServiceDoneJob(null)}
+        onConfirm={(input) => {
+          if (!serviceDoneJob) return;
+          const ok = recordACService(serviceDoneJob.id, input);
+          if (ok) {
+            setMessage(t("jobs.service_done_saved"));
+          } else {
+            setMessage(t("common.save_failed"));
+          }
+          setTimeout(() => setMessage(""), 2500);
+        }}
+      />
       {sheetJob && (
         <JobSheetModal
           job={sheetJob}
@@ -314,12 +351,13 @@ function ActionButton({ children, onClick }: { children: ReactNode; onClick: () 
 
 const JOB_ITEM_TYPES: JobItemType[] = ["part", "labour", "service"];
 
-function JobSheetModal({ job, locale, items, history, onAddItem, onDeleteItem, onClose }: { job: ACJob; locale: Locale; items: JobItem[]; history: JobStatusEntry[]; onAddItem: (input: JobItemInput) => void; onDeleteItem: (id: string) => void; onClose: () => void }) {
+function JobSheetModal({ job, locale, items, history, onAddItem, onDeleteItem, onClose }: { job: ACJob; locale: Locale; items: JobItem[]; history: JobStatusEntry[]; onAddItem: (input: JobItemInput) => boolean; onDeleteItem: (id: string) => boolean; onClose: () => void }) {
   const { t } = useLocale();
   const [itemType, setItemType] = useState<JobItemType>("part");
   const [name, setName] = useState("");
   const [qty, setQty] = useState(1);
   const [unitPrice, setUnitPrice] = useState(0);
+  const [itemMessage, setItemMessage] = useState("");
 
   const itemTypeLabels: Record<JobItemType, string> = {
     part: t("jobs.item.part"),
@@ -374,7 +412,7 @@ function JobSheetModal({ job, locale, items, history, onAddItem, onDeleteItem, o
                     <td className="px-3 py-2.5 text-right font-mono">{i.qty}</td>
                     <td className="px-3 py-2.5 text-right font-mono">{formatLkr(i.unitPrice)}</td>
                     <td className="px-3 py-2.5 text-right font-mono font-black">{formatLkr(i.lineTotal)}</td>
-                    <td className="px-3 py-2.5 text-right"><button onClick={() => onDeleteItem(i.id)} className="rounded-full bg-rose-50 px-2 py-1 text-xs font-black text-rose-700 hover:bg-rose-100">✕</button></td>
+                    <td className="px-3 py-2.5 text-right"><button onClick={() => { if (!onDeleteItem(i.id)) setItemMessage(t("common.save_failed")); }} className="rounded-full bg-rose-50 px-2 py-1 text-xs font-black text-rose-700 hover:bg-rose-100">✕</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -386,12 +424,18 @@ function JobSheetModal({ job, locale, items, history, onAddItem, onDeleteItem, o
             onSubmit={(e) => {
               e.preventDefault();
               if (!name.trim()) return;
-              onAddItem({ jobId: job.id, itemType, name, qty, unitPrice });
+              const ok = onAddItem({ jobId: job.id, itemType, name, qty, unitPrice });
+              if (!ok) {
+                setItemMessage(t("common.save_failed"));
+                return;
+              }
+              setItemMessage("");
               setName("");
               setQty(1);
               setUnitPrice(0);
             }}
           >
+            {itemMessage && <p className="col-span-full text-sm font-semibold text-amber-700">{itemMessage}</p>}
             <input placeholder={t("jobs.item_name")} value={name} onChange={(e) => setName(e.target.value)} className="h-11 rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-teal-300" />
             <select value={itemType} onChange={(e) => setItemType(e.target.value as JobItemType)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-teal-300">
               {JOB_ITEM_TYPES.map((ty) => <option key={ty} value={ty}>{itemTypeLabels[ty]}</option>)}

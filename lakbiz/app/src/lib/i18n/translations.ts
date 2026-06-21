@@ -77,6 +77,7 @@ const si: Dict = {
 
   // Common
   "common.save": "සුරකින්න",
+  "common.save_failed": "සුරකින්න බැර — ගිණුම read-only හෝ සීමාවක් ඇත",
   "common.cancel": "අවලංගු",
   "common.add": "එකතු කරන්න",
   "common.edit": "සංස්කරණය",
@@ -249,6 +250,7 @@ const si: Dict = {
   "stock.stock_in": "තොග ඇතුළත්",
   "stock.no_stock": "තවම තොග නැත",
   "stock.no_stock_hint": "ඔබේ පළමු භාණ්ඩය ඉහතින් එකතු කරන්න",
+  "stock.limit_reached": "භාණ්ඩ සීමාව පිරී ඇත — වැඩිදුර එකතු කිරීමට සැලසුම උත්ශ්‍රේණි කරන්න",
   "stock.stock_in_title": "තොග ඇතුළත් කිරීම",
   "stock.stock_in_hint": "සැපයුම්කරුගෙන් ලැබුණු ප්‍රමාණය",
   "stock.add_stock_btn": "තොග එකතු කරන්න",
@@ -882,6 +884,7 @@ const en: Dict = {
   "nav.demo": "Demo",
 
   "common.save": "Save",
+  "common.save_failed": "Could not save — account may be read-only or a limit was reached",
   "common.cancel": "Cancel",
   "common.add": "Add",
   "common.edit": "Edit",
@@ -1050,6 +1053,7 @@ const en: Dict = {
   "stock.stock_in": "Stock in",
   "stock.no_stock": "No stock yet",
   "stock.no_stock_hint": "Add your first item above",
+  "stock.limit_reached": "Product limit reached — upgrade your plan to add more items",
   "stock.stock_in_title": "Stock in",
   "stock.stock_in_hint": "Quantity received from supplier",
   "stock.add_stock_btn": "Add stock",

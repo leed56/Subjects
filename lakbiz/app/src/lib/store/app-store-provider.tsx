@@ -87,16 +87,16 @@ export type AppStoreValue = {
   ready: boolean;
   cloudSyncing: boolean;
   cloudSyncError: string | null;
-  addProduct: (input: ProductInput) => void;
-  updateProduct: (id: string, input: ProductInput) => void;
+  addProduct: (input: ProductInput) => boolean;
+  updateProduct: (id: string, input: ProductInput) => boolean;
   deleteProduct: (id: string) => void;
   stockIn: (productId: string, qty: number, note?: string) => void;
   stockOut: (productId: string, qty: number, note?: string) => void;
-  addCustomer: (input: CustomerInput) => void;
-  updateCustomer: (id: string, input: CustomerInput) => void;
+  addCustomer: (input: CustomerInput) => boolean;
+  updateCustomer: (id: string, input: CustomerInput) => boolean;
   deleteCustomer: (id: string) => void;
-  addSupplier: (input: SupplierInput) => void;
-  updateSupplier: (id: string, input: SupplierInput) => void;
+  addSupplier: (input: SupplierInput) => boolean;
+  updateSupplier: (id: string, input: SupplierInput) => boolean;
   deleteSupplier: (id: string) => void;
   createPurchase: (input: PurchaseInput) => boolean;
   recordSupplierPayment: (
@@ -128,12 +128,12 @@ export type AppStoreValue = {
     options?: SaleOptions,
   ) => string | false;
   updateBusiness: (business: BusinessInfo) => void;
-  addACJob: (input: ACJobInput) => void;
-  updateACJob: (id: string, input: Partial<ACJobInput>) => void;
+  addACJob: (input: ACJobInput) => boolean;
+  updateACJob: (id: string, input: Partial<ACJobInput>) => boolean;
   deleteACJob: (id: string) => void;
-  recordACService: (jobId: string, input?: RecordACServiceInput) => void;
-  addJobItem: (input: JobItemInput) => void;
-  deleteJobItem: (id: string) => void;
+  recordACService: (jobId: string, input?: RecordACServiceInput) => boolean;
+  addJobItem: (input: JobItemInput) => boolean;
+  deleteJobItem: (id: string) => boolean;
   addTechnician: (input: TechnicianInput) => boolean;
   updateTechnician: (id: string, input: Partial<TechnicianInput>) => void;
   deleteTechnician: (id: string) => void;
@@ -244,12 +244,13 @@ function useAppStoreState(): AppStoreValue {
   }, [ready, user, org.id, org.isAuthenticated]);
 
   const persist = useCallback(
-    (next: AppData) => {
-      if (isReadOnly || !can("write")) return;
+    (next: AppData): boolean => {
+      if (isReadOnly || !can("write")) return false;
       setData(next);
       latestDataRef.current = next;
       saveAppData(next, org.id);
       scheduleCloudPush(next);
+      return true;
     },
     [isReadOnly, can, org.id, scheduleCloudPush],
   );
@@ -270,12 +271,12 @@ function useAppStoreState(): AppStoreValue {
       cloudSyncing,
       cloudSyncError,
       addProduct: (input) => {
-        if (!data || isReadOnly || !canAddProduct(data)) return;
-        persist(addProduct(data, input));
+        if (!data || !canAddProduct(data)) return false;
+        return persist(addProduct(data, input));
       },
       updateProduct: (id, input) => {
-        if (!data || isReadOnly) return;
-        persist(updateProduct(data, id, input));
+        if (!data) return false;
+        return persist(updateProduct(data, id, input));
       },
       deleteProduct: (id) => {
         if (!data || isReadOnly) return;
@@ -290,39 +291,38 @@ function useAppStoreState(): AppStoreValue {
         persist(adjustStock(data, productId, qty, "out", note));
       },
       addCustomer: (input) => {
-        if (!data || isReadOnly) return;
-        persist(addCustomer(data, input));
+        if (!data) return false;
+        return persist(addCustomer(data, input));
       },
       updateCustomer: (id, input) => {
-        if (!data || isReadOnly) return;
-        persist(updateCustomer(data, id, input));
+        if (!data) return false;
+        return persist(updateCustomer(data, id, input));
       },
       deleteCustomer: (id) => {
         if (!data || isReadOnly) return;
         persist(deleteCustomer(data, id));
       },
       addSupplier: (input) => {
-        if (!data || isReadOnly) return;
-        persist(addSupplier(data, input));
+        if (!data) return false;
+        return persist(addSupplier(data, input));
       },
       updateSupplier: (id, input) => {
-        if (!data || isReadOnly) return;
-        persist(updateSupplier(data, id, input));
+        if (!data) return false;
+        return persist(updateSupplier(data, id, input));
       },
       deleteSupplier: (id) => {
         if (!data || isReadOnly) return;
         persist(deleteSupplier(data, id));
       },
       createPurchase: (input) => {
-        if (!data || isReadOnly) return false;
+        if (!data || !can("write")) return false;
         const before = data.purchases.length;
         const next = createPurchase(data, input);
         if (next.purchases.length === before) return false;
-        persist(next);
-        return true;
+        return persist(next);
       },
       recordSupplierPayment: (supplierId, amount, method, note) => {
-        if (!data || isReadOnly) return false;
+        if (!data || !can("write")) return false;
         const before = data.supplierPayments.length;
         const next = recordSupplierPayment(
           data,
@@ -332,11 +332,10 @@ function useAppStoreState(): AppStoreValue {
           note,
         );
         if (next.supplierPayments.length === before) return false;
-        persist(next);
-        return true;
+        return persist(next);
       },
       recordCustomerPayment: (customerId, amount, method, note) => {
-        if (!data || isReadOnly) return false;
+        if (!data || !can("write")) return false;
         const before = data.customerPayments.length;
         const next = recordCustomerPayment(
           data,
@@ -346,59 +345,54 @@ function useAppStoreState(): AppStoreValue {
           note,
         );
         if (next.customerPayments.length === before) return false;
-        persist(next);
-        return true;
+        return persist(next);
       },
       addBankAccount: (input) => {
-        if (!data || isReadOnly || !can("write")) return false;
+        if (!data || !can("write")) return false;
         const before = data.bankAccounts.length;
         const next = addBankAccount(data, input);
         if (next.bankAccounts.length === before) return false;
-        persist(next);
-        return true;
+        return persist(next);
       },
       deleteBankAccount: (id) => {
         if (!data || isReadOnly) return;
         persist(deleteBankAccount(data, id));
       },
       addBankTransaction: (input) => {
-        if (!data || isReadOnly || !can("write")) return false;
+        if (!data || !can("write")) return false;
         const before = data.bankTransactions.length;
         const next = addBankTransaction(data, input);
         if (next.bankTransactions.length === before) return false;
-        persist(next);
-        return true;
+        return persist(next);
       },
       deleteBankTransaction: (id) => {
         if (!data || isReadOnly) return;
         persist(deleteBankTransaction(data, id));
       },
       addBankTransfer: (input) => {
-        if (!data || isReadOnly || !can("write")) return false;
+        if (!data || !can("write")) return false;
         const before = data.bankTransfers.length;
         const next = addBankTransfer(data, input);
         if (next.bankTransfers.length === before) return false;
-        persist(next);
-        return true;
+        return persist(next);
       },
       addCheque: (input) => {
-        if (!data || isReadOnly || !can("write")) return false;
+        if (!data || !can("write")) return false;
         const before = data.cheques.length;
         const next = addCheque(data, input);
         if (next.cheques.length === before) return false;
-        persist(next);
-        return true;
+        return persist(next);
       },
       updateChequeStatus: (chequeId, status, bankAccountId) => {
         if (!data || isReadOnly) return;
         persist(updateChequeStatus(data, chequeId, status, bankAccountId));
       },
       createSale: (lines, paymentMethod, options) => {
-        if (!data || isReadOnly) return false;
+        if (!data || !can("write")) return false;
         const before = data.sales.length;
         const next = createSale(data, lines, paymentMethod, options);
         if (next.sales.length === before) return false;
-        persist(next);
+        if (!persist(next)) return false;
         return next.sales[0].id;
       },
       updateBusiness: (business) => {
@@ -413,35 +407,40 @@ function useAppStoreState(): AppStoreValue {
         });
       },
       addACJob: (input) => {
-        if (!data || isReadOnly) return;
-        persist(addACJob(data, input));
+        if (!data) return false;
+        const before = data.acJobs.length;
+        const next = addACJob(data, input);
+        if (next.acJobs.length === before) return false;
+        return persist(next);
       },
       updateACJob: (id, input) => {
-        if (!data || isReadOnly) return;
-        persist(updateACJob(data, id, input));
+        if (!data) return false;
+        return persist(updateACJob(data, id, input));
       },
       deleteACJob: (id) => {
         if (!data || isReadOnly) return;
         persist(deleteACJob(data, id));
       },
       recordACService: (jobId, input) => {
-        if (!data || isReadOnly) return;
-        persist(recordACService(data, jobId, input));
+        if (!data) return false;
+        return persist(recordACService(data, jobId, input));
       },
       addJobItem: (input) => {
-        if (!data || isReadOnly) return;
-        persist(addJobItem(data, input));
+        if (!data) return false;
+        const before = data.jobItems.length;
+        const next = addJobItem(data, input);
+        if (next.jobItems.length === before) return false;
+        return persist(next);
       },
       deleteJobItem: (id) => {
-        if (!data || isReadOnly) return;
-        persist(deleteJobItem(data, id));
+        if (!data) return false;
+        return persist(deleteJobItem(data, id));
       },
       addTechnician: (input) => {
-        if (!data || isReadOnly || !can("write")) return false;
+        if (!data || !can("write")) return false;
         const next = addTechnician(data, input);
         if (next.technicians.length === data.technicians.length) return false;
-        persist(next);
-        return true;
+        return persist(next);
       },
       updateTechnician: (id, input) => {
         if (!data || isReadOnly) return;
@@ -452,11 +451,10 @@ function useAppStoreState(): AppStoreValue {
         persist(deleteTechnician(data, id));
       },
       addContractor: (input) => {
-        if (!data || isReadOnly || !can("write")) return false;
+        if (!data || !can("write")) return false;
         const next = addContractor(data, input);
         if (next.contractors.length === data.contractors.length) return false;
-        persist(next);
-        return true;
+        return persist(next);
       },
       updateContractor: (id, input) => {
         if (!data || isReadOnly) return;
@@ -467,32 +465,28 @@ function useAppStoreState(): AppStoreValue {
         persist(deleteContractor(data, id));
       },
       recordContractorPayment: (contractorId, amount, method, note) => {
-        if (!data || isReadOnly) return false;
+        if (!data || !can("write")) return false;
         const before = data.contractorPayments.length;
         const next = recordContractorPayment(data, contractorId, amount, method, note);
         if (next.contractorPayments.length === before) return false;
-        persist(next);
-        return true;
+        return persist(next);
       },
       addVehicle: (input) => {
-        if (!data || isReadOnly) return false;
+        if (!data || !can("write")) return false;
         const before = data.vehicles.length;
         const next = addVehicle(data, input);
         if (next.vehicles.length === before) return false;
-        persist(next);
-        return true;
+        return persist(next);
       },
       updateVehicle: (id, input) => {
         if (!data || isReadOnly) return;
         persist(updateVehicle(data, id, input));
       },
       sellVehicle: (input) => {
-        if (!data || isReadOnly) return false;
+        if (!data || !can("write")) return false;
         const v = data.vehicles.find((x) => x.id === input.vehicleId);
         if (!v || v.status === "sold") return false;
-        const next = sellVehicle(data, input);
-        persist(next);
-        return true;
+        return persist(sellVehicle(data, input));
       },
       deleteVehicle: (id) => {
         if (!data || isReadOnly) return;

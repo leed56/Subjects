@@ -77,15 +77,16 @@ export default function CustomersPage() {
     e.preventDefault();
     if (!name.trim()) return;
     const limit = creditLimit === "" ? undefined : Number(creditLimit);
-    if (editing) {
-      updateCustomer(editing.id, { name, phone, address, creditLimit: limit });
-      resetForm();
-      setMessage(t("cust.updated"));
-    } else {
-      addCustomer({ name, phone, address, creditLimit: limit });
-      resetForm();
-      setMessage(t("cust.added"));
+    const ok = editing
+      ? updateCustomer(editing.id, { name, phone, address, creditLimit: limit })
+      : addCustomer({ name, phone, address, creditLimit: limit });
+    if (!ok) {
+      setMessage(t("common.save_failed"));
+      setTimeout(() => setMessage(""), 2500);
+      return;
     }
+    resetForm();
+    setMessage(editing ? t("cust.updated") : t("cust.added"));
     setTimeout(() => setMessage(""), 2500);
   };
 
@@ -348,6 +349,9 @@ export default function CustomersPage() {
                     if (ok) {
                       setMessage(t("cust.payment_saved"));
                       setPayCustomerId(null);
+                    } else {
+                      setMessage(t("common.save_failed"));
+                      setTimeout(() => setMessage(""), 2500);
                     }
                   }}
                   className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700"

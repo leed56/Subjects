@@ -473,7 +473,7 @@ export default function BankingPage() {
                     setShowBankModal(false);
                     resetBankForm();
                   } else {
-                    setFormMessage(t("sales.failed"));
+                    setFormMessage(t("common.save_failed"));
                   }
                 }}
               >
@@ -529,7 +529,7 @@ export default function BankingPage() {
                       setShowTxnModal(false);
                       resetTxnForm();
                     } else {
-                      setFormMessage(t("sales.failed"));
+                      setFormMessage(t("common.save_failed"));
                     }
                   }}
                 >
@@ -589,7 +589,7 @@ export default function BankingPage() {
                       setShowTransferModal(false);
                       resetTransferForm();
                     } else {
-                      setFormMessage(t("sales.failed"));
+                      setFormMessage(t("common.save_failed"));
                     }
                   }}
                 >
@@ -634,7 +634,7 @@ export default function BankingPage() {
                     setShowChequeModal(false);
                     resetChequeForm();
                   } else {
-                    setFormMessage(t("sales.failed"));
+                    setFormMessage(t("common.save_failed"));
                   }
                 }}
               >

@@ -120,15 +120,16 @@ export default function SuppliersPage() {
   const saveSupplier = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    if (editing) {
-      updateSupplier(editing.id, { name, phone, address, vatNumber, contactPerson });
-      resetSupplierForm();
-      setMessage(t("common.saved"));
-    } else {
-      addSupplier({ name, phone, address, vatNumber, contactPerson });
-      resetSupplierForm();
-      setMessage(t("common.saved"));
+    const ok = editing
+      ? updateSupplier(editing.id, { name, phone, address, vatNumber, contactPerson })
+      : addSupplier({ name, phone, address, vatNumber, contactPerson });
+    if (!ok) {
+      setMessage(t("common.save_failed"));
+      setTimeout(() => setMessage(""), 2500);
+      return;
     }
+    resetSupplierForm();
+    setMessage(t("common.saved"));
     setTimeout(() => setMessage(""), 2500);
   };
 
@@ -476,7 +477,20 @@ export default function SuppliersPage() {
                 </select>
               </label>
               <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                <button onClick={() => { recordSupplierPayment(paySupplierId, payAmount, payMethod); setPaySupplierId(null); setMessage(t("sup.pay_saved")); }} className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">
+                <button
+                  onClick={() => {
+                    const ok = recordSupplierPayment(paySupplierId, payAmount, payMethod);
+                    if (ok) {
+                      setPaySupplierId(null);
+                      setMessage(t("sup.pay_saved"));
+                      setTimeout(() => setMessage(""), 2500);
+                    } else {
+                      setMessage(t("common.save_failed"));
+                      setTimeout(() => setMessage(""), 2500);
+                    }
+                  }}
+                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700"
+                >
                   {t("common.save")}
                 </button>
                 <button onClick={() => setPaySupplierId(null)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">

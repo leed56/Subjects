@@ -18,18 +18,20 @@ import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { formatProductFieldBadge } from "@/lib/sector-fields";
 import { useAppStore } from "@/lib/store/use-app-store";
+import { getPlan } from "@/lib/subscription/plans";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { Product } from "@/lib/types";
 
 export default function StockPage() {
   const { data, ready, addProduct, updateProduct, deleteProduct, stockIn } = useAppStore();
-  const { org } = useSubscription();
+  const { org, subscription } = useSubscription();
   const { t } = useLocale();
   const [editing, setEditing] = useState<Product | null>(null);
   const [stockInId, setStockInId] = useState<string | null>(null);
   const [stockInQty, setStockInQty] = useState(1);
   const [showForm, setShowForm] = useState(true);
   const [search, setSearch] = useState("");
+  const [message, setMessage] = useState("");
 
   if (!ready || !data) {
     return (
@@ -87,6 +89,12 @@ export default function StockPage() {
           }
         />
 
+        {message && (
+          <div className="mb-5 rounded-[1.25rem] border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 shadow-sm">
+            {message}
+          </div>
+        )}
+
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <ProStatCard
             label={t("common.items")}
@@ -141,16 +149,31 @@ export default function StockPage() {
                   submitLabel={t("common.update")}
                   onCancel={() => setEditing(null)}
                   onSubmit={(input) => {
-                    updateProduct(editing.id, input);
+                    const ok = updateProduct(editing.id, input);
+                    if (!ok) {
+                      setMessage(t("common.save_failed"));
+                      setTimeout(() => setMessage(""), 3000);
+                      return;
+                    }
                     setEditing(null);
+                    setMessage("");
                   }}
                 />
               ) : (
                 <ProductForm
                   defaultSectorId={org.sector}
                   onSubmit={(input) => {
-                    addProduct(input);
+                    const plan = getPlan(subscription.planId);
+                    const atCap =
+                      plan.maxProducts != null && data.products.length >= plan.maxProducts;
+                    const ok = addProduct(input);
+                    if (!ok) {
+                      setMessage(t(atCap ? "stock.limit_reached" : "common.save_failed"));
+                      setTimeout(() => setMessage(""), 4000);
+                      return;
+                    }
                     setShowForm(false);
+                    setMessage("");
                   }}
                 />
               )}
