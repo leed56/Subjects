@@ -1,12 +1,24 @@
 "use client";
 
+import type { FormEvent } from "react";
 import { useState } from "react";
-import { SiteHeader } from "@/components/site-header";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
+import { SiteHeader } from "@/components/site-header";
+import {
+  ProBadge,
+  ProButton,
+  ProCard,
+  ProEmptyState,
+  ProLoadingState,
+  ProMain,
+  ProPageHeader,
+  ProPageShell,
+  ProStatCard,
+} from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
-import { buildLedger } from "@/lib/ledger";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
+import { buildLedger } from "@/lib/ledger";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { Customer } from "@/lib/store/types";
 import type { PaymentMethod } from "@/lib/types";
@@ -32,13 +44,16 @@ export default function CustomersPage() {
   const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
   const [ledgerCustomer, setLedgerCustomer] = useState<Customer | null>(null);
   const [message, setMessage] = useState("");
+  const [search, setSearch] = useState("");
 
   if (!ready || !data) {
     return (
-      <div className="min-h-full bg-slate-50">
+      <ProPageShell>
         <SiteHeader />
-        <main className="mx-auto max-w-6xl px-4 py-10">{t("common.loading")}</main>
-      </div>
+        <ProMain>
+          <ProLoadingState label={t("common.loading")} />
+        </ProMain>
+      </ProPageShell>
     );
   }
 
@@ -50,7 +65,15 @@ export default function CustomersPage() {
     setEditing(null);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const startEdit = (customer: Customer) => {
+    setEditing(customer);
+    setName(customer.name);
+    setPhone(customer.phone ?? "");
+    setAddress(customer.address ?? "");
+    setCreditLimit(customer.creditLimit ?? "");
+  };
+
+  const handleSave = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     const limit = creditLimit === "" ? undefined : Number(creditLimit);
@@ -67,13 +90,32 @@ export default function CustomersPage() {
   };
 
   const totalCredit = data.customers.reduce((s, c) => s + c.creditBalance, 0);
+  const overLimitCount = data.customers.filter(
+    (c) => c.creditLimit != null && c.creditBalance > c.creditLimit,
+  ).length;
+  const payingCustomers = data.customers.filter((c) => c.creditBalance > 0).length;
+  const recentPaymentsTotal = data.customerPayments
+    .slice(0, 8)
+    .reduce((sum, p) => sum + p.amount, 0);
+
+  const query = search.trim().toLowerCase();
+  const customers = query
+    ? data.customers.filter(
+        (c) =>
+          c.name.toLowerCase().includes(query) ||
+          (c.phone ?? "").toLowerCase().includes(query) ||
+          (c.address ?? "").toLowerCase().includes(query),
+      )
+    : data.customers;
+
+  const payCustomer = payCustomerId
+    ? data.customers.find((c) => c.id === payCustomerId)
+    : null;
 
   const ledgerEntries = ledgerCustomer
     ? buildLedger(
         data.sales
-          .filter(
-            (s) => s.customerId === ledgerCustomer.id && s.creditAmount > 0,
-          )
+          .filter((s) => s.customerId === ledgerCustomer.id && s.creditAmount > 0)
           .map((s) => ({
             date: s.date,
             label: `${t("sales.bill")} ${s.billNo ?? s.id.slice(0, 8)}`,
@@ -90,251 +132,229 @@ export default function CustomersPage() {
     : [];
 
   return (
-    <div className="min-h-full bg-slate-50">
+    <ProPageShell>
       <SiteHeader />
-      <main className="mx-auto max-w-6xl px-4 py-10">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900">{t("cust.title")}</h1>
-          <p className="text-slate-600">
-            {t("cust.subtitle")} · {t("cust.total_owed")}{" "}
-            <strong>{formatLkr(totalCredit)}</strong>
-          </p>
-        </div>
+      <ProMain>
+        <ProPageHeader
+          eyebrow="Customer CRM"
+          title={t("cust.title")}
+          description={`${t("cust.subtitle")} · ${t("cust.total_owed")} ${formatLkr(totalCredit)}`}
+          actions={
+            <>
+              <ProButton href="/sales">{t("nav.sales")}</ProButton>
+              <ProButton href="/bills" variant="secondary">{t("nav.bills")}</ProButton>
+            </>
+          }
+        />
 
         {message && (
-          <div className="mb-4 rounded-lg bg-teal-50 px-4 py-3 text-sm text-teal-800">
+          <div className="mb-5 rounded-[1.25rem] border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900 shadow-sm">
             {message}
           </div>
         )}
 
-        <form
-          onSubmit={handleSave}
-          className="mb-8 rounded-xl border border-slate-200 bg-white p-5"
-        >
-          <h2 className="font-semibold text-slate-900">
-            {editing ? t("cust.edit") : t("cust.add")}
-          </h2>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <input
-              required
-              placeholder={`${t("common.name")} *`}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            />
-            <input
-              placeholder={t("common.phone")}
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            />
-            <input
-              placeholder={t("common.address")}
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="number"
-              min={0}
-              step="any"
-              placeholder={t("cust.credit_limit")}
-              value={creditLimit}
-              onChange={(e) =>
-                setCreditLimit(
-                  e.target.value === "" ? "" : Number(e.target.value),
-                )
-              }
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="mt-4 flex gap-2">
-            <button
-              type="submit"
-              className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
-            >
-              {editing ? t("common.update") : t("cust.add")}
-            </button>
-            {editing && (
-              <button
-                type="button"
-                onClick={resetForm}
-                className="rounded-lg border px-4 py-2 text-sm"
-              >
-                {t("common.cancel")}
-              </button>
-            )}
-          </div>
-        </form>
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <ProStatCard label={t("nav.customers")} value={String(data.customers.length)} hint="Saved customer profiles" icon="👥" tone="teal" />
+          <ProStatCard label={t("cust.credit_owed")} value={formatLkr(totalCredit)} hint={`${payingCustomers} customers with credit`} icon="🤝" tone="amber" />
+          <ProStatCard label={t("cust.over_limit")} value={String(overLimitCount)} hint={overLimitCount ? "Needs attention" : "All within limits"} icon="⚠️" tone={overLimitCount ? "rose" : "slate"} />
+          <ProStatCard label={t("cust.recent_payments")} value={formatLkr(recentPaymentsTotal)} hint="Latest 8 records" icon="💸" tone="emerald" />
+        </section>
 
-        {data.customers.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
-            {t("cust.no_customers")}. {t("cust.credit_hint")}
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b bg-slate-50 text-slate-600">
-                <tr>
-                  <th className="px-4 py-3">{t("common.name")}</th>
-                  <th className="px-4 py-3">{t("common.phone")}</th>
-                  <th className="px-4 py-3">{t("cust.credit_owed")}</th>
-                  <th className="px-4 py-3">{t("common.actions")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.customers.map((c) => (
-                  <tr key={c.id} className="border-b last:border-0">
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{c.name}</p>
-                      {c.address && (
-                        <p className="text-xs text-slate-400">{c.address}</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">{c.phone || "—"}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={
-                          c.creditBalance > 0
-                            ? "font-semibold text-amber-700"
-                            : "text-slate-500"
-                        }
-                      >
-                        {formatLkr(c.creditBalance)}
-                      </span>
-                      {c.creditLimit != null && (
-                        <span
-                          className={`mt-0.5 block text-xs ${
-                            c.creditBalance > c.creditLimit
-                              ? "font-medium text-red-600"
-                              : "text-slate-400"
-                          }`}
-                        >
-                          {t("cust.limit")}: {formatLkr(c.creditLimit)}
-                          {c.creditBalance > c.creditLimit &&
-                            ` · ${t("cust.over_limit")}`}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        {c.phone && (
-                          <MessageSendButton
-                            phone={c.phone}
-                            recipientName={c.name}
-                            context={{
-                              type: "customer",
-                              customerName: c.name,
-                              creditBalance: c.creditBalance,
-                              business: data.business,
-                            }}
-                            contextId={c.id}
-                          />
-                        )}
-                        {c.creditBalance > 0 && (
-                          <button
-                            onClick={() => {
-                              setPayCustomerId(c.id);
-                              setPayAmount(c.creditBalance);
-                            }}
-                            className="text-teal-700 hover:underline"
-                          >
-                            {t("cust.record_payment")}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setLedgerCustomer(c)}
-                          className="text-teal-700 hover:underline"
-                        >
-                          {t("cust.ledger")}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditing(c);
-                            setName(c.name);
-                            setPhone(c.phone ?? "");
-                            setAddress(c.address ?? "");
-                            setCreditLimit(c.creditLimit ?? "");
-                          }}
-                          className="text-teal-700 hover:underline"
-                        >
-                          {t("common.edit")}
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm(`${t("cust.delete_confirm")} ${c.name}?`))
-                              deleteCustomer(c.id);
-                          }}
-                          className="text-red-600 hover:underline"
-                        >
-                          {t("common.delete")}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+        <section className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+          <ProCard eyebrow={editing ? "Edit customer" : "Create customer"} title={editing ? t("cust.edit") : t("cust.add")}>
+            <form onSubmit={handleSave}>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input
+                  required
+                  placeholder={`${t("common.name")} *`}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                />
+                <input
+                  placeholder={t("common.phone")}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                />
+                <input
+                  placeholder={t("common.address")}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 sm:col-span-2"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  placeholder={t("cust.credit_limit")}
+                  value={creditLimit}
+                  onChange={(e) => setCreditLimit(e.target.value === "" ? "" : Number(e.target.value))}
+                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 sm:col-span-2"
+                />
+              </div>
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">
+                  {editing ? t("common.update") : t("cust.add")}
+                </button>
+                {editing && (
+                  <button type="button" onClick={resetForm} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
+                    {t("common.cancel")}
+                  </button>
+                )}
+              </div>
+            </form>
+          </ProCard>
+
+          <ProCard title="Find customers" eyebrow="Search CRM" action={<ProBadge tone={customers.length === data.customers.length ? "slate" : "teal"}>{customers.length} shown</ProBadge>}>
+            <div className="relative">
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name, phone or address..."
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pl-11 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
+              />
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
+            </div>
+            <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50/70 p-4 text-sm font-semibold text-amber-900">
+              {t("cust.credit_hint")}
+            </div>
+          </ProCard>
+        </section>
+
+        <section className="mt-6">
+          {data.customers.length === 0 ? (
+            <ProCard>
+              <ProEmptyState title={t("cust.no_customers")} description={t("cust.credit_hint")} />
+            </ProCard>
+          ) : customers.length === 0 ? (
+            <ProCard>
+              <ProEmptyState title={t("sales.no_match")} description="Try searching by customer name, phone, or address." />
+            </ProCard>
+          ) : (
+            <ProCard title="Customer list" action={<ProBadge tone="teal">{customers.length} customers</ProBadge>}>
+              <div className="hidden overflow-hidden rounded-2xl border border-slate-200 lg:block">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">{t("common.name")}</th>
+                      <th className="px-4 py-3">{t("common.phone")}</th>
+                      <th className="px-4 py-3">{t("cust.credit_owed")}</th>
+                      <th className="px-4 py-3">{t("common.actions")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customers.map((c) => (
+                      <CustomerRow
+                        key={c.id}
+                        customer={c}
+                        business={data.business}
+                        onPay={() => {
+                          setPayCustomerId(c.id);
+                          setPayAmount(c.creditBalance);
+                        }}
+                        onLedger={() => setLedgerCustomer(c)}
+                        onEdit={() => startEdit(c)}
+                        onDelete={() => {
+                          if (confirm(`${t("cust.delete_confirm")} ${c.name}?`)) deleteCustomer(c.id);
+                        }}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="grid gap-3 lg:hidden">
+                {customers.map((c) => (
+                  <CustomerCard
+                    key={c.id}
+                    customer={c}
+                    business={data.business}
+                    onPay={() => {
+                      setPayCustomerId(c.id);
+                      setPayAmount(c.creditBalance);
+                    }}
+                    onLedger={() => setLedgerCustomer(c)}
+                    onEdit={() => startEdit(c)}
+                    onDelete={() => {
+                      if (confirm(`${t("cust.delete_confirm")} ${c.name}?`)) deleteCustomer(c.id);
+                    }}
+                  />
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              </div>
+            </ProCard>
+          )}
+        </section>
 
         {data.customerPayments.length > 0 && (
-          <section className="mt-10">
-            <h2 className="font-semibold text-slate-900">{t("cust.recent_payments")}</h2>
-            <ul className="mt-3 space-y-2 text-sm text-slate-600">
-              {data.customerPayments.slice(0, 8).map((p) => (
-                <li key={p.id}>
-                  • {p.customerName} — {formatLkr(p.amount)} (
-                  {paymentLabel(t, p.method)})
-                </li>
-              ))}
-            </ul>
+          <section className="mt-6">
+            <ProCard title={t("cust.recent_payments")} action={<ProBadge tone="slate">Latest 8</ProBadge>}>
+              <div className="grid gap-3 md:grid-cols-2">
+                {data.customerPayments.slice(0, 8).map((p) => (
+                  <div key={p.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-black text-slate-950">{p.customerName}</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">{paymentLabel(t, p.method)}</p>
+                      </div>
+                      <p className="font-mono text-sm font-black text-teal-700">{formatLkr(p.amount)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ProCard>
           </section>
         )}
 
-        {payCustomerId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-sm rounded-xl bg-white p-5">
-              <h3 className="font-semibold">{t("cust.record_payment")}</h3>
-              <input
-                type="number"
-                min={1}
-                value={payAmount || ""}
-                onChange={(e) => setPayAmount(Number(e.target.value))}
-                className="mt-3 w-full rounded-lg border px-3 py-2"
-              />
-              <select
-                value={payMethod}
-                onChange={(e) => setPayMethod(e.target.value as PaymentMethod)}
-                className="mt-3 w-full rounded-lg border px-3 py-2"
-              >
-                {PAYMENT_OPTIONS.filter((m) => m !== "credit").map((m) => (
-                  <option key={m} value={m}>
-                    {paymentLabel(t, m)}
-                  </option>
-                ))}
-              </select>
-              <div className="mt-4 flex gap-2">
+        {payCustomerId && payCustomer && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">{t("cust.record_payment")}</p>
+                  <h3 className="mt-2 text-xl font-black text-slate-950">{payCustomer.name}</h3>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">{t("cust.credit_owed")}: {formatLkr(payCustomer.creditBalance)}</p>
+                </div>
+                <button onClick={() => setPayCustomerId(null)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+              </div>
+
+              <label className="mt-5 block text-sm font-black text-slate-700">
+                {t("bills.amount")}
+                <input
+                  type="number"
+                  min={1}
+                  value={payAmount || ""}
+                  onChange={(e) => setPayAmount(Number(e.target.value))}
+                  className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                />
+              </label>
+              <label className="mt-4 block text-sm font-black text-slate-700">
+                {t("common.payment")}
+                <select
+                  value={payMethod}
+                  onChange={(e) => setPayMethod(e.target.value as PaymentMethod)}
+                  className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                >
+                  {PAYMENT_OPTIONS.filter((m) => m !== "credit").map((m) => (
+                    <option key={m} value={m}>{paymentLabel(t, m)}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                 <button
                   onClick={() => {
-                    const ok = recordCustomerPayment(
-                      payCustomerId,
-                      payAmount,
-                      payMethod,
-                    );
+                    const ok = recordCustomerPayment(payCustomerId, payAmount, payMethod);
                     if (ok) {
                       setMessage(t("cust.payment_saved"));
                       setPayCustomerId(null);
                     }
                   }}
-                  className="rounded-lg bg-teal-700 px-4 py-2 text-sm text-white"
+                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700"
                 >
                   {t("common.save")}
                 </button>
-                <button
-                  onClick={() => setPayCustomerId(null)}
-                  className="rounded-lg border px-4 py-2 text-sm"
-                >
+                <button onClick={() => setPayCustomerId(null)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
                   {t("common.cancel")}
                 </button>
               </div>
@@ -343,58 +363,41 @@ export default function CustomersPage() {
         )}
 
         {ledgerCustomer && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl bg-white p-5">
-              <div className="flex items-start justify-between">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="font-semibold text-slate-900">
-                    {t("cust.ledger")} — {ledgerCustomer.name}
-                  </h3>
-                  <p className="text-sm text-slate-500">
-                    {t("cust.credit_owed")}: {formatLkr(ledgerCustomer.creditBalance)}
-                  </p>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">{t("cust.ledger")}</p>
+                  <h3 className="mt-2 text-xl font-black text-slate-950">{ledgerCustomer.name}</h3>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">{t("cust.credit_owed")}: {formatLkr(ledgerCustomer.creditBalance)}</p>
                 </div>
-                <button
-                  onClick={() => setLedgerCustomer(null)}
-                  className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600"
-                >
-                  ✕
-                </button>
+                <button onClick={() => setLedgerCustomer(null)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
               </div>
 
-              <div className="mt-4 flex-1 overflow-y-auto">
+              <div className="mt-5 flex-1 overflow-y-auto rounded-2xl border border-slate-200">
                 {ledgerEntries.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-slate-500">
-                    {t("cust.ledger_empty")}
-                  </p>
+                  <div className="p-6">
+                    <ProEmptyState title={t("cust.ledger_empty")} />
+                  </div>
                 ) : (
                   <table className="w-full text-left text-sm">
-                    <thead className="border-b text-slate-500">
+                    <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
                       <tr>
-                        <th className="py-2">{t("common.date")}</th>
-                        <th className="py-2">{t("common.details")}</th>
-                        <th className="py-2 text-right">{t("bills.amount")}</th>
-                        <th className="py-2 text-right">{t("cust.balance")}</th>
+                        <th className="px-4 py-3">{t("common.date")}</th>
+                        <th className="px-4 py-3">{t("common.details")}</th>
+                        <th className="px-4 py-3 text-right">{t("bills.amount")}</th>
+                        <th className="px-4 py-3 text-right">{t("cust.balance")}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {ledgerEntries.map((e, i) => (
                         <tr key={i} className="border-b last:border-0">
-                          <td className="py-2 text-slate-500">
-                            {new Date(e.date).toLocaleDateString("en-LK")}
+                          <td className="px-4 py-3 font-semibold text-slate-500">{new Date(e.date).toLocaleDateString("en-LK")}</td>
+                          <td className="px-4 py-3 font-semibold text-slate-700">{e.label}</td>
+                          <td className={`px-4 py-3 text-right font-mono font-black ${e.amount < 0 ? "text-emerald-700" : "text-slate-800"}`}>
+                            {e.amount < 0 ? "−" : "+"}{formatLkr(Math.abs(e.amount))}
                           </td>
-                          <td className="py-2">{e.label}</td>
-                          <td
-                            className={`py-2 text-right tabular-nums ${
-                              e.amount < 0 ? "text-emerald-700" : "text-slate-800"
-                            }`}
-                          >
-                            {e.amount < 0 ? "−" : "+"}
-                            {formatLkr(Math.abs(e.amount))}
-                          </td>
-                          <td className="py-2 text-right font-medium tabular-nums">
-                            {formatLkr(e.balance)}
-                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-black text-slate-950">{formatLkr(e.balance)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -404,7 +407,149 @@ export default function CustomersPage() {
             </div>
           </div>
         )}
-      </main>
+      </ProMain>
+    </ProPageShell>
+  );
+}
+
+function CustomerRow({
+  customer,
+  business,
+  onPay,
+  onLedger,
+  onEdit,
+  onDelete,
+}: {
+  customer: Customer;
+  business: NonNullable<ReturnType<typeof useAppStore>["data"]>["business"];
+  onPay: () => void;
+  onLedger: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useLocale();
+  const overLimit = customer.creditLimit != null && customer.creditBalance > customer.creditLimit;
+
+  return (
+    <tr className="border-b last:border-0">
+      <td className="px-4 py-3">
+        <p className="font-black text-slate-950">{customer.name}</p>
+        {customer.address && <p className="text-xs font-semibold text-slate-400">{customer.address}</p>}
+      </td>
+      <td className="px-4 py-3 font-semibold text-slate-600">{customer.phone || "—"}</td>
+      <td className="px-4 py-3">
+        <p className={customer.creditBalance > 0 ? "font-mono font-black text-amber-700" : "font-mono font-black text-slate-500"}>{formatLkr(customer.creditBalance)}</p>
+        {customer.creditLimit != null && (
+          <p className={overLimit ? "mt-1 text-xs font-black text-rose-600" : "mt-1 text-xs font-semibold text-slate-400"}>
+            {t("cust.limit")}: {formatLkr(customer.creditLimit)}{overLimit && ` · ${t("cust.over_limit")}`}
+          </p>
+        )}
+      </td>
+      <td className="px-4 py-3">
+        <CustomerActions customer={customer} business={business} onPay={onPay} onLedger={onLedger} onEdit={onEdit} onDelete={onDelete} />
+      </td>
+    </tr>
+  );
+}
+
+function CustomerCard({
+  customer,
+  business,
+  onPay,
+  onLedger,
+  onEdit,
+  onDelete,
+}: {
+  customer: Customer;
+  business: NonNullable<ReturnType<typeof useAppStore>["data"]>["business"];
+  onPay: () => void;
+  onLedger: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useLocale();
+  const overLimit = customer.creditLimit != null && customer.creditBalance > customer.creditLimit;
+
+  return (
+    <article className={`rounded-[1.5rem] border bg-slate-50 p-4 ring-1 ${overLimit ? "border-rose-200 ring-rose-100" : "border-slate-200 ring-slate-100"}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="truncate text-base font-black text-slate-950">{customer.name}</h2>
+          <p className="mt-1 text-xs font-semibold text-slate-500">{customer.phone || t("common.phone")}</p>
+          {customer.address && <p className="mt-1 text-xs font-semibold text-slate-400">{customer.address}</p>}
+        </div>
+        {overLimit ? <ProBadge tone="rose">{t("cust.over_limit")}</ProBadge> : customer.creditBalance > 0 ? <ProBadge tone="amber">Credit</ProBadge> : <ProBadge tone="emerald">Clear</ProBadge>}
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-white p-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t("cust.credit_owed")}</p>
+          <p className="mt-1 font-mono text-sm font-black text-amber-700">{formatLkr(customer.creditBalance)}</p>
+        </div>
+        <div>
+          <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t("cust.limit")}</p>
+          <p className="mt-1 font-mono text-sm font-black text-slate-900">{customer.creditLimit != null ? formatLkr(customer.creditLimit) : "—"}</p>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <CustomerActions customer={customer} business={business} onPay={onPay} onLedger={onLedger} onEdit={onEdit} onDelete={onDelete} mobile />
+      </div>
+    </article>
+  );
+}
+
+function CustomerActions({
+  customer,
+  business,
+  onPay,
+  onLedger,
+  onEdit,
+  onDelete,
+  mobile = false,
+}: {
+  customer: Customer;
+  business: NonNullable<ReturnType<typeof useAppStore>["data"]>["business"];
+  onPay: () => void;
+  onLedger: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  mobile?: boolean;
+}) {
+  const { t } = useLocale();
+  const buttonClass = mobile
+    ? "rounded-2xl px-3 py-3 text-xs font-black"
+    : "rounded-full px-3 py-1.5 text-xs font-black";
+
+  return (
+    <div className={mobile ? "grid grid-cols-2 gap-2" : "flex flex-wrap gap-2"}>
+      {customer.phone && (
+        <MessageSendButton
+          phone={customer.phone}
+          recipientName={customer.name}
+          context={{
+            type: "customer",
+            customerName: customer.name,
+            creditBalance: customer.creditBalance,
+            business,
+          }}
+          contextId={customer.id}
+        />
+      )}
+      {customer.creditBalance > 0 && (
+        <button onClick={onPay} className={`${buttonClass} bg-teal-50 text-teal-700 hover:bg-teal-100`}>
+          {t("cust.record_payment")}
+        </button>
+      )}
+      <button onClick={onLedger} className={`${buttonClass} bg-slate-100 text-slate-700 hover:bg-slate-200`}>
+        {t("cust.ledger")}
+      </button>
+      <button onClick={onEdit} className={`${buttonClass} bg-sky-50 text-sky-700 hover:bg-sky-100`}>
+        {t("common.edit")}
+      </button>
+      <button onClick={onDelete} className={`${buttonClass} bg-rose-50 text-rose-700 hover:bg-rose-100`}>
+        {t("common.delete")}
+      </button>
     </div>
   );
 }
