@@ -37,6 +37,8 @@ export function localDataWatermark(data: AppData, orgId: string | null): number 
     ...data.vehicles.map((v) => v.soldDate ?? ""),
     ...data.bankTransactions.map((t) => t.date),
     ...data.bankTransfers.map((t) => t.date),
+    ...data.jobStatusHistory.map((h) => h.date),
+    ...data.contractorPayments.map((p) => p.date),
     ...data.cheques.map((c) => c.chequeDate),
   ]);
   return Math.max(touch, entityMax);

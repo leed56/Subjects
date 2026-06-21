@@ -48,13 +48,13 @@ import type { BusinessInfo } from "@/lib/invoice";
 import { defaultTemplateForJob, loadNotificationSettings } from "@/lib/messaging";
 import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useAppStore } from "@/lib/store/use-app-store";
-import type { ACJob, JobAssigneeType } from "@/lib/store/types";
+import type { ACJob, JobAssigneeType, JobItem, JobItemType, JobItemInput, JobStatusEntry } from "@/lib/store/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 const UNIT_TYPES = ["Wall mounted", "Cassette", "Ducted", "Ceiling suspended", "Portable", "Window"];
 
 export default function JobsPage() {
-  const { data, ready, addACJob, updateACJob, deleteACJob, recordACService } = useAppStore();
+  const { data, ready, addACJob, updateACJob, deleteACJob, recordACService, addJobItem, deleteJobItem } = useAppStore();
   const { t, locale } = useLocale();
   const { org } = useSubscription();
   const notificationLogs = useNotificationLogs(org.id);
@@ -68,6 +68,7 @@ export default function JobsPage() {
   const [subcontractCost, setSubcontractCost] = useState(0);
   const [message, setMessage] = useState("");
   const [serviceDoneJob, setServiceDoneJob] = useState<ACJob | null>(null);
+  const [sheetJob, setSheetJob] = useState<ACJob | null>(null);
   const [customerId, setCustomerId] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
@@ -244,15 +245,26 @@ export default function JobsPage() {
           <ProCard title={t("jobs.all")} eyebrow="Status filter" action={<ProBadge tone="teal">{jobs.length} shown</ProBadge>}><div className="flex flex-wrap gap-2"><button onClick={() => setFilter("all")} className={`rounded-full px-3 py-2 text-xs font-black ${filter === "all" ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{t("jobs.all")} ({data.acJobs.length})</button>{AC_JOB_STATUSES.map((s) => <button key={s.value} onClick={() => setFilter(s.value)} className={`rounded-full px-3 py-2 text-xs font-black ${filter === s.value ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{locale === "si" ? s.labelSi : s.labelEn}</button>)}</div></ProCard>
         </section>
         <section className="mt-6">
-          {jobs.length === 0 ? <ProCard><ProEmptyState title={t("jobs.no_jobs")} description={t("jobs.no_jobs_hint")} /></ProCard> : <div className="grid gap-4 xl:grid-cols-2">{jobs.map((job) => <JobCard key={job.id} job={job} assigneePhone={job.assigneeType === "team" ? data.technicians.find((x) => x.id === job.assigneeId)?.phone : job.assigneeType === "contractor" ? data.contractors.find((x) => x.id === job.assigneeId)?.phone : undefined} locale={locale} business={data.business} notificationLogs={notificationLogs} notifySettings={notifySettings} onServiceDone={() => setServiceDoneJob(job)} onEdit={() => loadJob(job)} onSchedule={() => updateACJob(job.id, { status: "scheduled" })} onInstalled={() => updateACJob(job.id, { status: "installed", installedDate: new Date().toISOString().slice(0, 10) })} onComplete={() => updateACJob(job.id, { status: "completed" })} onDelete={() => { if (confirm(`${t("jobs.delete_confirm")} ${job.jobNo}?`)) deleteACJob(job.id); }} />)}</div>}
+          {jobs.length === 0 ? <ProCard><ProEmptyState title={t("jobs.no_jobs")} description={t("jobs.no_jobs_hint")} /></ProCard> : <div className="grid gap-4 xl:grid-cols-2">{jobs.map((job) => <JobCard key={job.id} job={job} assigneePhone={job.assigneeType === "team" ? data.technicians.find((x) => x.id === job.assigneeId)?.phone : job.assigneeType === "contractor" ? data.contractors.find((x) => x.id === job.assigneeId)?.phone : undefined} locale={locale} business={data.business} notificationLogs={notificationLogs} notifySettings={notifySettings} onServiceDone={() => setServiceDoneJob(job)} onJobSheet={() => setSheetJob(job)} onEdit={() => loadJob(job)} onSchedule={() => updateACJob(job.id, { status: "scheduled" })} onInstalled={() => updateACJob(job.id, { status: "installed", installedDate: new Date().toISOString().slice(0, 10) })} onComplete={() => updateACJob(job.id, { status: "completed" })} onDelete={() => { if (confirm(`${t("jobs.delete_confirm")} ${job.jobNo}?`)) deleteACJob(job.id); }} />)}</div>}
         </section>
       </ProMain>
       <AcServiceDoneDialog job={serviceDoneJob} business={data.business} open={!!serviceDoneJob} onClose={() => setServiceDoneJob(null)} onConfirm={(input) => { if (serviceDoneJob) { recordACService(serviceDoneJob.id, input); setMessage(t("jobs.service_done_saved")); setTimeout(() => setMessage(""), 2500); } }} />
+      {sheetJob && (
+        <JobSheetModal
+          job={sheetJob}
+          locale={locale}
+          items={data.jobItems.filter((i) => i.jobId === sheetJob.id)}
+          history={data.jobStatusHistory.filter((h) => h.jobId === sheetJob.id)}
+          onAddItem={addJobItem}
+          onDeleteItem={deleteJobItem}
+          onClose={() => setSheetJob(null)}
+        />
+      )}
     </ProPageShell>
   );
 }
 
-function JobCard({ job, assigneePhone, locale, business, notificationLogs, notifySettings, onServiceDone, onEdit, onSchedule, onInstalled, onComplete, onDelete }: { job: ACJob; assigneePhone?: string; locale: Locale; business: BusinessInfo; notificationLogs: ReturnType<typeof useNotificationLogs>; notifySettings: ReturnType<typeof loadNotificationSettings>; onServiceDone: () => void; onEdit: () => void; onSchedule: () => void; onInstalled: () => void; onComplete: () => void; onDelete: () => void }) {
+function JobCard({ job, assigneePhone, locale, business, notificationLogs, notifySettings, onServiceDone, onJobSheet, onEdit, onSchedule, onInstalled, onComplete, onDelete }: { job: ACJob; assigneePhone?: string; locale: Locale; business: BusinessInfo; notificationLogs: ReturnType<typeof useNotificationLogs>; notifySettings: ReturnType<typeof loadNotificationSettings>; onServiceDone: () => void; onJobSheet: () => void; onEdit: () => void; onSchedule: () => void; onInstalled: () => void; onComplete: () => void; onDelete: () => void }) {
   const { t } = useLocale();
   const balance = job.quotedAmount - job.depositAmount;
   const isContractor = job.assigneeType === "contractor";
@@ -280,6 +292,7 @@ function JobCard({ job, assigneePhone, locale, business, notificationLogs, notif
           {job.phone && <MessageSendButton phone={job.phone} recipientName={job.customerName} context={{ type: "ac_job", job, business }} defaultTemplate={defaultTemplateForJob(job.status)} contextId={job.id} />}
           {assigneePhone && job.assignedTechnician && <MessageSendButton phone={assigneePhone} recipientName={job.assignedTechnician} context={{ type: "ac_job", job, business }} defaultTemplate="job_assignee_dispatch" contextId={job.id} label={t("jobs.notify_assignee")} />}
           {canMarkServiceDone(job) && <ActionButton onClick={onServiceDone}>{t("jobs.service_done")}</ActionButton>}
+          <ActionButton onClick={onJobSheet}>{t("jobs.job_sheet")}</ActionButton>
           <ActionButton onClick={onEdit}>{t("common.edit")}</ActionButton>
           {job.status === "deposit_received" && <ActionButton onClick={onSchedule}>{t("jobs.schedule")}</ActionButton>}
           {job.status === "scheduled" && <ActionButton onClick={onInstalled}>{t("jobs.mark_installed")}</ActionButton>}
@@ -297,4 +310,110 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function ActionButton({ children, onClick }: { children: ReactNode; onClick: () => void }) {
   return <button onClick={onClick} className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700 hover:bg-teal-100">{children}</button>;
+}
+
+const JOB_ITEM_TYPES: JobItemType[] = ["part", "labour", "service"];
+
+function JobSheetModal({ job, locale, items, history, onAddItem, onDeleteItem, onClose }: { job: ACJob; locale: Locale; items: JobItem[]; history: JobStatusEntry[]; onAddItem: (input: JobItemInput) => void; onDeleteItem: (id: string) => void; onClose: () => void }) {
+  const { t } = useLocale();
+  const [itemType, setItemType] = useState<JobItemType>("part");
+  const [name, setName] = useState("");
+  const [qty, setQty] = useState(1);
+  const [unitPrice, setUnitPrice] = useState(0);
+
+  const itemTypeLabels: Record<JobItemType, string> = {
+    part: t("jobs.item.part"),
+    labour: t("jobs.item.labour"),
+    service: t("jobs.item.service"),
+  };
+
+  const itemsTotal = items.reduce((s, i) => s + i.lineTotal, 0);
+  const subcontract = job.assigneeType === "contractor" ? job.subcontractCost ?? 0 : 0;
+  const profit = job.quotedAmount - itemsTotal - subcontract;
+  const sortedHistory = [...history].sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-white/80 bg-white shadow-2xl shadow-slate-950/20">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
+          <div>
+            <p className="font-mono text-xs font-black uppercase tracking-wider text-teal-600">{job.jobNo} · {t("jobs.job_sheet")}</p>
+            <h3 className="mt-1 text-xl font-black text-slate-950">{job.customerName}</h3>
+            <p className="mt-1 text-sm font-semibold text-slate-500">{jobTypeLabel(job.jobType ?? "installation", locale)} · {job.address}</p>
+          </div>
+          <button onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Metric label={t("jobs.quote_label")} value={formatLkr(job.quotedAmount)} />
+            <Metric label={t("jobs.parts_labour")} value={formatLkr(itemsTotal)} />
+            {subcontract > 0 && <Metric label={t("jobs.subcontract_cost")} value={formatLkr(subcontract)} />}
+            <Metric label={t("jobs.net_profit")} value={formatLkr(profit)} />
+          </div>
+
+          <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2.5">{t("jobs.item_name")}</th>
+                  <th className="px-3 py-2.5">{t("bank.type")}</th>
+                  <th className="px-3 py-2.5 text-right">{t("jobs.qty")}</th>
+                  <th className="px-3 py-2.5 text-right">{t("jobs.unit_price")}</th>
+                  <th className="px-3 py-2.5 text-right">{t("jobs.line_total")}</th>
+                  <th className="px-3 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {items.length === 0 ? (
+                  <tr><td colSpan={6} className="px-3 py-4 text-center text-sm font-semibold text-slate-400">{t("jobs.no_items")}</td></tr>
+                ) : items.map((i) => (
+                  <tr key={i.id} className="border-b last:border-0">
+                    <td className="px-3 py-2.5 font-black text-slate-900">{i.name}</td>
+                    <td className="px-3 py-2.5 font-semibold text-slate-600">{itemTypeLabels[i.itemType]}</td>
+                    <td className="px-3 py-2.5 text-right font-mono">{i.qty}</td>
+                    <td className="px-3 py-2.5 text-right font-mono">{formatLkr(i.unitPrice)}</td>
+                    <td className="px-3 py-2.5 text-right font-mono font-black">{formatLkr(i.lineTotal)}</td>
+                    <td className="px-3 py-2.5 text-right"><button onClick={() => onDeleteItem(i.id)} className="rounded-full bg-rose-50 px-2 py-1 text-xs font-black text-rose-700 hover:bg-rose-100">✕</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <form
+            className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto_auto_auto]"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!name.trim()) return;
+              onAddItem({ jobId: job.id, itemType, name, qty, unitPrice });
+              setName("");
+              setQty(1);
+              setUnitPrice(0);
+            }}
+          >
+            <input placeholder={t("jobs.item_name")} value={name} onChange={(e) => setName(e.target.value)} className="h-11 rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-teal-300" />
+            <select value={itemType} onChange={(e) => setItemType(e.target.value as JobItemType)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-teal-300">
+              {JOB_ITEM_TYPES.map((ty) => <option key={ty} value={ty}>{itemTypeLabels[ty]}</option>)}
+            </select>
+            <input type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} className="h-11 w-20 rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-teal-300" />
+            <input type="number" min={0} placeholder={t("jobs.unit_price")} value={unitPrice || ""} onChange={(e) => setUnitPrice(Number(e.target.value))} className="h-11 w-28 rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-teal-300" />
+            <button type="submit" className="h-11 rounded-xl bg-teal-600 px-4 text-sm font-black text-white hover:bg-teal-700">{t("jobs.add_item")}</button>
+          </form>
+
+          <div className="mt-6">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">{t("jobs.status_history")}</p>
+            <ol className="mt-3 space-y-2">
+              {sortedHistory.map((h) => (
+                <li key={h.id} className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                  <span className="font-mono text-xs font-semibold text-slate-500">{h.date.slice(0, 10)}</span>
+                  <span className="font-black text-slate-900">{h.oldStatus ? `${jobStatusLabel(h.oldStatus as ACJobStatus, locale)} → ` : ""}{jobStatusLabel(h.newStatus as ACJobStatus, locale)}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

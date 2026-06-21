@@ -85,6 +85,35 @@ export type RecordACServiceInput = {
   visitNotes?: string;
 };
 
+export type JobItemType = "part" | "labour" | "service";
+
+export interface JobItem {
+  id: string;
+  jobId: string;
+  itemType: JobItemType;
+  name: string;
+  qty: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export type JobItemInput = {
+  jobId: string;
+  itemType: JobItemType;
+  name: string;
+  qty: number;
+  unitPrice: number;
+};
+
+export interface JobStatusEntry {
+  id: string;
+  jobId: string;
+  oldStatus?: string;
+  newStatus: string;
+  note?: string;
+  date: string;
+}
+
 export type VehicleStatus =
   | "incoming"
   | "reconditioning"
@@ -370,6 +399,8 @@ export interface AppData {
   purchases: Purchase[];
   supplierPayments: SupplierPayment[];
   acJobs: ACJob[];
+  jobItems: JobItem[];
+  jobStatusHistory: JobStatusEntry[];
   technicians: Technician[];
   contractors: Contractor[];
   contractorPayments: ContractorPayment[];

@@ -27,6 +27,7 @@ import {
   addCheque,
   addContractor,
   addCustomer,
+  addJobItem,
   addProduct,
   addSupplier,
   addTechnician,
@@ -39,6 +40,7 @@ import {
   deleteBankTransaction,
   deleteContractor,
   deleteCustomer,
+  deleteJobItem,
   deleteProduct,
   deleteSupplier,
   deleteTechnician,
@@ -68,6 +70,7 @@ import type {
   ChequeInput,
   ChequeStatus,
   ContractorInput,
+  JobItemInput,
   TechnicianInput,
   CustomerInput,
   ProductInput,
@@ -129,6 +132,8 @@ export type AppStoreValue = {
   updateACJob: (id: string, input: Partial<ACJobInput>) => void;
   deleteACJob: (id: string) => void;
   recordACService: (jobId: string, input?: RecordACServiceInput) => void;
+  addJobItem: (input: JobItemInput) => void;
+  deleteJobItem: (id: string) => void;
   addTechnician: (input: TechnicianInput) => void;
   updateTechnician: (id: string, input: Partial<TechnicianInput>) => void;
   deleteTechnician: (id: string) => void;
@@ -414,6 +419,14 @@ function useAppStoreState(): AppStoreValue {
       recordACService: (jobId, input) => {
         if (!data || isReadOnly) return;
         persist(recordACService(data, jobId, input));
+      },
+      addJobItem: (input) => {
+        if (!data || isReadOnly) return;
+        persist(addJobItem(data, input));
+      },
+      deleteJobItem: (id) => {
+        if (!data || isReadOnly) return;
+        persist(deleteJobItem(data, id));
       },
       addTechnician: (input) => {
         if (!data || isReadOnly) return;

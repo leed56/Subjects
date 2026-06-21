@@ -19,6 +19,7 @@ import { sanitizeCustomFields } from "@/lib/sector-fields";
 import type { PaymentMethod, Product } from "@/lib/types";
 import type {
   AppData,
+  ACJob,
   ACJobInput,
   RecordACServiceInput,
   BankAccountInput,
@@ -32,6 +33,9 @@ import type {
   Contractor,
   ContractorInput,
   ContractorPayment,
+  JobItem,
+  JobItemInput,
+  JobStatusEntry,
   Technician,
   TechnicianInput,
   WorkSpecialty,
@@ -484,7 +488,18 @@ export function addACJob(data: AppData, input: ACJobInput): AppData {
     notes: input.notes?.trim() || undefined,
   };
 
-  return recomputeContractorPayables({ ...data, acJobs: [job, ...data.acJobs] });
+  const statusEntry: JobStatusEntry = {
+    id: newId(),
+    jobId: job.id,
+    newStatus: job.status,
+    date: new Date().toISOString(),
+  };
+
+  return recomputeContractorPayables({
+    ...data,
+    acJobs: [job, ...data.acJobs],
+    jobStatusHistory: [statusEntry, ...data.jobStatusHistory],
+  });
 }
 
 export function updateACJob(
@@ -492,9 +507,9 @@ export function updateACJob(
   id: string,
   input: Partial<ACJobInput>,
 ): AppData {
-  return recomputeContractorPayables({
-    ...data,
-    acJobs: data.acJobs.map((j) => {
+  const previous = data.acJobs.find((j) => j.id === id);
+  let nextStatusValue: string | undefined;
+  const acJobs = data.acJobs.map((j) => {
       if (j.id !== id) return j;
       const customer = input.customerId
         ? data.customers.find((c) => c.id === input.customerId)
@@ -553,7 +568,7 @@ export function updateACJob(
         status = "service_due";
       }
 
-      return {
+      const result: ACJob = {
         ...j,
         jobType: input.jobType ?? j.jobType,
         assignedTechnician:
@@ -593,15 +608,56 @@ export function updateACJob(
         amcContract: input.amcContract ?? j.amcContract ?? false,
         notes: input.notes?.trim() ?? j.notes,
       };
-    }),
-  });
+      nextStatusValue = result.status;
+      return result;
+    });
+
+  const statusChanged =
+    !!previous && nextStatusValue != null && previous.status !== nextStatusValue;
+  const jobStatusHistory = statusChanged
+    ? [
+        {
+          id: newId(),
+          jobId: id,
+          oldStatus: previous!.status,
+          newStatus: nextStatusValue!,
+          date: new Date().toISOString(),
+        },
+        ...data.jobStatusHistory,
+      ]
+    : data.jobStatusHistory;
+
+  return recomputeContractorPayables({ ...data, acJobs, jobStatusHistory });
 }
 
 export function deleteACJob(data: AppData, id: string): AppData {
   return recomputeContractorPayables({
     ...data,
     acJobs: data.acJobs.filter((j) => j.id !== id),
+    jobItems: data.jobItems.filter((i) => i.jobId !== id),
+    jobStatusHistory: data.jobStatusHistory.filter((h) => h.jobId !== id),
   });
+}
+
+export function addJobItem(data: AppData, input: JobItemInput): AppData {
+  const name = input.name.trim();
+  if (!name || !data.acJobs.some((j) => j.id === input.jobId)) return data;
+  const qty = input.qty > 0 ? input.qty : 1;
+  const unitPrice = Math.max(0, input.unitPrice);
+  const item: JobItem = {
+    id: newId(),
+    jobId: input.jobId,
+    itemType: input.itemType,
+    name,
+    qty,
+    unitPrice,
+    lineTotal: Math.round(qty * unitPrice * 100) / 100,
+  };
+  return { ...data, jobItems: [item, ...data.jobItems] };
+}
+
+export function deleteJobItem(data: AppData, id: string): AppData {
+  return { ...data, jobItems: data.jobItems.filter((i) => i.id !== id) };
 }
 
 /** Mark service visit complete and schedule next due date (days-based) */

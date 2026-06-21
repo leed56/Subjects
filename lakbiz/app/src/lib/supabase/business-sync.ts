@@ -66,6 +66,8 @@ export function isEmptyBusinessData(data: AppData): boolean {
     data.bankTransfers.length === 0 &&
     data.cheques.length === 0 &&
     data.acJobs.length === 0 &&
+    data.jobItems.length === 0 &&
+    data.jobStatusHistory.length === 0 &&
     data.technicians.length === 0 &&
     data.contractors.length === 0 &&
     data.contractorPayments.length === 0 &&
@@ -96,6 +98,8 @@ export async function pullBusinessData(
     bankTransfersRes,
     chequesRes,
     acJobsRes,
+    jobItemsRes,
+    jobStatusHistoryRes,
     techniciansRes,
     contractorsRes,
     contractorPaymentsRes,
@@ -135,6 +139,11 @@ export async function pullBusinessData(
       .eq("organization_id", organizationId),
     supabase.from("cheques").select("*").eq("organization_id", organizationId),
     supabase.from("ac_jobs").select("*").eq("organization_id", organizationId),
+    supabase.from("job_items").select("*").eq("organization_id", organizationId),
+    supabase
+      .from("job_status_history")
+      .select("*")
+      .eq("organization_id", organizationId),
     supabase.from("technicians").select("*").eq("organization_id", organizationId),
     supabase.from("contractors").select("*").eq("organization_id", organizationId),
     supabase
@@ -161,6 +170,8 @@ export async function pullBusinessData(
     bankTransfersRes.error ??
     chequesRes.error ??
     acJobsRes.error ??
+    jobItemsRes.error ??
+    jobStatusHistoryRes.error ??
     techniciansRes.error ??
     contractorsRes.error ??
     contractorPaymentsRes.error ??
@@ -373,6 +384,23 @@ export async function pullBusinessData(
         row.subcontract_cost != null ? num(row.subcontract_cost) : undefined,
       notes: row.notes ?? undefined,
     })),
+    jobItems: (jobItemsRes.data ?? []).map((row) => ({
+      id: row.id,
+      jobId: row.job_id,
+      itemType: row.item_type as AppData["jobItems"][number]["itemType"],
+      name: row.name,
+      qty: num(row.qty),
+      unitPrice: num(row.unit_price),
+      lineTotal: num(row.line_total),
+    })),
+    jobStatusHistory: (jobStatusHistoryRes.data ?? []).map((row) => ({
+      id: row.id,
+      jobId: row.job_id,
+      oldStatus: row.old_status ?? undefined,
+      newStatus: row.new_status,
+      note: row.note ?? undefined,
+      date: row.created_at,
+    })),
     technicians: (techniciansRes.data ?? []).map((row) => ({
       id: row.id,
       name: row.name,
@@ -470,6 +498,8 @@ async function upsertOrgRows(
     | "bank_transfers"
     | "cheques"
     | "ac_jobs"
+    | "job_items"
+    | "job_status_history"
     | "technicians"
     | "contractors"
     | "contractor_payments"
@@ -501,6 +531,8 @@ async function deleteOrgRowsNotIn(
     | "bank_transfers"
     | "cheques"
     | "ac_jobs"
+    | "job_items"
+    | "job_status_history"
     | "technicians"
     | "contractors"
     | "contractor_payments"
@@ -564,6 +596,8 @@ async function fetchCloudWatermark(organizationId: string): Promise<number> {
     latestTimestamp(supabase, "bank_transfers", organizationId, "updated_at"),
     latestTimestamp(supabase, "cheques", organizationId, "updated_at"),
     latestTimestamp(supabase, "ac_jobs", organizationId, "updated_at"),
+    latestTimestamp(supabase, "job_items", organizationId, "updated_at"),
+    latestTimestamp(supabase, "job_status_history", organizationId, "updated_at"),
     latestTimestamp(supabase, "technicians", organizationId, "updated_at"),
     latestTimestamp(supabase, "contractors", organizationId, "updated_at"),
     latestTimestamp(supabase, "contractor_payments", organizationId, "updated_at"),
@@ -830,6 +864,27 @@ export async function pushBusinessData(
     notes: job.notes ?? null,
   }));
 
+  const jobItemRows = data.jobItems.map((i) => ({
+    id: i.id,
+    organization_id: organizationId,
+    job_id: i.jobId,
+    item_type: i.itemType,
+    name: i.name,
+    qty: i.qty,
+    unit_price: i.unitPrice,
+    line_total: i.lineTotal,
+  }));
+
+  const jobStatusHistoryRows = data.jobStatusHistory.map((h) => ({
+    id: h.id,
+    organization_id: organizationId,
+    job_id: h.jobId,
+    old_status: h.oldStatus ?? null,
+    new_status: h.newStatus,
+    note: h.note ?? null,
+    created_at: h.date,
+  }));
+
   const technicianRows = data.technicians.map((tch) => ({
     id: tch.id,
     organization_id: organizationId,
@@ -910,6 +965,8 @@ export async function pushBusinessData(
       | "bank_transfers"
       | "cheques"
       | "ac_jobs"
+      | "job_items"
+      | "job_status_history"
       | "technicians"
       | "contractors"
       | "contractor_payments"
@@ -929,6 +986,8 @@ export async function pushBusinessData(
     { table: "stock_logs", rows: stockLogRows },
     { table: "cheques", rows: chequeRows },
     { table: "ac_jobs", rows: acJobRows },
+    { table: "job_items", rows: jobItemRows },
+    { table: "job_status_history", rows: jobStatusHistoryRows },
     { table: "technicians", rows: technicianRows },
     { table: "contractors", rows: contractorRows },
     { table: "contractor_payments", rows: contractorPaymentRows },
@@ -970,7 +1029,9 @@ export async function pushBusinessData(
       | "bank_transfers"
       | "technicians"
       | "contractors"
-      | "contractor_payments";
+      | "contractor_payments"
+      | "job_items"
+      | "job_status_history";
     ids: string[];
   }> = [
     { table: "sales", ids: data.sales.map((s) => s.id) },
@@ -982,6 +1043,8 @@ export async function pushBusinessData(
     { table: "bank_transfers", ids: data.bankTransfers.map((t) => t.id) },
     { table: "cheques", ids: data.cheques.map((c) => c.id) },
     { table: "ac_jobs", ids: data.acJobs.map((j) => j.id) },
+    { table: "job_items", ids: data.jobItems.map((i) => i.id) },
+    { table: "job_status_history", ids: data.jobStatusHistory.map((h) => h.id) },
     { table: "technicians", ids: data.technicians.map((tch) => tch.id) },
     { table: "contractors", ids: data.contractors.map((c) => c.id) },
     { table: "contractor_payments", ids: data.contractorPayments.map((p) => p.id) },
