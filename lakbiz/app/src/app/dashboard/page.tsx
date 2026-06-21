@@ -4,218 +4,350 @@ import Link from "next/link";
 import { useState } from "react";
 import { AcServiceDoneDialog } from "@/components/ac-service-done-dialog";
 import { AcServiceDuePanel } from "@/components/ac-service-due-panel";
-import { DashboardStat } from "@/components/dashboard-stat";
 import { SiteHeader } from "@/components/site-header";
+import {
+  ProBadge,
+  ProButton,
+  ProCard,
+  ProEmptyState,
+  ProLoadingState,
+  ProMain,
+  ProPageHeader,
+  ProPageShell,
+  ProStatCard,
+} from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { getDashboardStats } from "@/lib/store/actions";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { ACJob } from "@/lib/store/types";
 import { getVatQuarterSummary } from "@/lib/vat";
-
 import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 export default function DashboardPage() {
   const { data, ready, resetAll, recordACService } = useAppStore();
   const { t } = useLocale();
-  const { can, org } = useSubscription();
+  const { can, org, isReadOnly } = useSubscription();
   const notificationLogs = useNotificationLogs(org.id);
   const showVehicles = can("vehicles");
   const [serviceDoneJob, setServiceDoneJob] = useState<ACJob | null>(null);
 
   if (!ready || !data) {
     return (
-      <div className="min-h-full bg-slate-50">
+      <ProPageShell>
         <SiteHeader />
-        <main className="mx-auto max-w-6xl px-4 py-10">{t("common.loading")}</main>
-      </div>
+        <ProMain>
+          <ProLoadingState label={t("common.loading")} />
+        </ProMain>
+      </ProPageShell>
     );
   }
 
   const stats = getDashboardStats(data);
   const vat = getVatQuarterSummary(data);
+  const shopName = data.business.name || org.name || "LakBiz";
+  const primaryActions = [
+    { href: "/sales", label: t("dash.new_sale"), icon: "🧾", variant: "primary" as const },
+    { href: "/stock", label: t("dash.add_stock"), icon: "📦", variant: "secondary" as const },
+    { href: "/customers", label: t("nav.customers"), icon: "👥", variant: "secondary" as const },
+    { href: "/banking", label: t("nav.banking"), icon: "🏦", variant: "secondary" as const },
+  ];
 
   return (
-    <div className="min-h-full bg-slate-50">
+    <ProPageShell>
       <SiteHeader />
-      <main className="mx-auto max-w-6xl px-4 py-10">
-        <div className="mb-6 grid gap-3 sm:grid-cols-2">
-          <Link
-            href="/sales"
-            className="flex min-h-[4.5rem] items-center justify-center rounded-2xl bg-amber-500 px-6 py-4 text-center text-lg font-bold text-slate-950 shadow-lg shadow-amber-500/20 transition hover:bg-amber-400"
-          >
-            {t("dash.new_sale")}
-          </Link>
-          <Link
-            href="/suppliers"
-            className="flex min-h-[4.5rem] items-center justify-center rounded-2xl border-2 border-teal-600 bg-white px-6 py-4 text-center text-lg font-bold text-teal-800 transition hover:bg-teal-50"
-          >
-            {t("dash.add_purchase")}
-          </Link>
-        </div>
-
-        {vat.enabled ? (
-          <Link
-            href="/vat"
-            className="mb-8 block rounded-2xl border border-teal-500/40 bg-gradient-to-br from-slate-950 to-slate-900 p-6 text-white shadow-xl transition hover:border-teal-400/60"
-          >
-            <p className="text-xs font-bold uppercase tracking-[0.15em] text-teal-400">
-              {t("vat.meter_label")}
-            </p>
-            <p className="mt-1 text-sm text-slate-400">{vat.bounds.label}</p>
-            <p className="mt-3 font-mono text-4xl font-bold tabular-nums text-teal-400 sm:text-5xl">
-              {formatLkr(vat.netPayable)}
-            </p>
-            <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-500">
-              <span>
-                {t("vat.output_vat")}: {formatLkr(vat.outputVat)}
-              </span>
-              <span>
-                {t("vat.input_vat")}: {formatLkr(vat.inputVat)}
-              </span>
-            </div>
-          </Link>
-        ) : (
-          <div className="mb-8 rounded-2xl border border-dashed border-teal-300 bg-teal-50/50 p-5 text-center">
-            <p className="text-sm text-slate-700">{t("vat.enable_hint")}</p>
-            <Link
-              href="/settings/shop"
-              className="mt-3 inline-block rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white"
-            >
-              {t("vat.shop_settings")}
-            </Link>
-          </div>
-        )}
-
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">{t("dash.title")}</h1>
-            <p className="text-slate-600">
-              {t("dash.live")} · {stats.productCount} {t("dash.products")} ·{" "}
-              {stats.saleCount} {t("dash.sales_today")}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Link
-              href="/stock"
-              className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white"
-            >
-              {t("dash.add_stock")}
-            </Link>
-            <Link
-              href="/sales"
-              className="rounded-lg border border-teal-700 px-4 py-2 text-sm font-medium text-teal-700"
-            >
-              {t("dash.new_sale")}
-            </Link>
-          </div>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <DashboardStat
-            labelKey="dash.today_sales"
-            value={formatLkr(stats.todaySales)}
-          />
-          <DashboardStat
-            labelKey="dash.today_profit"
-            value={formatLkr(stats.todayProfit)}
-            hintKey="dash.profit_hint"
-          />
-          <DashboardStat
-            labelKey="dash.products"
-            value={String(stats.productCount)}
-          />
-          <DashboardStat
-            labelKey="dash.low_stock"
-            value={String(stats.lowStockCount)}
-          />
-        </div>
-
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <DashboardStat
-            labelKey="dash.credit_out"
-            value={formatLkr(stats.creditOutstanding)}
-          />
-          <DashboardStat
-            labelKey="dash.supplier_pay"
-            value={formatLkr(stats.payableOutstanding)}
-          />
-          <DashboardStat
-            labelKey="dash.bank_balance"
-            value={formatLkr(stats.bankBalance)}
-          />
-          <DashboardStat
-            labelKey="dash.cheques_due"
-            value={String(stats.chequesDueSoonCount)}
-          />
-          {showVehicles && (
+      <ProMain>
+        <ProPageHeader
+          eyebrow={org.isAuthenticated ? t("common.saved_cloud") : t("common.saved_browser")}
+          title={`${t("dash.title")} · ${shopName}`}
+          description={
+            <span>
+              {t("dash.live")} · {stats.productCount} {t("dash.products")} · {stats.saleCount} {t("dash.sales_today")}
+              {isReadOnly && (
+                <span className="mt-2 block font-bold text-amber-700">
+                  Read-only access is active. Editing actions are disabled for this workspace.
+                </span>
+              )}
+            </span>
+          }
+          actions={
             <>
-              <DashboardStat
-                labelKey="dash.vehicles_sale"
-                value={String(stats.forSaleVehicleCount)}
-              />
-              <DashboardStat
-                labelKey="dash.car_profit_month"
-                value={formatLkr(stats.vehicleProfitThisMonth)}
-              />
+              <ProButton href="/sales">{t("dash.new_sale")}</ProButton>
+              <ProButton href="/stock" variant="secondary">
+                {t("dash.add_stock")}
+              </ProButton>
             </>
-          )}
-        </div>
-
-        {showVehicles && stats.aging60VehicleCount > 0 && (
-          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="font-medium text-amber-900">
-                {stats.aging60VehicleCount} {t("dash.vehicles_aging")}
-              </p>
-              <Link href="/vehicles" className="text-sm text-amber-800 underline">
-                {t("dash.view_vehicles")}
-              </Link>
-            </div>
-            <ul className="mt-2 space-y-1 text-sm text-amber-900">
-              {stats.aging60Vehicles.map((v) => (
-                <li key={v.id}>
-                  • {v.make} {v.model} {v.year} — {formatLkr(v.askPrice)} (
-                  {v.stockId})
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {stats.pendingACJobCount > 0 && (
-          <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="font-medium text-sky-900">
-                {stats.pendingACJobCount} {t("dash.ac_pending")}
-              </p>
-              <Link href="/jobs" className="text-sm text-sky-800 underline">
-                {t("dash.view_jobs")}
-              </Link>
-            </div>
-            <ul className="mt-2 space-y-1 text-sm text-sky-800">
-              {stats.pendingACJobs.map((j) => (
-                <li key={j.id}>
-                  • {j.customerName} — {j.description} ({j.jobNo})
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <AcServiceDuePanel
-          dueTodayJobs={stats.acServiceDueToday}
-          upcomingJobs={stats.acServiceDueSoon.filter(
-            (j) =>
-              j.serviceDueDate &&
-              stats.acServiceDueToday.every((t) => t.id !== j.id),
-          )}
-          business={data.business}
-          overdueCount={stats.acServiceOverdueCount}
-          logs={notificationLogs}
-          onServiceDone={setServiceDoneJob}
+          }
         />
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <ProStatCard
+            label={t("dash.today_sales")}
+            value={formatLkr(stats.todaySales)}
+            hint={`${stats.saleCount} ${t("dash.sales_today")}`}
+            icon="💸"
+            tone="teal"
+          />
+          <ProStatCard
+            label={t("dash.today_profit")}
+            value={formatLkr(stats.todayProfit)}
+            hint={t("dash.profit_hint")}
+            icon="📈"
+            tone="emerald"
+          />
+          <ProStatCard
+            label={t("dash.bank_balance")}
+            value={formatLkr(stats.bankBalance)}
+            hint={t("nav.banking")}
+            icon="🏦"
+            tone="blue"
+          />
+          <ProStatCard
+            label={t("dash.low_stock")}
+            value={String(stats.lowStockCount)}
+            hint={stats.lowStockCount > 0 ? t("dash.low_stock_alert") : t("dash.all_good_stock")}
+            icon="⚠️"
+            tone={stats.lowStockCount > 0 ? "amber" : "slate"}
+          />
+        </section>
+
+        <section className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <ProStatCard
+            label={t("dash.credit_out")}
+            value={formatLkr(stats.creditOutstanding)}
+            hint={t("dash.credit_customers")}
+            icon="🤝"
+            tone="amber"
+          />
+          <ProStatCard
+            label={t("dash.supplier_pay")}
+            value={formatLkr(stats.payableOutstanding)}
+            hint={t("dash.supplier_payables")}
+            icon="📥"
+            tone="rose"
+          />
+          <ProStatCard
+            label={t("dash.cheques_due")}
+            value={String(stats.chequesDueSoonCount)}
+            hint={t("nav.banking")}
+            icon="🏷️"
+            tone="slate"
+          />
+          {showVehicles ? (
+            <ProStatCard
+              label={t("dash.car_profit_month")}
+              value={formatLkr(stats.vehicleProfitThisMonth)}
+              hint={`${stats.forSaleVehicleCount} ${t("dash.vehicles_sale")}`}
+              icon="🚗"
+              tone="blue"
+            />
+          ) : (
+            <ProStatCard
+              label={t("dash.products")}
+              value={String(stats.productCount)}
+              hint={t("nav.stock")}
+              icon="📦"
+              tone="teal"
+            />
+          )}
+        </section>
+
+        <section className="mt-6 grid gap-6 xl:grid-cols-[1.5fr_0.95fr]">
+          <ProCard
+            eyebrow="Command center"
+            title="Quick actions"
+            action={<ProBadge tone={org.isAuthenticated ? "emerald" : "slate"}>{org.isAuthenticated ? "Cloud" : "Browser"}</ProBadge>}
+          >
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-2">
+              {primaryActions.map((action) => (
+                <Link
+                  key={action.href}
+                  href={action.href}
+                  className="group rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-lg hover:shadow-teal-950/5"
+                >
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-xl shadow-sm ring-1 ring-slate-200 transition group-hover:scale-105">
+                    {action.icon}
+                  </span>
+                  <p className="mt-4 text-sm font-black text-slate-950">{action.label}</p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">Open module →</p>
+                </Link>
+              ))}
+            </div>
+          </ProCard>
+
+          <ProCard
+            eyebrow={vat.enabled ? t("vat.meter_label") : t("vat.title")}
+            title={vat.enabled ? formatLkr(vat.netPayable) : t("vat.enable_hint")}
+            action={<ProButton href="/vat" variant="secondary">{t("nav.vat")}</ProButton>}
+            className={vat.enabled ? "bg-slate-950 text-white ring-slate-800" : ""}
+          >
+            {vat.enabled ? (
+              <div>
+                <p className="text-sm font-semibold text-slate-400">{vat.bounds.label}</p>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-500">{t("vat.output_vat")}</p>
+                    <p className="mt-1 font-mono text-xl font-black text-amber-300">{formatLkr(vat.outputVat)}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-500">{t("vat.input_vat")}</p>
+                    <p className="mt-1 font-mono text-xl font-black text-teal-300">{formatLkr(vat.inputVat)}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-teal-200 bg-teal-50 p-4 text-sm text-slate-700">
+                <p>{t("vat.enable_hint")}</p>
+                <Link href="/settings/shop" className="mt-3 inline-flex font-black text-teal-700 underline">
+                  {t("vat.shop_settings")}
+                </Link>
+              </div>
+            )}
+          </ProCard>
+        </section>
+
+        <section className="mt-6 grid gap-6 xl:grid-cols-3">
+          <ProCard
+            title={t("dash.low_stock_alert")}
+            action={<ProButton href="/stock" variant="ghost">{t("nav.stock")}</ProButton>}
+          >
+            {stats.lowStockItems.length === 0 ? (
+              <ProEmptyState title={t("dash.all_good_stock")} description="Your reorder list is clear right now." />
+            ) : (
+              <div className="space-y-3">
+                {stats.lowStockItems.slice(0, 6).map((p) => (
+                  <div key={p.id} className="flex items-center justify-between gap-4 rounded-2xl border border-amber-100 bg-amber-50/60 p-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-black text-slate-950">{p.name}</p>
+                      <p className="text-xs font-semibold text-amber-700">
+                        {p.stockQty} {String(p.customFields.unit ?? "pcs")} · {t("common.low")}
+                      </p>
+                    </div>
+                    <ProBadge tone="amber">Low</ProBadge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ProCard>
+
+          <ProCard
+            title={t("dash.credit_customers")}
+            action={<ProButton href="/customers" variant="ghost">{t("dash.manage_customers")}</ProButton>}
+          >
+            {stats.topDebtors.length === 0 ? (
+              <ProEmptyState title={t("dash.no_credit")} description="No outstanding customer credit at the moment." />
+            ) : (
+              <div className="space-y-3">
+                {stats.topDebtors.slice(0, 6).map((c) => (
+                  <div key={c.id} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="truncate text-sm font-black text-slate-950">{c.name}</p>
+                    <p className="shrink-0 font-mono text-sm font-black text-teal-700">{formatLkr(c.creditBalance)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ProCard>
+
+          <ProCard
+            title={t("dash.supplier_payables")}
+            action={<ProButton href="/suppliers" variant="ghost">{t("dash.manage_suppliers")}</ProButton>}
+          >
+            {stats.topPayables.length === 0 ? (
+              <ProEmptyState title={t("dash.no_payables")} description="Supplier payable list is clear." />
+            ) : (
+              <div className="space-y-3">
+                {stats.topPayables.slice(0, 6).map((s) => (
+                  <div key={s.id} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="truncate text-sm font-black text-slate-950">{s.name}</p>
+                    <p className="shrink-0 font-mono text-sm font-black text-rose-700">{formatLkr(s.payableBalance)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ProCard>
+        </section>
+
+        {(showVehicles && stats.aging60VehicleCount > 0) || stats.pendingACJobCount > 0 ? (
+          <section className="mt-6 grid gap-6 lg:grid-cols-2">
+            {showVehicles && stats.aging60VehicleCount > 0 && (
+              <ProCard
+                title={`${stats.aging60VehicleCount} ${t("dash.vehicles_aging")}`}
+                action={<ProButton href="/vehicles" variant="secondary">{t("dash.view_vehicles")}</ProButton>}
+              >
+                <div className="space-y-3">
+                  {stats.aging60Vehicles.slice(0, 5).map((v) => (
+                    <div key={v.id} className="rounded-2xl border border-amber-100 bg-amber-50/60 p-3">
+                      <p className="font-black text-amber-950">{v.make} {v.model} {v.year}</p>
+                      <p className="mt-1 text-sm font-semibold text-amber-800">{formatLkr(v.askPrice)} · {v.stockId}</p>
+                    </div>
+                  ))}
+                </div>
+              </ProCard>
+            )}
+
+            {stats.pendingACJobCount > 0 && (
+              <ProCard
+                title={`${stats.pendingACJobCount} ${t("dash.ac_pending")}`}
+                action={<ProButton href="/jobs" variant="secondary">{t("dash.view_jobs")}</ProButton>}
+              >
+                <div className="space-y-3">
+                  {stats.pendingACJobs.slice(0, 5).map((j) => (
+                    <div key={j.id} className="rounded-2xl border border-sky-100 bg-sky-50/70 p-3">
+                      <p className="font-black text-sky-950">{j.customerName}</p>
+                      <p className="mt-1 text-sm font-semibold text-sky-800">{j.description} · {j.jobNo}</p>
+                    </div>
+                  ))}
+                </div>
+              </ProCard>
+            )}
+          </section>
+        ) : null}
+
+        <section className="mt-6">
+          <AcServiceDuePanel
+            dueTodayJobs={stats.acServiceDueToday}
+            upcomingJobs={stats.acServiceDueSoon.filter(
+              (j) =>
+                j.serviceDueDate &&
+                stats.acServiceDueToday.every((t) => t.id !== j.id),
+            )}
+            business={data.business}
+            overdueCount={stats.acServiceOverdueCount}
+            logs={notificationLogs}
+            onServiceDone={setServiceDoneJob}
+          />
+        </section>
+
+        {data.products.length === 0 && (
+          <section className="mt-6">
+            <ProCard>
+              <ProEmptyState
+                title={t("dash.get_started")}
+                description="Add stock, customers and your first sale to activate the full dashboard experience."
+                action={
+                  <div className="flex flex-col justify-center gap-2 sm:flex-row">
+                    <ProButton href="/stock">{t("nav.stock")}</ProButton>
+                    <ProButton href="/customers" variant="secondary">{t("nav.customers")}</ProButton>
+                    <ProButton href="/sales" variant="secondary">{t("nav.sales")}</ProButton>
+                  </div>
+                }
+              />
+            </ProCard>
+          </section>
+        )}
+
+        <div className="mt-8 flex flex-col items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 text-center text-xs font-semibold text-slate-500 shadow-sm sm:flex-row sm:text-left">
+          <span>{t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}</span>
+          <button
+            onClick={() => {
+              if (confirm(t("common.confirm_delete"))) resetAll();
+            }}
+            className="rounded-full px-3 py-1.5 font-black text-rose-600 transition hover:bg-rose-50"
+          >
+            {t("common.reset_data")}
+          </button>
+        </div>
 
         <AcServiceDoneDialog
           job={serviceDoneJob}
@@ -226,113 +358,7 @@ export default function DashboardPage() {
             if (serviceDoneJob) recordACService(serviceDoneJob.id, input);
           }}
         />
-
-        <div className="mt-10 grid gap-6 lg:grid-cols-3">
-          <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="font-semibold text-slate-900">
-              {t("dash.low_stock_alert")}
-            </h2>
-            {stats.lowStockItems.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">{t("dash.all_good_stock")}</p>
-            ) : (
-              <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                {stats.lowStockItems.map((p) => (
-                  <li key={p.id}>
-                    • {p.name} — {p.stockQty}{" "}
-                    {String(p.customFields.unit ?? "pcs")}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="font-semibold text-slate-900">
-              {t("dash.credit_customers")}
-            </h2>
-            {stats.topDebtors.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">{t("dash.no_credit")}</p>
-            ) : (
-              <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                {stats.topDebtors.map((c) => (
-                  <li key={c.id}>
-                    • {c.name} — {formatLkr(c.creditBalance)}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <Link
-              href="/customers"
-              className="mt-3 inline-block text-sm text-teal-700 underline"
-            >
-              {t("dash.manage_customers")}
-            </Link>
-          </section>
-
-          <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="font-semibold text-slate-900">
-              {t("dash.supplier_payables")}
-            </h2>
-            {stats.topPayables.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">{t("dash.no_payables")}</p>
-            ) : (
-              <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                {stats.topPayables.map((s) => (
-                  <li key={s.id}>
-                    • {s.name} — {formatLkr(s.payableBalance)}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <Link
-              href="/suppliers"
-              className="mt-3 inline-block text-sm text-teal-700 underline"
-            >
-              {t("dash.manage_suppliers")}
-            </Link>
-          </section>
-        </div>
-
-        {data.products.length === 0 && (
-          <div className="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-            <p className="font-medium">{t("dash.get_started")}</p>
-            <ol className="mt-2 list-decimal space-y-1 pl-5">
-              <li>
-                <Link href="/stock" className="underline">
-                  {t("nav.stock")}
-                </Link>
-              </li>
-              <li>
-                <Link href="/customers" className="underline">
-                  {t("nav.customers")}
-                </Link>
-              </li>
-              <li>
-                <Link href="/sales" className="underline">
-                  {t("nav.sales")}
-                </Link>
-              </li>
-              <li>
-                <Link href="/banking" className="underline">
-                  {t("nav.banking")}
-                </Link>
-              </li>
-            </ol>
-          </div>
-        )}
-
-        <p className="mt-8 text-center text-xs text-slate-400">
-          {t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}{" "}
-          <button
-            onClick={() => {
-              if (confirm(t("common.confirm_delete"))) resetAll();
-            }}
-            className="underline hover:text-slate-600"
-          >
-            {t("common.reset_data")}
-          </button>
-        </p>
-      </main>
-    </div>
+      </ProMain>
+    </ProPageShell>
   );
 }
