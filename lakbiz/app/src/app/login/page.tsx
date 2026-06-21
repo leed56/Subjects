@@ -17,8 +17,6 @@ import { createBrowserClient } from "@/lib/supabase/client";
 import { SectorPicker } from "@/components/sector-picker";
 import type { SectorId } from "@/lib/types";
 
-const DEMO_ORG_KEY = "lakbiz-org-demo";
-
 type Mode = "signin" | "signup";
 
 export default function LoginPage() {
@@ -130,25 +128,6 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const continueDemo = () => {
-    if (mode === "signup") {
-      try {
-        localStorage.setItem(
-          DEMO_ORG_KEY,
-          JSON.stringify({
-            id: null,
-            name: shopName.trim() || "Demo Shop",
-            sector,
-            isAuthenticated: false,
-          }),
-        );
-      } catch {
-        /* ignore */
-      }
-    }
-    router.push("/dashboard");
   };
 
   return (
@@ -313,13 +292,9 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <button
-          type="button"
-          onClick={continueDemo}
-          className={`mt-4 w-full rounded-lg border border-slate-300 py-2.5 text-sm text-slate-700 hover:bg-slate-50 ${adminLogin ? "hidden" : ""}`}
-        >
-          {t("sub.login_demo")}
-        </button>
+        <p className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm text-slate-600">
+          Need access? Contact LakBiz to receive your login details.
+        </p>
 
         <p className="mt-6 text-center text-xs text-slate-500">
           {!adminLogin ? (
