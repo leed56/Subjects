@@ -129,6 +129,15 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     si: `ආයුබෝවන් {{customerName}}, *{{shopName}}* job *{{jobNo}}* සම්පූර්ණයි.\n\nඅපව තෝරා ගැනීමට ස්තූතියි!\n{{shopPhone}}`,
   },
   {
+    id: "job_assignee_dispatch",
+    icon: "🧰",
+    labelEn: "Work order (assignee)",
+    labelSi: "වැඩ නියෝගය (පවරන ලද)",
+    category: "jobs",
+    en: `*{{shopName}}* — Work order\nJob {{jobNo}}\n{{description}}\nCustomer: {{customerName}}\nSite: {{address}}\nScheduled: {{scheduledDate}}\nQuote: {{quotedAmount}}`,
+    si: `*{{shopName}}* — වැඩ නියෝගය\nJob {{jobNo}}\n{{description}}\nපාරිභෝගික: {{customerName}}\nස්ථානය: {{address}}\nදිනය: {{scheduledDate}}\nමුදල: {{quotedAmount}}`,
+  },
+  {
     id: "custom",
     icon: "✏️",
     labelEn: "Custom message",

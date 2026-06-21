@@ -116,6 +116,16 @@ export default function WorkforcePage() {
   const activeContractors = data.contractors.filter((c) => c.active);
   const outstandingPayout = data.contractors.reduce((s, c) => s + c.payableBalance, 0);
 
+  const contractorJobStats = (id: string) => {
+    const jobs = data.acJobs.filter(
+      (j) => j.assigneeType === "contractor" && j.assigneeId === id && j.status === "completed",
+    );
+    const revenue = jobs.reduce((s, j) => s + j.quotedAmount, 0);
+    const cost = jobs.reduce((s, j) => s + (j.subcontractCost ?? 0), 0);
+    return { count: jobs.length, margin: revenue - cost };
+  };
+  const totalMargin = data.contractors.reduce((s, c) => s + contractorJobStats(c.id).margin, 0);
+
   return (
     <ProPageShell>
       <SiteHeader />
@@ -146,7 +156,7 @@ export default function WorkforcePage() {
           <ProStatCard label={t("work.team")} value={String(data.technicians.length)} hint={t("work.in_house")} icon="🧑‍🔧" tone="teal" />
           <ProStatCard label={t("work.contractors")} value={String(data.contractors.length)} hint={`${activeContractors.length} ${t("work.active")}`} icon="🤝" tone="blue" />
           <ProStatCard label={t("work.outstanding_payout")} value={formatLkr(outstandingPayout)} hint={t("work.owed_contractors")} icon="💸" tone="amber" />
-          <ProStatCard label={t("work.active")} value={String(data.technicians.filter((x) => x.active).length + activeContractors.length)} hint={t("work.available")} icon="✅" tone="emerald" />
+          <ProStatCard label={t("work.total_margin")} value={formatLkr(totalMargin)} hint={t("work.margin_hint")} icon="📈" tone="emerald" />
         </section>
 
         {showTechForm && (
@@ -266,7 +276,9 @@ export default function WorkforcePage() {
               <ProEmptyState title={t("work.no_contractors")} description={t("work.contractor_hint")} />
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {data.contractors.map((c) => (
+                {data.contractors.map((c) => {
+                  const stats = contractorJobStats(c.id);
+                  return (
                   <article key={c.id} className="rounded-[1.5rem] border border-slate-200 bg-white p-4 ring-1 ring-slate-100">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -288,6 +300,7 @@ export default function WorkforcePage() {
                         <p className={`font-mono font-black ${c.payableBalance > 0 ? "text-rose-600" : "text-slate-900"}`}>{formatLkr(c.payableBalance)}</p>
                       </div>
                     </div>
+                    <p className="mt-3 text-xs font-bold text-slate-500">{t("work.jobs_done")}: {stats.count} · {t("work.margin")}: <span className="font-black text-emerald-700">{formatLkr(stats.margin)}</span></p>
                     <div className="mt-4 flex flex-wrap gap-2">
                       {c.payableBalance > 0 && (
                         <button onClick={() => { setPayContractor(c); setPayAmount(c.payableBalance); setPayMethod("cash"); setPayNote(""); }} className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700 hover:bg-emerald-100">
@@ -302,7 +315,8 @@ export default function WorkforcePage() {
                       </button>
                     </div>
                   </article>
-                ))}
+                  );
+                })}
               </div>
             )}
           </ProCard>

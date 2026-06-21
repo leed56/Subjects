@@ -13,6 +13,7 @@ type MessageSendButtonProps = {
   contextId?: string;
   variant?: "primary" | "compact" | "icon";
   disabled?: boolean;
+  label?: string;
 };
 
 export function MessageSendButton({
@@ -23,6 +24,7 @@ export function MessageSendButton({
   contextId,
   variant = "compact",
   disabled,
+  label,
 }: MessageSendButtonProps) {
   const { t } = useLocale();
   const [open, setOpen] = useState(false);
@@ -41,9 +43,9 @@ export function MessageSendButton({
         disabled={disabled}
         onClick={() => setOpen(true)}
         className={`${baseClass} disabled:opacity-40`}
-        title={t("msg.send_message")}
+        title={label ?? t("msg.send_message")}
       >
-        {variant === "icon" ? "💬" : t("msg.send_message")}
+        {variant === "icon" ? "💬" : (label ?? t("msg.send_message"))}
       </button>
       <MessageComposer
         open={open}

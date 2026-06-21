@@ -19,6 +19,7 @@ export type MessageTemplateId =
   | "job_service_due_technician"
   | "job_service_complete_next"
   | "job_completed"
+  | "job_assignee_dispatch"
   | "custom";
 
 export type MessageContextType = "sale" | "customer" | "ac_job" | "custom";
