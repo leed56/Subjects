@@ -167,18 +167,14 @@ export default function JobsPage() {
           description={`${t("jobs.subtitle")} — ${pending.length} ${t("jobs.pending")}`}
           actions={<><ProButton href="/customers" variant="secondary">{t("nav.customers")}</ProButton><button onClick={() => { resetForm(); setShowForm((v) => !v); }} className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700">{showForm ? t("common.hide_form") : t("jobs.new")}</button></>}
         />
-
         {message && <div className="mb-5 rounded-[1.25rem] border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900 shadow-sm">{message}</div>}
-
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <ProStatCard label={t("jobs.pending")} value={String(pending.length)} hint="Quotes, deposits and scheduled" icon="🛠️" tone="amber" />
           <ProStatCard label={t("jobs.schedule")} value={String(scheduled.length)} hint="Scheduled work" icon="📅" tone="blue" />
           <ProStatCard label={t("jobs.service_due_section")} value={String(serviceDue.length)} hint="Ready to mark done" icon="❄️" tone={serviceDue.length ? "amber" : "slate"} />
           <ProStatCard label={t("jobs.quote_label")} value={formatLkr(quoteTotal)} hint="Total quoted value" icon="💸" tone="emerald" />
         </section>
-
         <section className="mt-6"><AcRemindersBanner /></section>
-
         {showForm && (
           <section className="mt-6">
             <ProCard eyebrow={editing ? "Edit AC job" : "Create AC job"} title={editing ? `${t("jobs.edit_job")} ${editing.jobNo}` : t("jobs.new_job")} action={<ProBadge tone="teal">{formatLkr(quotedAmount)}</ProBadge>}>
@@ -212,17 +208,14 @@ export default function JobsPage() {
             </ProCard>
           </section>
         )}
-
         <section className="mt-6 grid gap-4 lg:grid-cols-2">
           <ProCard title={t("jobs.all_types")} eyebrow="Type filter"><div className="flex flex-wrap gap-2"><button onClick={() => setTypeFilter("all")} className={`rounded-full px-3 py-2 text-xs font-black ${typeFilter === "all" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{t("jobs.all_types")}</button>{AC_JOB_TYPES.map((tpe) => <button key={tpe.value} onClick={() => setTypeFilter(tpe.value)} className={`rounded-full px-3 py-2 text-xs font-black ${typeFilter === tpe.value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{locale === "si" ? tpe.labelSi : tpe.labelEn}</button>)}</div></ProCard>
           <ProCard title={t("jobs.all")} eyebrow="Status filter" action={<ProBadge tone="teal">{jobs.length} shown</ProBadge>}><div className="flex flex-wrap gap-2"><button onClick={() => setFilter("all")} className={`rounded-full px-3 py-2 text-xs font-black ${filter === "all" ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{t("jobs.all")} ({data.acJobs.length})</button>{AC_JOB_STATUSES.map((s) => <button key={s.value} onClick={() => setFilter(s.value)} className={`rounded-full px-3 py-2 text-xs font-black ${filter === s.value ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{locale === "si" ? s.labelSi : s.labelEn}</button>)}</div></ProCard>
         </section>
-
         <section className="mt-6">
           {jobs.length === 0 ? <ProCard><ProEmptyState title={t("jobs.no_jobs")} description={t("jobs.no_jobs_hint")} /></ProCard> : <div className="grid gap-4 xl:grid-cols-2">{jobs.map((job) => <JobCard key={job.id} job={job} locale={locale} business={data.business} notificationLogs={notificationLogs} notifySettings={notifySettings} onServiceDone={() => setServiceDoneJob(job)} onEdit={() => loadJob(job)} onSchedule={() => updateACJob(job.id, { status: "scheduled" })} onInstalled={() => updateACJob(job.id, { status: "installed", installedDate: new Date().toISOString().slice(0, 10) })} onComplete={() => updateACJob(job.id, { status: "completed" })} onDelete={() => { if (confirm(`${t("jobs.delete_confirm")} ${job.jobNo}?`)) deleteACJob(job.id); }} />)}</div>}
         </section>
       </ProMain>
-
       <AcServiceDoneDialog job={serviceDoneJob} business={data.business} open={!!serviceDoneJob} onClose={() => setServiceDoneJob(null)} onConfirm={(input) => { if (serviceDoneJob) { recordACService(serviceDoneJob.id, input); setMessage(t("jobs.service_done_saved")); setTimeout(() => setMessage(""), 2500); } }} />
     </ProPageShell>
   );
