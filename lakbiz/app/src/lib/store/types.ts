@@ -204,6 +204,32 @@ export interface BankAccountRecord {
   balance: number;
 }
 
+export type BankTransactionType =
+  | "deposit"
+  | "withdrawal"
+  | "fee"
+  | "interest"
+  | "adjustment";
+
+export interface BankTransaction {
+  id: string;
+  accountId: string;
+  type: BankTransactionType;
+  amount: number;
+  description?: string;
+  reference?: string;
+  date: string;
+}
+
+export interface BankTransfer {
+  id: string;
+  fromAccountId: string;
+  toAccountId: string;
+  amount: number;
+  description?: string;
+  date: string;
+}
+
 export type ChequeStatus = "pending" | "deposited" | "cleared" | "bounced";
 
 export interface ChequeRecord {
@@ -279,6 +305,8 @@ export interface AppData {
   acJobs: ACJob[];
   vehicles: VehicleRecord[];
   bankAccounts: BankAccountRecord[];
+  bankTransactions: BankTransaction[];
+  bankTransfers: BankTransfer[];
   cheques: ChequeRecord[];
 }
 
@@ -330,6 +358,23 @@ export type BankAccountInput = {
   accountName: string;
   accountNumber: string;
   balance: number;
+};
+
+export type BankTransactionInput = {
+  accountId: string;
+  type: BankTransactionType;
+  amount: number;
+  description?: string;
+  reference?: string;
+  date?: string;
+};
+
+export type BankTransferInput = {
+  fromAccountId: string;
+  toAccountId: string;
+  amount: number;
+  description?: string;
+  date?: string;
 };
 
 export type ChequeInput = {

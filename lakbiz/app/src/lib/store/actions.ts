@@ -22,6 +22,11 @@ import type {
   ACJobInput,
   RecordACServiceInput,
   BankAccountInput,
+  BankTransaction,
+  BankTransactionInput,
+  BankTransactionType,
+  BankTransfer,
+  BankTransferInput,
   ChequeInput,
   ChequeStatus,
   CustomerInput,
@@ -748,6 +753,88 @@ export function deleteBankAccount(data: AppData, id: string): AppData {
   return {
     ...data,
     bankAccounts: data.bankAccounts.filter((a) => a.id !== id),
+  };
+}
+
+/** Signed effect of a transaction on its account balance. */
+function txnBalanceDelta(type: BankTransactionType, amount: number): number {
+  if (type === "withdrawal" || type === "fee") return -amount;
+  return amount; // deposit, interest, adjustment (adjustment may be negative)
+}
+
+export function addBankTransaction(
+  data: AppData,
+  input: BankTransactionInput,
+): AppData {
+  const account = data.bankAccounts.find((a) => a.id === input.accountId);
+  if (!account || input.amount === 0) return data;
+
+  const txn: BankTransaction = {
+    id: newId(),
+    accountId: input.accountId,
+    type: input.type,
+    amount: input.amount,
+    description: input.description?.trim() || undefined,
+    reference: input.reference?.trim() || undefined,
+    date: input.date ?? new Date().toISOString(),
+  };
+
+  const delta = txnBalanceDelta(input.type, input.amount);
+
+  return {
+    ...data,
+    bankTransactions: [txn, ...data.bankTransactions],
+    bankAccounts: data.bankAccounts.map((a) =>
+      a.id === input.accountId ? { ...a, balance: a.balance + delta } : a,
+    ),
+  };
+}
+
+export function deleteBankTransaction(data: AppData, id: string): AppData {
+  const txn = data.bankTransactions.find((t) => t.id === id);
+  if (!txn) return data;
+
+  const delta = txnBalanceDelta(txn.type, txn.amount);
+
+  return {
+    ...data,
+    bankTransactions: data.bankTransactions.filter((t) => t.id !== id),
+    bankAccounts: data.bankAccounts.map((a) =>
+      a.id === txn.accountId ? { ...a, balance: a.balance - delta } : a,
+    ),
+  };
+}
+
+export function addBankTransfer(
+  data: AppData,
+  input: BankTransferInput,
+): AppData {
+  if (
+    input.amount <= 0 ||
+    input.fromAccountId === input.toAccountId ||
+    !data.bankAccounts.some((a) => a.id === input.fromAccountId) ||
+    !data.bankAccounts.some((a) => a.id === input.toAccountId)
+  ) {
+    return data;
+  }
+
+  const transfer: BankTransfer = {
+    id: newId(),
+    fromAccountId: input.fromAccountId,
+    toAccountId: input.toAccountId,
+    amount: input.amount,
+    description: input.description?.trim() || undefined,
+    date: input.date ?? new Date().toISOString(),
+  };
+
+  return {
+    ...data,
+    bankTransfers: [transfer, ...data.bankTransfers],
+    bankAccounts: data.bankAccounts.map((a) => {
+      if (a.id === input.fromAccountId) return { ...a, balance: a.balance - input.amount };
+      if (a.id === input.toAccountId) return { ...a, balance: a.balance + input.amount };
+      return a;
+    }),
   };
 }
 

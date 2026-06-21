@@ -32,6 +32,8 @@ export const emptyAppData = (): AppData => ({
   acJobs: [],
   vehicles: [],
   bankAccounts: [],
+  bankTransactions: [],
+  bankTransfers: [],
   cheques: [],
 });
 

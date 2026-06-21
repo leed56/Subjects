@@ -16,7 +16,19 @@ import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
-import type { ChequeRecord, ChequeStatus } from "@/lib/store/types";
+import type {
+  BankTransactionType,
+  ChequeRecord,
+  ChequeStatus,
+} from "@/lib/store/types";
+
+const TXN_TYPES: BankTransactionType[] = [
+  "deposit",
+  "withdrawal",
+  "fee",
+  "interest",
+  "adjustment",
+];
 
 export default function BankingPage() {
   const {
@@ -24,6 +36,9 @@ export default function BankingPage() {
     ready,
     addBankAccount,
     deleteBankAccount,
+    addBankTransaction,
+    deleteBankTransaction,
+    addBankTransfer,
     addCheque,
     updateChequeStatus,
   } = useAppStore();
@@ -34,6 +49,14 @@ export default function BankingPage() {
     deposited: t("bank.status.deposited"),
     cleared: t("bank.status.cleared"),
     bounced: t("bank.status.bounced"),
+  };
+
+  const txnTypeLabels: Record<BankTransactionType, string> = {
+    deposit: t("bank.txn.deposit"),
+    withdrawal: t("bank.txn.withdrawal"),
+    fee: t("bank.txn.fee"),
+    interest: t("bank.txn.interest"),
+    adjustment: t("bank.txn.adjustment"),
   };
 
   const [showBankForm, setShowBankForm] = useState(false);
@@ -55,6 +78,20 @@ export default function BankingPage() {
   const [statusCheque, setStatusCheque] = useState<ChequeRecord | null>(null);
   const [depositAccountId, setDepositAccountId] = useState("");
   const [selectedChequeStatus, setSelectedChequeStatus] = useState<ChequeStatus>("pending");
+
+  const [showTxnForm, setShowTxnForm] = useState(false);
+  const [txnAccountId, setTxnAccountId] = useState("");
+  const [txnType, setTxnType] = useState<BankTransactionType>("deposit");
+  const [txnAmount, setTxnAmount] = useState(0);
+  const [txnDesc, setTxnDesc] = useState("");
+  const [txnDate, setTxnDate] = useState(new Date().toISOString().slice(0, 10));
+
+  const [showTransferForm, setShowTransferForm] = useState(false);
+  const [trFrom, setTrFrom] = useState("");
+  const [trTo, setTrTo] = useState("");
+  const [trAmount, setTrAmount] = useState(0);
+  const [trDesc, setTrDesc] = useState("");
+  const [trDate, setTrDate] = useState(new Date().toISOString().slice(0, 10));
 
   if (!ready || !data) {
     return (
@@ -80,6 +117,30 @@ export default function BankingPage() {
     setDepositAccountId(data.bankAccounts[0]?.id ?? "");
   };
 
+  const accountLabel = (id: string) => {
+    const a = data.bankAccounts.find((x) => x.id === id);
+    return a ? `${a.bankName} — ${a.accountNumber}` : "—";
+  };
+
+  const ledger = [
+    ...data.bankTransactions.map((tx) => ({
+      key: tx.id,
+      date: tx.date,
+      label: txnTypeLabels[tx.type],
+      detail: `${accountLabel(tx.accountId)}${tx.description ? ` · ${tx.description}` : ""}`,
+      signed: tx.type === "withdrawal" || tx.type === "fee" ? -tx.amount : tx.amount,
+      removable: tx.id,
+    })),
+    ...data.bankTransfers.map((tr) => ({
+      key: tr.id,
+      date: tr.date,
+      label: t("bank.transfer"),
+      detail: `${accountLabel(tr.fromAccountId)} → ${accountLabel(tr.toAccountId)}${tr.description ? ` · ${tr.description}` : ""}`,
+      signed: tr.amount,
+      removable: null as string | null,
+    })),
+  ].sort((a, b) => (a.date < b.date ? 1 : -1));
+
   return (
     <ProPageShell>
       <SiteHeader />
@@ -95,6 +156,25 @@ export default function BankingPage() {
                 className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98]"
               >
                 {t("bank.add_account")}
+              </button>
+              <button
+                onClick={() => {
+                  setTxnAccountId(data.bankAccounts[0]?.id ?? "");
+                  setShowTxnForm((v) => !v);
+                }}
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98]"
+              >
+                {t("bank.record_txn")}
+              </button>
+              <button
+                onClick={() => {
+                  setTrFrom(data.bankAccounts[0]?.id ?? "");
+                  setTrTo(data.bankAccounts[1]?.id ?? "");
+                  setShowTransferForm((v) => !v);
+                }}
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98]"
+              >
+                {t("bank.transfer")}
               </button>
               <button
                 onClick={() => setShowChequeForm((v) => !v)}
@@ -140,6 +220,96 @@ export default function BankingPage() {
                   <button type="button" onClick={() => setShowBankForm(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
                 </div>
               </form>
+            </ProCard>
+          </section>
+        )}
+
+        {showTxnForm && (
+          <section className="mt-6">
+            <ProCard eyebrow="Ledger" title={t("bank.txn_title")}>
+              {data.bankAccounts.length === 0 ? (
+                <ProEmptyState title={t("bank.no_accounts")} description={t("bank.txn_need_account")} />
+              ) : (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const ok = addBankTransaction({
+                      accountId: txnAccountId,
+                      type: txnType,
+                      amount: txnAmount,
+                      description: txnDesc,
+                      date: txnDate,
+                    });
+                    if (ok) {
+                      setShowTxnForm(false);
+                      setTxnAmount(0);
+                      setTxnDesc("");
+                    }
+                  }}
+                >
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <select value={txnAccountId} onChange={(e) => setTxnAccountId(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                      {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
+                    </select>
+                    <select value={txnType} onChange={(e) => setTxnType(e.target.value as BankTransactionType)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                      {TXN_TYPES.map((ty) => <option key={ty} value={ty}>{txnTypeLabels[ty]}</option>)}
+                    </select>
+                    <input type="number" required placeholder={t("bank.amount")} value={txnAmount || ""} onChange={(e) => setTxnAmount(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                    <input type="date" required value={txnDate} onChange={(e) => setTxnDate(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                    <input placeholder={t("bank.description")} value={txnDesc} onChange={(e) => setTxnDesc(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 sm:col-span-2" />
+                  </div>
+                  <p className="mt-2 text-xs font-semibold text-slate-500">{t("bank.adjustment_hint")}</p>
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("bank.save_txn")}</button>
+                    <button type="button" onClick={() => setShowTxnForm(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+                  </div>
+                </form>
+              )}
+            </ProCard>
+          </section>
+        )}
+
+        {showTransferForm && (
+          <section className="mt-6">
+            <ProCard eyebrow="Ledger" title={t("bank.transfer_title")}>
+              {data.bankAccounts.length < 2 ? (
+                <ProEmptyState title={t("bank.transfer_need_accounts")} description={t("bank.transfer_need_accounts_desc")} />
+              ) : (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const ok = addBankTransfer({
+                      fromAccountId: trFrom,
+                      toAccountId: trTo,
+                      amount: trAmount,
+                      description: trDesc,
+                      date: trDate,
+                    });
+                    if (ok) {
+                      setShowTransferForm(false);
+                      setTrAmount(0);
+                      setTrDesc("");
+                    }
+                  }}
+                >
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <select value={trFrom} onChange={(e) => setTrFrom(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                      {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
+                    </select>
+                    <select value={trTo} onChange={(e) => setTrTo(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                      {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
+                    </select>
+                    <input type="number" required placeholder={t("bank.amount")} value={trAmount || ""} onChange={(e) => setTrAmount(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                    <input type="date" required value={trDate} onChange={(e) => setTrDate(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                    <input placeholder={t("bank.description")} value={trDesc} onChange={(e) => setTrDesc(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 sm:col-span-2" />
+                  </div>
+                  {trFrom === trTo && <p className="mt-2 text-xs font-bold text-rose-600">{t("bank.transfer_same")}</p>}
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("bank.save_transfer")}</button>
+                    <button type="button" onClick={() => setShowTransferForm(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+                  </div>
+                </form>
+              )}
             </ProCard>
           </section>
         )}
@@ -218,6 +388,52 @@ export default function BankingPage() {
                     </button>
                   </article>
                 ))}
+              </div>
+            )}
+          </ProCard>
+        </section>
+
+        <section className="mt-6">
+          <ProCard title={t("bank.transactions")} eyebrow="Ledger" action={<ProBadge tone="teal">{ledger.length}</ProBadge>}>
+            {ledger.length === 0 ? (
+              <ProEmptyState title={t("bank.no_transactions")} description={t("bank.txn_hint")} />
+            ) : (
+              <div className="overflow-hidden rounded-2xl border border-slate-200">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">{t("common.date")}</th>
+                      <th className="px-4 py-3">{t("bank.type")}</th>
+                      <th className="px-4 py-3">{t("bank.account")}</th>
+                      <th className="px-4 py-3 text-right">{t("bank.amount")}</th>
+                      <th className="px-4 py-3">{t("common.actions")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ledger.map((row) => (
+                      <tr key={row.key} className="border-b last:border-0">
+                        <td className="px-4 py-3 font-semibold text-slate-600">{row.date.slice(0, 10)}</td>
+                        <td className="px-4 py-3 font-black text-slate-950">{row.label}</td>
+                        <td className="px-4 py-3 font-semibold text-slate-600">{row.detail}</td>
+                        <td className={`px-4 py-3 text-right font-mono font-black ${row.signed < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                          {row.signed < 0 ? "-" : "+"}{formatLkr(Math.abs(row.signed))}
+                        </td>
+                        <td className="px-4 py-3">
+                          {row.removable && (
+                            <button
+                              onClick={() => {
+                                if (confirm(t("bank.delete_txn"))) deleteBankTransaction(row.removable!);
+                              }}
+                              className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100"
+                            >
+                              {t("common.delete")}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </ProCard>

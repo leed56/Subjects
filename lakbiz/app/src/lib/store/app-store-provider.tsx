@@ -22,6 +22,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   addACJob,
   addBankAccount,
+  addBankTransaction,
+  addBankTransfer,
   addCheque,
   addCustomer,
   addProduct,
@@ -32,6 +34,7 @@ import {
   createSale,
   deleteACJob,
   deleteBankAccount,
+  deleteBankTransaction,
   deleteCustomer,
   deleteProduct,
   deleteSupplier,
@@ -53,6 +56,8 @@ import type {
   AppData,
   ACJobInput,
   BankAccountInput,
+  BankTransactionInput,
+  BankTransferInput,
   ChequeInput,
   ChequeStatus,
   CustomerInput,
@@ -96,6 +101,9 @@ export type AppStoreValue = {
   ) => boolean;
   addBankAccount: (input: BankAccountInput) => void;
   deleteBankAccount: (id: string) => void;
+  addBankTransaction: (input: BankTransactionInput) => boolean;
+  deleteBankTransaction: (id: string) => void;
+  addBankTransfer: (input: BankTransferInput) => boolean;
   addCheque: (input: ChequeInput) => void;
   updateChequeStatus: (
     chequeId: string,
@@ -322,6 +330,26 @@ function useAppStoreState(): AppStoreValue {
       deleteBankAccount: (id) => {
         if (!data || isReadOnly) return;
         persist(deleteBankAccount(data, id));
+      },
+      addBankTransaction: (input) => {
+        if (!data || isReadOnly) return false;
+        const before = data.bankTransactions.length;
+        const next = addBankTransaction(data, input);
+        if (next.bankTransactions.length === before) return false;
+        persist(next);
+        return true;
+      },
+      deleteBankTransaction: (id) => {
+        if (!data || isReadOnly) return;
+        persist(deleteBankTransaction(data, id));
+      },
+      addBankTransfer: (input) => {
+        if (!data || isReadOnly) return false;
+        const before = data.bankTransfers.length;
+        const next = addBankTransfer(data, input);
+        if (next.bankTransfers.length === before) return false;
+        persist(next);
+        return true;
       },
       addCheque: (input) => {
         if (!data || isReadOnly) return;
