@@ -111,12 +111,12 @@ export type AppStoreValue = {
     method: PaymentMethod,
     note?: string,
   ) => boolean;
-  addBankAccount: (input: BankAccountInput) => void;
+  addBankAccount: (input: BankAccountInput) => boolean;
   deleteBankAccount: (id: string) => void;
   addBankTransaction: (input: BankTransactionInput) => boolean;
   deleteBankTransaction: (id: string) => void;
   addBankTransfer: (input: BankTransferInput) => boolean;
-  addCheque: (input: ChequeInput) => void;
+  addCheque: (input: ChequeInput) => boolean;
   updateChequeStatus: (
     chequeId: string,
     status: ChequeStatus,
@@ -134,10 +134,10 @@ export type AppStoreValue = {
   recordACService: (jobId: string, input?: RecordACServiceInput) => void;
   addJobItem: (input: JobItemInput) => void;
   deleteJobItem: (id: string) => void;
-  addTechnician: (input: TechnicianInput) => void;
+  addTechnician: (input: TechnicianInput) => boolean;
   updateTechnician: (id: string, input: Partial<TechnicianInput>) => void;
   deleteTechnician: (id: string) => void;
-  addContractor: (input: ContractorInput) => void;
+  addContractor: (input: ContractorInput) => boolean;
   updateContractor: (id: string, input: Partial<ContractorInput>) => void;
   deleteContractor: (id: string) => void;
   recordContractorPayment: (
@@ -350,15 +350,19 @@ function useAppStoreState(): AppStoreValue {
         return true;
       },
       addBankAccount: (input) => {
-        if (!data || isReadOnly) return;
-        persist(addBankAccount(data, input));
+        if (!data || isReadOnly || !can("write")) return false;
+        const before = data.bankAccounts.length;
+        const next = addBankAccount(data, input);
+        if (next.bankAccounts.length === before) return false;
+        persist(next);
+        return true;
       },
       deleteBankAccount: (id) => {
         if (!data || isReadOnly) return;
         persist(deleteBankAccount(data, id));
       },
       addBankTransaction: (input) => {
-        if (!data || isReadOnly) return false;
+        if (!data || isReadOnly || !can("write")) return false;
         const before = data.bankTransactions.length;
         const next = addBankTransaction(data, input);
         if (next.bankTransactions.length === before) return false;
@@ -370,7 +374,7 @@ function useAppStoreState(): AppStoreValue {
         persist(deleteBankTransaction(data, id));
       },
       addBankTransfer: (input) => {
-        if (!data || isReadOnly) return false;
+        if (!data || isReadOnly || !can("write")) return false;
         const before = data.bankTransfers.length;
         const next = addBankTransfer(data, input);
         if (next.bankTransfers.length === before) return false;
@@ -378,8 +382,12 @@ function useAppStoreState(): AppStoreValue {
         return true;
       },
       addCheque: (input) => {
-        if (!data || isReadOnly) return;
-        persist(addCheque(data, input));
+        if (!data || isReadOnly || !can("write")) return false;
+        const before = data.cheques.length;
+        const next = addCheque(data, input);
+        if (next.cheques.length === before) return false;
+        persist(next);
+        return true;
       },
       updateChequeStatus: (chequeId, status, bankAccountId) => {
         if (!data || isReadOnly) return;
@@ -429,8 +437,11 @@ function useAppStoreState(): AppStoreValue {
         persist(deleteJobItem(data, id));
       },
       addTechnician: (input) => {
-        if (!data || isReadOnly) return;
-        persist(addTechnician(data, input));
+        if (!data || isReadOnly || !can("write")) return false;
+        const next = addTechnician(data, input);
+        if (next.technicians.length === data.technicians.length) return false;
+        persist(next);
+        return true;
       },
       updateTechnician: (id, input) => {
         if (!data || isReadOnly) return;
@@ -441,8 +452,11 @@ function useAppStoreState(): AppStoreValue {
         persist(deleteTechnician(data, id));
       },
       addContractor: (input) => {
-        if (!data || isReadOnly) return;
-        persist(addContractor(data, input));
+        if (!data || isReadOnly || !can("write")) return false;
+        const next = addContractor(data, input);
+        if (next.contractors.length === data.contractors.length) return false;
+        persist(next);
+        return true;
       },
       updateContractor: (id, input) => {
         if (!data || isReadOnly) return;

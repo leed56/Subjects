@@ -15,6 +15,7 @@ import {
 import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type {
   BankTransactionType,
@@ -43,6 +44,8 @@ export default function BankingPage() {
     updateChequeStatus,
   } = useAppStore();
   const { t } = useLocale();
+  const { isReadOnly, can } = useSubscription();
+  const canWrite = !isReadOnly && can("write");
 
   const statusLabels: Record<ChequeStatus, string> = {
     pending: t("bank.status.pending"),
@@ -59,14 +62,14 @@ export default function BankingPage() {
     adjustment: t("bank.txn.adjustment"),
   };
 
-  const [showBankForm, setShowBankForm] = useState(false);
+  const [showBankModal, setShowBankModal] = useState(false);
   const [bankName, setBankName] = useState(LK_BANKS[0]);
   const [branch, setBranch] = useState("");
   const [accountName, setAccountName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [balance, setBalance] = useState(0);
 
-  const [showChequeForm, setShowChequeForm] = useState(false);
+  const [showChequeModal, setShowChequeModal] = useState(false);
   const [chDirection, setChDirection] = useState<"received" | "paid">("received");
   const [chNo, setChNo] = useState("");
   const [chBank, setChBank] = useState(LK_BANKS[0]);
@@ -79,14 +82,15 @@ export default function BankingPage() {
   const [depositAccountId, setDepositAccountId] = useState("");
   const [selectedChequeStatus, setSelectedChequeStatus] = useState<ChequeStatus>("pending");
 
-  const [showTxnForm, setShowTxnForm] = useState(false);
+  const [showTxnModal, setShowTxnModal] = useState(false);
   const [txnAccountId, setTxnAccountId] = useState("");
   const [txnType, setTxnType] = useState<BankTransactionType>("deposit");
   const [txnAmount, setTxnAmount] = useState(0);
   const [txnDesc, setTxnDesc] = useState("");
   const [txnDate, setTxnDate] = useState(new Date().toISOString().slice(0, 10));
 
-  const [showTransferForm, setShowTransferForm] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [formMessage, setFormMessage] = useState("");
   const [trFrom, setTrFrom] = useState("");
   const [trTo, setTrTo] = useState("");
   const [trAmount, setTrAmount] = useState(0);
@@ -141,6 +145,94 @@ export default function BankingPage() {
     })),
   ].sort((a, b) => (a.date < b.date ? 1 : -1));
 
+  const closeAllModals = () => {
+    setShowBankModal(false);
+    setShowTxnModal(false);
+    setShowTransferModal(false);
+    setShowChequeModal(false);
+  };
+
+  const resetBankForm = () => {
+    setBankName(LK_BANKS[0]);
+    setBranch("");
+    setAccountName("");
+    setAccountNumber("");
+    setBalance(0);
+    setFormMessage("");
+  };
+
+  const resetTxnForm = () => {
+    setTxnType("deposit");
+    setTxnAmount(0);
+    setTxnDesc("");
+    setTxnDate(new Date().toISOString().slice(0, 10));
+    setFormMessage("");
+  };
+
+  const resetTransferForm = () => {
+    setTrAmount(0);
+    setTrDesc("");
+    setTrDate(new Date().toISOString().slice(0, 10));
+    setFormMessage("");
+  };
+
+  const resetChequeForm = () => {
+    setChDirection("received");
+    setChNo("");
+    setChBank(LK_BANKS[0]);
+    setChParty("");
+    setChAmount(0);
+    setChDate(new Date().toISOString().slice(0, 10));
+    setChPostDated(false);
+    setFormMessage("");
+  };
+
+  const openBankModal = () => {
+    if (!canWrite) {
+      setFormMessage(t("sub.read_only"));
+      return;
+    }
+    closeAllModals();
+    resetBankForm();
+    setShowBankModal(true);
+  };
+
+  const openTxnModal = () => {
+    if (!canWrite) {
+      setFormMessage(t("sub.read_only"));
+      return;
+    }
+    closeAllModals();
+    resetTxnForm();
+    setTxnAccountId(data.bankAccounts[0]?.id ?? "");
+    setShowTxnModal(true);
+  };
+
+  const openTransferModal = () => {
+    if (!canWrite) {
+      setFormMessage(t("sub.read_only"));
+      return;
+    }
+    closeAllModals();
+    resetTransferForm();
+    setTrFrom(data.bankAccounts[0]?.id ?? "");
+    setTrTo(data.bankAccounts[1]?.id ?? "");
+    setShowTransferModal(true);
+  };
+
+  const openChequeModal = () => {
+    if (!canWrite) {
+      setFormMessage(t("sub.read_only"));
+      return;
+    }
+    closeAllModals();
+    resetChequeForm();
+    setShowChequeModal(true);
+  };
+
+  const inputClass =
+    "h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100";
+
   return (
     <ProPageShell>
       <SiteHeader />
@@ -152,39 +244,46 @@ export default function BankingPage() {
           actions={
             <>
               <button
-                onClick={() => setShowBankForm((v) => !v)}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98]"
+                type="button"
+                onClick={openBankModal}
+                disabled={!canWrite}
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("bank.add_account")}
               </button>
               <button
-                onClick={() => {
-                  setTxnAccountId(data.bankAccounts[0]?.id ?? "");
-                  setShowTxnForm((v) => !v);
-                }}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98]"
+                type="button"
+                onClick={openTxnModal}
+                disabled={!canWrite}
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("bank.record_txn")}
               </button>
               <button
-                onClick={() => {
-                  setTrFrom(data.bankAccounts[0]?.id ?? "");
-                  setTrTo(data.bankAccounts[1]?.id ?? "");
-                  setShowTransferForm((v) => !v);
-                }}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98]"
+                type="button"
+                onClick={openTransferModal}
+                disabled={!canWrite}
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("bank.transfer")}
               </button>
               <button
-                onClick={() => setShowChequeForm((v) => !v)}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98]"
+                type="button"
+                onClick={openChequeModal}
+                disabled={!canWrite}
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("bank.add_cheque")}
               </button>
             </>
           }
         />
+
+        {formMessage && !showBankModal && !showTxnModal && !showTransferModal && !showChequeModal && (
+          <p className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+            {formMessage}
+          </p>
+        )}
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <ProStatCard label={t("bank.total_balance")} value={formatLkr(totalBank)} hint={`${data.bankAccounts.length} accounts`} icon="🏦" tone="teal" />
@@ -193,178 +292,20 @@ export default function BankingPage() {
           <ProStatCard label="Cheque value" value={formatLkr(chequeValue)} hint="Received minus paid" icon="💸" tone="emerald" />
         </section>
 
-        {showBankForm && (
-          <section className="mt-6">
-            <ProCard eyebrow="Bank account" title={t("bank.add_account_title")}>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  addBankAccount({ bankName, branch, accountName, accountNumber, balance });
-                  setShowBankForm(false);
-                  setAccountName("");
-                  setAccountNumber("");
-                  setBalance(0);
-                }}
-              >
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <select value={bankName} onChange={(e) => setBankName(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                    {LK_BANKS.map((b) => <option key={b}>{b}</option>)}
-                  </select>
-                  <input placeholder={t("bank.branch")} value={branch} onChange={(e) => setBranch(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input required placeholder={t("bank.account_name")} value={accountName} onChange={(e) => setAccountName(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input required placeholder={t("bank.account_no")} value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input type="number" placeholder={t("bank.opening_balance")} value={balance || ""} onChange={(e) => setBalance(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                </div>
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("bank.save_account")}</button>
-                  <button type="button" onClick={() => setShowBankForm(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
-                </div>
-              </form>
-            </ProCard>
-          </section>
-        )}
-
-        {showTxnForm && (
-          <section className="mt-6">
-            <ProCard eyebrow="Ledger" title={t("bank.txn_title")}>
-              {data.bankAccounts.length === 0 ? (
-                <ProEmptyState title={t("bank.no_accounts")} description={t("bank.txn_need_account")} />
-              ) : (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const ok = addBankTransaction({
-                      accountId: txnAccountId,
-                      type: txnType,
-                      amount: txnAmount,
-                      description: txnDesc,
-                      date: txnDate,
-                    });
-                    if (ok) {
-                      setShowTxnForm(false);
-                      setTxnAmount(0);
-                      setTxnDesc("");
-                    }
-                  }}
-                >
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    <select value={txnAccountId} onChange={(e) => setTxnAccountId(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                      {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
-                    </select>
-                    <select value={txnType} onChange={(e) => setTxnType(e.target.value as BankTransactionType)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                      {TXN_TYPES.map((ty) => <option key={ty} value={ty}>{txnTypeLabels[ty]}</option>)}
-                    </select>
-                    <input type="number" required placeholder={t("bank.amount")} value={txnAmount || ""} onChange={(e) => setTxnAmount(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                    <input type="date" required value={txnDate} onChange={(e) => setTxnDate(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                    <input placeholder={t("bank.description")} value={txnDesc} onChange={(e) => setTxnDesc(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 sm:col-span-2" />
-                  </div>
-                  <p className="mt-2 text-xs font-semibold text-slate-500">{t("bank.adjustment_hint")}</p>
-                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                    <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("bank.save_txn")}</button>
-                    <button type="button" onClick={() => setShowTxnForm(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
-                  </div>
-                </form>
-              )}
-            </ProCard>
-          </section>
-        )}
-
-        {showTransferForm && (
-          <section className="mt-6">
-            <ProCard eyebrow="Ledger" title={t("bank.transfer_title")}>
-              {data.bankAccounts.length < 2 ? (
-                <ProEmptyState title={t("bank.transfer_need_accounts")} description={t("bank.transfer_need_accounts_desc")} />
-              ) : (
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const ok = addBankTransfer({
-                      fromAccountId: trFrom,
-                      toAccountId: trTo,
-                      amount: trAmount,
-                      description: trDesc,
-                      date: trDate,
-                    });
-                    if (ok) {
-                      setShowTransferForm(false);
-                      setTrAmount(0);
-                      setTrDesc("");
-                    }
-                  }}
-                >
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    <select value={trFrom} onChange={(e) => setTrFrom(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                      {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
-                    </select>
-                    <select value={trTo} onChange={(e) => setTrTo(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                      {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
-                    </select>
-                    <input type="number" required placeholder={t("bank.amount")} value={trAmount || ""} onChange={(e) => setTrAmount(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                    <input type="date" required value={trDate} onChange={(e) => setTrDate(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                    <input placeholder={t("bank.description")} value={trDesc} onChange={(e) => setTrDesc(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 sm:col-span-2" />
-                  </div>
-                  {trFrom === trTo && <p className="mt-2 text-xs font-bold text-rose-600">{t("bank.transfer_same")}</p>}
-                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                    <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("bank.save_transfer")}</button>
-                    <button type="button" onClick={() => setShowTransferForm(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
-                  </div>
-                </form>
-              )}
-            </ProCard>
-          </section>
-        )}
-
-        {showChequeForm && (
-          <section className="mt-6">
-            <ProCard eyebrow="Cheque register" title={t("bank.add_cheque_title")}>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  addCheque({
-                    direction: chDirection,
-                    chequeNo: chNo,
-                    bankName: chBank,
-                    partyName: chParty,
-                    amount: chAmount,
-                    chequeDate: chDate,
-                    postDated: chPostDated,
-                  });
-                  setShowChequeForm(false);
-                  setChNo("");
-                  setChParty("");
-                  setChAmount(0);
-                }}
-              >
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <select value={chDirection} onChange={(e) => setChDirection(e.target.value as "received" | "paid")} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                    <option value="received">{t("bank.received")}</option>
-                    <option value="paid">{t("bank.paid")}</option>
-                  </select>
-                  <input required placeholder={t("bank.cheque_no")} value={chNo} onChange={(e) => setChNo(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <select value={chBank} onChange={(e) => setChBank(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                    {LK_BANKS.map((b) => <option key={b}>{b}</option>)}
-                  </select>
-                  <input required placeholder={t("bank.party_name")} value={chParty} onChange={(e) => setChParty(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input type="number" required placeholder={t("bank.amount")} value={chAmount || ""} onChange={(e) => setChAmount(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input type="date" required value={chDate} onChange={(e) => setChDate(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700">
-                    <input type="checkbox" checked={chPostDated} onChange={(e) => setChPostDated(e.target.checked)} />
-                    {t("bank.pdc")}
-                  </label>
-                </div>
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("bank.save_cheque")}</button>
-                  <button type="button" onClick={() => setShowChequeForm(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
-                </div>
-              </form>
-            </ProCard>
-          </section>
-        )}
-
         <section className="mt-6">
           <ProCard title={t("bank.total_balance")} eyebrow="Accounts" action={<ProBadge tone="teal">{data.bankAccounts.length} accounts</ProBadge>}>
             {data.bankAccounts.length === 0 ? (
-              <ProEmptyState title={t("bank.no_accounts")} description="Add a bank account to track deposits, cleared cheques and balances." />
+              <ProEmptyState
+                title={t("bank.no_accounts")}
+                description="Add a bank account to track deposits, cleared cheques and balances."
+                action={
+                  canWrite ? (
+                    <button type="button" onClick={openBankModal} className="rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-black text-white hover:bg-teal-700">
+                      {t("bank.add_account")}
+                    </button>
+                  ) : undefined
+                }
+              />
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {data.bankAccounts.map((acc) => (
@@ -513,6 +454,216 @@ export default function BankingPage() {
             )}
           </ProCard>
         </section>
+
+        {showBankModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">Bank account</p>
+                  <h3 className="mt-2 text-xl font-black text-slate-950">{t("bank.add_account_title")}</h3>
+                </div>
+                <button type="button" onClick={() => setShowBankModal(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+              </div>
+              <form
+                className="mt-5"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (addBankAccount({ bankName, branch, accountName, accountNumber, balance })) {
+                    setShowBankModal(false);
+                    resetBankForm();
+                  } else {
+                    setFormMessage(t("sales.failed"));
+                  }
+                }}
+              >
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <select value={bankName} onChange={(e) => setBankName(e.target.value)} className={inputClass}>
+                    {LK_BANKS.map((b) => <option key={b}>{b}</option>)}
+                  </select>
+                  <input placeholder={t("bank.branch")} value={branch} onChange={(e) => setBranch(e.target.value)} className={inputClass} />
+                  <input required placeholder={t("bank.account_name")} value={accountName} onChange={(e) => setAccountName(e.target.value)} className={inputClass} />
+                  <input required placeholder={t("bank.account_no")} value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className={inputClass} />
+                  <input type="number" placeholder={t("bank.opening_balance")} value={balance || ""} onChange={(e) => setBalance(Number(e.target.value))} className={inputClass} />
+                </div>
+                {formMessage && showBankModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("bank.save_account")}</button>
+                  <button type="button" onClick={() => setShowBankModal(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {showTxnModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">Ledger</p>
+                  <h3 className="mt-2 text-xl font-black text-slate-950">{t("bank.txn_title")}</h3>
+                </div>
+                <button type="button" onClick={() => setShowTxnModal(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+              </div>
+              {data.bankAccounts.length === 0 ? (
+                <div className="mt-5">
+                  <ProEmptyState
+                    title={t("bank.no_accounts")}
+                    description={t("bank.txn_need_account")}
+                    action={
+                      canWrite ? (
+                        <button type="button" onClick={() => { setShowTxnModal(false); openBankModal(); }} className="rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-black text-white hover:bg-teal-700">
+                          {t("bank.add_account")}
+                        </button>
+                      ) : undefined
+                    }
+                  />
+                </div>
+              ) : (
+                <form
+                  className="mt-5"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (addBankTransaction({ accountId: txnAccountId, type: txnType, amount: txnAmount, description: txnDesc, date: txnDate })) {
+                      setShowTxnModal(false);
+                      resetTxnForm();
+                    } else {
+                      setFormMessage(t("sales.failed"));
+                    }
+                  }}
+                >
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <select value={txnAccountId} onChange={(e) => setTxnAccountId(e.target.value)} className={inputClass}>
+                      {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
+                    </select>
+                    <select value={txnType} onChange={(e) => setTxnType(e.target.value as BankTransactionType)} className={inputClass}>
+                      {TXN_TYPES.map((ty) => <option key={ty} value={ty}>{txnTypeLabels[ty]}</option>)}
+                    </select>
+                    <input type="number" required placeholder={t("bank.amount")} value={txnAmount || ""} onChange={(e) => setTxnAmount(Number(e.target.value))} className={inputClass} />
+                    <input type="date" required value={txnDate} onChange={(e) => setTxnDate(e.target.value)} className={inputClass} />
+                    <input placeholder={t("bank.description")} value={txnDesc} onChange={(e) => setTxnDesc(e.target.value)} className={`${inputClass} sm:col-span-2`} />
+                  </div>
+                  <p className="mt-2 text-xs font-semibold text-slate-500">{t("bank.adjustment_hint")}</p>
+                  {formMessage && showTxnModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("bank.save_txn")}</button>
+                    <button type="button" onClick={() => setShowTxnModal(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
+
+        {showTransferModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">Ledger</p>
+                  <h3 className="mt-2 text-xl font-black text-slate-950">{t("bank.transfer_title")}</h3>
+                </div>
+                <button type="button" onClick={() => setShowTransferModal(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+              </div>
+              {data.bankAccounts.length < 2 ? (
+                <div className="mt-5">
+                  <ProEmptyState
+                    title={t("bank.transfer_need_accounts")}
+                    description={t("bank.transfer_need_accounts_desc")}
+                    action={
+                      canWrite ? (
+                        <button type="button" onClick={() => { setShowTransferModal(false); openBankModal(); }} className="rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-black text-white hover:bg-teal-700">
+                          {t("bank.add_account")}
+                        </button>
+                      ) : undefined
+                    }
+                  />
+                </div>
+              ) : (
+                <form
+                  className="mt-5"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (addBankTransfer({ fromAccountId: trFrom, toAccountId: trTo, amount: trAmount, description: trDesc, date: trDate })) {
+                      setShowTransferModal(false);
+                      resetTransferForm();
+                    } else {
+                      setFormMessage(t("sales.failed"));
+                    }
+                  }}
+                >
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <select value={trFrom} onChange={(e) => setTrFrom(e.target.value)} className={inputClass}>
+                      {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
+                    </select>
+                    <select value={trTo} onChange={(e) => setTrTo(e.target.value)} className={inputClass}>
+                      {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
+                    </select>
+                    <input type="number" required placeholder={t("bank.amount")} value={trAmount || ""} onChange={(e) => setTrAmount(Number(e.target.value))} className={inputClass} />
+                    <input type="date" required value={trDate} onChange={(e) => setTrDate(e.target.value)} className={inputClass} />
+                    <input placeholder={t("bank.description")} value={trDesc} onChange={(e) => setTrDesc(e.target.value)} className={`${inputClass} sm:col-span-2`} />
+                  </div>
+                  {trFrom === trTo && <p className="mt-2 text-xs font-bold text-rose-600">{t("bank.transfer_same")}</p>}
+                  {formMessage && showTransferModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("bank.save_transfer")}</button>
+                    <button type="button" onClick={() => setShowTransferModal(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
+
+        {showChequeModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">Cheque register</p>
+                  <h3 className="mt-2 text-xl font-black text-slate-950">{t("bank.add_cheque_title")}</h3>
+                </div>
+                <button type="button" onClick={() => setShowChequeModal(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+              </div>
+              <form
+                className="mt-5"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (addCheque({ direction: chDirection, chequeNo: chNo, bankName: chBank, partyName: chParty, amount: chAmount, chequeDate: chDate, postDated: chPostDated })) {
+                    setShowChequeModal(false);
+                    resetChequeForm();
+                  } else {
+                    setFormMessage(t("sales.failed"));
+                  }
+                }}
+              >
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <select value={chDirection} onChange={(e) => setChDirection(e.target.value as "received" | "paid")} className={inputClass}>
+                    <option value="received">{t("bank.received")}</option>
+                    <option value="paid">{t("bank.paid")}</option>
+                  </select>
+                  <input required placeholder={t("bank.cheque_no")} value={chNo} onChange={(e) => setChNo(e.target.value)} className={inputClass} />
+                  <select value={chBank} onChange={(e) => setChBank(e.target.value)} className={inputClass}>
+                    {LK_BANKS.map((b) => <option key={b}>{b}</option>)}
+                  </select>
+                  <input required placeholder={t("bank.party_name")} value={chParty} onChange={(e) => setChParty(e.target.value)} className={inputClass} />
+                  <input type="number" required placeholder={t("bank.amount")} value={chAmount || ""} onChange={(e) => setChAmount(Number(e.target.value))} className={inputClass} />
+                  <input type="date" required value={chDate} onChange={(e) => setChDate(e.target.value)} className={inputClass} />
+                  <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 sm:col-span-2">
+                    <input type="checkbox" checked={chPostDated} onChange={(e) => setChPostDated(e.target.checked)} />
+                    {t("bank.pdc")}
+                  </label>
+                </div>
+                {formMessage && showChequeModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("bank.save_cheque")}</button>
+                  <button type="button" onClick={() => setShowChequeModal(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {statusCheque && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">

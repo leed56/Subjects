@@ -24,9 +24,9 @@ Sri Lanka–focused SaaS pricing and technical design for LakBiz.
 | Vehicles module | 790 |
 | Both sector pack | 1,290 |
 
-**Trial:** 14 days, Business-level features, no credit card. Email signup.
+**Trial:** Default 14 days (platform admin can set 0–90 days when creating a shop). Business-level features, no credit card, no in-app checkout.
 
-**After trial:** 7-day read-only grace (view data, no new sales), then contact LakBiz to activate.
+**After trial:** Subscription moves to `read_only` or `past_due` per admin action; customer contacts LakBiz to activate or extend.
 
 ---
 
@@ -69,7 +69,7 @@ New shops are created only via **Platform admin → Create shop** (`POST /api/ad
 3. Template resolved from `business_templates` (DB), with local fallback
 4. Shop owners are **never** added to `platform_admins` — use separate LakBiz admin accounts
 
-Self-signup (`bootstrap_user_organization`) is disabled when `NEXT_PUBLIC_ADMIN_ONLY=true`.
+Public self-signup is **off in production** (`NEXT_PUBLIC_ADMIN_ONLY=true` by default). The `bootstrap_user_organization` RPC remains for dev/demo only and always provisions a fixed 14-day Business trial — it is not used for customer onboarding.
 
 ### Tenant model
 
@@ -118,13 +118,14 @@ Business payments (customer credit, supplier payables, contractor payouts, POS c
 - [x] Subscription doc + SQL migration in repo
 - [x] Plan definitions + `can()` feature gate in app
 - [x] `/settings/plans` read-only UI (Sinhala + English)
-- [x] `/login` email signup
-- [x] Supabase org + subscription provisioning
+- [x] `/login` email/password for provisioned shop owners
+- [x] Admin shop provisioning (`provision_shop` RPC + `/admin/shops/new`)
 - [x] Gate write actions per plan
 
 ### Phase B — Platform ops
 
-- [ ] Admin: manual activate / extend trial / change plan
+- [x] Admin: suspend / activate / change plan (`PATCH /api/admin/shops/[id]`)
+- [ ] Admin UI: extend trial end date explicitly (today via Supabase or PATCH)
 - [ ] Renewal WhatsApp/SMS reminders (optional)
 
 ### Phase C — Growth
@@ -143,9 +144,11 @@ Business payments (customer credit, supplier payables, contractor payouts, POS c
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
 
 4. Enable Email auth in Supabase dashboard.
+5. Promote at least one platform admin (`node scripts/create-platform-admin.mjs` from `app/`).
 
 Until Supabase is connected, the app runs in **demo mode** with a simulated Business trial.
 

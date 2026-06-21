@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type {
   Contractor,
@@ -71,6 +72,8 @@ export default function WorkforcePage() {
     recordContractorPayment,
   } = useAppStore();
   const { t } = useLocale();
+  const { isReadOnly, can } = useSubscription();
+  const canWrite = !isReadOnly && can("write");
 
   const specialtyLabels: Record<WorkSpecialty, string> = {
     installation: t("work.spec.installation"),
@@ -84,12 +87,13 @@ export default function WorkforcePage() {
     fixed: t("work.rate.fixed"),
   };
 
-  const [showTechForm, setShowTechForm] = useState(false);
+  const [showTechModal, setShowTechModal] = useState(false);
   const [techName, setTechName] = useState("");
   const [techPhone, setTechPhone] = useState("");
   const [techSpecs, setTechSpecs] = useState<WorkSpecialty[]>([]);
 
-  const [showConForm, setShowConForm] = useState(false);
+  const [showConModal, setShowConModal] = useState(false);
+  const [formMessage, setFormMessage] = useState("");
   const [conName, setConName] = useState("");
   const [conCompany, setConCompany] = useState("");
   const [conPhone, setConPhone] = useState("");
@@ -126,6 +130,43 @@ export default function WorkforcePage() {
   };
   const totalMargin = data.contractors.reduce((s, c) => s + contractorJobStats(c.id).margin, 0);
 
+  const resetTechForm = () => {
+    setTechName("");
+    setTechPhone("");
+    setTechSpecs([]);
+    setFormMessage("");
+  };
+
+  const resetConForm = () => {
+    setConName("");
+    setConCompany("");
+    setConPhone("");
+    setConSpecs([]);
+    setConRate(0);
+    setConRateType("per_job");
+    setFormMessage("");
+  };
+
+  const openTechModal = () => {
+    if (!canWrite) {
+      setFormMessage(t("sub.read_only"));
+      return;
+    }
+    resetTechForm();
+    setShowConModal(false);
+    setShowTechModal(true);
+  };
+
+  const openConModal = () => {
+    if (!canWrite) {
+      setFormMessage(t("sub.read_only"));
+      return;
+    }
+    resetConForm();
+    setShowTechModal(false);
+    setShowConModal(true);
+  };
+
   return (
     <ProPageShell>
       <SiteHeader />
@@ -137,20 +178,30 @@ export default function WorkforcePage() {
           actions={
             <>
               <button
-                onClick={() => setShowTechForm((v) => !v)}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98]"
+                type="button"
+                onClick={openTechModal}
+                disabled={!canWrite}
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("work.add_tech")}
               </button>
               <button
-                onClick={() => setShowConForm((v) => !v)}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98]"
+                type="button"
+                onClick={openConModal}
+                disabled={!canWrite}
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("work.add_contractor")}
               </button>
             </>
           }
         />
+
+        {formMessage && !showTechModal && !showConModal && (
+          <p className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+            {formMessage}
+          </p>
+        )}
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <ProStatCard label={t("work.team")} value={String(data.technicians.length)} hint={t("work.in_house")} icon="🧑‍🔧" tone="teal" />
@@ -159,84 +210,24 @@ export default function WorkforcePage() {
           <ProStatCard label={t("work.total_margin")} value={formatLkr(totalMargin)} hint={t("work.margin_hint")} icon="📈" tone="emerald" />
         </section>
 
-        {showTechForm && (
-          <section className="mt-6">
-            <ProCard eyebrow={t("work.in_house")} title={t("work.add_tech_title")}>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  addTechnician({ name: techName, phone: techPhone, specialties: techSpecs });
-                  setShowTechForm(false);
-                  setTechName("");
-                  setTechPhone("");
-                  setTechSpecs([]);
-                }}
-              >
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <input required placeholder={t("work.name")} value={techName} onChange={(e) => setTechName(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input placeholder={t("work.phone")} value={techPhone} onChange={(e) => setTechPhone(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                </div>
-                <div className="mt-3">
-                  <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">{t("work.specialties")}</p>
-                  <SpecialtyPicker value={techSpecs} onChange={setTechSpecs} labels={specialtyLabels} />
-                </div>
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("common.save")}</button>
-                  <button type="button" onClick={() => setShowTechForm(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
-                </div>
-              </form>
-            </ProCard>
-          </section>
-        )}
-
-        {showConForm && (
-          <section className="mt-6">
-            <ProCard eyebrow={t("work.contractors")} title={t("work.add_contractor_title")}>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  addContractor({
-                    name: conName,
-                    company: conCompany,
-                    phone: conPhone,
-                    specialties: conSpecs,
-                    rateType: conRateType,
-                    rateAmount: conRate,
-                  });
-                  setShowConForm(false);
-                  setConName("");
-                  setConCompany("");
-                  setConPhone("");
-                  setConSpecs([]);
-                  setConRate(0);
-                }}
-              >
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <input required placeholder={t("work.name")} value={conName} onChange={(e) => setConName(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input placeholder={t("work.company")} value={conCompany} onChange={(e) => setConCompany(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input placeholder={t("work.phone")} value={conPhone} onChange={(e) => setConPhone(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <select value={conRateType} onChange={(e) => setConRateType(e.target.value as ContractorRateType)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                    {RATE_TYPES.map((r) => <option key={r} value={r}>{rateLabels[r]}</option>)}
-                  </select>
-                  <input type="number" placeholder={t("work.rate_amount")} value={conRate || ""} onChange={(e) => setConRate(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                </div>
-                <div className="mt-3">
-                  <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">{t("work.specialties")}</p>
-                  <SpecialtyPicker value={conSpecs} onChange={setConSpecs} labels={specialtyLabels} />
-                </div>
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("common.save")}</button>
-                  <button type="button" onClick={() => setShowConForm(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
-                </div>
-              </form>
-            </ProCard>
-          </section>
-        )}
-
         <section className="mt-6">
           <ProCard title={t("work.team")} eyebrow={t("work.in_house")} action={<ProBadge tone="teal">{data.technicians.length}</ProBadge>}>
             {data.technicians.length === 0 ? (
-              <ProEmptyState title={t("work.no_team")} description={t("work.team_hint")} />
+              <ProEmptyState
+                title={t("work.no_team")}
+                description={t("work.team_hint")}
+                action={
+                  canWrite ? (
+                    <button
+                      type="button"
+                      onClick={openTechModal}
+                      className="rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-black text-white hover:bg-teal-700"
+                    >
+                      {t("work.add_tech")}
+                    </button>
+                  ) : undefined
+                }
+              />
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {data.technicians.map((tch) => (
@@ -273,7 +264,21 @@ export default function WorkforcePage() {
         <section className="mt-6">
           <ProCard title={t("work.contractors")} eyebrow={t("work.subcontractors")} action={<ProBadge tone="amber">{data.contractors.length}</ProBadge>}>
             {data.contractors.length === 0 ? (
-              <ProEmptyState title={t("work.no_contractors")} description={t("work.contractor_hint")} />
+              <ProEmptyState
+                title={t("work.no_contractors")}
+                description={t("work.contractor_hint")}
+                action={
+                  canWrite ? (
+                    <button
+                      type="button"
+                      onClick={openConModal}
+                      className="rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-black text-white hover:bg-teal-700"
+                    >
+                      {t("work.add_contractor")}
+                    </button>
+                  ) : undefined
+                }
+              />
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {data.contractors.map((c) => {
@@ -351,6 +356,104 @@ export default function WorkforcePage() {
           </section>
         )}
       </ProMain>
+
+      {showTechModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">{t("work.in_house")}</p>
+                <h3 className="mt-2 text-xl font-black text-slate-950">{t("work.add_tech_title")}</h3>
+              </div>
+              <button type="button" onClick={() => setShowTechModal(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+            </div>
+            <form
+              className="mt-5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (addTechnician({ name: techName, phone: techPhone, specialties: techSpecs })) {
+                  setShowTechModal(false);
+                  resetTechForm();
+                } else {
+                  setFormMessage(t("sub.read_only"));
+                }
+              }}
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input required placeholder={t("work.name")} value={techName} onChange={(e) => setTechName(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                <input placeholder={t("work.phone")} value={techPhone} onChange={(e) => setTechPhone(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+              </div>
+              <div className="mt-3">
+                <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">{t("work.specialties")}</p>
+                <SpecialtyPicker value={techSpecs} onChange={setTechSpecs} labels={specialtyLabels} />
+              </div>
+              {formMessage && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("common.save")}</button>
+                <button type="button" onClick={() => setShowTechModal(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showConModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">{t("work.contractors")}</p>
+                <h3 className="mt-2 text-xl font-black text-slate-950">{t("work.add_contractor_title")}</h3>
+              </div>
+              <button type="button" onClick={() => setShowConModal(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+            </div>
+            <form
+              className="mt-5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (
+                  addContractor({
+                    name: conName,
+                    company: conCompany,
+                    phone: conPhone,
+                    specialties: conSpecs,
+                    rateType: conRateType,
+                    rateAmount: conRate,
+                  })
+                ) {
+                  setShowConModal(false);
+                  resetConForm();
+                } else {
+                  setFormMessage(t("sub.read_only"));
+                }
+              }}
+            >
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <input required placeholder={t("work.name")} value={conName} onChange={(e) => setConName(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                <input placeholder={t("work.company")} value={conCompany} onChange={(e) => setConCompany(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                <input placeholder={t("work.phone")} value={conPhone} onChange={(e) => setConPhone(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                <select value={conRateType} onChange={(e) => setConRateType(e.target.value as ContractorRateType)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                  {RATE_TYPES.map((r) => (
+                    <option key={r} value={r}>
+                      {rateLabels[r]}
+                    </option>
+                  ))}
+                </select>
+                <input type="number" placeholder={t("work.rate_amount")} value={conRate || ""} onChange={(e) => setConRate(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+              </div>
+              <div className="mt-3">
+                <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">{t("work.specialties")}</p>
+                <SpecialtyPicker value={conSpecs} onChange={setConSpecs} labels={specialtyLabels} />
+              </div>
+              {formMessage && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("common.save")}</button>
+                <button type="button" onClick={() => setShowConModal(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {payContractor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
