@@ -1,183 +1,114 @@
 "use client";
 
-import { useState } from "react";
-import { PlanCard } from "@/components/plan-card";
+import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
-import { TrialBanner } from "@/components/trial-banner";
-import { useLocale } from "@/lib/i18n/locale-provider";
 import {
-  PLANS,
-  formatLkrPrice,
-  getPlan,
-  relevantAddons,
-} from "@/lib/subscription/plans";
+  ProBadge,
+  ProButton,
+  ProCard,
+  ProMain,
+  ProPageHeader,
+  ProPageShell,
+  ProStatCard,
+} from "@/components/ui/pro-shell";
+import { useLocale } from "@/lib/i18n/locale-provider";
+import { PLANS, formatLkrPrice, getPlan, relevantAddons } from "@/lib/subscription/plans";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
-import type { BillingCycle, PlanId } from "@/lib/subscription/types";
-import { isSupabaseConfigured } from "@/lib/supabase/client";
 
 export default function BillingPage() {
-  const { t, locale } = useLocale();
-  const {
-    subscription,
-    org,
-    setDemoPlan,
-    setDemoBillingCycle,
-    daysLeftInTrial,
-  } = useSubscription();
-  const [message, setMessage] = useState("");
-  const [cycle, setCycle] = useState<BillingCycle>(subscription.billingCycle);
-  const cloudConnected = isSupabaseConfigured();
-
+  const { locale } = useLocale();
+  const { subscription, org, daysLeftInTrial, isReadOnly } = useSubscription();
   const currentPlan = getPlan(subscription.planId);
-
-  const handleSelectPlan = async (planId: PlanId) => {
-    setDemoPlan(planId);
-    setDemoBillingCycle(cycle);
-
-    if (!cloudConnected || !org.isAuthenticated || subscription.isDemo) {
-      setMessage(t("sub.demo_mode"));
-      setTimeout(() => setMessage(""), 4000);
-      return;
-    }
-
-    setMessage(t("common.loading"));
-    try {
-      const res = await fetch("/api/billing/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId, billingCycle: cycle }),
-      });
-      const json = (await res.json()) as {
-        ok?: boolean;
-        checkoutUrl?: string;
-        error?: string;
-        code?: string;
-      };
-
-      if (json.ok && json.checkoutUrl) {
-        window.location.href = json.checkoutUrl;
-        return;
-      }
-
-      setMessage(json.error ?? t("sub.checkout_error"));
-    } catch {
-      setMessage(t("sub.checkout_error"));
-    }
-    setTimeout(() => setMessage(""), 6000);
-  };
-
-  const statusLabel =
-    subscription.status === "trialing"
-      ? t("sub.trial")
-      : subscription.status === "active"
-        ? t("sub.active")
-        : subscription.status;
+  const addons = relevantAddons(org.sector, subscription.planId);
+  const statusTone = subscription.status === "active" ? "emerald" : subscription.status === "trialing" ? "teal" : isReadOnly ? "amber" : "slate";
+  const periodEnd = subscription.currentPeriodEnd ?? subscription.trialEndsAt;
 
   return (
-    <div className="min-h-full bg-slate-50">
+    <ProPageShell>
       <SiteHeader />
-      <main className="mx-auto max-w-6xl px-4 py-10">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">{t("sub.title")}</h1>
-          <p className="text-slate-600">{t("sub.subtitle")}</p>
-        </div>
+      <ProMain>
+        <ProPageHeader
+          eyebrow="Subscription"
+          title="Plan and account status"
+          description="Your LakBiz plan, module access and account status are managed by the platform team."
+          actions={
+            <>
+              <ProButton href="/dashboard" variant="secondary">Dashboard</ProButton>
+              <ProButton href="/login?next=/admin" variant="secondary">Platform admin</ProButton>
+            </>
+          }
+        />
 
-        {message && (
-          <div className="mb-6 rounded-lg bg-teal-50 px-4 py-3 text-sm text-teal-800">
-            {message}
-          </div>
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <ProStatCard label="Current plan" value={locale === "si" ? currentPlan.nameSi : currentPlan.nameEn} hint="Assigned by LakBiz" icon="Plan" tone="teal" />
+          <ProStatCard label="Status" value={subscription.status.replace("_", " ")} hint={daysLeftInTrial != null ? `${daysLeftInTrial} days left` : "Managed account"} icon="OK" tone={statusTone} />
+          <ProStatCard label="Business" value={org.name} hint={org.isAuthenticated ? "Cloud account" : "Demo/local mode"} icon="Shop" tone="blue" />
+          <ProStatCard label="Period end" value={periodEnd ? new Date(periodEnd).toLocaleDateString("en-LK") : "Manual"} hint="Updated by LakBiz" icon="Date" tone="amber" />
+        </section>
+
+        <section className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <ProCard title="Account management" eyebrow="LakBiz managed" action={<ProBadge tone="teal">Managed</ProBadge>}>
+            <div className="space-y-4 text-sm font-semibold leading-6 text-slate-600">
+              <p>Customer shops and plan changes are handled by the LakBiz platform team.</p>
+              <p>This page is a read-only summary for customers. It does not include an online checkout flow.</p>
+              <p>Contact LakBiz support for plan changes, renewals, module changes or account questions.</p>
+            </div>
+            <div className="mt-5 rounded-2xl border border-teal-100 bg-teal-50 p-4 text-sm font-bold text-teal-900">
+              Your access is controlled from the platform admin panel.
+            </div>
+          </ProCard>
+
+          <ProCard title="Assigned plan details" eyebrow="Current package">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-black uppercase tracking-wide text-slate-400">{locale === "si" ? currentPlan.nameSi : currentPlan.nameEn}</p>
+              <p className="mt-2 text-3xl font-black text-slate-950">{formatLkrPrice(currentPlan.priceMonthlyLkr)}</p>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Monthly reference price.</p>
+            </div>
+            <div className="mt-4 grid gap-2 text-sm font-semibold text-slate-600">
+              <p>Users: up to {currentPlan.maxUsers}</p>
+              <p>Branches: up to {currentPlan.maxBranches}</p>
+              <p>Products: {currentPlan.maxProducts == null ? "unlimited" : currentPlan.maxProducts}</p>
+            </div>
+          </ProCard>
+        </section>
+
+        <section className="mt-6">
+          <ProCard title="Available packages" eyebrow="Reference only">
+            <div className="grid gap-4 md:grid-cols-3">
+              {PLANS.map((plan) => (
+                <div key={plan.id} className={`rounded-[1.25rem] border p-4 ${plan.id === subscription.planId ? "border-teal-200 bg-teal-50" : "border-slate-200 bg-white"}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-lg font-black text-slate-950">{locale === "si" ? plan.nameSi : plan.nameEn}</p>
+                    {plan.id === subscription.planId && <ProBadge tone="teal">Current</ProBadge>}
+                  </div>
+                  <p className="mt-2 font-mono text-xl font-black text-teal-700">{formatLkrPrice(plan.priceMonthlyLkr)}</p>
+                  <p className="mt-2 text-xs font-semibold text-slate-500">Plan changes are handled by LakBiz.</p>
+                </div>
+              ))}
+            </div>
+          </ProCard>
+        </section>
+
+        {addons.length > 0 && (
+          <section className="mt-6">
+            <ProCard title="Optional add-ons" eyebrow="Reference only">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {addons.map((addon) => (
+                  <div key={addon.id} className="rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+                    <p className="font-black text-slate-950">{locale === "si" ? addon.nameSi : addon.nameEn}</p>
+                    <p className="mt-1 font-mono font-black text-teal-700">{formatLkrPrice(addon.priceMonthlyLkr)}/month</p>
+                    <p className="mt-2 text-xs font-semibold text-slate-500">Contact LakBiz to activate.</p>
+                  </div>
+                ))}
+              </div>
+            </ProCard>
+          </section>
         )}
 
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-5">
-          <div>
-            <p className="text-sm text-slate-500">{t("sub.status")}</p>
-            <p className="text-lg font-semibold capitalize">{statusLabel}</p>
-            {org.isAuthenticated && (
-              <p className="text-sm text-slate-600">{org.name}</p>
-            )}
-            {cloudConnected && !subscription.isDemo && (
-              <p className="text-xs text-green-700">{t("sub.db_connected")}</p>
-            )}
-            {subscription.status === "trialing" && daysLeftInTrial != null && (
-              <p className="text-sm text-teal-700">
-                {t("sub.trial_banner")} {daysLeftInTrial}
-              </p>
-            )}
-          </div>
-          <div>
-            <p className="text-sm text-slate-500">{t("sub.current_plan")}</p>
-            <p className="text-lg font-semibold">
-              {locale === "si" ? currentPlan.nameSi : currentPlan.nameEn}
-            </p>
-          </div>
-          <div className="flex rounded-lg border border-slate-200 p-1">
-            <button
-              type="button"
-              onClick={() => setCycle("monthly")}
-              className={`rounded-md px-4 py-1.5 text-sm ${
-                cycle === "monthly"
-                  ? "bg-teal-700 text-white"
-                  : "text-slate-600"
-              }`}
-            >
-              {t("sub.monthly")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setCycle("annual")}
-              className={`rounded-md px-4 py-1.5 text-sm ${
-                cycle === "annual"
-                  ? "bg-teal-700 text-white"
-                  : "text-slate-600"
-              }`}
-            >
-              {t("sub.annual")}
-            </button>
-          </div>
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-3">
-          {PLANS.map((plan) => (
-            <PlanCard
-              key={plan.id}
-              plan={plan}
-              cycle={cycle}
-              currentPlanId={subscription.planId}
-              sectorId={org.sector}
-              onSelect={handleSelectPlan}
-            />
-          ))}
-        </div>
-
-        <section className="mt-10">
-          <h2 className="text-lg font-semibold text-slate-900">
-            {t("sub.addons")}
-          </h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {relevantAddons(org.sector, subscription.planId).map((addon) => (
-              <div
-                key={addon.id}
-                className="rounded-lg border border-slate-200 bg-white p-4 text-sm"
-              >
-                <p className="font-medium">
-                  {locale === "si" ? addon.nameSi : addon.nameEn}
-                </p>
-                <p className="text-teal-700">
-                  {formatLkrPrice(addon.priceMonthlyLkr)}/{t("sub.month")}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="mt-10 rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-          <p className="font-medium text-slate-800">{t("sub.pay_manual")}</p>
-          <p className="mt-2">{t("sub.payhere_soon")}</p>
-          {!isSupabaseConfigured() && (
-            <p className="mt-2 text-amber-700">{t("sub.demo_mode")}</p>
-          )}
-        </section>
-      </main>
-    </div>
+        <p className="mt-6 text-center text-sm font-semibold text-slate-500">
+          <Link href="/dashboard" className="text-teal-700 underline">Back to dashboard</Link>
+        </p>
+      </ProMain>
+    </ProPageShell>
   );
 }
