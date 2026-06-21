@@ -44,6 +44,7 @@ import {
   deleteTechnician,
   deleteVehicle,
   recordACService,
+  recordContractorPayment,
   updateContractor,
   updateTechnician,
   recordCustomerPayment,
@@ -134,6 +135,12 @@ export type AppStoreValue = {
   addContractor: (input: ContractorInput) => void;
   updateContractor: (id: string, input: Partial<ContractorInput>) => void;
   deleteContractor: (id: string) => void;
+  recordContractorPayment: (
+    contractorId: string,
+    amount: number,
+    method: PaymentMethod,
+    note?: string,
+  ) => boolean;
   addVehicle: (input: VehicleInput) => boolean;
   updateVehicle: (id: string, input: Partial<VehicleInput>) => void;
   sellVehicle: (input: VehicleSaleInput) => boolean;
@@ -431,6 +438,14 @@ function useAppStoreState(): AppStoreValue {
       deleteContractor: (id) => {
         if (!data || isReadOnly) return;
         persist(deleteContractor(data, id));
+      },
+      recordContractorPayment: (contractorId, amount, method, note) => {
+        if (!data || isReadOnly) return false;
+        const before = data.contractorPayments.length;
+        const next = recordContractorPayment(data, contractorId, amount, method, note);
+        if (next.contractorPayments.length === before) return false;
+        persist(next);
+        return true;
       },
       addVehicle: (input) => {
         if (!data || isReadOnly) return false;

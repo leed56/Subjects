@@ -68,6 +68,7 @@ export function isEmptyBusinessData(data: AppData): boolean {
     data.acJobs.length === 0 &&
     data.technicians.length === 0 &&
     data.contractors.length === 0 &&
+    data.contractorPayments.length === 0 &&
     data.vehicles.length === 0
   );
 }
@@ -97,6 +98,7 @@ export async function pullBusinessData(
     acJobsRes,
     techniciansRes,
     contractorsRes,
+    contractorPaymentsRes,
     vehiclesRes,
     business,
   ] = await Promise.all([
@@ -135,6 +137,10 @@ export async function pullBusinessData(
     supabase.from("ac_jobs").select("*").eq("organization_id", organizationId),
     supabase.from("technicians").select("*").eq("organization_id", organizationId),
     supabase.from("contractors").select("*").eq("organization_id", organizationId),
+    supabase
+      .from("contractor_payments")
+      .select("*")
+      .eq("organization_id", organizationId),
     supabase.from("vehicles").select("*").eq("organization_id", organizationId),
     fetchOrgShopSettings(organizationId),
   ]);
@@ -157,6 +163,7 @@ export async function pullBusinessData(
     acJobsRes.error ??
     techniciansRes.error ??
     contractorsRes.error ??
+    contractorPaymentsRes.error ??
     vehiclesRes.error;
 
   if (firstError) return null;
@@ -391,6 +398,15 @@ export async function pullBusinessData(
       active: row.active ?? true,
       notes: row.notes ?? undefined,
     })),
+    contractorPayments: (contractorPaymentsRes.data ?? []).map((row) => ({
+      id: row.id,
+      contractorId: row.contractor_id,
+      contractorName: row.contractor_name ?? "",
+      amount: num(row.amount),
+      date: row.payment_date,
+      method: asPaymentMethod(row.method),
+      note: row.note ?? undefined,
+    })),
     vehicles: (vehiclesRes.data ?? []).map((row) => ({
       id: row.id,
       stockId: row.stock_id,
@@ -456,6 +472,7 @@ async function upsertOrgRows(
     | "ac_jobs"
     | "technicians"
     | "contractors"
+    | "contractor_payments"
     | "vehicles"
     | "sale_lines"
     | "purchase_lines",
@@ -486,6 +503,7 @@ async function deleteOrgRowsNotIn(
     | "ac_jobs"
     | "technicians"
     | "contractors"
+    | "contractor_payments"
     | "vehicles",
   organizationId: string,
   keepIds: string[],
@@ -548,6 +566,7 @@ async function fetchCloudWatermark(organizationId: string): Promise<number> {
     latestTimestamp(supabase, "ac_jobs", organizationId, "updated_at"),
     latestTimestamp(supabase, "technicians", organizationId, "updated_at"),
     latestTimestamp(supabase, "contractors", organizationId, "updated_at"),
+    latestTimestamp(supabase, "contractor_payments", organizationId, "updated_at"),
     latestTimestamp(supabase, "vehicles", organizationId, "updated_at"),
     latestTimestamp(supabase, "sales", organizationId, "sale_date"),
     latestTimestamp(supabase, "purchases", organizationId, "purchase_date"),
@@ -835,6 +854,17 @@ export async function pushBusinessData(
     notes: c.notes ?? null,
   }));
 
+  const contractorPaymentRows = data.contractorPayments.map((p) => ({
+    id: p.id,
+    organization_id: organizationId,
+    contractor_id: p.contractorId,
+    contractor_name: p.contractorName,
+    amount: p.amount,
+    payment_date: p.date,
+    method: p.method,
+    note: p.note ?? null,
+  }));
+
   const vehicleRows = data.vehicles.map((v) => ({
     id: v.id,
     organization_id: organizationId,
@@ -882,6 +912,7 @@ export async function pushBusinessData(
       | "ac_jobs"
       | "technicians"
       | "contractors"
+      | "contractor_payments"
       | "vehicles";
     rows: Record<string, unknown>[];
   }> = [
@@ -900,6 +931,7 @@ export async function pushBusinessData(
     { table: "ac_jobs", rows: acJobRows },
     { table: "technicians", rows: technicianRows },
     { table: "contractors", rows: contractorRows },
+    { table: "contractor_payments", rows: contractorPaymentRows },
     { table: "vehicles", rows: vehicleRows },
   ];
 
@@ -937,7 +969,8 @@ export async function pushBusinessData(
       | "bank_transactions"
       | "bank_transfers"
       | "technicians"
-      | "contractors";
+      | "contractors"
+      | "contractor_payments";
     ids: string[];
   }> = [
     { table: "sales", ids: data.sales.map((s) => s.id) },
@@ -951,6 +984,7 @@ export async function pushBusinessData(
     { table: "ac_jobs", ids: data.acJobs.map((j) => j.id) },
     { table: "technicians", ids: data.technicians.map((tch) => tch.id) },
     { table: "contractors", ids: data.contractors.map((c) => c.id) },
+    { table: "contractor_payments", ids: data.contractorPayments.map((p) => p.id) },
     { table: "vehicles", ids: data.vehicles.map((v) => v.id) },
     { table: "products", ids: data.products.map((p) => p.id) },
     { table: "customers", ids: data.customers.map((c) => c.id) },

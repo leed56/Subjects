@@ -31,6 +31,7 @@ import type {
   ChequeStatus,
   Contractor,
   ContractorInput,
+  ContractorPayment,
   Technician,
   TechnicianInput,
   WorkSpecialty,
@@ -483,7 +484,7 @@ export function addACJob(data: AppData, input: ACJobInput): AppData {
     notes: input.notes?.trim() || undefined,
   };
 
-  return { ...data, acJobs: [job, ...data.acJobs] };
+  return recomputeContractorPayables({ ...data, acJobs: [job, ...data.acJobs] });
 }
 
 export function updateACJob(
@@ -491,7 +492,7 @@ export function updateACJob(
   id: string,
   input: Partial<ACJobInput>,
 ): AppData {
-  return {
+  return recomputeContractorPayables({
     ...data,
     acJobs: data.acJobs.map((j) => {
       if (j.id !== id) return j;
@@ -593,11 +594,14 @@ export function updateACJob(
         notes: input.notes?.trim() ?? j.notes,
       };
     }),
-  };
+  });
 }
 
 export function deleteACJob(data: AppData, id: string): AppData {
-  return { ...data, acJobs: data.acJobs.filter((j) => j.id !== id) };
+  return recomputeContractorPayables({
+    ...data,
+    acJobs: data.acJobs.filter((j) => j.id !== id),
+  });
 }
 
 /** Mark service visit complete and schedule next due date (days-based) */
@@ -678,6 +682,61 @@ export function updateTechnician(
 
 export function deleteTechnician(data: AppData, id: string): AppData {
   return { ...data, technicians: data.technicians.filter((t) => t.id !== id) };
+}
+
+/**
+ * Derive each contractor's payable balance from completed contractor jobs
+ * (subcontract cost) minus payouts. Deterministic — call after any change to
+ * jobs or contractor payments so balances never drift.
+ */
+export function recomputeContractorPayables(data: AppData): AppData {
+  const accrued = new Map<string, number>();
+  for (const j of data.acJobs) {
+    if (j.assigneeType === "contractor" && j.assigneeId && j.status === "completed") {
+      accrued.set(
+        j.assigneeId,
+        (accrued.get(j.assigneeId) ?? 0) + (j.subcontractCost ?? 0),
+      );
+    }
+  }
+  const paid = new Map<string, number>();
+  for (const p of data.contractorPayments) {
+    paid.set(p.contractorId, (paid.get(p.contractorId) ?? 0) + p.amount);
+  }
+  return {
+    ...data,
+    contractors: data.contractors.map((c) => ({
+      ...c,
+      payableBalance: Math.max(0, (accrued.get(c.id) ?? 0) - (paid.get(c.id) ?? 0)),
+    })),
+  };
+}
+
+export function recordContractorPayment(
+  data: AppData,
+  contractorId: string,
+  amount: number,
+  method: PaymentMethod,
+  note?: string,
+): AppData {
+  if (amount <= 0) return data;
+  const contractor = data.contractors.find((c) => c.id === contractorId);
+  if (!contractor) return data;
+
+  const payment: ContractorPayment = {
+    id: newId(),
+    contractorId,
+    contractorName: contractor.name,
+    amount,
+    date: new Date().toISOString(),
+    method,
+    note: note?.trim() || undefined,
+  };
+
+  return recomputeContractorPayables({
+    ...data,
+    contractorPayments: [payment, ...data.contractorPayments],
+  });
 }
 
 export function addContractor(data: AppData, input: ContractorInput): AppData {

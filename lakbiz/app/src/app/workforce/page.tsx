@@ -16,12 +16,15 @@ import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type {
+  Contractor,
   ContractorRateType,
   WorkSpecialty,
 } from "@/lib/store/types";
+import type { PaymentMethod } from "@/lib/types";
 
 const SPECIALTIES: WorkSpecialty[] = ["installation", "service", "repair"];
 const RATE_TYPES: ContractorRateType[] = ["per_job", "per_unit", "per_meter", "fixed"];
+const PAY_METHODS: PaymentMethod[] = ["cash", "bank_transfer", "cheque", "card"];
 
 function SpecialtyPicker({
   value,
@@ -65,6 +68,7 @@ export default function WorkforcePage() {
     addContractor,
     updateContractor,
     deleteContractor,
+    recordContractorPayment,
   } = useAppStore();
   const { t } = useLocale();
 
@@ -92,6 +96,11 @@ export default function WorkforcePage() {
   const [conSpecs, setConSpecs] = useState<WorkSpecialty[]>([]);
   const [conRateType, setConRateType] = useState<ContractorRateType>("per_job");
   const [conRate, setConRate] = useState(0);
+
+  const [payContractor, setPayContractor] = useState<Contractor | null>(null);
+  const [payAmount, setPayAmount] = useState(0);
+  const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
+  const [payNote, setPayNote] = useState("");
 
   if (!ready || !data) {
     return (
@@ -279,7 +288,12 @@ export default function WorkforcePage() {
                         <p className={`font-mono font-black ${c.payableBalance > 0 ? "text-rose-600" : "text-slate-900"}`}>{formatLkr(c.payableBalance)}</p>
                       </div>
                     </div>
-                    <div className="mt-4 flex gap-2">
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {c.payableBalance > 0 && (
+                        <button onClick={() => { setPayContractor(c); setPayAmount(c.payableBalance); setPayMethod("cash"); setPayNote(""); }} className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700 hover:bg-emerald-100">
+                          {t("work.pay")}
+                        </button>
+                      )}
                       <button onClick={() => updateContractor(c.id, { active: !c.active })} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-200">
                         {c.active ? t("work.deactivate") : t("work.activate")}
                       </button>
@@ -293,7 +307,74 @@ export default function WorkforcePage() {
             )}
           </ProCard>
         </section>
+
+        {data.contractorPayments.length > 0 && (
+          <section className="mt-6">
+            <ProCard title={t("work.payouts")} eyebrow={t("work.contractors")} action={<ProBadge tone="emerald">{data.contractorPayments.length}</ProBadge>}>
+              <div className="overflow-hidden rounded-2xl border border-slate-200">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">{t("common.date")}</th>
+                      <th className="px-4 py-3">{t("work.contractors")}</th>
+                      <th className="px-4 py-3">{t("work.method")}</th>
+                      <th className="px-4 py-3 text-right">{t("bank.amount")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.contractorPayments.slice(0, 20).map((p) => (
+                      <tr key={p.id} className="border-b last:border-0">
+                        <td className="px-4 py-3 font-semibold text-slate-600">{p.date.slice(0, 10)}</td>
+                        <td className="px-4 py-3 font-black text-slate-950">{p.contractorName}</td>
+                        <td className="px-4 py-3 font-semibold text-slate-600">{methodLabel(p.method)}</td>
+                        <td className="px-4 py-3 text-right font-mono font-black text-emerald-600">{formatLkr(p.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </ProCard>
+          </section>
+        )}
       </ProMain>
+
+      {payContractor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">{t("work.pay")}</p>
+                <h3 className="mt-2 text-xl font-black text-slate-950">{payContractor.name}</h3>
+                <p className="mt-1 text-sm font-semibold text-slate-500">{t("work.payable")}: {formatLkr(payContractor.payableBalance)}</p>
+              </div>
+              <button onClick={() => setPayContractor(null)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+            </div>
+            <form
+              className="mt-5 space-y-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (recordContractorPayment(payContractor.id, payAmount, payMethod, payNote)) {
+                  setPayContractor(null);
+                }
+              }}
+            >
+              <input type="number" required min={1} placeholder={t("bank.amount")} value={payAmount || ""} onChange={(e) => setPayAmount(Number(e.target.value))} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" />
+              <select value={payMethod} onChange={(e) => setPayMethod(e.target.value as PaymentMethod)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-emerald-300">
+                {PAY_METHODS.map((m) => <option key={m} value={m}>{methodLabel(m)}</option>)}
+              </select>
+              <input placeholder={t("work.note")} value={payNote} onChange={(e) => setPayNote(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-emerald-300" />
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button type="submit" className="flex-1 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-700/20 hover:bg-emerald-700">{t("work.record_payout")}</button>
+                <button type="button" onClick={() => setPayContractor(null)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </ProPageShell>
   );
+
+  function methodLabel(m: PaymentMethod): string {
+    return t(`work.method.${m}`);
+  }
 }

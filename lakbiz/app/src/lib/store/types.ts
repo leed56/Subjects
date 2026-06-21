@@ -261,6 +261,16 @@ export type ContractorInput = {
   notes?: string;
 };
 
+export interface ContractorPayment {
+  id: string;
+  contractorId: string;
+  contractorName: string;
+  amount: number;
+  date: string;
+  method: PaymentMethod;
+  note?: string;
+}
+
 export type BankTransactionType =
   | "deposit"
   | "withdrawal"
@@ -362,6 +372,7 @@ export interface AppData {
   acJobs: ACJob[];
   technicians: Technician[];
   contractors: Contractor[];
+  contractorPayments: ContractorPayment[];
   vehicles: VehicleRecord[];
   bankAccounts: BankAccountRecord[];
   bankTransactions: BankTransaction[];
