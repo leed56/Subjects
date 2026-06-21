@@ -25,9 +25,11 @@ import {
   addBankTransaction,
   addBankTransfer,
   addCheque,
+  addContractor,
   addCustomer,
   addProduct,
   addSupplier,
+  addTechnician,
   addVehicle,
   adjustStock,
   createPurchase,
@@ -35,11 +37,15 @@ import {
   deleteACJob,
   deleteBankAccount,
   deleteBankTransaction,
+  deleteContractor,
   deleteCustomer,
   deleteProduct,
   deleteSupplier,
+  deleteTechnician,
   deleteVehicle,
   recordACService,
+  updateContractor,
+  updateTechnician,
   recordCustomerPayment,
   recordSupplierPayment,
   sellVehicle,
@@ -60,6 +66,8 @@ import type {
   BankTransferInput,
   ChequeInput,
   ChequeStatus,
+  ContractorInput,
+  TechnicianInput,
   CustomerInput,
   ProductInput,
   PurchaseInput,
@@ -120,6 +128,12 @@ export type AppStoreValue = {
   updateACJob: (id: string, input: Partial<ACJobInput>) => void;
   deleteACJob: (id: string) => void;
   recordACService: (jobId: string, input?: RecordACServiceInput) => void;
+  addTechnician: (input: TechnicianInput) => void;
+  updateTechnician: (id: string, input: Partial<TechnicianInput>) => void;
+  deleteTechnician: (id: string) => void;
+  addContractor: (input: ContractorInput) => void;
+  updateContractor: (id: string, input: Partial<ContractorInput>) => void;
+  deleteContractor: (id: string) => void;
   addVehicle: (input: VehicleInput) => boolean;
   updateVehicle: (id: string, input: Partial<VehicleInput>) => void;
   sellVehicle: (input: VehicleSaleInput) => boolean;
@@ -393,6 +407,30 @@ function useAppStoreState(): AppStoreValue {
       recordACService: (jobId, input) => {
         if (!data || isReadOnly) return;
         persist(recordACService(data, jobId, input));
+      },
+      addTechnician: (input) => {
+        if (!data || isReadOnly) return;
+        persist(addTechnician(data, input));
+      },
+      updateTechnician: (id, input) => {
+        if (!data || isReadOnly) return;
+        persist(updateTechnician(data, id, input));
+      },
+      deleteTechnician: (id) => {
+        if (!data || isReadOnly) return;
+        persist(deleteTechnician(data, id));
+      },
+      addContractor: (input) => {
+        if (!data || isReadOnly) return;
+        persist(addContractor(data, input));
+      },
+      updateContractor: (id, input) => {
+        if (!data || isReadOnly) return;
+        persist(updateContractor(data, id, input));
+      },
+      deleteContractor: (id) => {
+        if (!data || isReadOnly) return;
+        persist(deleteContractor(data, id));
       },
       addVehicle: (input) => {
         if (!data || isReadOnly) return false;

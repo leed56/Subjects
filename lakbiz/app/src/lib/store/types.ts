@@ -204,6 +204,52 @@ export interface BankAccountRecord {
   balance: number;
 }
 
+export type WorkSpecialty = "installation" | "service" | "repair";
+
+export interface Technician {
+  id: string;
+  name: string;
+  phone?: string;
+  specialties: WorkSpecialty[];
+  active: boolean;
+  notes?: string;
+}
+
+export type TechnicianInput = {
+  name: string;
+  phone?: string;
+  specialties?: WorkSpecialty[];
+  active?: boolean;
+  notes?: string;
+};
+
+export type ContractorRateType = "per_job" | "per_unit" | "per_meter" | "fixed";
+
+export interface Contractor {
+  id: string;
+  name: string;
+  company?: string;
+  phone?: string;
+  specialties: WorkSpecialty[];
+  rateType: ContractorRateType;
+  rateAmount: number;
+  /** Outstanding amount the shop owes this contractor (LKR) */
+  payableBalance: number;
+  active: boolean;
+  notes?: string;
+}
+
+export type ContractorInput = {
+  name: string;
+  company?: string;
+  phone?: string;
+  specialties?: WorkSpecialty[];
+  rateType?: ContractorRateType;
+  rateAmount?: number;
+  active?: boolean;
+  notes?: string;
+};
+
 export type BankTransactionType =
   | "deposit"
   | "withdrawal"
@@ -303,6 +349,8 @@ export interface AppData {
   purchases: Purchase[];
   supplierPayments: SupplierPayment[];
   acJobs: ACJob[];
+  technicians: Technician[];
+  contractors: Contractor[];
   vehicles: VehicleRecord[];
   bankAccounts: BankAccountRecord[];
   bankTransactions: BankTransaction[];

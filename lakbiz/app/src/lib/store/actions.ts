@@ -29,6 +29,11 @@ import type {
   BankTransferInput,
   ChequeInput,
   ChequeStatus,
+  Contractor,
+  ContractorInput,
+  Technician,
+  TechnicianInput,
+  WorkSpecialty,
   CustomerInput,
   ProductInput,
   Purchase,
@@ -608,6 +613,114 @@ export function recordACService(
     status: "completed",
     notes,
   });
+}
+
+const WORK_SPECIALTIES: WorkSpecialty[] = ["installation", "service", "repair"];
+
+function cleanSpecialties(input?: WorkSpecialty[]): WorkSpecialty[] {
+  if (!input) return [];
+  return WORK_SPECIALTIES.filter((s) => input.includes(s));
+}
+
+export function addTechnician(data: AppData, input: TechnicianInput): AppData {
+  const name = input.name.trim();
+  if (!name) return data;
+  const technician: Technician = {
+    id: newId(),
+    name,
+    phone: input.phone?.trim() || undefined,
+    specialties: cleanSpecialties(input.specialties),
+    active: input.active ?? true,
+    notes: input.notes?.trim() || undefined,
+  };
+  return { ...data, technicians: [technician, ...data.technicians] };
+}
+
+export function updateTechnician(
+  data: AppData,
+  id: string,
+  input: Partial<TechnicianInput>,
+): AppData {
+  return {
+    ...data,
+    technicians: data.technicians.map((t) =>
+      t.id === id
+        ? {
+            ...t,
+            name: input.name?.trim() || t.name,
+            phone:
+              input.phone !== undefined ? input.phone.trim() || undefined : t.phone,
+            specialties: input.specialties
+              ? cleanSpecialties(input.specialties)
+              : t.specialties,
+            active: input.active ?? t.active,
+            notes:
+              input.notes !== undefined ? input.notes.trim() || undefined : t.notes,
+          }
+        : t,
+    ),
+  };
+}
+
+export function deleteTechnician(data: AppData, id: string): AppData {
+  return { ...data, technicians: data.technicians.filter((t) => t.id !== id) };
+}
+
+export function addContractor(data: AppData, input: ContractorInput): AppData {
+  const name = input.name.trim();
+  if (!name) return data;
+  const contractor: Contractor = {
+    id: newId(),
+    name,
+    company: input.company?.trim() || undefined,
+    phone: input.phone?.trim() || undefined,
+    specialties: cleanSpecialties(input.specialties),
+    rateType: input.rateType ?? "per_job",
+    rateAmount: Math.max(0, input.rateAmount ?? 0),
+    payableBalance: 0,
+    active: input.active ?? true,
+    notes: input.notes?.trim() || undefined,
+  };
+  return { ...data, contractors: [contractor, ...data.contractors] };
+}
+
+export function updateContractor(
+  data: AppData,
+  id: string,
+  input: Partial<ContractorInput>,
+): AppData {
+  return {
+    ...data,
+    contractors: data.contractors.map((c) =>
+      c.id === id
+        ? {
+            ...c,
+            name: input.name?.trim() || c.name,
+            company:
+              input.company !== undefined
+                ? input.company.trim() || undefined
+                : c.company,
+            phone:
+              input.phone !== undefined ? input.phone.trim() || undefined : c.phone,
+            specialties: input.specialties
+              ? cleanSpecialties(input.specialties)
+              : c.specialties,
+            rateType: input.rateType ?? c.rateType,
+            rateAmount:
+              input.rateAmount != null
+                ? Math.max(0, input.rateAmount)
+                : c.rateAmount,
+            active: input.active ?? c.active,
+            notes:
+              input.notes !== undefined ? input.notes.trim() || undefined : c.notes,
+          }
+        : c,
+    ),
+  };
+}
+
+export function deleteContractor(data: AppData, id: string): AppData {
+  return { ...data, contractors: data.contractors.filter((c) => c.id !== id) };
 }
 
 export function addVehicle(data: AppData, input: VehicleInput): AppData {

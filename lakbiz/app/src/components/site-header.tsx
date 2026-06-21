@@ -16,6 +16,7 @@ const navKeys = [
   { href: "/stock", key: "nav.stock" },
   { href: "/suppliers", key: "nav.suppliers" },
   { href: "/jobs", key: "nav.jobs" },
+  { href: "/workforce", key: "nav.workforce" },
   { href: "/vehicles", key: "nav.vehicles" },
   { href: "/bills", key: "nav.bills" },
   { href: "/customers", key: "nav.customers" },
