@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { AcJobReminderTimeline } from "@/components/ac-job-reminder-timeline";
 import { AcRemindersBanner } from "@/components/ac-reminders-banner";
 import { AcServiceDoneDialog } from "@/components/ac-service-done-dialog";
@@ -43,6 +43,7 @@ import {
 } from "@/lib/ac-service";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import type { BusinessInfo } from "@/lib/invoice";
 import { defaultTemplateForJob, loadNotificationSettings } from "@/lib/messaging";
 import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -221,7 +222,7 @@ export default function JobsPage() {
   );
 }
 
-function JobCard({ job, locale, business, notificationLogs, notifySettings, onServiceDone, onEdit, onSchedule, onInstalled, onComplete, onDelete }: { job: ACJob; locale: string; business: any; notificationLogs: ReturnType<typeof useNotificationLogs>; notifySettings: ReturnType<typeof loadNotificationSettings>; onServiceDone: () => void; onEdit: () => void; onSchedule: () => void; onInstalled: () => void; onComplete: () => void; onDelete: () => void }) {
+function JobCard({ job, locale, business, notificationLogs, notifySettings, onServiceDone, onEdit, onSchedule, onInstalled, onComplete, onDelete }: { job: ACJob; locale: string; business: BusinessInfo; notificationLogs: ReturnType<typeof useNotificationLogs>; notifySettings: ReturnType<typeof loadNotificationSettings>; onServiceDone: () => void; onEdit: () => void; onSchedule: () => void; onInstalled: () => void; onComplete: () => void; onDelete: () => void }) {
   const { t } = useLocale();
   const balance = job.quotedAmount - job.depositAmount;
   return (
@@ -252,6 +253,6 @@ function Metric({ label, value }: { label: string; value: string }) {
   return <div className="rounded-2xl bg-slate-50 p-3"><p className="text-xs font-black uppercase tracking-wide text-slate-400">{label}</p><p className="mt-1 font-mono text-sm font-black text-slate-950">{value}</p></div>;
 }
 
-function ActionButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+function ActionButton({ children, onClick }: { children: ReactNode; onClick: () => void }) {
   return <button onClick={onClick} className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700 hover:bg-teal-100">{children}</button>;
 }
