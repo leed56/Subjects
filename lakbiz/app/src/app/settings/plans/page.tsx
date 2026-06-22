@@ -40,14 +40,9 @@ export default function PlansPage() {
           title={t("sub.plans_page_title")}
           description={t("sub.plans_page_desc")}
           actions={
-            <>
-              <ProButton href="/dashboard" variant="secondary">
-                Dashboard
-              </ProButton>
-              <ProButton href="/login?next=/admin" variant="secondary">
-                Platform admin
-              </ProButton>
-            </>
+            <ProButton href="/dashboard" variant="secondary">
+              Dashboard
+            </ProButton>
           }
         />
 
