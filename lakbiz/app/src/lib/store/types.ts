@@ -500,6 +500,12 @@ export type SaleLineInput = {
 export type SaleOptions = {
   customerId?: string;
   customerName?: string;
+  buyerPhone?: string;
+  buyerAddress?: string;
+  /** Create a Customers row when selling to a new buyer (walk-in) */
+  addToCustomers?: boolean;
+  /** Create an AC installation job for service follow-up */
+  createInstallJob?: boolean;
   /** Bill-level discount in LKR */
   discount?: number;
   chequeNo?: string;

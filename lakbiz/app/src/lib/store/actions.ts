@@ -1135,6 +1135,43 @@ export function updateChequeStatus(
   };
 }
 
+function acInstallHintsFromSaleLines(
+  data: AppData,
+  saleLines: Pick<Sale["lines"][number], "productId" | "productName" | "qty">[],
+): Pick<ACJobInput, "brand" | "btu" | "unitType" | "unitCount" | "description"> {
+  let unitCount = 0;
+  let brand: string | undefined;
+  let btu: number | undefined;
+  let unitType: string | undefined;
+  const names: string[] = [];
+
+  for (const line of saleLines) {
+    unitCount += line.qty;
+    names.push(line.productName);
+    const product = data.products.find((p) => p.id === line.productId);
+    if (!product) continue;
+    const cf = product.customFields ?? {};
+    if (!brand && cf.brand != null && String(cf.brand).trim()) {
+      brand = String(cf.brand).trim();
+    }
+    if (btu == null && cf.btu != null) {
+      const n = Number(cf.btu);
+      if (Number.isFinite(n) && n > 0) btu = n;
+    }
+    if (!unitType && cf.unitType != null && String(cf.unitType).trim()) {
+      unitType = String(cf.unitType).trim();
+    }
+  }
+
+  return {
+    brand,
+    btu,
+    unitType,
+    unitCount: Math.max(1, unitCount),
+    description: names.join(" · ") || "AC unit sale",
+  };
+}
+
 export function createSale(
   data: AppData,
   lines: { productId: string; qty: number; unitPrice?: number }[],
@@ -1159,6 +1196,38 @@ export function createSale(
 
   if (saleLines.length === 0) return data;
 
+  let working = data;
+  let resolvedCustomerId = options.customerId;
+  let resolvedName = options.customerName?.trim();
+  const buyerPhone = options.buyerPhone?.trim();
+  const buyerAddress = options.buyerAddress?.trim();
+
+  if (resolvedCustomerId) {
+    const existing = working.customers.find((c) => c.id === resolvedCustomerId);
+    if (existing) {
+      resolvedName = existing.name;
+      if (
+        (buyerPhone && buyerPhone !== existing.phone) ||
+        (buyerAddress && buyerAddress !== existing.address)
+      ) {
+        working = updateCustomer(working, existing.id, {
+          name: existing.name,
+          phone: buyerPhone || existing.phone,
+          address: buyerAddress || existing.address,
+        });
+      }
+    }
+  } else if (options.addToCustomers && resolvedName) {
+    working = addCustomer(working, {
+      name: resolvedName,
+      phone: buyerPhone,
+      address: buyerAddress,
+    });
+    const created = working.customers[0];
+    resolvedCustomerId = created.id;
+    resolvedName = created.name;
+  }
+
   const grossInclusive = saleLines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
   const discount = Math.min(
     Math.max(0, Math.round((options.discount ?? 0) * 100) / 100),
@@ -1173,16 +1242,16 @@ export function createSale(
     saleLines.reduce((s, l) => s + (l.unitPrice - l.buyPrice) * l.qty, 0) -
     discount;
 
-  const customer = options.customerId
-    ? data.customers.find((c) => c.id === options.customerId)
+  const customer = resolvedCustomerId
+    ? working.customers.find((c) => c.id === resolvedCustomerId)
     : undefined;
 
   const customerName =
-    customer?.name ?? (options.customerName?.trim() || undefined);
+    customer?.name ?? (resolvedName || undefined);
 
   if (paymentMethod === "credit" && !customer) return data;
 
-  let cheques = data.cheques;
+  let cheques = working.cheques;
   let chequeId: string | undefined;
   if (paymentMethod === "cheque") {
     if (!options.chequeNo || !options.chequeBank || !options.chequeDate) {
@@ -1196,7 +1265,7 @@ export function createSale(
         chequeNo: options.chequeNo.trim(),
         bankName: options.chequeBank.trim(),
         partyName: customerName ?? "Walk-in customer",
-        customerId: options.customerId,
+        customerId: resolvedCustomerId,
         amount: total,
         chequeDate: options.chequeDate,
         postDated: options.postDated ?? false,
@@ -1226,7 +1295,7 @@ export function createSale(
     total,
     profit,
     paymentMethod,
-    customerId: options.customerId,
+    customerId: resolvedCustomerId,
     customerName,
     creditAmount: paymentMethod === "credit" ? total : 0,
     chequeId,
@@ -1246,27 +1315,51 @@ export function createSale(
     date: sale.date,
   }));
 
-  let customers = data.customers;
-  if (paymentMethod === "credit" && options.customerId) {
+  let customers = working.customers;
+  if (paymentMethod === "credit" && resolvedCustomerId) {
     customers = customers.map((c) =>
-      c.id === options.customerId
+      c.id === resolvedCustomerId
         ? { ...c, creditBalance: c.creditBalance + total }
         : c,
     );
   }
 
-  return {
-    ...data,
-    sales: [sale, ...data.sales],
+  let next: AppData = {
+    ...working,
+    sales: [sale, ...working.sales],
     customers,
     cheques,
-    products: data.products.map((p) => {
+    products: working.products.map((p) => {
       const sold = qtyByProduct.get(p.id);
       if (!sold) return p;
       return { ...p, stockQty: Math.max(0, p.stockQty - sold) };
     }),
-    stockLogs: [...stockLogs, ...data.stockLogs],
+    stockLogs: [...stockLogs, ...working.stockLogs],
   };
+
+  if (options.createInstallJob && buyerAddress) {
+    const hints = acInstallHintsFromSaleLines(working, saleLines);
+    const deposit = paymentMethod !== "credit" ? total : 0;
+    const status =
+      deposit >= total && total > 0 ? "deposit_received" : "quote";
+    next = addACJob(next, {
+      jobType: "installation",
+      customerId: resolvedCustomerId,
+      customerName: customerName ?? "Customer",
+      phone: buyerPhone || customer?.phone,
+      address: buyerAddress,
+      brand: hints.brand,
+      btu: hints.btu,
+      unitType: hints.unitType,
+      unitCount: hints.unitCount,
+      description: hints.description,
+      quotedAmount: total,
+      depositAmount: deposit,
+      status,
+    });
+  }
+
+  return next;
 }
 
 function daysUntil(dateStr: string): number {

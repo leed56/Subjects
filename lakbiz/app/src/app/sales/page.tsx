@@ -19,12 +19,17 @@ import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { splitInclusiveTotal } from "@/lib/vat";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { useCanWrite } from "@/lib/subscription/use-can-write";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { PaymentMethod } from "@/lib/types";
 
 export default function SalesPage() {
   const { data, ready, createSale } = useAppStore();
   const { t } = useLocale();
+  const { org, can } = useSubscription();
+  const canWrite = useCanWrite();
+  const showAcBuyerPanel = org.sector === "ac_hvac" && can("ac_jobs");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
@@ -33,6 +38,10 @@ export default function SalesPage() {
   const [payment, setPayment] = useState<PaymentMethod>("cash");
   const [customerId, setCustomerId] = useState("");
   const [walkInName, setWalkInName] = useState("");
+  const [buyerPhone, setBuyerPhone] = useState("");
+  const [buyerAddress, setBuyerAddress] = useState("");
+  const [addToCustomers, setAddToCustomers] = useState(true);
+  const [createInstallJob, setCreateInstallJob] = useState(true);
   const [chequeNo, setChequeNo] = useState("");
   const [chequeBank, setChequeBank] = useState(LK_BANKS[0]);
   const [chequeDate, setChequeDate] = useState(new Date().toISOString().slice(0, 10));
@@ -83,10 +92,31 @@ export default function SalesPage() {
     setCart({});
     setPriceOverrides({});
     setWalkInName("");
+    setBuyerPhone("");
+    setBuyerAddress("");
+    setCustomerId("");
+    setAddToCustomers(true);
+    setCreateInstallJob(true);
     setChequeNo("");
     setDiscount(0);
     setCashReceived("");
     setSearch("");
+  };
+
+  const buyerName = customerId
+    ? data?.customers.find((c) => c.id === customerId)?.name ?? walkInName
+    : walkInName;
+
+  const handleCustomerChange = (id: string) => {
+    setCustomerId(id);
+    const customer = data?.customers.find((c) => c.id === id);
+    if (customer) {
+      setWalkInName(customer.name);
+      setBuyerPhone(customer.phone ?? "");
+      setBuyerAddress(customer.address ?? "");
+    } else {
+      setWalkInName("");
+    }
   };
 
   const handleSale = () => {
@@ -110,6 +140,19 @@ export default function SalesPage() {
       return;
     }
 
+    if (showAcBuyerPanel) {
+      const needsName =
+        (addToCustomers && !customerId) || createInstallJob;
+      if (needsName && !buyerName.trim()) {
+        setMessage(t("sales.ac_name_required"));
+        return;
+      }
+      if (createInstallJob && !buyerAddress.trim()) {
+        setMessage(t("sales.ac_address_required"));
+        return;
+      }
+    }
+
     const saleId = createSale(
       lines.map((l) => ({
         productId: l.product.id,
@@ -119,7 +162,11 @@ export default function SalesPage() {
       payment,
       {
         customerId: customerId || undefined,
-        customerName: walkInName || undefined,
+        customerName: buyerName.trim() || undefined,
+        buyerPhone: buyerPhone.trim() || undefined,
+        buyerAddress: buyerAddress.trim() || undefined,
+        addToCustomers: showAcBuyerPanel && addToCustomers && !customerId,
+        createInstallJob: showAcBuyerPanel && createInstallJob,
         discount: discountClamped || undefined,
         chequeNo: payment === "cheque" ? chequeNo : undefined,
         chequeBank: payment === "cheque" ? chequeBank : undefined,
@@ -131,12 +178,20 @@ export default function SalesPage() {
     if (saleId) {
       resetAfterSale();
       setLastBillId(saleId);
+      const savedCustomer = showAcBuyerPanel && addToCustomers && !customerId;
+      const savedJob = showAcBuyerPanel && createInstallJob;
       setMessage(
-        payment === "credit"
-          ? t("sales.credit_saved")
-          : payment === "cheque"
-            ? t("sales.cheque_saved")
-            : t("sales.saved"),
+        savedCustomer && savedJob
+          ? t("sales.saved_with_customer_and_job")
+          : savedCustomer
+            ? t("sales.saved_with_customer")
+            : savedJob
+              ? t("sales.saved_with_job")
+              : payment === "credit"
+                ? t("sales.credit_saved")
+                : payment === "cheque"
+                  ? t("sales.cheque_saved")
+                  : t("sales.saved"),
       );
       setTimeout(() => setMessage(""), 6000);
     } else {
@@ -362,7 +417,7 @@ export default function SalesPage() {
                     {t("common.customer")}
                     <select
                       value={customerId}
-                      onChange={(e) => setCustomerId(e.target.value)}
+                      onChange={(e) => handleCustomerChange(e.target.value)}
                       className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
                     >
                       <option value="">{t("sales.walkin")}</option>
@@ -375,6 +430,64 @@ export default function SalesPage() {
                   </label>
 
                   {!customerId && (
+                    <label className="block text-sm font-black text-slate-700">
+                      {showAcBuyerPanel ? t("common.customer") : t("sales.walkin_name")}
+                      <input
+                        value={walkInName}
+                        onChange={(e) => setWalkInName(e.target.value)}
+                        className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                      />
+                    </label>
+                  )}
+
+                  {showAcBuyerPanel && lines.length > 0 && (
+                    <div className="rounded-2xl border border-sky-100 bg-sky-50/80 p-4">
+                      <p className="text-sm font-black text-sky-950">{t("sales.ac_buyer_title")}</p>
+                      <p className="mt-1 text-xs font-semibold text-sky-800/80">{t("sales.ac_buyer_hint")}</p>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <label className="block text-xs font-black text-sky-900">
+                          {t("sales.buyer_phone")}
+                          <input
+                            value={buyerPhone}
+                            onChange={(e) => setBuyerPhone(e.target.value)}
+                            className="mt-1 h-11 w-full rounded-xl border border-sky-100 bg-white px-3 text-sm font-semibold outline-none focus:border-teal-300"
+                          />
+                        </label>
+                        <label className="block text-xs font-black text-sky-900 sm:col-span-2">
+                          {t("sales.buyer_address")}
+                          <input
+                            value={buyerAddress}
+                            onChange={(e) => setBuyerAddress(e.target.value)}
+                            className="mt-1 h-11 w-full rounded-xl border border-sky-100 bg-white px-3 text-sm font-semibold outline-none focus:border-teal-300"
+                          />
+                        </label>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {!customerId && (
+                          <label className="flex items-center gap-2 text-xs font-bold text-sky-900">
+                            <input
+                              type="checkbox"
+                              checked={addToCustomers}
+                              onChange={(e) => setAddToCustomers(e.target.checked)}
+                              className="h-4 w-4 rounded border-sky-200"
+                            />
+                            {t("sales.add_to_customers")}
+                          </label>
+                        )}
+                        <label className="flex items-center gap-2 text-xs font-bold text-sky-900">
+                          <input
+                            type="checkbox"
+                            checked={createInstallJob}
+                            onChange={(e) => setCreateInstallJob(e.target.checked)}
+                            className="h-4 w-4 rounded border-sky-200"
+                          />
+                          {t("sales.create_install_job")}
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {!showAcBuyerPanel && !customerId && (
                     <label className="block text-sm font-black text-slate-700">
                       {t("sales.walkin_name")}
                       <input
@@ -462,7 +575,7 @@ export default function SalesPage() {
                   )}
 
                   <button
-                    disabled={lines.length === 0}
+                    disabled={lines.length === 0 || !canWrite}
                     onClick={handleSale}
                     className="w-full rounded-2xl bg-teal-600 py-4 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
                   >
