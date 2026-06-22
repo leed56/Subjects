@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { Product, SectorId } from "@/lib/types";
-import { sectors, defaultCategoryForSector } from "@/lib/sectors";
+import { sectors, defaultCategoryForSector, categoriesForSector, sectorById } from "@/lib/sectors";
 import {
   customFieldsFromProduct,
   emptyCustomFieldsForSector,
@@ -10,15 +10,6 @@ import {
 } from "@/lib/sector-fields";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { ProductInput } from "@/lib/store/types";
-
-const categories = [
-  "Grocery",
-  "Electronics",
-  "Electricals",
-  "Spare Parts",
-  "Air Conditioning",
-  "Other",
-];
 
 const units = ["pcs", "kg", "m", "box", "unit", "set"];
 
@@ -47,6 +38,8 @@ const emptyForm = (sectorId: SectorId = "grocery"): FormState => ({
 interface ProductFormProps {
   initial?: Product;
   defaultSectorId?: SectorId;
+  /** When set (provisioned shop), sector template and categories are fixed to this shop type. */
+  lockedSectorId?: SectorId;
   onSubmit: (input: ProductInput) => void;
   onCancel?: () => void;
   submitLabel?: string;
@@ -55,27 +48,43 @@ interface ProductFormProps {
 export function ProductForm({
   initial,
   defaultSectorId = "grocery",
+  lockedSectorId,
   onSubmit,
   onCancel,
   submitLabel,
 }: ProductFormProps) {
   const { t, locale } = useLocale();
-  const [form, setForm] = useState<FormState>(() =>
-    initial
-      ? {
-          name: initial.name,
-          sku: initial.sku ?? "",
-          category: initial.category,
-          sectorId: initial.sectorId,
-          buyPrice: initial.buyPrice,
-          sellPrice: initial.sellPrice,
-          stockQty: initial.stockQty,
-          reorderLevel: initial.reorderLevel ?? 5,
-          unit: String(initial.customFields.unit ?? "pcs"),
-          sectorCustom: customFieldsFromProduct(initial),
-        }
-      : emptyForm(defaultSectorId),
+  const shopSectorId = lockedSectorId ?? defaultSectorId;
+  const [form, setForm] = useState<FormState>(() => {
+    if (initial) {
+      const sectorId = lockedSectorId ?? initial.sectorId;
+      return {
+        name: initial.name,
+        sku: initial.sku ?? "",
+        category: categoriesForSector(sectorId).includes(initial.category)
+          ? initial.category
+          : defaultCategoryForSector(sectorId),
+        sectorId,
+        buyPrice: initial.buyPrice,
+        sellPrice: initial.sellPrice,
+        stockQty: initial.stockQty,
+        reorderLevel: initial.reorderLevel ?? 5,
+        unit: String(initial.customFields.unit ?? "pcs"),
+        sectorCustom: customFieldsFromProduct({
+          ...initial,
+          sectorId,
+        }),
+      };
+    }
+    return emptyForm(shopSectorId);
+  });
+
+  const categories = useMemo(
+    () => categoriesForSector(lockedSectorId ?? form.sectorId),
+    [lockedSectorId, form.sectorId],
   );
+
+  const lockedSector = lockedSectorId ? sectorById(lockedSectorId) : undefined;
 
   const sectorFields = useMemo(
     () => sectorFormFields(form.sectorId),
@@ -92,6 +101,7 @@ export function ProductForm({
     }));
 
   const handleSectorChange = (sectorId: SectorId) => {
+    if (lockedSectorId) return;
     setForm((f) => ({
       ...f,
       sectorId,
@@ -108,12 +118,17 @@ export function ProductForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) return;
+    const sectorId = lockedSectorId ?? form.sectorId;
     const { sectorCustom, ...rest } = form;
     onSubmit({
       ...rest,
+      sectorId,
+      category: categoriesForSector(sectorId).includes(rest.category)
+        ? rest.category
+        : defaultCategoryForSector(sectorId),
       customFields: sectorCustom,
     });
-    if (!initial) setForm(emptyForm(defaultSectorId));
+    if (!initial) setForm(emptyForm(shopSectorId));
   };
 
   const saveLabel = submitLabel ?? t("stock.save_item");
@@ -158,17 +173,24 @@ export function ProductForm({
         </label>
         <label className="block">
           <span className="text-sm text-slate-600">{t("stock.sector")}</span>
-          <select
-            value={form.sectorId}
-            onChange={(e) => handleSectorChange(e.target.value as SectorId)}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          >
-            {sectors.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nameSi} / {s.nameEn}
-              </option>
-            ))}
-          </select>
+          {lockedSectorId && lockedSector ? (
+            <div className="mt-1 flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800">
+              <span className="mr-2">{lockedSector.icon}</span>
+              {locale === "si" ? lockedSector.nameSi : lockedSector.nameEn}
+            </div>
+          ) : (
+            <select
+              value={form.sectorId}
+              onChange={(e) => handleSectorChange(e.target.value as SectorId)}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            >
+              {sectors.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nameSi} / {s.nameEn}
+                </option>
+              ))}
+            </select>
+          )}
         </label>
         <label className="block">
           <span className="text-sm text-slate-600">{t("stock.unit")}</span>

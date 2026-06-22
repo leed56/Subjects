@@ -149,6 +149,8 @@ export default function StockPage() {
               {editing ? (
                 <ProductForm
                   initial={editing}
+                  lockedSectorId={org.isAuthenticated ? org.sector : undefined}
+                  defaultSectorId={org.sector}
                   submitLabel={t("common.update")}
                   onCancel={() => setEditing(null)}
                   onSubmit={(input) => {
@@ -164,6 +166,7 @@ export default function StockPage() {
                 />
               ) : (
                 <ProductForm
+                  lockedSectorId={org.isAuthenticated ? org.sector : undefined}
                   defaultSectorId={org.sector}
                   onSubmit={(input) => {
                     const plan = getPlan(subscription.planId);

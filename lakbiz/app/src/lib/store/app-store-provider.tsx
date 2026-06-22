@@ -61,6 +61,7 @@ import {
   updateVehicle,
 } from "./actions";
 import { clearAppData, loadAppData, saveAppData, setStorageOrgId } from "./storage";
+import { normalizeProductCategory, parseSectorId } from "@/lib/sectors";
 import type {
   AppData,
   ACJobInput,
@@ -81,6 +82,7 @@ import type {
   VehicleInput,
   VehicleSaleInput,
 } from "./types";
+import type { SectorId } from "@/lib/types";
 
 export type AppStoreValue = {
   data: AppData | null;
@@ -156,6 +158,17 @@ export type AppStoreValue = {
 const AppStoreContext = createContext<AppStoreValue | null>(null);
 
 const CLOUD_SYNC_DEBOUNCE_MS = 1500;
+
+function normalizeProductForShop(
+  input: ProductInput,
+  shopSector: SectorId,
+): ProductInput {
+  return {
+    ...input,
+    sectorId: shopSector,
+    category: normalizeProductCategory(shopSector, input.category),
+  };
+}
 
 function useAppStoreState(): AppStoreValue {
   const { user } = useAuth();
@@ -272,11 +285,19 @@ function useAppStoreState(): AppStoreValue {
       cloudSyncError,
       addProduct: (input) => {
         if (!data || !canAddProduct(data)) return false;
-        return persist(addProduct(data, input));
+        const shopSector = parseSectorId(org.sector);
+        const normalized = org.isAuthenticated
+          ? normalizeProductForShop(input, shopSector)
+          : input;
+        return persist(addProduct(data, normalized));
       },
       updateProduct: (id, input) => {
         if (!data) return false;
-        return persist(updateProduct(data, id, input));
+        const shopSector = parseSectorId(org.sector);
+        const normalized = org.isAuthenticated
+          ? normalizeProductForShop(input, shopSector)
+          : input;
+        return persist(updateProduct(data, id, normalized));
       },
       deleteProduct: (id) => {
         if (!data || isReadOnly) return;
@@ -510,6 +531,8 @@ function useAppStoreState(): AppStoreValue {
     canAddProduct,
     persist,
     scheduleCloudPush,
+    org.sector,
+    org.isAuthenticated,
   ]);
 }
 

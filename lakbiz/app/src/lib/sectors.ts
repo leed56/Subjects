@@ -108,9 +108,37 @@ export function defaultCategoryForSector(sectorId: SectorId): string {
     electricals: "Electricals",
     spare_parts: "Spare Parts",
     ac_hvac: "Air Conditioning",
-    car_sales: "Other",
+    car_sales: "Vehicles",
   };
   return map[sectorId];
+}
+
+/** Stock categories scoped to each business template — not a global mix. */
+export function categoriesForSector(sectorId: SectorId): string[] {
+  const map: Record<SectorId, string[]> = {
+    grocery: ["Grocery", "Beverages", "Frozen", "Household", "Other"],
+    electronics: ["Electronics", "Accessories", "Other"],
+    electricals: ["Electricals", "Wire & Cable", "Fixtures", "Other"],
+    spare_parts: ["Spare Parts", "Filters", "Other"],
+    ac_hvac: [
+      "Air Conditioning",
+      "Pipe & Accessories",
+      "Consumables",
+      "Service Parts",
+      "Other",
+    ],
+    car_sales: ["Vehicles", "Accessories", "Other"],
+  };
+  return map[sectorId] ?? [defaultCategoryForSector(sectorId), "Other"];
+}
+
+export function normalizeProductCategory(
+  sectorId: SectorId,
+  category: string,
+): string {
+  const trimmed = category.trim();
+  const allowed = categoriesForSector(sectorId);
+  return allowed.includes(trimmed) ? trimmed : defaultCategoryForSector(sectorId);
 }
 
 export const bankingModules = {
