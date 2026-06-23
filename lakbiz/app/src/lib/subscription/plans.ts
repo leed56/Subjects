@@ -36,6 +36,7 @@ export const PLANS: PlanDefinition[] = [
       vehicles: false,
       export: false,
       offline: false,
+      bulk_messaging: false,
     },
   },
   {
@@ -59,6 +60,7 @@ export const PLANS: PlanDefinition[] = [
       vehicles: false,
       export: true,
       offline: false,
+      bulk_messaging: true,
     },
   },
   {
@@ -81,6 +83,7 @@ export const PLANS: PlanDefinition[] = [
       vehicles: true,
       export: true,
       offline: true,
+      bulk_messaging: true,
     },
   },
 ];

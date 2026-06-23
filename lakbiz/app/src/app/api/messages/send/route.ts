@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { orgAllowsBulkMessaging } from "@/lib/messaging/plan-gate-server";
 import { sendTextLkSms, isTextLkConfigured } from "@/lib/messaging/textlk-server";
 import { normalizeSlPhone } from "@/lib/messaging/phone";
 import { checkOrgSmsQuota } from "@/lib/messaging/sms-quota-server";
@@ -38,6 +39,17 @@ export async function POST(request: Request) {
 
   if (member.role !== "owner" && member.role !== "manager") {
     return NextResponse.json({ ok: false, error: "Owner or manager only" }, { status: 403 });
+  }
+
+  const bulkAllowed = await orgAllowsBulkMessaging(supabase, member.organization_id);
+  if (!bulkAllowed) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Auto SMS requires a Business or Pro plan. Contact LakBiz to upgrade.",
+      },
+      { status: 403 },
+    );
   }
 
   const platformPolicy = await fetchPlatformMessagingPolicy(supabase);

@@ -37,6 +37,7 @@ const PLAN_MODULE_KEYS: (keyof PlanFeatures)[] = [
   "vehicles",
   "export",
   "offline",
+  "bulk_messaging",
 ];
 
 export function canAccess(

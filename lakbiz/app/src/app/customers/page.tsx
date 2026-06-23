@@ -2,6 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useState } from "react";
+import Link from "next/link";
 import { BulkWhatsAppComposer } from "@/components/messaging/bulk-whatsapp-composer";
 import { ExportActions } from "@/components/export/export-actions";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
@@ -158,6 +159,7 @@ export default function CustomersPage() {
     : typeFiltered;
 
   const canExport = can("export");
+  const canBulkMessaging = can("bulk_messaging");
   const customerExportLabels = {
     name: t("common.name"),
     type: t("cust.contact_type"),
@@ -214,13 +216,23 @@ export default function CustomersPage() {
                   }
                 />
               )}
-              <button
-                type="button"
-                onClick={() => setBulkWaOpen(true)}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-black text-sky-800 shadow-sm transition hover:bg-sky-100 active:scale-[0.98]"
-              >
-                {t("msg.bulk_messages")}
-              </button>
+              {canBulkMessaging ? (
+                <button
+                  type="button"
+                  onClick={() => setBulkWaOpen(true)}
+                  className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-black text-sky-800 shadow-sm transition hover:bg-sky-100 active:scale-[0.98]"
+                >
+                  {t("msg.bulk_messages")}
+                </button>
+              ) : (
+                <Link
+                  href="/settings/plans"
+                  className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-500"
+                  title={t("msg.bulk_plan_hint")}
+                >
+                  {t("msg.bulk_messages")}
+                </Link>
+              )}
               <ProButton href="/sales">{t("nav.sales")}</ProButton>
               <ProButton href="/bills" variant="secondary">{t("nav.bills")}</ProButton>
             </>

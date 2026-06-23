@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ProBadge, ProEmptyState } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { BusinessInfo } from "@/lib/invoice";
 import {
   composeMessage,
@@ -46,6 +48,8 @@ export function BulkMessageComposer({
   business,
 }: BulkMessageComposerProps) {
   const { t, locale } = useLocale();
+  const { can } = useSubscription();
+  const allowed = can("bulk_messaging");
   const [channel, setChannel] =
     useState<Extract<MessageChannel, "sms" | "whatsapp">>("sms");
   const [templateId, setTemplateId] =
@@ -89,6 +93,32 @@ export function BulkMessageComposer({
   const current = queue[stepIndex];
 
   if (!open) return null;
+
+  if (!allowed) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-md rounded-[2rem] border border-white/80 bg-white p-6 shadow-2xl">
+          <h3 className="text-lg font-black text-slate-950">{t("sub.upgrade_required")}</h3>
+          <p className="mt-3 text-sm font-semibold text-slate-600">{t("msg.bulk_plan_hint")}</p>
+          <div className="mt-6 flex gap-3">
+            <Link
+              href="/settings/plans"
+              className="rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white"
+            >
+              {t("sub.upgrade_now")}
+            </Link>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700"
+            >
+              {t("common.cancel")}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const toggle = (id: string) => {
     setSelected((prev) => {

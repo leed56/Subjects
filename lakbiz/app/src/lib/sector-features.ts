@@ -18,6 +18,7 @@ const SECTOR_FEATURES: Record<SectorId, PlanFeatures> = {
     vehicles: false,
     export: true,
     offline: false,
+    bulk_messaging: true,
   },
   electronics: {
     sales: true,
@@ -30,6 +31,7 @@ const SECTOR_FEATURES: Record<SectorId, PlanFeatures> = {
     vehicles: false,
     export: true,
     offline: false,
+    bulk_messaging: true,
   },
   electricals: {
     sales: true,
@@ -42,6 +44,7 @@ const SECTOR_FEATURES: Record<SectorId, PlanFeatures> = {
     vehicles: false,
     export: true,
     offline: false,
+    bulk_messaging: true,
   },
   spare_parts: {
     sales: true,
@@ -54,6 +57,7 @@ const SECTOR_FEATURES: Record<SectorId, PlanFeatures> = {
     vehicles: false,
     export: true,
     offline: false,
+    bulk_messaging: true,
   },
   ac_hvac: {
     sales: true,
@@ -66,6 +70,7 @@ const SECTOR_FEATURES: Record<SectorId, PlanFeatures> = {
     vehicles: false,
     export: true,
     offline: true,
+    bulk_messaging: true,
   },
   car_sales: {
     sales: true,
@@ -78,6 +83,7 @@ const SECTOR_FEATURES: Record<SectorId, PlanFeatures> = {
     vehicles: true,
     export: true,
     offline: false,
+    bulk_messaging: true,
   },
 };
 

@@ -31,6 +31,7 @@ export type FeatureKey =
   | "vehicles"
   | "export"
   | "offline"
+  | "bulk_messaging"
   | "write"; // any create/update/delete
 
 export interface PlanFeatures {
@@ -44,6 +45,7 @@ export interface PlanFeatures {
   vehicles: boolean;
   export: boolean;
   offline: boolean;
+  bulk_messaging: boolean;
 }
 
 export interface SubscriptionState {

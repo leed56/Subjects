@@ -23,7 +23,7 @@ import {
 
 export default function NotificationsSettingsPage() {
   const { t } = useLocale();
-  const { org } = useSubscription();
+  const { org, can } = useSubscription();
   const [settings, setSettings] = useState<NotificationSettings>(
     defaultNotificationSettings(),
   );
@@ -36,6 +36,7 @@ export default function NotificationsSettingsPage() {
   const [mounted, setMounted] = useState(false);
   const smsApiConfigured = useSmsApiConfigured();
   const apiEnabled = smsApiConfigured === true;
+  const canApiSms = can("bulk_messaging");
   const smsInputsDisabled = mounted && smsApiConfigured !== true;
 
   useEffect(() => {
@@ -178,7 +179,7 @@ export default function NotificationsSettingsPage() {
               >
                 <option value="whatsapp">{t("msg.whatsapp")}</option>
                 <option value="sms">{t("msg.sms")}</option>
-                {apiEnabled && (
+                {apiEnabled && canApiSms && (
                   <option value="api_sms">{t("msg.api_sms")}</option>
                 )}
               </select>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 import {
   composeFromContext,
   defaultTemplateForContext,
@@ -64,6 +65,8 @@ export function MessageComposer({
   contextId,
 }: MessageComposerProps) {
   const { t } = useLocale();
+  const { can } = useSubscription();
+  const canApiSms = can("bulk_messaging");
   const settings = loadNotificationSettings();
   const [channel, setChannel] = useState<MessageChannel>(settings.defaultChannel);
   const [templateId, setTemplateId] = useState<MessageTemplateId>(
@@ -83,10 +86,14 @@ export function MessageComposer({
   useEffect(() => {
     if (!open) return;
     setTemplateId(defaultTemplate ?? defaultTemplateForContext(context));
-    setChannel(settings.defaultChannel);
+    setChannel(
+      settings.defaultChannel === "api_sms" && !canApiSms
+        ? "whatsapp"
+        : settings.defaultChannel,
+    );
     setMessageLang(settings.preferredLanguage);
     setFeedback(null);
-  }, [open, defaultTemplate, context, settings.defaultChannel, settings.preferredLanguage]);
+  }, [open, defaultTemplate, context, settings.defaultChannel, settings.preferredLanguage, canApiSms]);
 
   useEffect(() => {
     if (!open) return;
@@ -177,7 +184,9 @@ export function MessageComposer({
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5 sm:flex-row">
           <div className="flex-1 space-y-4">
             <div className="flex gap-2">
-              {CHANNELS.filter((c) => c.id !== "api_sms" || apiEnabled).map(
+              {CHANNELS.filter(
+                (c) => c.id !== "api_sms" || (apiEnabled && canApiSms),
+              ).map(
                 (c) => (
                   <button
                     key={c.id}
