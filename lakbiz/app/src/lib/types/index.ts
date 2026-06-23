@@ -18,6 +18,9 @@ export type PaymentMethod =
 /** Inventory lane: new stock vs used/refurbished (Phase A). */
 export type ProductCondition = "new" | "used";
 
+/** Customer account: person vs B2B company (Phase B — same credit ledger). */
+export type ContactType = "individual" | "company";
+
 export type ChequeStatus =
   | "pending"
   | "deposited"

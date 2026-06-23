@@ -20,6 +20,7 @@ import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { splitInclusiveTotal } from "@/lib/vat";
+import { customerPrimaryLabel } from "@/lib/contact-type";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useCanWrite } from "@/lib/subscription/use-can-write";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -91,6 +92,13 @@ export default function SalesPage() {
   const setOverride = (id: string, value: number) => {
     setPriceOverrides((o) => ({ ...o, [id]: Math.max(0, value) }));
   };
+
+  const individualCustomers = data.customers.filter((c) => c.contactType === "individual");
+  const companyCustomers = data.customers.filter((c) => c.contactType === "company");
+  const customerOptionText = (c: (typeof data.customers)[number]) =>
+    `${customerPrimaryLabel(c)}${
+      c.creditBalance > 0 ? ` (${t("sales.owes")} ${formatLkr(c.creditBalance)})` : ""
+    }`;
 
   const resetAfterSale = () => {
     setCart({});
@@ -452,11 +460,24 @@ export default function SalesPage() {
                       className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
                     >
                       <option value="">{t("sales.walkin")}</option>
-                      {data.customers.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}{c.creditBalance > 0 ? ` (${t("sales.owes")} ${formatLkr(c.creditBalance)})` : ""}
-                        </option>
-                      ))}
+                      {individualCustomers.length > 0 && (
+                        <optgroup label={t("cust.type_individual")}>
+                          {individualCustomers.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {customerOptionText(c)}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {companyCustomers.length > 0 && (
+                        <optgroup label={t("cust.type_company")}>
+                          {companyCustomers.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {customerOptionText(c)}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
                   </label>
 

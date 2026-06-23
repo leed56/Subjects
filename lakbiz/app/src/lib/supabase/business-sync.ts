@@ -1,6 +1,7 @@
 "use client";
 
 import { parseProductCondition } from "@/lib/product-condition";
+import { parseContactType } from "@/lib/contact-type";
 import type { PaymentMethod, Product, SectorId } from "@/lib/types";
 import type { BusinessInfo } from "@/lib/invoice";
 import { defaultBusiness } from "@/lib/invoice";
@@ -218,6 +219,9 @@ export async function pullBusinessData(
     customers: (customersRes.data ?? []).map((row) => ({
       id: row.id,
       name: row.name,
+      contactType: parseContactType(row.contact_type),
+      contactPerson: row.contact_person ?? undefined,
+      vatNumber: row.vat_number ?? undefined,
       phone: row.phone ?? undefined,
       address: row.address ?? undefined,
       creditBalance: num(row.credit_balance),
@@ -697,6 +701,9 @@ export async function pushBusinessData(
     id: c.id,
     organization_id: organizationId,
     name: c.name,
+    contact_type: c.contactType,
+    contact_person: c.contactPerson ?? null,
+    vat_number: c.vatNumber ?? null,
     phone: c.phone ?? null,
     address: c.address ?? null,
     credit_balance: c.creditBalance,

@@ -1,4 +1,5 @@
 import { parseProductCondition } from "@/lib/product-condition";
+import { parseContactType } from "@/lib/contact-type";
 import type { AppData } from "./types";
 import { defaultBusiness, type BusinessInfo } from "@/lib/invoice";
 import { calcInputVat, splitInclusiveTotal } from "@/lib/vat";
@@ -89,6 +90,10 @@ export function parseAppData(parsed: Partial<AppData>): AppData {
     products: (parsed.products ?? []).map((p) => ({
       ...p,
       condition: parseProductCondition(p.condition),
+    })),
+    customers: (parsed.customers ?? []).map((c) => ({
+      ...c,
+      contactType: parseContactType(c.contactType),
     })),
     sales: (parsed.sales ?? []).map(normalizeSale),
     purchases: (parsed.purchases ?? []).map(normalizePurchase),

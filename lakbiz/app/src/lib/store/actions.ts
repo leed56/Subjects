@@ -17,6 +17,7 @@ import {
 } from "@/lib/vehicles";
 import { sanitizeCustomFields } from "@/lib/sector-fields";
 import { parseProductCondition } from "@/lib/product-condition";
+import { parseContactType } from "@/lib/contact-type";
 import type { PaymentMethod, Product } from "@/lib/types";
 import type {
   AppData,
@@ -161,9 +162,14 @@ export function adjustStock(
 }
 
 export function addCustomer(data: AppData, input: CustomerInput): AppData {
+  const contactType = parseContactType(input.contactType);
+  const isCompany = contactType === "company";
   const customer = {
     id: newId(),
     name: input.name.trim(),
+    contactType,
+    contactPerson: isCompany ? input.contactPerson?.trim() || undefined : undefined,
+    vatNumber: isCompany ? input.vatNumber?.trim() || undefined : undefined,
     phone: input.phone?.trim() || undefined,
     address: input.address?.trim() || undefined,
     creditLimit:
@@ -180,6 +186,8 @@ export function updateCustomer(
   id: string,
   input: CustomerInput,
 ): AppData {
+  const contactType = parseContactType(input.contactType);
+  const isCompany = contactType === "company";
   return {
     ...data,
     customers: data.customers.map((c) =>
@@ -187,6 +195,11 @@ export function updateCustomer(
         ? {
             ...c,
             name: input.name.trim(),
+            contactType,
+            contactPerson: isCompany
+              ? input.contactPerson?.trim() || undefined
+              : undefined,
+            vatNumber: isCompany ? input.vatNumber?.trim() || undefined : undefined,
             phone: input.phone?.trim() || undefined,
             address: input.address?.trim() || undefined,
             creditLimit:

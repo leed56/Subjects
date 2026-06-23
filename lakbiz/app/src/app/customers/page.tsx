@@ -3,6 +3,7 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
+import { ContactTypeBadge } from "@/components/contact-type-badge";
 import { SiteHeader } from "@/components/site-header";
 import {
   ProBadge,
@@ -21,8 +22,10 @@ import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { buildLedger } from "@/lib/ledger";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { Customer } from "@/lib/store/types";
-import type { PaymentMethod } from "@/lib/types";
+import type { ContactType, PaymentMethod } from "@/lib/types";
 import { useCanWrite } from "@/lib/subscription/use-can-write";
+
+type ContactFilter = "all" | ContactType;
 
 export default function CustomersPage() {
   const {
@@ -37,9 +40,13 @@ export default function CustomersPage() {
   const canWrite = useCanWrite();
 
   const [name, setName] = useState("");
+  const [contactType, setContactType] = useState<ContactType>("individual");
+  const [contactPerson, setContactPerson] = useState("");
+  const [vatNumber, setVatNumber] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [creditLimit, setCreditLimit] = useState<number | "">("");
+  const [typeFilter, setTypeFilter] = useState<ContactFilter>("all");
   const [editing, setEditing] = useState<Customer | null>(null);
   const [payCustomerId, setPayCustomerId] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState(0);
@@ -61,6 +68,9 @@ export default function CustomersPage() {
 
   const resetForm = () => {
     setName("");
+    setContactType("individual");
+    setContactPerson("");
+    setVatNumber("");
     setPhone("");
     setAddress("");
     setCreditLimit("");
@@ -70,6 +80,9 @@ export default function CustomersPage() {
   const startEdit = (customer: Customer) => {
     setEditing(customer);
     setName(customer.name);
+    setContactType(customer.contactType);
+    setContactPerson(customer.contactPerson ?? "");
+    setVatNumber(customer.vatNumber ?? "");
     setPhone(customer.phone ?? "");
     setAddress(customer.address ?? "");
     setCreditLimit(customer.creditLimit ?? "");
@@ -79,9 +92,18 @@ export default function CustomersPage() {
     e.preventDefault();
     if (!name.trim()) return;
     const limit = creditLimit === "" ? undefined : Number(creditLimit);
+    const payload = {
+      name,
+      contactType,
+      contactPerson,
+      vatNumber,
+      phone,
+      address,
+      creditLimit: limit,
+    };
     const ok = editing
-      ? updateCustomer(editing.id, { name, phone, address, creditLimit: limit })
-      : addCustomer({ name, phone, address, creditLimit: limit });
+      ? updateCustomer(editing.id, payload)
+      : addCustomer(payload);
     if (!ok) {
       setMessage(t("common.save_failed"));
       setTimeout(() => setMessage(""), 2500);
@@ -101,15 +123,24 @@ export default function CustomersPage() {
     .slice(0, 8)
     .reduce((sum, p) => sum + p.amount, 0);
 
+  const individualCount = data.customers.filter((c) => c.contactType === "individual").length;
+  const companyCount = data.customers.filter((c) => c.contactType === "company").length;
+
   const query = search.trim().toLowerCase();
+  const typeFiltered =
+    typeFilter === "all"
+      ? data.customers
+      : data.customers.filter((c) => c.contactType === typeFilter);
   const customers = query
-    ? data.customers.filter(
+    ? typeFiltered.filter(
         (c) =>
           c.name.toLowerCase().includes(query) ||
           (c.phone ?? "").toLowerCase().includes(query) ||
-          (c.address ?? "").toLowerCase().includes(query),
+          (c.address ?? "").toLowerCase().includes(query) ||
+          (c.contactPerson ?? "").toLowerCase().includes(query) ||
+          (c.vatNumber ?? "").toLowerCase().includes(query),
       )
-    : data.customers;
+    : typeFiltered;
 
   const payCustomer = payCustomerId
     ? data.customers.find((c) => c.id === payCustomerId)
@@ -163,17 +194,77 @@ export default function CustomersPage() {
           <ProStatCard label={t("cust.recent_payments")} value={formatLkr(recentPaymentsTotal)} hint="Latest 8 records" icon="💸" tone="emerald" />
         </section>
 
+        <div className="mt-6 flex flex-wrap gap-2">
+          {(
+            [
+              { id: "all" as const, label: t("cust.filter_all"), count: data.customers.length },
+              { id: "individual" as const, label: t("cust.type_individual"), count: individualCount },
+              { id: "company" as const, label: t("cust.type_company"), count: companyCount },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setTypeFilter(tab.id)}
+              className={`rounded-2xl px-4 py-2 text-sm font-black transition ${
+                typeFilter === tab.id
+                  ? "bg-teal-600 text-white shadow-lg shadow-teal-700/20"
+                  : "border border-slate-200 bg-white text-slate-700 hover:border-teal-200"
+              }`}
+            >
+              {tab.label}
+              <span className="ml-2 opacity-80">({tab.count})</span>
+            </button>
+          ))}
+        </div>
+
         <section className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <ProCard eyebrow={editing ? "Edit customer" : "Create customer"} title={editing ? t("cust.edit") : t("cust.add")}>
             <form onSubmit={handleSave}>
+              <div className="mb-3 flex flex-wrap gap-2">
+                {(["individual", "company"] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setContactType(type)}
+                    className={`rounded-2xl px-4 py-2 text-sm font-black transition ${
+                      contactType === type
+                        ? "bg-teal-600 text-white shadow-lg shadow-teal-700/20"
+                        : "border border-slate-200 bg-white text-slate-700 hover:border-teal-200"
+                    }`}
+                  >
+                    {t(type === "company" ? "cust.type_company" : "cust.type_individual")}
+                  </button>
+                ))}
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <input
                   required
-                  placeholder={`${t("common.name")} *`}
+                  placeholder={
+                    contactType === "company"
+                      ? `${t("cust.company_name")} *`
+                      : `${t("common.name")} *`
+                  }
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 sm:col-span-2"
                 />
+                {contactType === "company" && (
+                  <>
+                    <input
+                      placeholder={t("cust.contact_person")}
+                      value={contactPerson}
+                      onChange={(e) => setContactPerson(e.target.value)}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    />
+                    <input
+                      placeholder={t("cust.vat_number")}
+                      value={vatNumber}
+                      onChange={(e) => setVatNumber(e.target.value)}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    />
+                  </>
+                )}
                 <input
                   placeholder={t("common.phone")}
                   value={phone}
@@ -209,7 +300,7 @@ export default function CustomersPage() {
             </form>
           </ProCard>
 
-          <ProCard title="Find customers" eyebrow="Search CRM" action={<ProBadge tone={customers.length === data.customers.length ? "slate" : "teal"}>{customers.length} shown</ProBadge>}>
+          <ProCard title="Find customers" eyebrow="Search CRM" action={<ProBadge tone={customers.length === typeFiltered.length ? "slate" : "teal"}>{customers.length} shown</ProBadge>}>
             <div className="relative">
               <input
                 type="search"
@@ -439,7 +530,16 @@ function CustomerRow({
   return (
     <tr className="border-b last:border-0">
       <td className="px-4 py-3">
-        <p className="font-black text-slate-950">{customer.name}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="font-black text-slate-950">{customer.name}</p>
+          <ContactTypeBadge type={customer.contactType} />
+        </div>
+        {customer.contactType === "company" && customer.contactPerson && (
+          <p className="text-xs font-semibold text-slate-500">{customer.contactPerson}</p>
+        )}
+        {customer.vatNumber && (
+          <p className="text-xs font-semibold text-slate-400">{t("cust.vat_number")}: {customer.vatNumber}</p>
+        )}
         {customer.address && <p className="text-xs font-semibold text-slate-400">{customer.address}</p>}
       </td>
       <td className="px-4 py-3 font-semibold text-slate-600">{customer.phone || "—"}</td>
@@ -480,8 +580,17 @@ function CustomerCard({
     <article className={`rounded-[1.5rem] border bg-slate-50 p-4 ring-1 ${overLimit ? "border-rose-200 ring-rose-100" : "border-slate-200 ring-slate-100"}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="truncate text-base font-black text-slate-950">{customer.name}</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="truncate text-base font-black text-slate-950">{customer.name}</h2>
+            <ContactTypeBadge type={customer.contactType} />
+          </div>
+          {customer.contactType === "company" && customer.contactPerson && (
+            <p className="mt-1 text-xs font-semibold text-slate-500">{customer.contactPerson}</p>
+          )}
           <p className="mt-1 text-xs font-semibold text-slate-500">{customer.phone || t("common.phone")}</p>
+          {customer.vatNumber && (
+            <p className="mt-1 text-xs font-semibold text-slate-400">{t("cust.vat_number")}: {customer.vatNumber}</p>
+          )}
           {customer.address && <p className="mt-1 text-xs font-semibold text-slate-400">{customer.address}</p>}
         </div>
         {overLimit ? <ProBadge tone="rose">{t("cust.over_limit")}</ProBadge> : customer.creditBalance > 0 ? <ProBadge tone="amber">Credit</ProBadge> : <ProBadge tone="emerald">Clear</ProBadge>}

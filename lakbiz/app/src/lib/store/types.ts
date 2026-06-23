@@ -1,4 +1,4 @@
-import type { PaymentMethod, Product, SectorId, ProductCondition } from "@/lib/types";
+import type { ContactType, PaymentMethod, Product, SectorId, ProductCondition } from "@/lib/types";
 import type { BusinessInfo } from "@/lib/invoice";
 import { defaultBusiness } from "@/lib/invoice";
 import type { ACJobStatus } from "@/lib/ac-jobs";
@@ -218,6 +218,11 @@ export interface StockLog {
 export interface Customer {
   id: string;
   name: string;
+  contactType: ContactType;
+  /** Primary contact name when contactType is company */
+  contactPerson?: string;
+  /** Company VAT/TIN for B2B */
+  vatNumber?: string;
   phone?: string;
   address?: string;
   creditBalance: number;
@@ -428,6 +433,9 @@ export type ProductInput = {
 
 export type CustomerInput = {
   name: string;
+  contactType?: ContactType;
+  contactPerson?: string;
+  vatNumber?: string;
   phone?: string;
   address?: string;
   creditLimit?: number;
