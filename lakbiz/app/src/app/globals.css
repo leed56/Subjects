@@ -104,9 +104,19 @@ body {
 
   .invoice-paper {
     box-shadow: none !important;
-    border: none !important;
     max-width: 100% !important;
     padding: 0 !important;
+  }
+
+  .invoice-paper:not(.tax-invoice-paper) {
+    border: none !important;
+  }
+
+  .tax-invoice-paper {
+    box-shadow: none !important;
+    border: 2px solid #0f172a !important;
+    max-width: 100% !important;
+    padding: 0.5rem !important;
   }
 
   main {

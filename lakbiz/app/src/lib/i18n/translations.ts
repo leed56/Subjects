@@ -240,6 +240,8 @@ const si: Dict = {
   "dash.new_sale": "නව විකුණුම",
   "dash.add_purchase": "මිලදී ගැනීම එකතු කරන්න",
   "dash.low_stock_alert": "අවසන් වෙන තොග අනතුරු ඇඟවීම",
+  "dash.low_stock_banner": "{count} භාණ්ඩ අවසන් වෙන/නැතිවූ තොග — Stock බලන්න.",
+  "dash.out_of_stock": "නැත",
   "dash.credit_customers": "ණය ගනුදෙනුකරු",
   "dash.supplier_payables": "සැපයුම්කරු ණය",
   "dash.manage_customers": "ගනුදෙනුකරු කළමනාකරණය",
@@ -576,6 +578,11 @@ const si: Dict = {
   "inv.unit_price": "ඒකක මිල",
   "inv.invoice": "ඉන්වොයිසිය",
   "inv.tax_invoice": "බදු ඉන්වොයිසිය",
+  "inv.seller": "විකුණුම්කරු",
+  "inv.buyer": "ගැනුම්කරු",
+  "inv.vat_reg_no": "VAT ලියාපදිංචි අංකය",
+  "inv.taxable_amount": "බදු ගත වන මුදල",
+  "inv.compliance_note": "IRD VAT ඉන්වොයිසි ආකෘතිය · LakBiz",
 
   // Shop profile (premium)
   "shop.logo": "ලාංඡනය (logo)",
@@ -1298,6 +1305,8 @@ const en: Dict = {
   "dash.new_sale": "New sale",
   "dash.add_purchase": "Add purchase",
   "dash.low_stock_alert": "Low stock alert",
+  "dash.low_stock_banner": "{count} item(s) low or out of stock — review Stock.",
+  "dash.out_of_stock": "Out",
   "dash.credit_customers": "Credit customers",
   "dash.supplier_payables": "Supplier payables",
   "dash.manage_customers": "Manage customers",
@@ -1627,6 +1636,11 @@ const en: Dict = {
   "inv.unit_price": "Unit price",
   "inv.invoice": "Invoice",
   "inv.tax_invoice": "Tax Invoice",
+  "inv.seller": "Seller",
+  "inv.buyer": "Buyer",
+  "inv.vat_reg_no": "VAT registration no.",
+  "inv.taxable_amount": "Taxable amount",
+  "inv.compliance_note": "IRD VAT invoice format · LakBiz",
 
   // Shop profile (premium)
   "shop.logo": "Logo",

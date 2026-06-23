@@ -105,6 +105,7 @@ export default function BillDetailPage() {
             business={data.business}
             customerPhone={customer?.phone}
             customerAddress={customer?.address}
+            customerVatNumber={customer?.vatNumber}
           />
         </div>
       </ProMain>

@@ -1477,14 +1477,22 @@ export function updateBusiness(
   };
 }
 
+export function getLowStockProducts(products: AppData["products"]) {
+  return products
+    .filter(
+      (p) =>
+        p.stockQty <= 0 ||
+        (p.reorderLevel != null && p.stockQty <= p.reorderLevel),
+    )
+    .sort((a, b) => a.stockQty - b.stockQty);
+}
+
 export function getDashboardStats(data: AppData) {
   const today = todayKey();
   const todaySales = data.sales.filter((s) => s.date.startsWith(today));
   const salesTotal = todaySales.reduce((s, sale) => s + sale.total, 0);
   const profitTotal = todaySales.reduce((s, sale) => s + sale.profit, 0);
-  const lowStock = data.products.filter(
-    (p) => p.reorderLevel != null && p.stockQty <= p.reorderLevel,
-  );
+  const lowStock = getLowStockProducts(data.products);
   const stockValue = data.products.reduce(
     (s, p) => s + p.buyPrice * p.stockQty,
     0,

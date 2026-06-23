@@ -2,7 +2,7 @@
 
 import type { Sale } from "@/lib/store/types";
 import type { BusinessInfo } from "@/lib/invoice";
-import { buildInvoiceText, buildQuoteText, whatsappShareUrl } from "@/lib/invoice";
+import { buildInvoiceText, buildQuoteText, taxInvoiceAmounts, whatsappShareUrl } from "@/lib/invoice";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { amountInWordsLkr, formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -13,6 +13,7 @@ interface InvoiceViewProps {
   business: BusinessInfo;
   customerPhone?: string;
   customerAddress?: string;
+  customerVatNumber?: string;
   showActions?: boolean;
 }
 
@@ -21,6 +22,7 @@ export function InvoiceView({
   business,
   customerPhone,
   customerAddress,
+  customerVatNumber,
   showActions = true,
 }: InvoiceViewProps) {
   const { t } = useLocale();
@@ -30,13 +32,12 @@ export function InvoiceView({
   const waUrl = whatsappShareUrl(invoiceText, customerPhone ?? business.phone);
   const quoteWaUrl = whatsappShareUrl(quoteText, customerPhone ?? business.phone);
 
-  const hasVat =
-    business.vatRegistered === true &&
-    sale.outputVat != null &&
-    sale.outputVat > 0;
-  const subtotal = sale.subtotal ?? sale.total - (sale.outputVat ?? 0);
+  const amounts = taxInvoiceAmounts(sale, business);
+  const isTaxInvoice = amounts.isTaxInvoice;
   const discount = sale.discount ?? 0;
   const gross = sale.lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
+  const showBuyer =
+    Boolean(sale.customerName || customerAddress || customerPhone || customerVatNumber);
 
   return (
     <div>
@@ -84,7 +85,20 @@ export function InvoiceView({
         </div>
       )}
 
-      <article className="invoice-paper mx-auto max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <article
+        className={`invoice-paper mx-auto max-w-md rounded-xl border bg-white p-6 shadow-sm ${
+          isTaxInvoice ? "tax-invoice-paper border-slate-900" : "border-slate-200"
+        }`}
+      >
+        {isTaxInvoice && (
+          <div className="mb-4 border-2 border-slate-900 px-3 py-2 text-center">
+            <p className="text-lg font-bold uppercase tracking-wide text-slate-900">
+              {t("inv.tax_invoice")}
+            </p>
+            <p className="text-xs font-semibold text-slate-600">බදු ඉන්වොයිසිය</p>
+          </div>
+        )}
+
         <header className="border-b border-dashed border-slate-300 pb-4 text-center">
           {business.logoDataUrl && (
             // eslint-disable-next-line @next/next/no-img-element
@@ -123,15 +137,61 @@ export function InvoiceView({
           )}
         </header>
 
-        <p className="mt-3 text-center text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-          {hasVat ? t("inv.tax_invoice") : t("inv.invoice")}
-        </p>
+        {isTaxInvoice && (
+          <div className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
+            <div className="rounded border border-slate-300 p-2 text-left">
+              <p className="font-bold uppercase text-slate-700">{t("inv.seller")}</p>
+              <p className="mt-1 font-semibold text-slate-900">{business.name}</p>
+              {business.address && <p className="text-slate-600">{business.address}</p>}
+              {business.vatNumber && (
+                <p className="text-slate-600">
+                  {t("inv.vat_reg_no")}: {business.vatNumber}
+                </p>
+              )}
+              {business.tin && <p className="text-slate-600">TIN: {business.tin}</p>}
+              {business.brNumber && (
+                <p className="text-slate-600">
+                  {t("shop.br_number")}: {business.brNumber}
+                </p>
+              )}
+            </div>
+            {showBuyer && (
+              <div className="rounded border border-slate-300 p-2 text-left">
+                <p className="font-bold uppercase text-slate-700">{t("inv.buyer")}</p>
+                {sale.customerName && (
+                  <p className="mt-1 font-semibold text-slate-900">{sale.customerName}</p>
+                )}
+                {customerAddress && <p className="text-slate-600">{customerAddress}</p>}
+                {customerPhone && <p className="text-slate-600">{customerPhone}</p>}
+                {customerVatNumber && (
+                  <p className="text-slate-600">
+                    {t("inv.vat_reg_no")}: {customerVatNumber}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!isTaxInvoice && (
+          <p className="mt-3 text-center text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            {t("inv.invoice")}
+          </p>
+        )}
+
+        {isTaxInvoice && (
+          <p className="mt-3 text-center text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+            {t("inv.bill_no")}: {billNo}
+          </p>
+        )}
 
         <div className="mt-3 space-y-1 text-sm text-slate-600">
-          <div className="flex justify-between">
-            <span>{t("inv.bill_no")}</span>
-            <span className="font-mono font-medium text-slate-900">{billNo}</span>
-          </div>
+          {!isTaxInvoice && (
+            <div className="flex justify-between">
+              <span>{t("inv.bill_no")}</span>
+              <span className="font-mono font-medium text-slate-900">{billNo}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span>{t("common.date")}</span>
             <span>{new Date(sale.date).toLocaleString("en-LK")}</span>
@@ -200,17 +260,15 @@ export function InvoiceView({
               </div>
             </>
           )}
-          {hasVat && (
+          {isTaxInvoice && (
             <>
               <div className="flex justify-between text-slate-600">
-                <span>{t("vat.subtotal")}</span>
-                <span className="tabular-nums">{formatLkr(subtotal)}</span>
+                <span>{t("inv.taxable_amount")}</span>
+                <span className="tabular-nums">{formatLkr(amounts.subtotal)}</span>
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>{t("vat.output_vat")} (18%)</span>
-                <span className="tabular-nums">
-                  {formatLkr(sale.outputVat ?? 0)}
-                </span>
+                <span className="tabular-nums">{formatLkr(amounts.vat)}</span>
               </div>
             </>
           )}
@@ -232,6 +290,11 @@ export function InvoiceView({
           {business.invoiceFooter && (
             <p className="mb-2 whitespace-pre-line text-slate-500">
               {business.invoiceFooter}
+            </p>
+          )}
+          {isTaxInvoice && (
+            <p className="mt-3 text-left text-[10px] leading-relaxed text-slate-500">
+              {t("inv.compliance_note")}
             </p>
           )}
           {t("bills.thank_you")}

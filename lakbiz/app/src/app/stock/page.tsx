@@ -21,6 +21,7 @@ import { exportStockCsv } from "@/lib/export";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { formatProductFieldBadge } from "@/lib/sector-fields";
 import { useAppStore } from "@/lib/store/use-app-store";
+import { getLowStockProducts } from "@/lib/store/actions";
 import { getPlan } from "@/lib/subscription/plans";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
@@ -70,9 +71,7 @@ export default function StockPage() {
   const newCount = data.products.filter((p) => p.condition === "new").length;
   const usedCount = data.products.filter((p) => p.condition === "used").length;
 
-  const lowStock = data.products.filter(
-    (p) => p.reorderLevel != null && p.stockQty <= p.reorderLevel,
-  );
+  const lowStock = getLowStockProducts(data.products);
   const inventoryValue = data.products.reduce((sum, p) => sum + p.stockQty * p.buyPrice, 0);
   const sellValue = data.products.reduce((sum, p) => sum + p.stockQty * p.sellPrice, 0);
   const categories = new Set(data.products.map((p) => p.category).filter(Boolean)).size;

@@ -83,6 +83,15 @@ export default function DashboardPage() {
           }
         />
 
+        {stats.lowStockCount > 0 && (
+          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+            {t("dash.low_stock_banner").replace("{count}", String(stats.lowStockCount))}{" "}
+            <Link href="/stock" className="font-black underline">
+              {t("nav.stock")}
+            </Link>
+          </p>
+        )}
+
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <ProStatCard
             label={t("dash.today_sales")}
@@ -233,10 +242,13 @@ export default function DashboardPage() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-black text-slate-950">{p.name}</p>
                       <p className="text-xs font-semibold text-amber-700">
-                        {p.stockQty} {String(p.customFields.unit ?? "pcs")} · {t("common.low")}
+                        {p.stockQty} {String(p.customFields.unit ?? "pcs")}
+                        {p.reorderLevel != null ? ` · ${t("stock.reorder_level")} ${p.reorderLevel}` : ""}
                       </p>
                     </div>
-                    <ProBadge tone="amber">Low</ProBadge>
+                    <ProBadge tone="amber">
+                      {p.stockQty <= 0 ? t("dash.out_of_stock") : t("common.low")}
+                    </ProBadge>
                   </div>
                 ))}
               </div>

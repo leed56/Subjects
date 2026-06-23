@@ -1,6 +1,7 @@
 import type { Sale } from "@/lib/store/types";
 import { formatLkr } from "./format";
 import { whatsappShareUrl as buildWhatsappUrl } from "@/lib/messaging/channels";
+import { splitInclusiveTotal } from "./vat";
 
 export interface BusinessInfo {
   name: string;
@@ -66,6 +67,16 @@ export function formatPaymentLabel(
   return labels[method];
 }
 
+export function taxInvoiceAmounts(sale: Sale, business: BusinessInfo) {
+  const isTaxInvoice = business.vatRegistered === true;
+  if (!isTaxInvoice) {
+    return { isTaxInvoice: false as const, vat: 0, subtotal: sale.total, total: sale.total };
+  }
+  const vat = sale.outputVat ?? splitInclusiveTotal(sale.total).vat;
+  const subtotal = sale.subtotal ?? sale.total - vat;
+  return { isTaxInvoice: true as const, vat, subtotal, total: sale.total };
+}
+
 export function buildInvoiceText(
   sale: Sale,
   business: BusinessInfo,
@@ -78,35 +89,46 @@ export function buildInvoiceText(
     )
     .join("\n");
 
+  const amounts = taxInvoiceAmounts(sale, business);
+  const title = amounts.isTaxInvoice
+    ? (t ? t("inv.tax_invoice") : "TAX INVOICE / බදු ඉන්වොයිසිය")
+    : (t ? t("inv.invoice") : "INVOICE");
+
   return [
+    title,
     `*${business.name}*`,
     business.nameSi ? `_${business.nameSi}_` : "",
     business.address ? business.address : "",
     business.phone ? `Tel: ${business.phone}` : "",
     business.vatRegistered && business.vatNumber
-      ? `VAT: ${business.vatNumber}`
+      ? `${t ? t("inv.vat_reg_no") : "VAT Reg No"}: ${business.vatNumber}`
+      : "",
+    business.tin ? `TIN: ${business.tin}` : "",
+    business.brNumber
+      ? `${t ? t("shop.br_number") : "BR"}: ${business.brNumber}`
       : "",
     "",
-    `Bill: ${sale.billNo ?? sale.id.slice(0, 8)}`,
-    `Date: ${new Date(sale.date).toLocaleString("en-LK")}`,
-    sale.customerName ? `Customer: ${sale.customerName}` : "",
+    `${t ? t("inv.bill_no") : "Bill"}: ${sale.billNo ?? sale.id.slice(0, 8)}`,
+    `${t ? t("common.date") : "Date"}: ${new Date(sale.date).toLocaleString("en-LK")}`,
+    sale.customerName ? `${t ? t("common.customer") : "Customer"}: ${sale.customerName}` : "",
     "",
     lines,
     "",
     ...(sale.discount && sale.discount > 0
-      ? [`Discount: -${formatLkr(sale.discount)}`]
+      ? [`${t ? t("sales.discount") : "Discount"}: -${formatLkr(sale.discount)}`]
       : []),
-    ...(sale.outputVat && sale.outputVat > 0
+    ...(amounts.isTaxInvoice
       ? [
-          `Subtotal: ${formatLkr(sale.subtotal ?? sale.total - sale.outputVat)}`,
-          `VAT (18%): ${formatLkr(sale.outputVat)}`,
+          `${t ? t("inv.taxable_amount") : "Taxable amount"}: ${formatLkr(amounts.subtotal)}`,
+          `${t ? t("vat.output_vat") : "VAT"} (18%): ${formatLkr(amounts.vat)}`,
           "",
         ]
       : []),
-    `*Total: ${formatLkr(sale.total)}*`,
-    `Payment: ${formatPaymentLabel(sale.paymentMethod, t)}`,
+    `*${t ? t("inv.total") : "Total"}: ${formatLkr(sale.total)}*`,
+    `${t ? t("common.payment") : "Payment"}: ${formatPaymentLabel(sale.paymentMethod, t)}`,
     "",
     t ? t("bills.thank_you") : "Thank you! / ස්තූතියි",
+    amounts.isTaxInvoice && t ? t("inv.compliance_note") : "",
     business.invoiceFooter ? business.invoiceFooter : "",
   ]
     .filter(Boolean)
