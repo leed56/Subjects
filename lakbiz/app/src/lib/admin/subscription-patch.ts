@@ -1,3 +1,5 @@
+import type { BillingCycle } from "@/lib/subscription/types";
+
 const MAX_EXTEND_DAYS = 90;
 
 export function parseTrialEndsAtInput(value: string): string | null {
@@ -37,6 +39,22 @@ export function shouldReactivateTrial(
   if (!trialEndsAt) return false;
   if (Date.parse(trialEndsAt) <= Date.now()) return false;
   return status === "read_only" || status === "past_due";
+}
+
+export function parseBillingCycle(value: unknown): BillingCycle | null {
+  if (value === "monthly" || value === "annual") return value;
+  return null;
+}
+
+/** Next period end for manual LakBiz billing (monthly or annual). */
+export function periodEndFromCycle(cycle: BillingCycle, fromMs = Date.now()): string {
+  const d = new Date(fromMs);
+  if (cycle === "annual") {
+    d.setFullYear(d.getFullYear() + 1);
+  } else {
+    d.setMonth(d.getMonth() + 1);
+  }
+  return d.toISOString();
 }
 
 export { MAX_EXTEND_DAYS };

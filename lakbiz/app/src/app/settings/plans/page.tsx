@@ -12,7 +12,7 @@ import {
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { useLocale } from "@/lib/i18n/locale-provider";
-import { PLANS, formatLkrPrice, getPlan, relevantAddons } from "@/lib/subscription/plans";
+import { PLANS, formatLkrPrice, getPlan, planPrice, relevantAddons } from "@/lib/subscription/plans";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 export default function PlansPage() {
@@ -30,6 +30,9 @@ export default function PlansPage() {
           : "slate";
   const periodEnd = subscription.currentPeriodEnd ?? subscription.trialEndsAt;
   const planName = locale === "si" ? currentPlan.nameSi : currentPlan.nameEn;
+  const billingLabel =
+    subscription.billingCycle === "annual" ? t("sub.annual") : t("sub.monthly");
+  const currentPrice = planPrice(currentPlan, subscription.billingCycle);
 
   return (
     <ProPageShell>
@@ -46,7 +49,7 @@ export default function PlansPage() {
           }
         />
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <ProStatCard
             label={t("sub.plans_stat_plan")}
             value={planName}
@@ -64,6 +67,17 @@ export default function PlansPage() {
             }
             icon="OK"
             tone={statusTone}
+          />
+          <ProStatCard
+            label={t("sub.plans_stat_billing")}
+            value={billingLabel}
+            hint={
+              subscription.billingCycle === "annual"
+                ? t("sub.annual_save")
+                : t("sub.plans_reference_price")
+            }
+            icon="Billing"
+            tone="slate"
           />
           <ProStatCard
             label={t("sub.plans_stat_business")}
@@ -107,11 +121,18 @@ export default function PlansPage() {
                 {planName}
               </p>
               <p className="mt-2 text-3xl font-black text-slate-950">
-                {formatLkrPrice(currentPlan.priceMonthlyLkr)}
+                {formatLkrPrice(currentPrice)}
               </p>
               <p className="mt-1 text-sm font-semibold text-slate-500">
-                {t("sub.plans_reference_price")}
+                {subscription.billingCycle === "annual"
+                  ? t("sub.plans_reference_annual")
+                  : t("sub.plans_reference_price")}
               </p>
+              {subscription.billingCycle === "annual" && (
+                <p className="mt-1 text-xs font-semibold text-teal-700">
+                  {t("sub.annual_save")}
+                </p>
+              )}
             </div>
             <div className="mt-4 grid gap-2 text-sm font-semibold text-slate-600">
               <p>
@@ -133,6 +154,8 @@ export default function PlansPage() {
             <div className="grid gap-4 md:grid-cols-3">
               {PLANS.map((plan) => {
                 const name = locale === "si" ? plan.nameSi : plan.nameEn;
+                const monthly = plan.priceMonthlyLkr;
+                const annual = plan.priceAnnualLkr;
                 return (
                   <div
                     key={plan.id}
@@ -149,7 +172,16 @@ export default function PlansPage() {
                       )}
                     </div>
                     <p className="mt-2 font-mono text-xl font-black text-teal-700">
-                      {formatLkrPrice(plan.priceMonthlyLkr)}
+                      {formatLkrPrice(monthly)}
+                      <span className="text-sm font-semibold text-slate-500">
+                        /{t("sub.month")}
+                      </span>
+                    </p>
+                    <p className="mt-1 font-mono text-sm font-bold text-slate-600">
+                      {formatLkrPrice(annual)}/{t("sub.annual")}{" "}
+                      <span className="text-xs font-semibold text-teal-700">
+                        ({t("sub.annual_save")})
+                      </span>
                     </p>
                     <p className="mt-2 text-xs font-semibold text-slate-500">
                       {t("sub.plans_plan_changes")}

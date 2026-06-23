@@ -131,7 +131,7 @@ Business payments (customer credit, supplier payables, contractor payouts, POS c
 ### Phase C — Growth
 
 - [ ] Referral credits
-- [ ] Annual billing discounts (manual invoicing)
+- [x] Annual billing discounts (manual invoicing)
 
 ---
 

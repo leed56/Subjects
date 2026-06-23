@@ -21,7 +21,7 @@ export async function GET() {
       phone,
       sector,
       created_at,
-      subscriptions ( plan_id, status, trial_ends_at ),
+      subscriptions ( plan_id, status, trial_ends_at, billing_cycle ),
       org_members ( user_id, role )
     `,
     )
@@ -60,6 +60,7 @@ export async function GET() {
       createdAt: org.created_at,
       planId: sub?.plan_id ?? "business",
       status: sub?.status ?? "trialing",
+      billingCycle: sub?.billing_cycle ?? "monthly",
       trialEndsAt: sub?.trial_ends_at ?? null,
       ownerEmail: owner ? (ownerEmails.get(owner.user_id) ?? null) : null,
     };

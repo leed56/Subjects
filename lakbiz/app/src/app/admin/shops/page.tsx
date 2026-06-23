@@ -7,6 +7,8 @@ import { sectorById } from "@/lib/sectors";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { SectorId } from "@/lib/types";
 
+import type { BillingCycle } from "@/lib/subscription/types";
+
 type ShopRow = {
   id: string;
   name: string;
@@ -14,6 +16,7 @@ type ShopRow = {
   sector: string;
   planId: string;
   status: string;
+  billingCycle: BillingCycle;
   trialEndsAt: string | null;
   ownerEmail: string | null;
   createdAt: string;
@@ -94,6 +97,9 @@ export default function AdminShopsPage() {
     void patchShop(id, { trialEndsAt: date }, t("admin.trial_extended_msg"));
   };
 
+  const setBillingCycle = (id: string, billingCycle: BillingCycle) =>
+    void patchShop(id, { billingCycle }, t("admin.billing_cycle_updated"));
+
   const expiringCount = useMemo(
     () => shops.filter((shop) => isTrialExpiringSoon(shop.status, shop.trialEndsAt)).length,
     [shops],
@@ -166,8 +172,19 @@ export default function AdminShopsPage() {
                     <td className="px-4 py-3 text-slate-300">
                       {shop.ownerEmail ?? "—"}
                     </td>
-                    <td className="px-4 py-3 capitalize text-slate-300">
-                      {shop.planId}
+                    <td className="px-4 py-3 text-slate-300">
+                      <p className="capitalize">{shop.planId}</p>
+                      <select
+                        value={shop.billingCycle}
+                        onChange={(e) =>
+                          setBillingCycle(shop.id, e.target.value as BillingCycle)
+                        }
+                        disabled={saving}
+                        className="mt-1 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-white"
+                      >
+                        <option value="monthly">{t("sub.monthly")}</option>
+                        <option value="annual">{t("sub.annual")}</option>
+                      </select>
                     </td>
                     <td className="px-4 py-3 capitalize text-slate-300">
                       {shop.status}
