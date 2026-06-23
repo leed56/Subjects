@@ -15,8 +15,8 @@ import {
 import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
-import { useSubscription } from "@/lib/subscription/subscription-provider";
-import { useCanWrite } from "@/lib/subscription/use-can-write";
+import { WriteDisabledHint } from "@/components/write-disabled-hint";
+import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type {
   BankTransactionType,
@@ -45,8 +45,7 @@ export default function BankingPage() {
     updateChequeStatus,
   } = useAppStore();
   const { t } = useLocale();
-  const { isReadOnly, can } = useSubscription();
-  const canWrite = useCanWrite();
+  const { canWrite, disabledHint } = useWriteAccess();
 
   const statusLabels: Record<ChequeStatus, string> = {
     pending: t("bank.status.pending"),
@@ -248,6 +247,7 @@ export default function BankingPage() {
                 type="button"
                 onClick={openBankModal}
                 disabled={!canWrite}
+                title={!canWrite ? (disabledHint ?? undefined) : undefined}
                 className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("bank.add_account")}
@@ -256,6 +256,7 @@ export default function BankingPage() {
                 type="button"
                 onClick={openTxnModal}
                 disabled={!canWrite}
+                title={!canWrite ? (disabledHint ?? undefined) : undefined}
                 className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("bank.record_txn")}
@@ -264,6 +265,7 @@ export default function BankingPage() {
                 type="button"
                 onClick={openTransferModal}
                 disabled={!canWrite}
+                title={!canWrite ? (disabledHint ?? undefined) : undefined}
                 className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("bank.transfer")}
@@ -272,6 +274,7 @@ export default function BankingPage() {
                 type="button"
                 onClick={openChequeModal}
                 disabled={!canWrite}
+                title={!canWrite ? (disabledHint ?? undefined) : undefined}
                 className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("bank.add_cheque")}
@@ -279,6 +282,8 @@ export default function BankingPage() {
             </>
           }
         />
+
+        <WriteDisabledHint className="mb-5" />
 
         {formMessage && !showBankModal && !showTxnModal && !showTransferModal && !showChequeModal && (
           <p className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">

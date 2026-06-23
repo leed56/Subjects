@@ -19,7 +19,8 @@ import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { VehicleRecord, VehicleStatus } from "@/lib/store/types";
 import type { PaymentMethod } from "@/lib/types";
-import { useCanWrite } from "@/lib/subscription/use-can-write";
+import { WriteDisabledHint } from "@/components/write-disabled-hint";
+import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import {
   agingLabel,
   CAR_MAKES,
@@ -32,7 +33,7 @@ import {
 export default function VehiclesPage() {
   const { data, ready, addVehicle, updateVehicle, sellVehicle, deleteVehicle } = useAppStore();
   const { t } = useLocale();
-  const canWrite = useCanWrite();
+  const { canWrite, disabledHint } = useWriteAccess();
 
   const [showForm, setShowForm] = useState(true);
   const [editing, setEditing] = useState<VehicleRecord | null>(null);
@@ -157,6 +158,7 @@ export default function VehiclesPage() {
               <button
                 type="button"
                 disabled={!canWrite}
+                title={!canWrite ? (disabledHint ?? undefined) : undefined}
                 onClick={() => {
                   resetForm();
                   setShowForm((v) => !v);
@@ -168,6 +170,8 @@ export default function VehiclesPage() {
             </>
           }
         />
+
+        <WriteDisabledHint className="mb-5" />
 
         {message && (
           <div className="mb-5 rounded-[1.25rem] border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900 shadow-sm">
@@ -285,7 +289,7 @@ export default function VehiclesPage() {
                 </div>
 
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button type="submit" disabled={!canWrite} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  <button type="submit" disabled={!canWrite} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
                     {editing ? t("common.update") : t("veh.add")}
                   </button>
                   {editing && (

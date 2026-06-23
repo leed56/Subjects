@@ -23,7 +23,8 @@ import { useAppStore } from "@/lib/store/use-app-store";
 import type { Supplier } from "@/lib/store/types";
 import type { PaymentMethod } from "@/lib/types";
 import { calcInputVat } from "@/lib/vat";
-import { useCanWrite } from "@/lib/subscription/use-can-write";
+import { WriteDisabledHint } from "@/components/write-disabled-hint";
+import { useWriteAccess } from "@/lib/subscription/use-can-write";
 
 export default function SuppliersPage() {
   const {
@@ -36,7 +37,7 @@ export default function SuppliersPage() {
     recordSupplierPayment,
   } = useAppStore();
   const { t } = useLocale();
-  const canWrite = useCanWrite();
+  const { canWrite, disabledHint } = useWriteAccess();
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -214,6 +215,8 @@ export default function SuppliersPage() {
           }
         />
 
+        <WriteDisabledHint className="mb-5" />
+
         {message && (
           <div className="mb-5 rounded-[1.25rem] border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900 shadow-sm">
             {message}
@@ -238,7 +241,7 @@ export default function SuppliersPage() {
                 <input placeholder={t("sup.vat_number")} value={vatNumber} onChange={(e) => setVatNumber(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
               </div>
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <button type="submit" disabled={!canWrite} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
+                <button type="submit" disabled={!canWrite} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
                   {editing ? t("common.update") : t("sup.add")}
                 </button>
                 {editing && (

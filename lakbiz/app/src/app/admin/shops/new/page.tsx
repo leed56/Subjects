@@ -23,6 +23,7 @@ export default function AdminCreateShopPage() {
   const [trialDays, setTrialDays] = useState(14);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [templatesWarning, setTemplatesWarning] = useState<string | null>(null);
   const [created, setCreated] = useState<{
     email: string;
     password: string;
@@ -33,12 +34,23 @@ export default function AdminCreateShopPage() {
   useEffect(() => {
     void fetch("/api/admin/templates")
       .then((r) => r.json())
-      .then((json: { ok?: boolean; templates?: BusinessTemplate[] }) => {
-        if (json.ok && json.templates?.length) {
+      .then((json: {
+        ok?: boolean;
+        templates?: BusinessTemplate[];
+        source?: string;
+        error?: string;
+      }) => {
+        if (json.templates?.length) {
           setTemplates(json.templates);
         }
+        if (!json.ok || json.source === "fallback") {
+          setTemplatesWarning(t("admin.templates_load_failed"));
+        }
+      })
+      .catch(() => {
+        setTemplatesWarning(t("admin.templates_load_failed"));
       });
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const template = templates.find((x) => x.id === templateId);
@@ -245,6 +257,12 @@ export default function AdminCreateShopPage() {
             />
           </label>
         </div>
+
+        {templatesWarning && (
+          <p className="rounded-lg border border-amber-700/50 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
+            {templatesWarning}
+          </p>
+        )}
 
         {error && (
           <p className="rounded-lg bg-red-950/50 px-4 py-3 text-sm text-red-200">

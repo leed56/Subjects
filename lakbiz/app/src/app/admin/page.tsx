@@ -30,10 +30,16 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     void fetch("/api/admin/templates")
       .then((r) => r.json())
-      .then((json: { ok?: boolean; templates?: unknown[] }) => {
-        if (json.ok && json.templates) setTemplateCount(json.templates.length);
+      .then((json: { ok?: boolean; templates?: unknown[]; source?: string }) => {
+        if (json.templates) setTemplateCount(json.templates.length);
+        if (!json.ok || json.source === "fallback") {
+          setError((prev) => prev ?? t("admin.templates_load_failed"));
+        }
+      })
+      .catch(() => {
+        setError((prev) => prev ?? t("admin.templates_load_failed"));
       });
-  }, []);
+  }, [t]);
 
   const active = shops.filter((s) => s.status === "active" || s.status === "trialing").length;
 

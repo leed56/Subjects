@@ -16,12 +16,31 @@ export async function GET() {
     .eq("is_active", true)
     .order("sort_order");
 
-  if (error || !data?.length) {
-    return NextResponse.json({ ok: true, templates: BUSINESS_TEMPLATES });
+  if (error) {
+    console.error("business_templates query failed:", error);
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Could not load templates from database",
+        detail: error.message,
+        templates: BUSINESS_TEMPLATES,
+        source: "fallback",
+      },
+      { status: 503 },
+    );
+  }
+
+  if (!data?.length) {
+    return NextResponse.json({
+      ok: true,
+      templates: BUSINESS_TEMPLATES,
+      source: "static",
+    });
   }
 
   return NextResponse.json({
     ok: true,
     templates: data.map(templateFromDbRow),
+    source: "database",
   });
 }

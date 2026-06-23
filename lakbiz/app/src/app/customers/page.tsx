@@ -29,7 +29,8 @@ import { recipientsWithPhone } from "@/lib/messaging/bulk-whatsapp";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { Customer } from "@/lib/store/types";
 import type { ContactType, PaymentMethod, Product } from "@/lib/types";
-import { useCanWrite } from "@/lib/subscription/use-can-write";
+import { WriteDisabledHint } from "@/components/write-disabled-hint";
+import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 type ContactFilter = "all" | ContactType;
@@ -46,7 +47,7 @@ export default function CustomersPage() {
     removeCustomerProductPrice,
   } = useAppStore();
   const { t } = useLocale();
-  const canWrite = useCanWrite();
+  const { canWrite, disabledHint } = useWriteAccess();
   const { can } = useSubscription();
 
   const [name, setName] = useState("");
@@ -226,6 +227,8 @@ export default function CustomersPage() {
           }
         />
 
+        <WriteDisabledHint className="mb-5" />
+
         {message && (
           <div className="mb-5 rounded-[1.25rem] border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900 shadow-sm">
             {message}
@@ -333,7 +336,7 @@ export default function CustomersPage() {
                 />
               </div>
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <button type="submit" disabled={!canWrite} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
+                <button type="submit" disabled={!canWrite} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
                   {editing ? t("common.update") : t("cust.add")}
                 </button>
                 {editing && (

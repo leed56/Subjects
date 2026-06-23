@@ -24,7 +24,8 @@ import { splitInclusiveTotal } from "@/lib/vat";
 import { customerPrimaryLabel } from "@/lib/contact-type";
 import { effectiveUnitPrice, wholesalePriceFor } from "@/lib/company-pricing";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
-import { useCanWrite } from "@/lib/subscription/use-can-write";
+import { WriteDisabledHint } from "@/components/write-disabled-hint";
+import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { PaymentMethod, ProductCondition } from "@/lib/types";
 
@@ -34,7 +35,7 @@ export default function SalesPage() {
   const { data, ready, createSale } = useAppStore();
   const { t } = useLocale();
   const { org, can, canSeeFinancials } = useSubscription();
-  const canWrite = useCanWrite();
+  const { canWrite, disabledHint } = useWriteAccess();
   const showAcBuyerPanel = org.sector === "ac_hvac" && can("ac_jobs");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
@@ -268,6 +269,8 @@ export default function SalesPage() {
             </>
           }
         />
+
+        <WriteDisabledHint className="mb-5" />
 
         {message && (
           <div className="mb-5 rounded-[1.25rem] border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900 shadow-sm">
@@ -697,6 +700,7 @@ export default function SalesPage() {
 
                   <button
                     disabled={lines.length === 0 || !canWrite}
+                    title={!canWrite ? (disabledHint ?? undefined) : undefined}
                     onClick={handleSale}
                     className="w-full rounded-2xl bg-teal-600 py-4 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
                   >
