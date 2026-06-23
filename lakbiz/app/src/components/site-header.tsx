@@ -251,24 +251,39 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
           </nav>
 
           <div className="border-t border-slate-100 p-4 space-y-2">
-            <Link
-              href="/settings/notifications"
-              onClick={() => setOpen(false)}
-              className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              {t("nav.notifications")}
-            </Link>
-            <Link
-              href="/settings/plans"
-              onClick={() => setOpen(false)}
-              className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              {t("nav.plans")}
-            </Link>
+            {canAccessSettingsPath("/settings/notifications") && (
+              <Link
+                href="/settings/notifications"
+                onClick={() => setOpen(false)}
+                className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                {t("nav.notifications")}
+              </Link>
+            )}
+            {canAccessSettingsPath("/settings/plans") && (
+              <Link
+                href="/settings/plans"
+                onClick={() => setOpen(false)}
+                className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                {t("nav.plans")}
+              </Link>
+            )}
+            {canManageTeam && (
+              <Link
+                href="/settings/team"
+                onClick={() => setOpen(false)}
+                className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                {t("nav.team")}
+              </Link>
+            )}
             <Link
               href={user ? "/settings/shop" : "/login"}
               onClick={() => setOpen(false)}
-              className="block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className={`block rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 ${
+                user && !canAccessSettingsPath("/settings/shop") ? "hidden" : ""
+              }`}
             >
               {user ? user.email?.split("@")[0] : t("nav.login")}
             </Link>

@@ -125,8 +125,8 @@ Business payments (customer credit, supplier payables, contractor payouts, POS c
 ### Phase B — Platform ops
 
 - [x] Admin: suspend / activate / change plan (`PATCH /api/admin/shops/[id]`)
-- [ ] Admin UI: extend trial end date explicitly (today via Supabase or PATCH)
-- [ ] Renewal WhatsApp/SMS reminders (optional)
+- [x] Admin UI: extend trial end date explicitly (today via Supabase or PATCH)
+- [x] Renewal WhatsApp/SMS reminders (optional)
 
 ### Phase C — Growth
 

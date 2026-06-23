@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { countTrialsExpiringSoon } from "@/lib/admin/trial-ops";
 import { useLocale } from "@/lib/i18n/locale-provider";
 
 type ShopRow = {
@@ -10,6 +11,7 @@ type ShopRow = {
   sector: string;
   status: string;
   planId: string;
+  trialEndsAt: string | null;
 };
 
 export default function AdminDashboardPage() {
@@ -42,21 +44,37 @@ export default function AdminDashboardPage() {
   }, [t]);
 
   const active = shops.filter((s) => s.status === "active" || s.status === "trialing").length;
+  const expiringSoon = useMemo(() => countTrialsExpiringSoon(shops), [shops]);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
       <h2 className="text-2xl font-bold text-white">{t("admin.platform_dashboard")}</h2>
       <p className="mt-2 text-slate-400">{t("admin.platform_subtitle")}</p>
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label={t("admin.total_shops")} value={String(shops.length)} />
         <StatCard label={t("admin.active_trial")} value={String(active)} />
+        <StatCard
+          label={t("admin.trials_expiring")}
+          value={String(expiringSoon)}
+          hint={t("admin.trials_expiring_hint")}
+          tone={expiringSoon > 0 ? "amber" : "default"}
+        />
         <StatCard
           label={t("admin.templates")}
           value={templateCount != null ? String(templateCount) : "—"}
           hint={t("admin.templates_hint")}
         />
       </div>
+
+      {expiringSoon > 0 && (
+        <p className="mt-6 rounded-lg border border-amber-700/40 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
+          {t("admin.trials_expiring_banner").replace("{count}", String(expiringSoon))}{" "}
+          <Link href="/admin/shops" className="font-semibold underline">
+            {t("admin.view_all_shops")}
+          </Link>
+        </p>
+      )}
 
       {error && (
         <p className="mt-6 rounded-lg bg-red-950/50 px-4 py-3 text-sm text-red-200">
@@ -92,16 +110,32 @@ function StatCard({
   label,
   value,
   hint,
+  tone = "default",
 }: {
   label: string;
   value: string;
   hint?: string;
+  tone?: "default" | "amber";
 }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-      <p className="text-sm text-slate-400">{label}</p>
-      <p className="mt-2 text-3xl font-bold text-white">{value}</p>
-      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+    <div
+      className={`rounded-2xl border p-5 ${
+        tone === "amber"
+          ? "border-amber-700/50 bg-amber-950/30"
+          : "border-slate-800 bg-slate-900"
+      }`}
+    >
+      <p className={`text-sm ${tone === "amber" ? "text-amber-200" : "text-slate-400"}`}>
+        {label}
+      </p>
+      <p className={`mt-2 text-3xl font-bold ${tone === "amber" ? "text-amber-50" : "text-white"}`}>
+        {value}
+      </p>
+      {hint && (
+        <p className={`mt-1 text-xs ${tone === "amber" ? "text-amber-300/80" : "text-slate-500"}`}>
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

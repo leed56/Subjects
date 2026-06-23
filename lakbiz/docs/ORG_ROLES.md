@@ -45,6 +45,8 @@ Owner → **Settings → Team** (`/settings/team`):
 
 ## Test checklist
 
+Implementation is **code-complete** in the app (see `app/src/lib/org-role/`). Run the checks below manually in staging with real owner and `data_entry` logins.
+
 ### Owner login
 
 - [ ] Nav shows all modules allowed by plan/sector.

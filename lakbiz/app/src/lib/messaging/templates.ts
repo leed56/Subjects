@@ -147,6 +147,15 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     si: `*{{shopName}}* — වැඩ නියෝගය\nJob {{jobNo}}\n{{description}}\nපාරිභෝගික: {{customerName}}\nස්ථානය: {{address}}\nදිනය: {{scheduledDate}}\nමුදල: {{quotedAmount}}`,
   },
   {
+    id: "subscription_renewal_reminder",
+    icon: "📅",
+    labelEn: "Subscription renewal",
+    labelSi: "දායකත්වය අලුත් කිරීම",
+    category: "general",
+    en: `Hi, your LakBiz subscription for *{{shopName}}* ({{planName}}) {{renewalLabel}} on *{{endDate}}* ({{daysLeft}} days).\n\nContact {{supportContact}} to renew or extend your trial.\nThank you for using LakBiz!`,
+    si: `ආයුබෝවන්, *{{shopName}}* ({{planName}}) LakBiz දායකත්වය *{{endDate}}* ({{daysLeft}} දින) {{renewalLabelSi}}.\n\n{{supportContact}} හරහා අලුත් කරන්න.\nLakBiz භාවිතා කිරීමට ස්තූතියි!`,
+  },
+  {
     id: "custom",
     icon: "✏️",
     labelEn: "Custom message",

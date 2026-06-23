@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { daysUntilIso, isTrialExpiringSoon } from "@/lib/admin/trial-ops";
 import { sectorById } from "@/lib/sectors";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { SectorId } from "@/lib/types";
@@ -93,6 +94,11 @@ export default function AdminShopsPage() {
     void patchShop(id, { trialEndsAt: date }, t("admin.trial_extended_msg"));
   };
 
+  const expiringCount = useMemo(
+    () => shops.filter((shop) => isTrialExpiringSoon(shop.status, shop.trialEndsAt)).length,
+    [shops],
+  );
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -107,6 +113,12 @@ export default function AdminShopsPage() {
           {t("admin.create_shop_btn")}
         </Link>
       </div>
+
+      {expiringCount > 0 && (
+        <p className="mt-4 rounded-lg border border-amber-700/40 bg-amber-950/40 px-4 py-3 text-sm text-amber-100">
+          {t("admin.trials_expiring_banner").replace("{count}", String(expiringCount))}
+        </p>
+      )}
 
       {message && (
         <p className="mt-4 rounded-lg bg-slate-800 px-4 py-3 text-sm text-teal-200">
@@ -134,8 +146,15 @@ export default function AdminShopsPage() {
               {shops.map((shop) => {
                 const sector = sectorById(shop.sector as SectorId);
                 const saving = savingTrialId === shop.id;
+                const expiringSoon = isTrialExpiringSoon(shop.status, shop.trialEndsAt);
+                const daysLeft = daysUntilIso(shop.trialEndsAt);
                 return (
-                  <tr key={shop.id} className="border-t border-slate-800">
+                  <tr
+                    key={shop.id}
+                    className={`border-t border-slate-800 ${
+                      expiringSoon ? "bg-amber-950/20" : ""
+                    }`}
+                  >
                     <td className="px-4 py-3">
                       <p className="font-medium text-white">{shop.name}</p>
                       <p className="text-xs text-slate-500">{shop.phone ?? "—"}</p>
@@ -152,6 +171,11 @@ export default function AdminShopsPage() {
                     </td>
                     <td className="px-4 py-3 capitalize text-slate-300">
                       {shop.status}
+                      {expiringSoon && daysLeft != null && (
+                        <span className="ml-2 rounded-full bg-amber-900/80 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-100">
+                          {t("admin.trial_days_left").replace("{days}", String(daysLeft))}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <p className="text-slate-300">

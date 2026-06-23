@@ -10,6 +10,9 @@ export type PlatformMessagingPolicy = {
   defaultRemindDays: number[];
   defaultServiceIntervalDays: number;
   cronEnabled: boolean;
+  /** Days before trial/period end to SMS shop owners (platform billing) */
+  subscriptionRenewalRemindDays: number[];
+  subscriptionRenewalCronEnabled: boolean;
 };
 
 export const DEFAULT_PLATFORM_MESSAGING_POLICY: PlatformMessagingPolicy = {
@@ -19,6 +22,8 @@ export const DEFAULT_PLATFORM_MESSAGING_POLICY: PlatformMessagingPolicy = {
   defaultRemindDays: [14, 7, 2, 0],
   defaultServiceIntervalDays: 180,
   cronEnabled: true,
+  subscriptionRenewalRemindDays: [7, 3, 0],
+  subscriptionRenewalCronEnabled: true,
 };
 
 export function parsePlatformMessagingPolicy(
@@ -34,6 +39,12 @@ export function parsePlatformMessagingPolicy(
         (n): n is number => typeof n === "number" && n >= 0 && n <= 365,
       )
     : d.defaultRemindDays;
+
+  const subscriptionRenewalRemindDays = Array.isArray(row.subscriptionRenewalRemindDays)
+    ? row.subscriptionRenewalRemindDays.filter(
+        (n): n is number => typeof n === "number" && n >= 0 && n <= 365,
+      )
+    : d.subscriptionRenewalRemindDays;
 
   return {
     serviceDueRepeatDays: clampInt(row.serviceDueRepeatDays, d.serviceDueRepeatDays, 1, 90),
@@ -51,6 +62,14 @@ export function parsePlatformMessagingPolicy(
     ),
     cronEnabled:
       typeof row.cronEnabled === "boolean" ? row.cronEnabled : d.cronEnabled,
+    subscriptionRenewalRemindDays:
+      subscriptionRenewalRemindDays.length > 0
+        ? [...new Set(subscriptionRenewalRemindDays)].sort((a, b) => b - a)
+        : d.subscriptionRenewalRemindDays,
+    subscriptionRenewalCronEnabled:
+      typeof row.subscriptionRenewalCronEnabled === "boolean"
+        ? row.subscriptionRenewalCronEnabled
+        : d.subscriptionRenewalCronEnabled,
   };
 }
 

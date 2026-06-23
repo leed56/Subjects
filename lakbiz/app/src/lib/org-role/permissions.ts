@@ -88,6 +88,9 @@ export function canAccessShopRoute(role: OrgRole, href: string): boolean {
 }
 
 export function canAccessSettingsPath(role: OrgRole, pathname: string): boolean {
+  if (pathname === "/settings/team" || pathname.startsWith("/settings/team/")) {
+    return true;
+  }
   if (role === "owner") return true;
   if (role === "manager") {
     return MANAGER_PLUS_SETTINGS.some(

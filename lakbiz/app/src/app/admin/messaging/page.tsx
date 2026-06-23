@@ -93,6 +93,48 @@ export default function AdminMessagingPage() {
     });
   };
 
+  const toggleRenewalRemindDay = (day: number) => {
+    const active = policy.subscriptionRenewalRemindDays.includes(day);
+    const next = active
+      ? policy.subscriptionRenewalRemindDays.filter((d) => d !== day)
+      : [...policy.subscriptionRenewalRemindDays, day];
+    void save({
+      ...policy,
+      subscriptionRenewalRemindDays: [...new Set(next)].sort((a, b) => b - a),
+    });
+  };
+
+  const runRenewalCron = async () => {
+    setSaving(true);
+    setMessage(null);
+    const res = await fetch("/api/cron/subscription-renewal-reminders", {
+      method: "POST",
+    });
+    const json = (await res.json()) as {
+      ok?: boolean;
+      sent?: number;
+      matched?: number;
+      skippedReason?: string;
+      error?: string;
+      errors?: string[];
+    };
+    setSaving(false);
+    if (json.ok) {
+      setMessage(
+        t("admin.messaging_renewal_run_ok")
+          .replace("{sent}", String(json.sent ?? 0))
+          .replace("{matched}", String(json.matched ?? 0)),
+      );
+    } else {
+      setMessage(
+        json.skippedReason ??
+          json.error ??
+          json.errors?.[0] ??
+          t("admin.failed"),
+      );
+    }
+  };
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <Link href="/admin" className="text-sm text-teal-400 hover:underline">
@@ -254,6 +296,57 @@ export default function AdminMessagingPage() {
                 {t("msg.remind_add_day")}
               </button>
             </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+            <h3 className="font-semibold text-white">{t("admin.messaging_renewal_title")}</h3>
+            <p className="mt-1 text-xs text-slate-500">{t("admin.messaging_renewal_hint")}</p>
+            <label className="mt-4 flex items-center gap-3 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                checked={policy.subscriptionRenewalCronEnabled}
+                onChange={(e) =>
+                  void save({
+                    ...policy,
+                    subscriptionRenewalCronEnabled: e.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded"
+              />
+              {t("admin.messaging_renewal_cron_enabled")}
+            </label>
+            <p className="mt-4 text-sm font-medium text-slate-300">
+              {t("admin.messaging_renewal_schedule")}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[7, 3, 0].map((day) => {
+                const active = policy.subscriptionRenewalRemindDays.includes(day);
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => toggleRenewalRemindDay(day)}
+                    className={`rounded-full px-3 py-1.5 text-sm ${
+                      active
+                        ? "bg-amber-700 text-white"
+                        : "border border-slate-700 text-slate-300 hover:bg-slate-800"
+                    }`}
+                  >
+                    {day === 0
+                      ? t("msg.remind_day_of")
+                      : t("msg.remind_days_before").replace("{{days}}", String(day))}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              disabled={saving || !textLkConfigured}
+              onClick={() => void runRenewalCron()}
+              className="mt-4 rounded-xl border border-amber-700/50 bg-amber-950/40 px-4 py-2 text-sm font-medium text-amber-100 hover:bg-amber-950/60 disabled:opacity-50"
+            >
+              {t("admin.messaging_renewal_run_now")}
+            </button>
           </section>
 
           <div className="flex flex-wrap gap-3">
