@@ -21,8 +21,11 @@ import { stripFinancialData } from "@/lib/org-role/strip-financials";
 import { getPlan } from "@/lib/subscription/plans";
 import {
   pushBusinessData,
+  pullRemoteIfNewer,
   syncBusinessData,
+  fetchCloudSyncWatermark,
 } from "@/lib/supabase/business-sync";
+import { localDataWatermark } from "@/lib/supabase/sync-watermark";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   addACJob,
@@ -96,6 +99,8 @@ export type AppStoreValue = {
   ready: boolean;
   cloudSyncing: boolean;
   cloudSyncError: string | null;
+  cloudRemoteNotice: boolean;
+  dismissCloudRemoteNotice: () => void;
   addProduct: (input: ProductInput) => boolean;
   updateProduct: (id: string, input: ProductInput) => boolean;
   deleteProduct: (id: string) => void;
@@ -171,6 +176,7 @@ export type AppStoreValue = {
 const AppStoreContext = createContext<AppStoreValue | null>(null);
 
 const CLOUD_SYNC_DEBOUNCE_MS = 1500;
+const CLOUD_POLL_MS = 60_000;
 
 function normalizeProductForShop(
   input: ProductInput,
@@ -191,7 +197,9 @@ function useAppStoreState(): AppStoreValue {
   const [ready, setReady] = useState(false);
   const [cloudSyncing, setCloudSyncing] = useState(false);
   const [cloudSyncError, setCloudSyncError] = useState<string | null>(null);
+  const [cloudRemoteNotice, setCloudRemoteNotice] = useState(false);
   const cloudLoadedRef = useRef(false);
+  const lastCloudWatermarkRef = useRef(0);
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestDataRef = useRef<AppData | null>(null);
 
@@ -202,6 +210,8 @@ function useAppStoreState(): AppStoreValue {
     latestDataRef.current = initial;
     setReady(true);
     cloudLoadedRef.current = false;
+    lastCloudWatermarkRef.current = 0;
+    setCloudRemoteNotice(false);
     if (pushTimerRef.current) {
       clearTimeout(pushTimerRef.current);
       pushTimerRef.current = null;
@@ -223,15 +233,48 @@ function useAppStoreState(): AppStoreValue {
       latestDataRef.current = next;
       if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
       pushTimerRef.current = setTimeout(() => {
+        pushTimerRef.current = null;
         const payload = latestDataRef.current;
         if (!payload || !org.id) return;
+
         setCloudSyncing(true);
-        void pushBusinessData(org.id, payload, {
-          preserveBuyPrices: !canSeeFinancials,
-        }).then((err) => {
+        void (async () => {
+          const cloudTs = await fetchCloudSyncWatermark(org.id!);
+          const localTs = localDataWatermark(payload, org.id);
+
+          if (cloudTs > localTs) {
+            const pulled = await pullRemoteIfNewer(
+              org.id!,
+              payload,
+              lastCloudWatermarkRef.current,
+            );
+            lastCloudWatermarkRef.current = Math.max(
+              lastCloudWatermarkRef.current,
+              pulled.cloudTs,
+            );
+            if (pulled.refreshed) {
+              setData(pulled.data);
+              latestDataRef.current = pulled.data;
+              saveAppData(pulled.data, org.id);
+              setCloudRemoteNotice(true);
+              setCloudSyncError(null);
+            } else if (pulled.error) {
+              setCloudSyncError(pulled.error);
+            }
+            setCloudSyncing(false);
+            return;
+          }
+
+          const err = await pushBusinessData(org.id!, payload, {
+            preserveBuyPrices: !canSeeFinancials,
+          });
+          if (!err) {
+            lastCloudWatermarkRef.current = await fetchCloudSyncWatermark(org.id!);
+            setCloudRemoteNotice(false);
+          }
           setCloudSyncing(false);
           setCloudSyncError(err);
-        });
+        })();
       }, CLOUD_SYNC_DEBOUNCE_MS);
     },
     [org.id, org.isAuthenticated, user, canSeeFinancials],
@@ -257,12 +300,13 @@ function useAppStoreState(): AppStoreValue {
     setCloudSyncing(true);
     setCloudSyncError(null);
 
-    void syncBusinessData(org.id, local).then(({ data: synced, error }) => {
+    void syncBusinessData(org.id, local).then(async ({ data: synced, error }) => {
       if (cancelled) return;
       cloudLoadedRef.current = true;
       setData(synced);
       latestDataRef.current = synced;
       saveAppData(synced, org.id);
+      lastCloudWatermarkRef.current = await fetchCloudSyncWatermark(org.id!);
       setCloudSyncing(false);
       setCloudSyncError(error);
     });
@@ -271,6 +315,53 @@ function useAppStoreState(): AppStoreValue {
       cancelled = true;
     };
   }, [ready, user, org.id, org.isAuthenticated]);
+
+  useEffect(() => {
+    if (!ready || !user || !org.id || !org.isAuthenticated) return;
+
+    const pullIfIdle = () => {
+      if (document.visibilityState === "hidden") return;
+      if (pushTimerRef.current) return;
+      const payload = latestDataRef.current;
+      if (!payload || !org.id) return;
+
+      const localTs = localDataWatermark(payload, org.id);
+      if (localTs > lastCloudWatermarkRef.current) return;
+
+      void pullRemoteIfNewer(org.id, payload, lastCloudWatermarkRef.current).then(
+        (result) => {
+          lastCloudWatermarkRef.current = Math.max(
+            lastCloudWatermarkRef.current,
+            result.cloudTs,
+          );
+          if (!result.refreshed) return;
+          setData(result.data);
+          latestDataRef.current = result.data;
+          saveAppData(result.data, org.id);
+          setCloudRemoteNotice(true);
+          setCloudSyncError(null);
+        },
+      );
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") pullIfIdle();
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", pullIfIdle);
+    const interval = window.setInterval(pullIfIdle, CLOUD_POLL_MS);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", pullIfIdle);
+      window.clearInterval(interval);
+    };
+  }, [ready, user, org.id, org.isAuthenticated]);
+
+  const dismissCloudRemoteNotice = useCallback(() => {
+    setCloudRemoteNotice(false);
+  }, []);
 
   const persist = useCallback(
     (next: AppData): boolean => {
@@ -299,6 +390,8 @@ function useAppStoreState(): AppStoreValue {
       ready,
       cloudSyncing,
       cloudSyncError,
+      cloudRemoteNotice,
+      dismissCloudRemoteNotice,
       addProduct: (input) => {
         if (!data || !canAddProduct(data)) return false;
         const shopSector = parseSectorId(org.sector);
@@ -567,6 +660,8 @@ function useAppStoreState(): AppStoreValue {
     ready,
     cloudSyncing,
     cloudSyncError,
+    cloudRemoteNotice,
+    dismissCloudRemoteNotice,
     isReadOnly,
     can,
     canAddProduct,

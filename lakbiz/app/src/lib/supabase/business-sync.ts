@@ -1149,10 +1149,48 @@ export async function syncBusinessData(
     Promise.resolve(localDataWatermark(local, organizationId)),
   ]);
 
-  if (localTs > cloudTs) {
+  if (localTs >= cloudTs) {
     const pushError = await pushBusinessData(organizationId, local);
     return { data: local, error: pushError };
   }
 
   return { data: cloud!, error: null };
+}
+
+export async function fetchCloudSyncWatermark(organizationId: string): Promise<number> {
+  return fetchCloudWatermark(organizationId);
+}
+
+/** Pull cloud snapshot when another device saved newer data and local is not ahead. */
+export async function pullRemoteIfNewer(
+  organizationId: string,
+  local: AppData,
+  lastKnownCloudTs: number,
+): Promise<{
+  data: AppData;
+  cloudTs: number;
+  refreshed: boolean;
+  error: string | null;
+}> {
+  const cloudTs = await fetchCloudWatermark(organizationId);
+  if (cloudTs <= lastKnownCloudTs) {
+    return { data: local, cloudTs, refreshed: false, error: null };
+  }
+
+  const localTs = localDataWatermark(local, organizationId);
+  if (localTs > cloudTs) {
+    return { data: local, cloudTs, refreshed: false, error: null };
+  }
+
+  const cloud = await pullBusinessData(organizationId, local.business);
+  if (!cloud) {
+    return {
+      data: local,
+      cloudTs,
+      refreshed: false,
+      error: "Could not load cloud data",
+    };
+  }
+
+  return { data: cloud, cloudTs, refreshed: true, error: null };
 }
