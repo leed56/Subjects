@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { createTeamMember, TEAM_MEMBER_ROLES } from "@/lib/org-role/create-team-member";
 import { requireOrgOwner } from "@/lib/org-role/require-org-role";
+import { parseOrgRole } from "@/lib/org-role/permissions";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { OrgRole } from "@/lib/subscription/types";
-import { parseOrgRole } from "@/lib/org-role/permissions";
 
 export async function GET() {
   const owner = await requireOrgOwner();
@@ -42,7 +43,7 @@ export async function GET() {
   return NextResponse.json({ ok: true, members: rows });
 }
 
-const INVITE_ROLES: OrgRole[] = ["data_entry", "cashier", "technician", "manager"];
+const INVITE_ROLES = TEAM_MEMBER_ROLES;
 
 export async function POST(request: Request) {
   const owner = await requireOrgOwner();
@@ -79,35 +80,24 @@ export async function POST(request: Request) {
     );
   }
   if (!INVITE_ROLES.includes(role)) {
-    return NextResponse.json({ ok: false, error: "Invalid role for invite" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Invalid role" }, { status: 400 });
   }
 
-  const { data: authData, error: authError } = await admin.auth.admin.createUser({
+  const result = await createTeamMember({
+    admin,
+    organizationId: owner.organizationId,
+    ownerUserId: owner.userId,
     email,
     password,
-    email_confirm: true,
-    user_metadata: { invited_by: owner.userId, shop_role: role },
-  });
-
-  if (authError) {
-    return NextResponse.json({ ok: false, error: authError.message }, { status: 400 });
-  }
-
-  const userId = authData.user.id;
-
-  const { error: memberError } = await admin.from("org_members").insert({
-    organization_id: owner.organizationId,
-    user_id: userId,
     role,
   });
 
-  if (memberError) {
-    await admin.auth.admin.deleteUser(userId);
-    return NextResponse.json({ ok: false, error: memberError.message }, { status: 400 });
+  if ("error" in result) {
+    return NextResponse.json({ ok: false, error: result.error }, { status: 400 });
   }
 
   return NextResponse.json({
     ok: true,
-    member: { userId, email, role },
+    member: result,
   });
 }

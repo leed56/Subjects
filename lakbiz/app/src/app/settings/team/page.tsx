@@ -48,7 +48,7 @@ export default function TeamSettingsPage() {
     if (canManageTeam) load();
   }, [canManageTeam]);
 
-  const handleInvite = async (e: FormEvent) => {
+  const handleCreateUser = async (e: FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setMessage("");
@@ -60,10 +60,10 @@ export default function TeamSettingsPage() {
     const json = (await res.json()) as { ok?: boolean; error?: string };
     setSubmitting(false);
     if (!json.ok) {
-      setMessage(json.error ?? t("team.invite_failed"));
+      setMessage(json.error ?? t("team.create_failed"));
       return;
     }
-    setMessage(t("team.invite_ok"));
+    setMessage(t("team.create_ok"));
     setEmail("");
     setPassword("");
     load();
@@ -102,8 +102,9 @@ export default function TeamSettingsPage() {
         )}
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <ProCard title={t("team.invite_title")} eyebrow={t("team.invite_eyebrow")}>
-            <form onSubmit={handleInvite} className="space-y-3">
+          <ProCard title={t("team.create_title")} eyebrow={t("team.create_eyebrow")}>
+            <p className="mb-4 text-sm font-semibold text-slate-600">{t("team.create_hint")}</p>
+            <form onSubmit={handleCreateUser} className="space-y-3">
               <label className="block text-sm font-black text-slate-700">
                 {t("team.email")}
                 <input
@@ -143,7 +144,7 @@ export default function TeamSettingsPage() {
                 disabled={submitting}
                 className="w-full rounded-2xl bg-teal-600 py-3 text-sm font-black text-white hover:bg-teal-700 disabled:opacity-50"
               >
-                {submitting ? t("common.saving") : t("team.invite_btn")}
+                {submitting ? t("common.saving") : t("team.create_btn")}
               </button>
             </form>
           </ProCard>
