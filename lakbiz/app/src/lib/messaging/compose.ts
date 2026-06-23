@@ -1,5 +1,5 @@
 import { formatLkr } from "@/lib/format";
-import { buildInvoiceText } from "@/lib/invoice";
+import { buildInvoiceText, buildQuoteText } from "@/lib/invoice";
 import { formatPaymentLabel } from "@/lib/invoice";
 import type { Locale } from "@/lib/i18n/translations";
 import { defaultTemplateForJob } from "./templates";
@@ -102,6 +102,10 @@ export function composeFromContext(
 
   if (context.type === "sale" && templateId === "bill_receipt") {
     return buildInvoiceText(context.sale, context.business);
+  }
+
+  if (context.type === "sale" && templateId === "sales_quote") {
+    return buildQuoteText(context.sale, context.business);
   }
 
   return composeMessage(templateId, locale, vars);

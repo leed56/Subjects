@@ -113,6 +113,84 @@ export function buildInvoiceText(
     .join("\n");
 }
 
+/** WhatsApp-friendly price quote (Phase D) — same line items, quote header. */
+export function buildQuoteText(
+  sale: Sale,
+  business: BusinessInfo,
+  t?: (key: string) => string,
+): string {
+  const lines = sale.lines
+    .map(
+      (l) =>
+        `${l.productName} x${l.qty} @ ${formatLkr(l.unitPrice)} = ${formatLkr(l.unitPrice * l.qty)}`,
+    )
+    .join("\n");
+
+  return [
+    `*${business.name}*`,
+    t ? t("msg.quote_header") : "PRICE QUOTE / ඇස්තමේන්තුව",
+    "",
+    sale.customerName ? `${t ? t("common.customer") : "Customer"}: ${sale.customerName}` : "",
+    `Date: ${new Date().toLocaleDateString("en-LK")}`,
+    "",
+    lines,
+    "",
+    ...(sale.discount && sale.discount > 0
+      ? [`Discount: -${formatLkr(sale.discount)}`]
+      : []),
+    `*${t ? t("msg.quote_total") : "Quoted total"}: ${formatLkr(sale.total)}*`,
+    "",
+    t ? t("msg.quote_validity") : "Valid for 7 days. Reply to confirm.",
+    business.phone ? `${t ? t("bills.tel") : "Tel"}: ${business.phone}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+export type QuoteLineInput = {
+  productName: string;
+  qty: number;
+  unitPrice: number;
+};
+
+/** Ad-hoc quote from POS cart before a sale is saved (Phase D). */
+export function buildQuoteTextFromLines(
+  cartLines: QuoteLineInput[],
+  total: number,
+  business: BusinessInfo,
+  options?: { customerName?: string; discount?: number; t?: (key: string) => string },
+): string {
+  const t = options?.t;
+  const lines = cartLines
+    .map(
+      (l) =>
+        `${l.productName} x${l.qty} @ ${formatLkr(l.unitPrice)} = ${formatLkr(l.unitPrice * l.qty)}`,
+    )
+    .join("\n");
+
+  return [
+    `*${business.name}*`,
+    t ? t("msg.quote_header") : "PRICE QUOTE / ඇස්තමේන්තුව",
+    "",
+    options?.customerName
+      ? `${t ? t("common.customer") : "Customer"}: ${options.customerName}`
+      : "",
+    `Date: ${new Date().toLocaleDateString("en-LK")}`,
+    "",
+    lines,
+    "",
+    ...(options?.discount && options.discount > 0
+      ? [`Discount: -${formatLkr(options.discount)}`]
+      : []),
+    `*${t ? t("msg.quote_total") : "Quoted total"}: ${formatLkr(total)}*`,
+    "",
+    t ? t("msg.quote_validity") : "Valid for 7 days. Reply to confirm.",
+    business.phone ? `${t ? t("bills.tel") : "Tel"}: ${business.phone}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 export function whatsappShareUrl(text: string, phone?: string): string {
   return buildWhatsappUrl(text, phone);
 }

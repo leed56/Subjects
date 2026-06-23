@@ -2,6 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useState } from "react";
+import { BulkWhatsAppComposer } from "@/components/messaging/bulk-whatsapp-composer";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { ContactTypeBadge } from "@/components/contact-type-badge";
 import { SiteHeader } from "@/components/site-header";
@@ -21,6 +22,7 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { buildLedger } from "@/lib/ledger";
 import { wholesalePriceCount } from "@/lib/company-pricing";
+import { recipientsWithPhone } from "@/lib/messaging/bulk-whatsapp";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { Customer } from "@/lib/store/types";
 import type { ContactType, PaymentMethod, Product } from "@/lib/types";
@@ -59,6 +61,7 @@ export default function CustomersPage() {
   const [priceSearch, setPriceSearch] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
+  const [bulkWaOpen, setBulkWaOpen] = useState(false);
 
   if (!ready || !data) {
     return (
@@ -120,6 +123,7 @@ export default function CustomersPage() {
   };
 
   const totalCredit = data.customers.reduce((s, c) => s + c.creditBalance, 0);
+  const bulkRecipients = recipientsWithPhone(data.customers);
   const overLimitCount = data.customers.filter(
     (c) => c.creditLimit != null && c.creditBalance > c.creditLimit,
   ).length;
@@ -180,6 +184,13 @@ export default function CustomersPage() {
           description={`${t("cust.subtitle")} · ${t("cust.total_owed")} ${formatLkr(totalCredit)}`}
           actions={
             <>
+              <button
+                type="button"
+                onClick={() => setBulkWaOpen(true)}
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-black text-green-800 shadow-sm transition hover:bg-green-100 active:scale-[0.98]"
+              >
+                {t("msg.bulk_whatsapp")}
+              </button>
               <ProButton href="/sales">{t("nav.sales")}</ProButton>
               <ProButton href="/bills" variant="secondary">{t("nav.bills")}</ProButton>
             </>
@@ -546,6 +557,12 @@ export default function CustomersPage() {
             }}
           />
         )}
+        <BulkWhatsAppComposer
+          open={bulkWaOpen}
+          onClose={() => setBulkWaOpen(false)}
+          recipients={bulkRecipients}
+          business={data.business}
+        />
       </ProMain>
     </ProPageShell>
   );

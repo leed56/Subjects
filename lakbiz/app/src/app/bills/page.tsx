@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { SiteHeader } from "@/components/site-header";
 import {
   ProBadge,
@@ -15,10 +16,20 @@ import {
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
+import { buildInvoiceText, buildQuoteText, whatsappShareUrl } from "@/lib/invoice";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { paymentLabel } from "@/lib/i18n/payment";
 import { useAppStore } from "@/lib/store/use-app-store";
+import type { Sale } from "@/lib/store/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+
+function customerPhoneForSale(
+  sale: Sale,
+  customers: { id: string; phone?: string }[],
+): string | undefined {
+  if (!sale.customerId) return undefined;
+  return customers.find((c) => c.id === sale.customerId)?.phone;
+}
 
 export default function BillsPage() {
   const { data, ready, updateBusiness } = useAppStore();
@@ -192,7 +203,17 @@ export default function BillsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {bills.map((s) => (
+                    {bills.map((s) => {
+                      const phone = customerPhoneForSale(s, data.customers);
+                      const invoiceWa = whatsappShareUrl(
+                        buildInvoiceText(s, data.business, t),
+                        phone,
+                      );
+                      const quoteWa = whatsappShareUrl(
+                        buildQuoteText(s, data.business, t),
+                        phone,
+                      );
+                      return (
                       <tr key={s.id} className="border-b last:border-0">
                         <td className="px-4 py-3 font-mono text-xs font-black text-slate-700">{s.billNo ?? s.id.slice(0, 8)}</td>
                         <td className="px-4 py-3 font-semibold text-slate-600">{new Date(s.date).toLocaleString("en-LK")}</td>
@@ -200,10 +221,37 @@ export default function BillsPage() {
                         <td className="px-4 py-3 font-mono font-black text-slate-950">{formatLkr(s.total)}</td>
                         <td className="px-4 py-3"><ProBadge tone="slate">{paymentLabel(t, s.paymentMethod)}</ProBadge></td>
                         <td className="px-4 py-3 text-right">
-                          <Link href={`/bills/${s.id}`} className="font-black text-teal-700 hover:underline">{t("common.view_print")}</Link>
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            <Link href={`/bills/${s.id}`} className="font-black text-teal-700 hover:underline">{t("common.view_print")}</Link>
+                            <a
+                              href={invoiceWa}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-lg bg-green-600 px-2 py-1 text-xs font-black text-white hover:bg-green-700"
+                            >
+                              WA
+                            </a>
+                            <a
+                              href={quoteWa}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-lg border border-green-600 px-2 py-1 text-xs font-black text-green-700 hover:bg-green-50"
+                            >
+                              {t("bills.quote_whatsapp")}
+                            </a>
+                            <MessageSendButton
+                              phone={phone}
+                              recipientName={s.customerName ?? t("common.customer")}
+                              context={{ type: "sale", sale: s, business: data.business }}
+                              defaultTemplate="bill_receipt"
+                              contextId={s.id}
+                              variant="icon"
+                            />
+                          </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

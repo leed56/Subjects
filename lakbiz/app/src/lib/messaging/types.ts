@@ -6,6 +6,7 @@ export type MessageChannel = "whatsapp" | "sms" | "api_sms";
 
 export type MessageTemplateId =
   | "bill_receipt"
+  | "sales_quote"
   | "credit_reminder"
   | "payment_thanks"
   | "job_quote"

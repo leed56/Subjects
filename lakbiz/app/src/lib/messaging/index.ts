@@ -5,5 +5,6 @@ export * from "./compose";
 export * from "./channels";
 export * from "./settings";
 export * from "./dispatch";
+export * from "./bulk-whatsapp";
 export * from "./textlk-server";
 export * from "./service-due-cron";

@@ -12,6 +12,15 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     si: `ආයුබෝවන් {{customerName}}, *{{shopName}}* වෙත එන ලදීමට ස්තූතියි.\n\nබිල්: {{billNo}}\nමුළු මුදල: {{total}}\nගෙවීම: {{paymentMethod}}\n\n{{shopPhone}}\nස්තූතියි!`,
   },
   {
+    id: "sales_quote",
+    icon: "📋",
+    labelEn: "Price quote",
+    labelSi: "මිල ඇස්තමේන්තුව",
+    category: "sales",
+    en: `Hi {{customerName}}, price quote from *{{shopName}}*.\n\n{{shopPhone}}\nReply to confirm your order.`,
+    si: `ආයුබෝවන් {{customerName}}, *{{shopName}}* මිල ඇස්තමේන්තුව.\n\n{{shopPhone}}\nඇණවුම තහවුරු කිරීමට පිළිතුරු දෙන්න.`,
+  },
+  {
     id: "credit_reminder",
     icon: "💳",
     labelEn: "Credit reminder",
@@ -157,7 +166,7 @@ export function templatesForContext(
 ): MessageTemplate[] {
   if (contextType === "sale") {
     return MESSAGE_TEMPLATES.filter((t) =>
-      ["bill_receipt", "custom"].includes(t.id),
+      ["bill_receipt", "sales_quote", "custom"].includes(t.id),
     );
   }
   if (contextType === "customer") {

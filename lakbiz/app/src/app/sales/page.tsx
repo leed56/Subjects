@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/pro-shell";
 import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
+import { buildQuoteTextFromLines, whatsappShareUrl } from "@/lib/invoice";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { splitInclusiveTotal } from "@/lib/vat";
@@ -93,6 +94,21 @@ export default function SalesPage() {
   const selectedCustomer = customerId
     ? data.customers.find((c) => c.id === customerId)
     : undefined;
+
+  const quoteCustomerName =
+    selectedCustomer?.name || walkInName.trim() || undefined;
+  const quotePhone = selectedCustomer?.phone || buyerPhone.trim() || undefined;
+  const quoteText = buildQuoteTextFromLines(
+    lines.map((l) => ({
+      productName: l.product.name,
+      qty: l.qty,
+      unitPrice: l.unitPrice,
+    })),
+    netTotal,
+    data.business,
+    { customerName: quoteCustomerName, discount: discountClamped, t },
+  );
+  const quoteWaUrl = whatsappShareUrl(quoteText, quotePhone);
 
   const setQty = (id: string, qty: number, max: number) => {
     const clamped = Math.max(0, Math.min(max, Number.isFinite(qty) ? qty : 0));
@@ -666,6 +682,17 @@ export default function SalesPage() {
                         {t("sales.pdc")}
                       </label>
                     </div>
+                  )}
+
+                  {lines.length > 0 && (
+                    <a
+                      href={quoteWaUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex w-full items-center justify-center rounded-2xl border border-green-600 bg-green-50 py-3 text-sm font-black text-green-800 transition hover:bg-green-100"
+                    >
+                      {t("bills.quote_whatsapp")}
+                    </a>
                   )}
 
                   <button

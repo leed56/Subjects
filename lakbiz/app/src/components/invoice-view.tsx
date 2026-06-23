@@ -2,7 +2,7 @@
 
 import type { Sale } from "@/lib/store/types";
 import type { BusinessInfo } from "@/lib/invoice";
-import { buildInvoiceText, whatsappShareUrl } from "@/lib/invoice";
+import { buildInvoiceText, buildQuoteText, whatsappShareUrl } from "@/lib/invoice";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { amountInWordsLkr, formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -26,7 +26,9 @@ export function InvoiceView({
   const { t } = useLocale();
   const billNo = sale.billNo ?? sale.id.slice(0, 8).toUpperCase();
   const invoiceText = buildInvoiceText(sale, business, t);
+  const quoteText = buildQuoteText(sale, business, t);
   const waUrl = whatsappShareUrl(invoiceText, customerPhone ?? business.phone);
+  const quoteWaUrl = whatsappShareUrl(quoteText, customerPhone ?? business.phone);
 
   const hasVat =
     business.vatRegistered === true &&
@@ -54,6 +56,14 @@ export function InvoiceView({
           >
             {t("bills.whatsapp")}
           </a>
+          <a
+            href={quoteWaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-green-600 bg-white px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
+          >
+            {t("bills.quote_whatsapp")}
+          </a>
           <MessageSendButton
             phone={customerPhone}
             recipientName={sale.customerName ?? t("common.customer")}
@@ -61,6 +71,15 @@ export function InvoiceView({
             defaultTemplate="bill_receipt"
             contextId={sale.id}
             variant="compact"
+          />
+          <MessageSendButton
+            phone={customerPhone}
+            recipientName={sale.customerName ?? t("common.customer")}
+            context={{ type: "sale", sale, business }}
+            defaultTemplate="sales_quote"
+            contextId={sale.id}
+            variant="compact"
+            label={t("bills.quote_whatsapp")}
           />
         </div>
       )}
