@@ -23,6 +23,7 @@ const emptyForm = (sectorId: SectorId = "grocery"): FormState => ({
   sku: "",
   category: defaultCategoryForSector(sectorId),
   sectorId,
+  condition: "new",
   buyPrice: 0,
   sellPrice: 0,
   stockQty: 0,
@@ -67,6 +68,7 @@ export function ProductForm({
           ? initial.category
           : defaultCategoryForSector(sectorId),
         sectorId,
+        condition: initial.condition ?? "new",
         buyPrice: initial.buyPrice,
         sellPrice: initial.sellPrice,
         stockQty: initial.stockQty,
@@ -193,6 +195,17 @@ export function ProductForm({
               ))}
             </select>
           )}
+        </label>
+        <label className="block">
+          <span className="text-sm text-slate-600">{t("stock.condition")}</span>
+          <select
+            value={form.condition ?? "new"}
+            onChange={(e) => set("condition", e.target.value as ProductInput["condition"])}
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="new">{t("stock.condition_new")}</option>
+            <option value="used">{t("stock.condition_used")}</option>
+          </select>
         </label>
         <label className="block">
           <span className="text-sm text-slate-600">{t("stock.unit")}</span>

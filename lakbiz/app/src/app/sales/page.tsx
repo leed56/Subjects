@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
+import { ProductConditionBadge } from "@/components/product-condition-badge";
 import {
   ProBadge,
   ProButton,
@@ -22,7 +23,9 @@ import { splitInclusiveTotal } from "@/lib/vat";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useCanWrite } from "@/lib/subscription/use-can-write";
 import { useAppStore } from "@/lib/store/use-app-store";
-import type { PaymentMethod } from "@/lib/types";
+import type { PaymentMethod, ProductCondition } from "@/lib/types";
+
+type ConditionFilter = "all" | ProductCondition;
 
 export default function SalesPage() {
   const { data, ready, createSale } = useAppStore();
@@ -33,6 +36,7 @@ export default function SalesPage() {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
+  const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
   const [discount, setDiscount] = useState(0);
   const [cashReceived, setCashReceived] = useState<number | "">("");
   const [payment, setPayment] = useState<PaymentMethod>("cash");
@@ -201,7 +205,7 @@ export default function SalesPage() {
 
   const inStock = data.products.filter((p) => p.stockQty > 0);
   const query = search.trim().toLowerCase();
-  const filtered = query
+  const searched = query
     ? inStock.filter(
         (p) =>
           p.name.toLowerCase().includes(query) ||
@@ -209,6 +213,10 @@ export default function SalesPage() {
           p.category.toLowerCase().includes(query),
       )
     : inStock;
+  const filtered =
+    conditionFilter === "all"
+      ? searched
+      : searched.filter((p) => p.condition === conditionFilter);
 
   return (
     <ProPageShell>
@@ -271,6 +279,28 @@ export default function SalesPage() {
                   />
                   <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
                 </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(
+                    [
+                      { id: "all" as const, label: t("stock.filter_all") },
+                      { id: "new" as const, label: t("stock.condition_new") },
+                      { id: "used" as const, label: t("stock.condition_used") },
+                    ] as const
+                  ).map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setConditionFilter(tab.id)}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-black transition ${
+                        conditionFilter === tab.id
+                          ? "bg-teal-600 text-white"
+                          : "bg-slate-100 text-slate-600 hover:bg-teal-50"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
               </ProCard>
 
               {filtered.length === 0 ? (
@@ -296,6 +326,7 @@ export default function SalesPage() {
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <h2 className="truncate text-sm font-black text-slate-950">{p.name}</h2>
+                              <ProductConditionBadge condition={p.condition} />
                               {selected && <ProBadge tone="teal">In cart</ProBadge>}
                             </div>
                             <p className="mt-1 text-xs font-semibold text-slate-500">

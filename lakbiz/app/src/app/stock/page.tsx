@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ProductForm } from "@/components/product-form";
+import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { SiteHeader } from "@/components/site-header";
 import {
   ProBadge,
@@ -21,7 +22,9 @@ import { useAppStore } from "@/lib/store/use-app-store";
 import { getPlan } from "@/lib/subscription/plans";
 import { useCanWrite } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
-import type { Product } from "@/lib/types";
+import type { Product, ProductCondition } from "@/lib/types";
+
+type ConditionFilter = "all" | ProductCondition;
 
 export default function StockPage() {
   const { data, ready, addProduct, updateProduct, deleteProduct, stockIn } = useAppStore();
@@ -33,6 +36,7 @@ export default function StockPage() {
   const [stockInQty, setStockInQty] = useState(1);
   const [showForm, setShowForm] = useState(true);
   const [search, setSearch] = useState("");
+  const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
   const [message, setMessage] = useState("");
 
   if (!ready || !data) {
@@ -47,7 +51,7 @@ export default function StockPage() {
   }
 
   const query = search.trim().toLowerCase();
-  const products = query
+  const searched = query
     ? data.products.filter(
         (p) =>
           p.name.toLowerCase().includes(query) ||
@@ -55,6 +59,13 @@ export default function StockPage() {
           p.category.toLowerCase().includes(query),
       )
     : data.products;
+  const products =
+    conditionFilter === "all"
+      ? searched
+      : searched.filter((p) => p.condition === conditionFilter);
+
+  const newCount = data.products.filter((p) => p.condition === "new").length;
+  const usedCount = data.products.filter((p) => p.condition === "used").length;
 
   const lowStock = data.products.filter(
     (p) => p.reorderLevel != null && p.stockQty <= p.reorderLevel,
@@ -97,6 +108,30 @@ export default function StockPage() {
             {message}
           </div>
         )}
+
+        <div className="mb-5 flex flex-wrap gap-2">
+          {(
+            [
+              { id: "all" as const, label: t("stock.filter_all"), count: data.products.length },
+              { id: "new" as const, label: t("stock.condition_new"), count: newCount },
+              { id: "used" as const, label: t("stock.condition_used"), count: usedCount },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setConditionFilter(tab.id)}
+              className={`rounded-2xl px-4 py-2 text-sm font-black transition ${
+                conditionFilter === tab.id
+                  ? "bg-teal-600 text-white shadow-lg shadow-teal-700/20"
+                  : "border border-slate-200 bg-white text-slate-700 hover:border-teal-200"
+              }`}
+            >
+              {tab.label}
+              <span className="ml-2 opacity-80">({tab.count})</span>
+            </button>
+          ))}
+        </div>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <ProStatCard
@@ -257,6 +292,7 @@ export default function StockPage() {
                     <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
                       <tr>
                         <th className="px-4 py-3">{t("stock.item_name")}</th>
+                        <th className="px-4 py-3">{t("stock.condition")}</th>
                         <th className="px-4 py-3">{t("stock.category")}</th>
                         <th className="px-4 py-3">{t("stock.title")}</th>
                         {canSeeFinancials && <th className="px-4 py-3">{t("stock.buy_price")}</th>}
@@ -275,6 +311,9 @@ export default function StockPage() {
                               <p className="font-black text-slate-950">{p.name}</p>
                               {p.sku && <p className="text-xs font-semibold text-slate-400">{p.sku}</p>}
                               {badge && <span className="mt-1 inline-block rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-600">{badge}</span>}
+                            </td>
+                            <td className="px-4 py-3">
+                              <ProductConditionBadge condition={p.condition} />
                             </td>
                             <td className="px-4 py-3 font-semibold text-slate-600">{p.category}</td>
                             <td className="px-4 py-3">
@@ -410,6 +449,7 @@ function ProductMobileCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="truncate text-base font-black text-slate-950">{product.name}</h2>
+            <ProductConditionBadge condition={product.condition} />
             {low && <ProBadge tone="amber">{t("common.low")}</ProBadge>}
           </div>
           <p className="mt-1 text-xs font-semibold text-slate-500">

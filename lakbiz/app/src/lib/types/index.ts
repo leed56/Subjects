@@ -15,6 +15,9 @@ export type PaymentMethod =
   | "cheque"
   | "credit";
 
+/** Inventory lane: new stock vs used/refurbished (Phase A). */
+export type ProductCondition = "new" | "used";
+
 export type ChequeStatus =
   | "pending"
   | "deposited"
@@ -59,6 +62,8 @@ export interface Product {
   sku?: string;
   category: string;
   sectorId: SectorId;
+  /** new = default lane; used = second-hand / refurbished stock */
+  condition: ProductCondition;
   buyPrice: number;
   sellPrice: number;
   stockQty: number;

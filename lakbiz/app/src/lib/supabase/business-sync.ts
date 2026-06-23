@@ -1,5 +1,6 @@
 "use client";
 
+import { parseProductCondition } from "@/lib/product-condition";
 import type { PaymentMethod, Product, SectorId } from "@/lib/types";
 import type { BusinessInfo } from "@/lib/invoice";
 import { defaultBusiness } from "@/lib/invoice";
@@ -204,6 +205,7 @@ export async function pullBusinessData(
       sku: row.sku ?? undefined,
       category: row.category,
       sectorId: asSectorId(row.sector_id),
+      condition: parseProductCondition(row.condition),
       buyPrice: num(row.buy_price),
       sellPrice: num(row.sell_price),
       stockQty: num(row.stock_qty),
@@ -682,6 +684,7 @@ export async function pushBusinessData(
     sku: p.sku ?? null,
     category: p.category,
     sector_id: p.sectorId,
+    condition: parseProductCondition(p.condition),
     buy_price: p.buyPrice,
     sell_price: p.sellPrice,
     stock_qty: p.stockQty,

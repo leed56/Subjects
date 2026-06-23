@@ -1,4 +1,4 @@
-import type { PaymentMethod, Product, SectorId } from "@/lib/types";
+import type { PaymentMethod, Product, SectorId, ProductCondition } from "@/lib/types";
 import type { BusinessInfo } from "@/lib/invoice";
 import { defaultBusiness } from "@/lib/invoice";
 import type { ACJobStatus } from "@/lib/ac-jobs";
@@ -416,6 +416,7 @@ export type ProductInput = {
   sku?: string;
   category: string;
   sectorId: SectorId;
+  condition?: ProductCondition;
   buyPrice: number;
   sellPrice: number;
   stockQty: number;

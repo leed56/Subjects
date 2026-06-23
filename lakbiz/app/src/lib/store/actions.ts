@@ -16,6 +16,7 @@ import {
   vehicleTotalCost,
 } from "@/lib/vehicles";
 import { sanitizeCustomFields } from "@/lib/sector-fields";
+import { parseProductCondition } from "@/lib/product-condition";
 import type { PaymentMethod, Product } from "@/lib/types";
 import type {
   AppData,
@@ -59,6 +60,7 @@ export function addProduct(data: AppData, input: ProductInput): AppData {
     sku: input.sku?.trim() || undefined,
     category: input.category.trim(),
     sectorId: input.sectorId,
+    condition: parseProductCondition(input.condition),
     buyPrice: input.buyPrice,
     sellPrice: input.sellPrice,
     stockQty: input.stockQty,
@@ -104,6 +106,7 @@ export function updateProduct(
             sku: input.sku?.trim() || undefined,
             category: input.category.trim(),
             sectorId: input.sectorId,
+            condition: parseProductCondition(input.condition ?? p.condition),
             buyPrice: input.buyPrice,
             sellPrice: input.sellPrice,
             stockQty: input.stockQty,
