@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { createTeamMember, TEAM_MEMBER_ROLES } from "@/lib/org-role/create-team-member";
+import {
+  createTeamMember,
+  resetTeamMemberPassword,
+  TEAM_MEMBER_ROLES,
+} from "@/lib/org-role/create-team-member";
 import { requireOrgOwner } from "@/lib/org-role/require-org-role";
 import { parseOrgRole } from "@/lib/org-role/permissions";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -59,15 +63,21 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { email?: string; password?: string; role?: OrgRole };
+  let body: {
+    action?: "create" | "reset_password";
+    email?: string;
+    password?: string;
+    role?: OrgRole;
+  };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
 
-  const email = body.email?.trim().toLowerCase();
-  const password = body.password ?? "";
+  const action = body.action ?? "create";
+  const email = body.email?.trim().toLowerCase() ?? "";
+  const password = body.password?.trim() ?? "";
   const role = parseOrgRole(body.role ?? "data_entry");
 
   if (!email || !email.includes("@")) {
@@ -79,6 +89,20 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+
+  if (action === "reset_password") {
+    const reset = await resetTeamMemberPassword({
+      admin,
+      organizationId: owner.organizationId,
+      email,
+      password,
+    });
+    if ("error" in reset) {
+      return NextResponse.json({ ok: false, error: reset.error }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, member: reset, reset: true });
+  }
+
   if (!INVITE_ROLES.includes(role)) {
     return NextResponse.json({ ok: false, error: "Invalid role" }, { status: 400 });
   }

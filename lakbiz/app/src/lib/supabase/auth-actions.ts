@@ -159,16 +159,26 @@ export async function signInWithEmail(email: string, password: string) {
   const supabase = createBrowserClient();
   if (!supabase) throw new Error("Supabase not configured");
 
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedPassword = password.trim();
+
   const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
+    email: normalizedEmail,
+    password: normalizedPassword,
   });
 
   if (error) {
-    if (error.message.toLowerCase().includes("email not confirmed")) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes("email not confirmed")) {
       throw new AuthFlowError(
-        "Email not confirmed yet. Use Resend email below, or check your spam and Promotions folders for the confirmation email.",
+        "Email not confirmed yet. Ask your shop owner to reset your password from Settings → Team, or use Resend email below.",
         "email_confirmation",
+      );
+    }
+    if (msg.includes("invalid login credentials")) {
+      throw new AuthFlowError(
+        "Invalid email or password. Check for extra spaces, use Sign in (not Create account), and ask the owner to reset your password from Settings → Team if needed.",
+        "auth",
       );
     }
     throw new AuthFlowError(error.message, "auth");
