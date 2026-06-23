@@ -3,6 +3,7 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { BulkWhatsAppComposer } from "@/components/messaging/bulk-whatsapp-composer";
+import { ExportActions } from "@/components/export/export-actions";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { ContactTypeBadge } from "@/components/contact-type-badge";
 import { SiteHeader } from "@/components/site-header";
@@ -22,11 +23,14 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { buildLedger } from "@/lib/ledger";
 import { wholesalePriceCount } from "@/lib/company-pricing";
+import { contactTypeI18nKey } from "@/lib/contact-type";
+import { exportCustomersCsv } from "@/lib/export";
 import { recipientsWithPhone } from "@/lib/messaging/bulk-whatsapp";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { Customer } from "@/lib/store/types";
 import type { ContactType, PaymentMethod, Product } from "@/lib/types";
 import { useCanWrite } from "@/lib/subscription/use-can-write";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 type ContactFilter = "all" | ContactType;
 
@@ -43,6 +47,7 @@ export default function CustomersPage() {
   } = useAppStore();
   const { t } = useLocale();
   const canWrite = useCanWrite();
+  const { can } = useSubscription();
 
   const [name, setName] = useState("");
   const [contactType, setContactType] = useState<ContactType>("individual");
@@ -151,6 +156,18 @@ export default function CustomersPage() {
       )
     : typeFiltered;
 
+  const canExport = can("export");
+  const customerExportLabels = {
+    name: t("common.name"),
+    type: t("cust.contact_type"),
+    contactPerson: t("cust.contact_person"),
+    phone: t("common.phone"),
+    address: t("common.address"),
+    vatNumber: t("cust.vat_number"),
+    creditBalance: t("cust.credit_owed"),
+    creditLimit: t("cust.credit_limit"),
+  };
+
   const payCustomer = payCustomerId
     ? data.customers.find((c) => c.id === payCustomerId)
     : null;
@@ -184,6 +201,18 @@ export default function CustomersPage() {
           description={`${t("cust.subtitle")} · ${t("cust.total_owed")} ${formatLkr(totalCredit)}`}
           actions={
             <>
+              {canExport && (
+                <ExportActions
+                  compact
+                  disabled={customers.length === 0}
+                  onExportCsv={() =>
+                    exportCustomersCsv(data.business, customers, {
+                      labels: customerExportLabels,
+                      typeLabel: (type) => t(contactTypeI18nKey(type)),
+                    })
+                  }
+                />
+              )}
               <button
                 type="button"
                 onClick={() => setBulkWaOpen(true)}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ProductForm } from "@/components/product-form";
+import { ExportActions } from "@/components/export/export-actions";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { SiteHeader } from "@/components/site-header";
 import {
@@ -16,6 +17,7 @@ import {
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
+import { exportStockCsv } from "@/lib/export";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { formatProductFieldBadge } from "@/lib/sector-fields";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -28,7 +30,7 @@ type ConditionFilter = "all" | ProductCondition;
 
 export default function StockPage() {
   const { data, ready, addProduct, updateProduct, deleteProduct, stockIn } = useAppStore();
-  const { org, subscription, canSeeFinancials } = useSubscription();
+  const { org, subscription, canSeeFinancials, can } = useSubscription();
   const canWrite = useCanWrite();
   const { t } = useLocale();
   const [editing, setEditing] = useState<Product | null>(null);
@@ -80,6 +82,18 @@ export default function StockPage() {
     setEditing(null);
   };
 
+  const canExport = can("export");
+  const stockExportLabels = {
+    name: t("common.name"),
+    sku: t("stock.sku"),
+    category: t("stock.category"),
+    condition: t("stock.condition"),
+    qty: t("common.items"),
+    sellPrice: t("stock.sell_price"),
+    buyPrice: t("stock.buy_price"),
+    reorderLevel: "Reorder level",
+  };
+
   return (
     <ProPageShell>
       <SiteHeader />
@@ -90,6 +104,20 @@ export default function StockPage() {
           description={`${products.length} ${t("common.items")} · ${t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}`}
           actions={
             <>
+              {canExport && (
+                <ExportActions
+                  compact
+                  disabled={products.length === 0}
+                  onExportCsv={() =>
+                    exportStockCsv(data.business, products, {
+                      includeBuyPrice: canSeeFinancials,
+                      labels: stockExportLabels,
+                      conditionLabel: (c) =>
+                        t(c === "used" ? "stock.condition_used" : "stock.condition_new"),
+                    })
+                  }
+                />
+              )}
               <ProButton href="/sales" variant="secondary">{t("nav.sales")}</ProButton>
               <button
                 type="button"

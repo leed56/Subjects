@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ExportActions } from "@/components/export/export-actions";
 import { SiteHeader } from "@/components/site-header";
 import {
   ProBadge,
@@ -14,13 +15,16 @@ import {
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
+import { exportVatCsv, printVatReport } from "@/lib/export";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { getVatQuarterSummary } from "@/lib/vat";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 export default function VatReturnPage() {
   const { data, ready } = useAppStore();
   const { t } = useLocale();
+  const { can } = useSubscription();
 
   if (!ready || !data) {
     return (
@@ -61,6 +65,20 @@ export default function VatReturnPage() {
     return d >= summary.bounds.start.getTime() && d <= summary.bounds.end.getTime();
   });
 
+  const canExport = can("export");
+  const vatExportLabels = {
+    billNo: t("bills.bill_no"),
+    date: t("common.date"),
+    customer: t("common.customer"),
+    outputVat: t("vat.output_vat"),
+    grnNo: "GRN #",
+    supplier: t("common.supplier"),
+    inputVat: t("vat.input_vat"),
+    netPayable: t("vat.net_payable"),
+    outputTotal: t("vat.output_vat"),
+    inputTotal: t("vat.input_vat"),
+  };
+
   return (
     <ProPageShell>
       <SiteHeader />
@@ -80,6 +98,30 @@ export default function VatReturnPage() {
           }
           actions={
             <>
+              {canExport && (
+                <ExportActions
+                  disabled={quarterSales.length === 0 && quarterPurchases.length === 0}
+                  onExportCsv={() =>
+                    exportVatCsv(
+                      data.business,
+                      quarterSales,
+                      quarterPurchases,
+                      summary,
+                      vatExportLabels,
+                    )
+                  }
+                  onPrintPdf={() =>
+                    printVatReport(
+                      data.business,
+                      quarterSales,
+                      quarterPurchases,
+                      summary,
+                      vatExportLabels,
+                      t("export.vat_report"),
+                    )
+                  }
+                />
+              )}
               <ProButton href="/sales" variant="secondary">{t("nav.sales")}</ProButton>
               <ProButton href="/suppliers" variant="secondary">{t("sup.record_purchase")}</ProButton>
               <ProButton href="/settings/shop">{t("vat.shop_settings")}</ProButton>

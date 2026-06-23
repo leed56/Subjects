@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { ExportActions } from "@/components/export/export-actions";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { SiteHeader } from "@/components/site-header";
 import {
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
 import { buildInvoiceText, buildQuoteText, whatsappShareUrl } from "@/lib/invoice";
+import { exportSalesCsv, printSalesReport } from "@/lib/export";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { paymentLabel } from "@/lib/i18n/payment";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -34,7 +36,7 @@ function customerPhoneForSale(
 export default function BillsPage() {
   const { data, ready, updateBusiness } = useAppStore();
   const { t } = useLocale();
-  const { canSeeFinancials } = useSubscription();
+  const { canSeeFinancials, can } = useSubscription();
   const [editBiz, setEditBiz] = useState(false);
   const [bizName, setBizName] = useState("");
   const [bizNameSi, setBizNameSi] = useState("");
@@ -78,6 +80,20 @@ export default function BillsPage() {
       )
     : data.sales;
 
+  const canExport = can("export");
+  const salesExportLabels = {
+    billNo: t("bills.bill_no"),
+    date: t("common.date"),
+    customer: t("common.customer"),
+    payment: t("common.payment"),
+    items: t("common.items"),
+    discount: t("sales.discount"),
+    subtotal: t("vat.subtotal"),
+    vat: t("vat.output_vat"),
+    total: t("common.total"),
+    profit: t("common.profit"),
+  };
+
   return (
     <ProPageShell>
       <SiteHeader />
@@ -88,6 +104,26 @@ export default function BillsPage() {
           description={`${t("bills.subtitle")} · ${data.sales.length} ${t("bills.count")}`}
           actions={
             <>
+              {canExport && (
+                <ExportActions
+                  disabled={bills.length === 0}
+                  onExportCsv={() =>
+                    exportSalesCsv(data.business, bills, {
+                      includeProfit: canSeeFinancials,
+                      labels: salesExportLabels,
+                      paymentLabel: (m) => paymentLabel(t, m),
+                    })
+                  }
+                  onPrintPdf={() =>
+                    printSalesReport(data.business, bills, {
+                      includeProfit: canSeeFinancials,
+                      labels: salesExportLabels,
+                      reportTitle: t("export.sales_report"),
+                      paymentLabel: (m) => paymentLabel(t, m),
+                    })
+                  }
+                />
+              )}
               <ProButton href="/sales">{t("bills.create_sale")}</ProButton>
               <button
                 type="button"
