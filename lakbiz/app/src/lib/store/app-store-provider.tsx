@@ -54,6 +54,8 @@ import {
   recordContractorPayment,
   updateContractor,
   updateTechnician,
+  setCustomerProductPrice,
+  removeCustomerProductPrice,
   recordCustomerPayment,
   recordSupplierPayment,
   sellVehicle,
@@ -102,6 +104,12 @@ export type AppStoreValue = {
   addCustomer: (input: CustomerInput) => boolean;
   updateCustomer: (id: string, input: CustomerInput) => boolean;
   deleteCustomer: (id: string) => void;
+  setCustomerProductPrice: (
+    customerId: string,
+    productId: string,
+    price: number,
+  ) => boolean;
+  removeCustomerProductPrice: (customerId: string, productId: string) => boolean;
   addSupplier: (input: SupplierInput) => boolean;
   updateSupplier: (id: string, input: SupplierInput) => boolean;
   deleteSupplier: (id: string) => void;
@@ -334,6 +342,27 @@ function useAppStoreState(): AppStoreValue {
       deleteCustomer: (id) => {
         if (!data || isReadOnly) return;
         persist(deleteCustomer(data, id));
+      },
+      setCustomerProductPrice: (customerId, productId, price) => {
+        if (!data || !can("write")) return false;
+        const before = data.customerProductPrices.find(
+          (p) => p.customerId === customerId && p.productId === productId,
+        )?.price;
+        const next = setCustomerProductPrice(data, customerId, productId, price);
+        const after = next.customerProductPrices.find(
+          (p) => p.customerId === customerId && p.productId === productId,
+        )?.price;
+        if (before === after && next.customerProductPrices.length === data.customerProductPrices.length) {
+          return false;
+        }
+        return persist(next);
+      },
+      removeCustomerProductPrice: (customerId, productId) => {
+        if (!data || !can("write")) return false;
+        const before = data.customerProductPrices.length;
+        const next = removeCustomerProductPrice(data, customerId, productId);
+        if (next.customerProductPrices.length === before) return false;
+        return persist(next);
       },
       addSupplier: (input) => {
         if (!data || !canUseSuppliersModule(orgRole)) return false;

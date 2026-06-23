@@ -20,9 +20,10 @@ import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { buildLedger } from "@/lib/ledger";
+import { wholesalePriceCount } from "@/lib/company-pricing";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { Customer } from "@/lib/store/types";
-import type { ContactType, PaymentMethod } from "@/lib/types";
+import type { ContactType, PaymentMethod, Product } from "@/lib/types";
 import { useCanWrite } from "@/lib/subscription/use-can-write";
 
 type ContactFilter = "all" | ContactType;
@@ -35,6 +36,8 @@ export default function CustomersPage() {
     updateCustomer,
     deleteCustomer,
     recordCustomerPayment,
+    setCustomerProductPrice,
+    removeCustomerProductPrice,
   } = useAppStore();
   const { t } = useLocale();
   const canWrite = useCanWrite();
@@ -52,6 +55,8 @@ export default function CustomersPage() {
   const [payAmount, setPayAmount] = useState(0);
   const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
   const [ledgerCustomer, setLedgerCustomer] = useState<Customer | null>(null);
+  const [pricingCustomer, setPricingCustomer] = useState<Customer | null>(null);
+  const [priceSearch, setPriceSearch] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
 
@@ -349,6 +354,11 @@ export default function CustomersPage() {
                           setPayAmount(c.creditBalance);
                         }}
                         onLedger={() => setLedgerCustomer(c)}
+                        onWholesale={() => {
+                          setPricingCustomer(c);
+                          setPriceSearch("");
+                        }}
+                        wholesaleCount={wholesalePriceCount(data.customerProductPrices, c.id)}
                         onEdit={() => startEdit(c)}
                         onDelete={() => {
                           if (confirm(`${t("cust.delete_confirm")} ${c.name}?`)) deleteCustomer(c.id);
@@ -370,6 +380,11 @@ export default function CustomersPage() {
                       setPayAmount(c.creditBalance);
                     }}
                     onLedger={() => setLedgerCustomer(c)}
+                    onWholesale={() => {
+                      setPricingCustomer(c);
+                      setPriceSearch("");
+                    }}
+                    wholesaleCount={wholesalePriceCount(data.customerProductPrices, c.id)}
                     onEdit={() => startEdit(c)}
                     onDelete={() => {
                       if (confirm(`${t("cust.delete_confirm")} ${c.name}?`)) deleteCustomer(c.id);
@@ -504,8 +519,197 @@ export default function CustomersPage() {
             </div>
           </div>
         )}
+
+        {pricingCustomer && data && (
+          <WholesalePricingModal
+            customer={pricingCustomer}
+            products={data.products}
+            prices={data.customerProductPrices.filter(
+              (p) => p.customerId === pricingCustomer.id,
+            )}
+            search={priceSearch}
+            onSearchChange={setPriceSearch}
+            canWrite={canWrite}
+            onClose={() => setPricingCustomer(null)}
+            onSave={(productId, price) => {
+              const ok = setCustomerProductPrice(pricingCustomer.id, productId, price);
+              if (ok) {
+                setMessage(t("cust.wholesale_saved"));
+                setTimeout(() => setMessage(""), 2500);
+              } else {
+                setMessage(t("common.save_failed"));
+                setTimeout(() => setMessage(""), 2500);
+              }
+            }}
+            onClear={(productId) => {
+              removeCustomerProductPrice(pricingCustomer.id, productId);
+            }}
+          />
+        )}
       </ProMain>
     </ProPageShell>
+  );
+}
+
+function WholesalePricingModal({
+  customer,
+  products,
+  prices,
+  search,
+  onSearchChange,
+  canWrite,
+  onClose,
+  onSave,
+  onClear,
+}: {
+  customer: Customer;
+  products: Product[];
+  prices: { productId: string; price: number }[];
+  search: string;
+  onSearchChange: (value: string) => void;
+  canWrite: boolean;
+  onClose: () => void;
+  onSave: (productId: string, price: number) => void;
+  onClear: (productId: string) => void;
+}) {
+  const { t } = useLocale();
+  const query = search.trim().toLowerCase();
+  const filtered = query
+    ? products.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          (p.sku ?? "").toLowerCase().includes(query) ||
+          p.category.toLowerCase().includes(query),
+      )
+    : products;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-600">
+              {t("cust.wholesale_prices")}
+            </p>
+            <h3 className="mt-2 text-xl font-black text-slate-950">{customer.name}</h3>
+            <p className="mt-1 text-sm font-semibold text-slate-500">{t("cust.wholesale_hint")}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+          >
+            ✕
+          </button>
+        </div>
+
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder={t("stock.search_placeholder")}
+          className="mt-5 h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
+        />
+
+        <div className="mt-4 flex-1 overflow-y-auto rounded-2xl border border-slate-200">
+          {filtered.length === 0 ? (
+            <div className="p-6">
+              <ProEmptyState title={t("sales.no_match")} />
+            </div>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead className="sticky top-0 border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">{t("common.name")}</th>
+                  <th className="px-4 py-3 text-right">{t("sales.retail_price")}</th>
+                  <th className="px-4 py-3 text-right">{t("cust.wholesale_price")}</th>
+                  <th className="px-4 py-3 text-right">{t("common.actions")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((product) => {
+                  const saved = prices.find((p) => p.productId === product.id);
+                  return (
+                    <WholesalePriceRow
+                      key={`${product.id}-${saved?.price ?? "retail"}`}
+                      product={product}
+                      savedPrice={saved?.price}
+                      canWrite={canWrite}
+                      onSave={onSave}
+                      onClear={onClear}
+                    />
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WholesalePriceRow({
+  product,
+  savedPrice,
+  canWrite,
+  onSave,
+  onClear,
+}: {
+  product: Product;
+  savedPrice?: number;
+  canWrite: boolean;
+  onSave: (productId: string, price: number) => void;
+  onClear: (productId: string) => void;
+}) {
+  const { t } = useLocale();
+  const [draft, setDraft] = useState(savedPrice ?? product.sellPrice);
+
+  return (
+    <tr className="border-b last:border-0">
+      <td className="px-4 py-3">
+        <p className="font-black text-slate-950">{product.name}</p>
+        <p className="text-xs font-semibold text-slate-400">{product.category}</p>
+      </td>
+      <td className="px-4 py-3 text-right font-mono font-semibold text-slate-500">
+        {formatLkr(product.sellPrice)}
+      </td>
+      <td className="px-4 py-3 text-right">
+        <input
+          type="number"
+          min={0}
+          step="any"
+          disabled={!canWrite}
+          value={draft}
+          onChange={(e) => setDraft(Number(e.target.value))}
+          className="w-28 rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-right text-xs font-black text-slate-900 outline-none focus:border-teal-300 disabled:opacity-50"
+        />
+      </td>
+      <td className="px-4 py-3 text-right">
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            disabled={!canWrite}
+            onClick={() => onSave(product.id, draft)}
+            className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700 hover:bg-teal-100 disabled:opacity-50"
+          >
+            {t("common.save")}
+          </button>
+          {savedPrice != null && (
+            <button
+              type="button"
+              disabled={!canWrite}
+              onClick={() => {
+                onClear(product.id);
+                setDraft(product.sellPrice);
+              }}
+              className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+            >
+              {t("cust.wholesale_clear")}
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -514,6 +718,8 @@ function CustomerRow({
   business,
   onPay,
   onLedger,
+  onWholesale,
+  wholesaleCount,
   onEdit,
   onDelete,
 }: {
@@ -521,6 +727,8 @@ function CustomerRow({
   business: NonNullable<ReturnType<typeof useAppStore>["data"]>["business"];
   onPay: () => void;
   onLedger: () => void;
+  onWholesale: () => void;
+  wholesaleCount: number;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -552,7 +760,16 @@ function CustomerRow({
         )}
       </td>
       <td className="px-4 py-3">
-        <CustomerActions customer={customer} business={business} onPay={onPay} onLedger={onLedger} onEdit={onEdit} onDelete={onDelete} />
+        <CustomerActions
+          customer={customer}
+          business={business}
+          wholesaleCount={wholesaleCount}
+          onPay={onPay}
+          onLedger={onLedger}
+          onWholesale={onWholesale}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
       </td>
     </tr>
   );
@@ -563,6 +780,8 @@ function CustomerCard({
   business,
   onPay,
   onLedger,
+  onWholesale,
+  wholesaleCount,
   onEdit,
   onDelete,
 }: {
@@ -570,6 +789,8 @@ function CustomerCard({
   business: NonNullable<ReturnType<typeof useAppStore>["data"]>["business"];
   onPay: () => void;
   onLedger: () => void;
+  onWholesale: () => void;
+  wholesaleCount: number;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -608,7 +829,17 @@ function CustomerCard({
       </div>
 
       <div className="mt-4">
-        <CustomerActions customer={customer} business={business} onPay={onPay} onLedger={onLedger} onEdit={onEdit} onDelete={onDelete} mobile />
+        <CustomerActions
+          customer={customer}
+          business={business}
+          wholesaleCount={wholesaleCount}
+          onPay={onPay}
+          onLedger={onLedger}
+          onWholesale={onWholesale}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          mobile
+        />
       </div>
     </article>
   );
@@ -617,16 +848,20 @@ function CustomerCard({
 function CustomerActions({
   customer,
   business,
+  wholesaleCount,
   onPay,
   onLedger,
+  onWholesale,
   onEdit,
   onDelete,
   mobile = false,
 }: {
   customer: Customer;
   business: NonNullable<ReturnType<typeof useAppStore>["data"]>["business"];
+  wholesaleCount: number;
   onPay: () => void;
   onLedger: () => void;
+  onWholesale: () => void;
   onEdit: () => void;
   onDelete: () => void;
   mobile?: boolean;
@@ -650,6 +885,15 @@ function CustomerActions({
           }}
           contextId={customer.id}
         />
+      )}
+      {customer.contactType === "company" && (
+        <button
+          onClick={onWholesale}
+          className={`${buttonClass} bg-indigo-50 text-indigo-700 hover:bg-indigo-100`}
+        >
+          {t("cust.wholesale_prices")}
+          {wholesaleCount > 0 ? ` (${wholesaleCount})` : ""}
+        </button>
       )}
       {customer.creditBalance > 0 && (
         <button onClick={onPay} className={`${buttonClass} bg-teal-50 text-teal-700 hover:bg-teal-100`}>

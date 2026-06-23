@@ -188,8 +188,13 @@ export function updateCustomer(
 ): AppData {
   const contactType = parseContactType(input.contactType);
   const isCompany = contactType === "company";
+  const customerProductPrices =
+    contactType === "individual"
+      ? data.customerProductPrices.filter((p) => p.customerId !== id)
+      : data.customerProductPrices;
   return {
     ...data,
+    customerProductPrices,
     customers: data.customers.map((c) =>
       c.id === id
         ? {
@@ -216,6 +221,70 @@ export function deleteCustomer(data: AppData, id: string): AppData {
   return {
     ...data,
     customers: data.customers.filter((c) => c.id !== id),
+    customerProductPrices: data.customerProductPrices.filter(
+      (p) => p.customerId !== id,
+    ),
+  };
+}
+
+export function setCustomerProductPrice(
+  data: AppData,
+  customerId: string,
+  productId: string,
+  price: number,
+): AppData {
+  const customer = data.customers.find((c) => c.id === customerId);
+  const product = data.products.find((p) => p.id === productId);
+  if (!customer || customer.contactType !== "company" || !product) return data;
+  if (!Number.isFinite(price) || price < 0) return data;
+
+  const existing = data.customerProductPrices.find(
+    (p) => p.customerId === customerId && p.productId === productId,
+  );
+
+  if (price === product.sellPrice) {
+    if (!existing) return data;
+    return {
+      ...data,
+      customerProductPrices: data.customerProductPrices.filter(
+        (p) => p.id !== existing.id,
+      ),
+    };
+  }
+
+  if (existing) {
+    return {
+      ...data,
+      customerProductPrices: data.customerProductPrices.map((p) =>
+        p.id === existing.id ? { ...p, price } : p,
+      ),
+    };
+  }
+
+  return {
+    ...data,
+    customerProductPrices: [
+      {
+        id: newId(),
+        customerId,
+        productId,
+        price,
+      },
+      ...data.customerProductPrices,
+    ],
+  };
+}
+
+export function removeCustomerProductPrice(
+  data: AppData,
+  customerId: string,
+  productId: string,
+): AppData {
+  return {
+    ...data,
+    customerProductPrices: data.customerProductPrices.filter(
+      (p) => !(p.customerId === customerId && p.productId === productId),
+    ),
   };
 }
 

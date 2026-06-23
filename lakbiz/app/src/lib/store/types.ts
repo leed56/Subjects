@@ -240,6 +240,14 @@ export interface CustomerPayment {
   note?: string;
 }
 
+/** B2B wholesale override for one company × product (Phase C). */
+export interface CustomerProductPrice {
+  id: string;
+  customerId: string;
+  productId: string;
+  price: number;
+}
+
 export interface BankAccountRecord {
   id: string;
   bankName: string;
@@ -400,6 +408,7 @@ export interface AppData {
   stockLogs: StockLog[];
   customers: Customer[];
   customerPayments: CustomerPayment[];
+  customerProductPrices: CustomerProductPrice[];
   suppliers: Supplier[];
   purchases: Purchase[];
   supplierPayments: SupplierPayment[];

@@ -21,6 +21,7 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { splitInclusiveTotal } from "@/lib/vat";
 import { customerPrimaryLabel } from "@/lib/contact-type";
+import { effectiveUnitPrice, wholesalePriceFor } from "@/lib/company-pricing";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useCanWrite } from "@/lib/subscription/use-can-write";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -60,10 +61,15 @@ export default function SalesPage() {
       .filter(([, qty]) => qty > 0)
       .map(([productId, qty]) => {
         const p = data.products.find((x) => x.id === productId)!;
-        const unitPrice = priceOverrides[productId] ?? p.sellPrice;
+        const unitPrice = effectiveUnitPrice(
+          p,
+          customerId,
+          data,
+          priceOverrides[productId],
+        );
         return { product: p, qty, unitPrice };
       });
-  }, [cart, priceOverrides, data]);
+  }, [cart, priceOverrides, data, customerId]);
 
   const gross = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
   const discountClamped = Math.min(Math.max(0, discount), gross);
@@ -83,6 +89,10 @@ export default function SalesPage() {
       </ProPageShell>
     );
   }
+
+  const selectedCustomer = customerId
+    ? data.customers.find((c) => c.id === customerId)
+    : undefined;
 
   const setQty = (id: string, qty: number, max: number) => {
     const clamped = Math.max(0, Math.min(max, Number.isFinite(qty) ? qty : 0));
@@ -121,6 +131,7 @@ export default function SalesPage() {
 
   const handleCustomerChange = (id: string) => {
     setCustomerId(id);
+    setPriceOverrides({});
     const customer = data?.customers.find((c) => c.id === id);
     if (customer) {
       setWalkInName(customer.name);
@@ -321,6 +332,21 @@ export default function SalesPage() {
                     const unit = String(p.customFields.unit ?? "pcs");
                     const qty = cart[p.id] ?? 0;
                     const selected = qty > 0;
+                    const unitPrice = effectiveUnitPrice(
+                      p,
+                      customerId,
+                      data,
+                      priceOverrides[p.id],
+                    );
+                    const wholesale = wholesalePriceFor(
+                      data.customerProductPrices,
+                      customerId,
+                      p.id,
+                    );
+                    const showWholesale =
+                      selectedCustomer?.contactType === "company" &&
+                      wholesale != null &&
+                      wholesale !== p.sellPrice;
                     return (
                       <article
                         key={p.id}
@@ -342,7 +368,23 @@ export default function SalesPage() {
                             </p>
                           </div>
                           <div className="shrink-0 text-right">
-                            <p className="text-sm font-black text-slate-950">{formatLkr(p.sellPrice)}</p>
+                            {showWholesale ? (
+                              <>
+                                <p className="text-xs font-semibold text-slate-400 line-through">
+                                  {formatLkr(p.sellPrice)}
+                                </p>
+                                <p className="text-sm font-black text-teal-700">
+                                  {formatLkr(unitPrice)}
+                                </p>
+                                <p className="text-[10px] font-black uppercase tracking-wide text-teal-600">
+                                  {t("sales.wholesale_price")}
+                                </p>
+                              </>
+                            ) : (
+                              <p className="text-sm font-black text-slate-950">
+                                {formatLkr(unitPrice)}
+                              </p>
+                            )}
                             <p className="text-xs font-bold text-slate-400">{p.stockQty} {unit} {t("sales.left")}</p>
                           </div>
                         </div>
@@ -372,7 +414,7 @@ export default function SalesPage() {
                             </button>
                           </div>
                           <p className="text-right text-sm font-black text-teal-700">
-                            {formatLkr((priceOverrides[p.id] ?? p.sellPrice) * qty)}
+                            {formatLkr(unitPrice * qty)}
                           </p>
                         </div>
                       </article>

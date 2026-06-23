@@ -28,6 +28,7 @@ export const emptyAppData = (): AppData => ({
   stockLogs: [],
   customers: [],
   customerPayments: [],
+  customerProductPrices: [],
   suppliers: [],
   purchases: [],
   supplierPayments: [],
@@ -95,6 +96,7 @@ export function parseAppData(parsed: Partial<AppData>): AppData {
       ...c,
       contactType: parseContactType(c.contactType),
     })),
+    customerProductPrices: parsed.customerProductPrices ?? [],
     sales: (parsed.sales ?? []).map(normalizeSale),
     purchases: (parsed.purchases ?? []).map(normalizePurchase),
     acJobs: (parsed.acJobs ?? []).map((job) => ({

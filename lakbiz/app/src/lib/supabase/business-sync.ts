@@ -61,6 +61,7 @@ export function isEmptyBusinessData(data: AppData): boolean {
     data.suppliers.length === 0 &&
     data.purchases.length === 0 &&
     data.customerPayments.length === 0 &&
+    data.customerProductPrices.length === 0 &&
     data.supplierPayments.length === 0 &&
     data.stockLogs.length === 0 &&
     data.bankAccounts.length === 0 &&
@@ -93,6 +94,7 @@ export async function pullBusinessData(
     purchasesRes,
     purchaseLinesRes,
     customerPaymentsRes,
+    customerProductPricesRes,
     supplierPaymentsRes,
     stockLogsRes,
     bankAccountsRes,
@@ -120,6 +122,10 @@ export async function pullBusinessData(
       .eq("organization_id", organizationId),
     supabase
       .from("customer_payments")
+      .select("*")
+      .eq("organization_id", organizationId),
+    supabase
+      .from("customer_product_prices")
       .select("*")
       .eq("organization_id", organizationId),
     supabase
@@ -165,6 +171,7 @@ export async function pullBusinessData(
     purchasesRes.error ??
     purchaseLinesRes.error ??
     customerPaymentsRes.error ??
+    customerProductPricesRes.error ??
     supplierPaymentsRes.error ??
     stockLogsRes.error ??
     bankAccountsRes.error ??
@@ -297,6 +304,12 @@ export async function pullBusinessData(
       date: row.payment_date,
       method: asPaymentMethod(row.method),
       note: row.note ?? undefined,
+    })),
+    customerProductPrices: (customerProductPricesRes.data ?? []).map((row) => ({
+      id: row.id,
+      customerId: row.customer_id,
+      productId: row.product_id,
+      price: num(row.price),
     })),
     supplierPayments: (supplierPaymentsRes.data ?? []).map((row) => ({
       id: row.id,
@@ -497,6 +510,7 @@ async function upsertOrgRows(
     | "sales"
     | "purchases"
     | "customer_payments"
+    | "customer_product_prices"
     | "supplier_payments"
     | "stock_logs"
     | "bank_accounts"
@@ -530,6 +544,7 @@ async function deleteOrgRowsNotIn(
     | "sales"
     | "purchases"
     | "customer_payments"
+    | "customer_product_prices"
     | "supplier_payments"
     | "stock_logs"
     | "bank_accounts"
@@ -611,6 +626,7 @@ async function fetchCloudWatermark(organizationId: string): Promise<number> {
     latestTimestamp(supabase, "sales", organizationId, "sale_date"),
     latestTimestamp(supabase, "purchases", organizationId, "purchase_date"),
     latestTimestamp(supabase, "customer_payments", organizationId, "payment_date"),
+    latestTimestamp(supabase, "customer_product_prices", organizationId, "updated_at"),
     latestTimestamp(supabase, "supplier_payments", organizationId, "payment_date"),
     latestTimestamp(supabase, "stock_logs", organizationId, "log_date"),
   ]);
@@ -797,6 +813,14 @@ export async function pushBusinessData(
     payment_date: p.date,
     method: p.method,
     note: p.note ?? null,
+  }));
+
+  const customerProductPriceRows = data.customerProductPrices.map((p) => ({
+    id: p.id,
+    organization_id: organizationId,
+    customer_id: p.customerId,
+    product_id: p.productId,
+    price: p.price,
   }));
 
   const supplierPaymentRows = data.supplierPayments.map((p) => ({
@@ -988,6 +1012,7 @@ export async function pushBusinessData(
       | "sales"
       | "purchases"
       | "customer_payments"
+      | "customer_product_prices"
       | "supplier_payments"
       | "stock_logs"
       | "bank_transactions"
@@ -1011,6 +1036,7 @@ export async function pushBusinessData(
     { table: "sales", rows: saleRows },
     { table: "purchases", rows: purchaseRows },
     { table: "customer_payments", rows: customerPaymentRows },
+    { table: "customer_product_prices", rows: customerProductPriceRows },
     { table: "supplier_payments", rows: supplierPaymentRows },
     { table: "stock_logs", rows: stockLogRows },
     { table: "cheques", rows: chequeRows },
@@ -1045,6 +1071,7 @@ export async function pushBusinessData(
       | "sales"
       | "purchases"
       | "customer_payments"
+      | "customer_product_prices"
       | "supplier_payments"
       | "stock_logs"
       | "cheques"
@@ -1066,6 +1093,10 @@ export async function pushBusinessData(
     { table: "sales", ids: data.sales.map((s) => s.id) },
     { table: "purchases", ids: data.purchases.map((p) => p.id) },
     { table: "customer_payments", ids: data.customerPayments.map((p) => p.id) },
+    {
+      table: "customer_product_prices",
+      ids: data.customerProductPrices.map((p) => p.id),
+    },
     { table: "supplier_payments", ids: data.supplierPayments.map((p) => p.id) },
     { table: "stock_logs", ids: data.stockLogs.map((l) => l.id) },
     { table: "bank_transactions", ids: data.bankTransactions.map((t) => t.id) },
