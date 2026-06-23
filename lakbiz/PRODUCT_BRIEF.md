@@ -202,9 +202,6 @@ Show these on the home screen — business people care about money, not charts:
 
 1. **One real shop pilot** — grocery or spare parts in Colombo or a provincial town.
 2. **Facebook / TikTok** short demos in Sinhala (“15 minutes setup”).
-3. Partner with **POS hardware sellers** (printer + scanner shops) for referrals.
-4. **Accountant referral** — give them free export format their clients already use.
-5. Word of mouth: offer **1 month free** for referrals.
 
 ---
 
