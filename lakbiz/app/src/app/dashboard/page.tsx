@@ -28,7 +28,7 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 export default function DashboardPage() {
   const { data, ready, resetAll, recordACService } = useAppStore();
   const { t } = useLocale();
-  const { can, org, isReadOnly } = useSubscription();
+  const { can, org, isReadOnly, canSeeFinancials } = useSubscription();
   const notificationLogs = useNotificationLogs(org.id);
   const showVehicles = can("vehicles");
   const [serviceDoneJob, setServiceDoneJob] = useState<ACJob | null>(null);
@@ -51,7 +51,9 @@ export default function DashboardPage() {
     { href: "/sales", label: t("dash.new_sale"), icon: "🧾", variant: "primary" as const },
     { href: "/stock", label: t("dash.add_stock"), icon: "📦", variant: "secondary" as const },
     { href: "/customers", label: t("nav.customers"), icon: "👥", variant: "secondary" as const },
-    { href: "/banking", label: t("nav.banking"), icon: "🏦", variant: "secondary" as const },
+    ...(canSeeFinancials
+      ? [{ href: "/banking", label: t("nav.banking"), icon: "🏦", variant: "secondary" as const }]
+      : []),
   ];
 
   return (
@@ -89,20 +91,24 @@ export default function DashboardPage() {
             icon="💸"
             tone="teal"
           />
-          <ProStatCard
-            label={t("dash.today_profit")}
-            value={formatLkr(stats.todayProfit)}
-            hint={t("dash.profit_hint")}
-            icon="📈"
-            tone="emerald"
-          />
-          <ProStatCard
-            label={t("dash.bank_balance")}
-            value={formatLkr(stats.bankBalance)}
-            hint={t("nav.banking")}
-            icon="🏦"
-            tone="blue"
-          />
+          {canSeeFinancials && (
+            <ProStatCard
+              label={t("dash.today_profit")}
+              value={formatLkr(stats.todayProfit)}
+              hint={t("dash.profit_hint")}
+              icon="📈"
+              tone="emerald"
+            />
+          )}
+          {canSeeFinancials && (
+            <ProStatCard
+              label={t("dash.bank_balance")}
+              value={formatLkr(stats.bankBalance)}
+              hint={t("nav.banking")}
+              icon="🏦"
+              tone="blue"
+            />
+          )}
           <ProStatCard
             label={t("dash.low_stock")}
             value={String(stats.lowStockCount)}
@@ -113,28 +119,32 @@ export default function DashboardPage() {
         </section>
 
         <section className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard
-            label={t("dash.credit_out")}
-            value={formatLkr(stats.creditOutstanding)}
-            hint={t("dash.credit_customers")}
-            icon="🤝"
-            tone="amber"
-          />
-          <ProStatCard
-            label={t("dash.supplier_pay")}
-            value={formatLkr(stats.payableOutstanding)}
-            hint={t("dash.supplier_payables")}
-            icon="📥"
-            tone="rose"
-          />
-          <ProStatCard
-            label={t("dash.cheques_due")}
-            value={String(stats.chequesDueSoonCount)}
-            hint={t("nav.banking")}
-            icon="🏷️"
-            tone="slate"
-          />
-          {showVehicles ? (
+          {canSeeFinancials && (
+            <>
+              <ProStatCard
+                label={t("dash.credit_out")}
+                value={formatLkr(stats.creditOutstanding)}
+                hint={t("dash.credit_customers")}
+                icon="🤝"
+                tone="amber"
+              />
+              <ProStatCard
+                label={t("dash.supplier_pay")}
+                value={formatLkr(stats.payableOutstanding)}
+                hint={t("dash.supplier_payables")}
+                icon="📥"
+                tone="rose"
+              />
+              <ProStatCard
+                label={t("dash.cheques_due")}
+                value={String(stats.chequesDueSoonCount)}
+                hint={t("nav.banking")}
+                icon="🏷️"
+                tone="slate"
+              />
+            </>
+          )}
+          {canSeeFinancials && showVehicles ? (
             <ProStatCard
               label={t("dash.car_profit_month")}
               value={formatLkr(stats.vehicleProfitThisMonth)}
@@ -176,6 +186,7 @@ export default function DashboardPage() {
             </div>
           </ProCard>
 
+          {canSeeFinancials && (
           <ProCard
             eyebrow={vat.enabled ? t("vat.meter_label") : t("vat.title")}
             title={vat.enabled ? formatLkr(vat.netPayable) : t("vat.enable_hint")}
@@ -205,6 +216,7 @@ export default function DashboardPage() {
               </div>
             )}
           </ProCard>
+          )}
         </section>
 
         <section className="mt-6 grid gap-6 xl:grid-cols-3">
@@ -231,6 +243,7 @@ export default function DashboardPage() {
             )}
           </ProCard>
 
+          {canSeeFinancials && (
           <ProCard
             title={t("dash.credit_customers")}
             action={<ProButton href="/customers" variant="ghost">{t("dash.manage_customers")}</ProButton>}
@@ -248,7 +261,9 @@ export default function DashboardPage() {
               </div>
             )}
           </ProCard>
+          )}
 
+          {canSeeFinancials && (
           <ProCard
             title={t("dash.supplier_payables")}
             action={<ProButton href="/suppliers" variant="ghost">{t("dash.manage_suppliers")}</ProButton>}
@@ -266,6 +281,7 @@ export default function DashboardPage() {
               </div>
             )}
           </ProCard>
+          )}
         </section>
 
         {(showVehicles && stats.aging60VehicleCount > 0) || stats.pendingACJobCount > 0 ? (

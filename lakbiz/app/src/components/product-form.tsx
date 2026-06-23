@@ -9,6 +9,7 @@ import {
   sectorFormFields,
 } from "@/lib/sector-fields";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { ProductInput } from "@/lib/store/types";
 
 const units = ["pcs", "kg", "m", "box", "unit", "set"];
@@ -54,6 +55,7 @@ export function ProductForm({
   submitLabel,
 }: ProductFormProps) {
   const { t, locale } = useLocale();
+  const { canSeeFinancials } = useSubscription();
   const shopSectorId = lockedSectorId ?? defaultSectorId;
   const [form, setForm] = useState<FormState>(() => {
     if (initial) {
@@ -204,6 +206,7 @@ export function ProductForm({
             ))}
           </select>
         </label>
+        {canSeeFinancials && (
         <label className="block">
           <span className="text-sm text-slate-600">{t("stock.buy_price")}</span>
           <input
@@ -214,6 +217,7 @@ export function ProductForm({
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           />
         </label>
+        )}
         <label className="block">
           <span className="text-sm text-slate-600">{t("stock.sell_price")}</span>
           <input

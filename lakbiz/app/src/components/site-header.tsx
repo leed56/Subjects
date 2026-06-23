@@ -26,7 +26,8 @@ const navKeys = [
 
 export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
   const { locale, setLocale, t } = useLocale();
-  const { can, org, isPlatformAdmin } = useSubscription();
+  const { can, org, isPlatformAdmin, canAccessShopRoute, canAccessSettingsPath, canManageTeam } =
+    useSubscription();
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -37,6 +38,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
   };
 
   const visibleNav = navKeys.filter((item) => {
+    if (!canAccessShopRoute(item.href)) return false;
     const feature = ROUTE_FEATURES[item.href];
     if (!feature) return true;
     return can(feature);
@@ -96,7 +98,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
                 pathname === "/settings/notifications"
                   ? "text-teal-800"
                   : "text-slate-600 hover:text-teal-700"
-              }`}
+              } ${canAccessSettingsPath("/settings/notifications") ? "" : "hidden"}`}
             >
               {t("nav.notifications")}
             </Link>
@@ -106,10 +108,22 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
                 pathname === "/settings/plans" || pathname === "/settings/billing"
                   ? "text-teal-800"
                   : "text-slate-600 hover:text-teal-700"
-              }`}
+              } ${canAccessSettingsPath("/settings/plans") ? "" : "hidden"}`}
             >
               {t("nav.plans")}
             </Link>
+            {canManageTeam && (
+              <Link
+                href="/settings/team"
+                className={`rounded-lg px-2 py-1 text-sm font-medium ${
+                  pathname === "/settings/team"
+                    ? "text-teal-800"
+                    : "text-slate-600 hover:text-teal-700"
+                }`}
+              >
+                {t("nav.team")}
+              </Link>
+            )}
             {isPlatformAdmin && (
               <Link
                 href="/admin"
@@ -120,7 +134,9 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
             )}
             <Link
               href={user ? "/settings/shop" : "/login"}
-              className="rounded-lg px-2 py-1 text-sm font-medium text-slate-600 hover:text-teal-700"
+              className={`rounded-lg px-2 py-1 text-sm font-medium text-slate-600 hover:text-teal-700 ${
+                user && !canAccessSettingsPath("/settings/shop") ? "hidden" : ""
+              }`}
             >
               {user ? user.email?.split("@")[0] : t("nav.login")}
             </Link>

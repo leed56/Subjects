@@ -13,6 +13,11 @@ import { useAuth } from "@/components/auth-provider";
 import type { PaymentMethod } from "@/lib/types";
 import type { BusinessInfo } from "@/lib/invoice";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import {
+  canUseBankingModule,
+  canUseSuppliersModule,
+} from "@/lib/org-role/permissions";
+import { stripFinancialData } from "@/lib/org-role/strip-financials";
 import { getPlan } from "@/lib/subscription/plans";
 import {
   pushBusinessData,
@@ -172,7 +177,8 @@ function normalizeProductForShop(
 
 function useAppStoreState(): AppStoreValue {
   const { user } = useAuth();
-  const { org, isReadOnly, subscription, can } = useSubscription();
+  const { org, isReadOnly, subscription, can, orgRole, canSeeFinancials } =
+    useSubscription();
   const [data, setData] = useState<AppData | null>(null);
   const [ready, setReady] = useState(false);
   const [cloudSyncing, setCloudSyncing] = useState(false);
@@ -212,13 +218,15 @@ function useAppStoreState(): AppStoreValue {
         const payload = latestDataRef.current;
         if (!payload || !org.id) return;
         setCloudSyncing(true);
-        void pushBusinessData(org.id, payload).then((err) => {
+        void pushBusinessData(org.id, payload, {
+          preserveBuyPrices: !canSeeFinancials,
+        }).then((err) => {
           setCloudSyncing(false);
           setCloudSyncError(err);
         });
       }, CLOUD_SYNC_DEBOUNCE_MS);
     },
-    [org.id, org.isAuthenticated, user],
+    [org.id, org.isAuthenticated, user, canSeeFinancials],
   );
 
   useEffect(() => {
@@ -294,9 +302,13 @@ function useAppStoreState(): AppStoreValue {
       updateProduct: (id, input) => {
         if (!data) return false;
         const shopSector = parseSectorId(org.sector);
-        const normalized = org.isAuthenticated
+        let normalized = org.isAuthenticated
           ? normalizeProductForShop(input, shopSector)
           : input;
+        if (!canSeeFinancials) {
+          const existing = data.products.find((p) => p.id === id);
+          if (existing) normalized = { ...normalized, buyPrice: existing.buyPrice };
+        }
         return persist(updateProduct(data, id, normalized));
       },
       deleteProduct: (id) => {
@@ -324,26 +336,26 @@ function useAppStoreState(): AppStoreValue {
         persist(deleteCustomer(data, id));
       },
       addSupplier: (input) => {
-        if (!data) return false;
+        if (!data || !canUseSuppliersModule(orgRole)) return false;
         return persist(addSupplier(data, input));
       },
       updateSupplier: (id, input) => {
-        if (!data) return false;
+        if (!data || !canUseSuppliersModule(orgRole)) return false;
         return persist(updateSupplier(data, id, input));
       },
       deleteSupplier: (id) => {
-        if (!data || isReadOnly) return;
+        if (!data || isReadOnly || !canUseSuppliersModule(orgRole)) return;
         persist(deleteSupplier(data, id));
       },
       createPurchase: (input) => {
-        if (!data || !can("write")) return false;
+        if (!data || !can("write") || !canUseSuppliersModule(orgRole)) return false;
         const before = data.purchases.length;
         const next = createPurchase(data, input);
         if (next.purchases.length === before) return false;
         return persist(next);
       },
       recordSupplierPayment: (supplierId, amount, method, note) => {
-        if (!data || !can("write")) return false;
+        if (!data || !can("write") || !canUseSuppliersModule(orgRole)) return false;
         const before = data.supplierPayments.length;
         const next = recordSupplierPayment(
           data,
@@ -369,43 +381,43 @@ function useAppStoreState(): AppStoreValue {
         return persist(next);
       },
       addBankAccount: (input) => {
-        if (!data || !can("write")) return false;
+        if (!data || !can("write") || !canUseBankingModule(orgRole)) return false;
         const before = data.bankAccounts.length;
         const next = addBankAccount(data, input);
         if (next.bankAccounts.length === before) return false;
         return persist(next);
       },
       deleteBankAccount: (id) => {
-        if (!data || isReadOnly) return;
+        if (!data || isReadOnly || !canUseBankingModule(orgRole)) return;
         persist(deleteBankAccount(data, id));
       },
       addBankTransaction: (input) => {
-        if (!data || !can("write")) return false;
+        if (!data || !can("write") || !canUseBankingModule(orgRole)) return false;
         const before = data.bankTransactions.length;
         const next = addBankTransaction(data, input);
         if (next.bankTransactions.length === before) return false;
         return persist(next);
       },
       deleteBankTransaction: (id) => {
-        if (!data || isReadOnly) return;
+        if (!data || isReadOnly || !canUseBankingModule(orgRole)) return;
         persist(deleteBankTransaction(data, id));
       },
       addBankTransfer: (input) => {
-        if (!data || !can("write")) return false;
+        if (!data || !can("write") || !canUseBankingModule(orgRole)) return false;
         const before = data.bankTransfers.length;
         const next = addBankTransfer(data, input);
         if (next.bankTransfers.length === before) return false;
         return persist(next);
       },
       addCheque: (input) => {
-        if (!data || !can("write")) return false;
+        if (!data || !can("write") || !canUseBankingModule(orgRole)) return false;
         const before = data.cheques.length;
         const next = addCheque(data, input);
         if (next.cheques.length === before) return false;
         return persist(next);
       },
       updateChequeStatus: (chequeId, status, bankAccountId) => {
-        if (!data || isReadOnly) return;
+        if (!data || isReadOnly || !canUseBankingModule(orgRole)) return;
         persist(updateChequeStatus(data, chequeId, status, bankAccountId));
       },
       createSale: (lines, paymentMethod, options) => {
@@ -533,13 +545,24 @@ function useAppStoreState(): AppStoreValue {
     scheduleCloudPush,
     org.sector,
     org.isAuthenticated,
+    orgRole,
+    canSeeFinancials,
   ]);
 }
 
 export function AppStoreProvider({ children }: { children: React.ReactNode }) {
-  const store = useAppStoreState();
+  const raw = useAppStoreState();
+  const { canSeeFinancials } = useSubscription();
+  const value = useMemo(
+    () => ({
+      ...raw,
+      data:
+        raw.data && !canSeeFinancials ? stripFinancialData(raw.data) : raw.data,
+    }),
+    [raw, canSeeFinancials],
+  );
   return (
-    <AppStoreContext.Provider value={store}>{children}</AppStoreContext.Provider>
+    <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>
   );
 }
 

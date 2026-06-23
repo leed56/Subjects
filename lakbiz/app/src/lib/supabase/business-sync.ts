@@ -655,8 +655,27 @@ async function replacePurchaseLines(
 export async function pushBusinessData(
   organizationId: string,
   data: AppData,
+  options?: { preserveBuyPrices?: boolean },
 ): Promise<string | null> {
-  const productRows = data.products.map((p) => ({
+  let products = data.products;
+  if (options?.preserveBuyPrices) {
+    const supabase = createBrowserClient();
+    if (supabase) {
+      const { data: rows } = await supabase
+        .from("products")
+        .select("id, buy_price")
+        .eq("organization_id", organizationId);
+      const buyMap = new Map(
+        (rows ?? []).map((row) => [row.id as string, num(row.buy_price)]),
+      );
+      products = data.products.map((p) => ({
+        ...p,
+        buyPrice: buyMap.has(p.id) ? buyMap.get(p.id)! : p.buyPrice,
+      }));
+    }
+  }
+
+  const productRows = products.map((p) => ({
     id: p.id,
     organization_id: organizationId,
     name: p.name,

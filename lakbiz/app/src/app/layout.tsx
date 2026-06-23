@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Noto_Sans_Sinhala } from "next/font/google";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import { AuthProvider } from "@/components/auth-provider";
 import { PlatformAdminRedirect } from "@/components/platform-admin-redirect";
+import { ShopRouteGuard } from "@/components/shop-route-guard";
 import { AppStoreProvider } from "@/lib/store/app-store-provider";
 import { SubscriptionProvider } from "@/lib/subscription/subscription-provider";
 import "./globals.css";
@@ -44,6 +45,7 @@ export default function RootLayout({
           <AuthProvider>
             <SubscriptionProvider>
               <PlatformAdminRedirect />
+              <ShopRouteGuard />
               <AppStoreProvider>{children}</AppStoreProvider>
             </SubscriptionProvider>
           </AuthProvider>

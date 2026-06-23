@@ -17,12 +17,14 @@ import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { paymentLabel } from "@/lib/i18n/payment";
 import { useAppStore } from "@/lib/store/use-app-store";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 export default function BillDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const { data, ready } = useAppStore();
   const { t } = useLocale();
+  const { canSeeFinancials } = useSubscription();
 
   if (!ready || !data) {
     return (
@@ -80,15 +82,17 @@ export default function BillDetailPage() {
             }
           />
 
-          <section className="mb-6 grid gap-4 sm:grid-cols-3">
+          <section className={`mb-6 grid gap-4 ${canSeeFinancials ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
             <ProCard>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{t("common.total")}</p>
               <p className="mt-2 font-mono text-2xl font-black text-slate-950">{formatLkr(sale.total)}</p>
             </ProCard>
+            {canSeeFinancials && (
             <ProCard>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{t("common.profit")}</p>
               <p className="mt-2 font-mono text-2xl font-black text-teal-700">{formatLkr(sale.profit)}</p>
             </ProCard>
+            )}
             <ProCard>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{t("common.payment")}</p>
               <p className="mt-2 text-2xl font-black text-slate-950">{paymentLabel(t, sale.paymentMethod)}</p>

@@ -25,7 +25,7 @@ import type { Product } from "@/lib/types";
 
 export default function StockPage() {
   const { data, ready, addProduct, updateProduct, deleteProduct, stockIn } = useAppStore();
-  const { org, subscription } = useSubscription();
+  const { org, subscription, canSeeFinancials } = useSubscription();
   const canWrite = useCanWrite();
   const { t } = useLocale();
   const [editing, setEditing] = useState<Product | null>(null);
@@ -113,6 +113,7 @@ export default function StockPage() {
             icon="⚠️"
             tone={lowStock.length > 0 ? "amber" : "slate"}
           />
+          {canSeeFinancials && (
           <ProStatCard
             label="Cost value"
             value={formatLkr(inventoryValue)}
@@ -120,6 +121,7 @@ export default function StockPage() {
             icon="🏷️"
             tone="blue"
           />
+          )}
           <ProStatCard
             label="Sell value"
             value={formatLkr(sellValue)}
@@ -236,6 +238,7 @@ export default function StockPage() {
                   <ProductMobileCard
                     key={p.id}
                     product={p}
+                    showBuyPrice={canSeeFinancials}
                     onEdit={() => {
                       setEditing(p);
                       setShowForm(false);
@@ -256,7 +259,7 @@ export default function StockPage() {
                         <th className="px-4 py-3">{t("stock.item_name")}</th>
                         <th className="px-4 py-3">{t("stock.category")}</th>
                         <th className="px-4 py-3">{t("stock.title")}</th>
-                        <th className="px-4 py-3">{t("stock.buy_price")}</th>
+                        {canSeeFinancials && <th className="px-4 py-3">{t("stock.buy_price")}</th>}
                         <th className="px-4 py-3">{t("stock.sell_price")}</th>
                         <th className="px-4 py-3">{t("common.actions")}</th>
                       </tr>
@@ -280,7 +283,9 @@ export default function StockPage() {
                               </span>
                               {low && <ProBadge tone="amber">{t("common.low")}</ProBadge>}
                             </td>
-                            <td className="px-4 py-3 font-mono font-semibold">{formatLkr(p.buyPrice)}</td>
+                            {canSeeFinancials && (
+                              <td className="px-4 py-3 font-mono font-semibold">{formatLkr(p.buyPrice)}</td>
+                            )}
                             <td className="px-4 py-3 font-mono font-black text-teal-700">{formatLkr(p.sellPrice)}</td>
                             <td className="px-4 py-3">
                               <div className="flex flex-wrap gap-2">
@@ -386,11 +391,13 @@ function ProductMobileCard({
   onEdit,
   onStockIn,
   onDelete,
+  showBuyPrice,
 }: {
   product: Product;
   onEdit: () => void;
   onStockIn: () => void;
   onDelete: () => void;
+  showBuyPrice: boolean;
 }) {
   const { t } = useLocale();
   const unit = String(product.customFields.unit ?? "pcs");
@@ -418,11 +425,13 @@ function ProductMobileCard({
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-3">
+      <div className={`mt-4 grid gap-3 rounded-2xl bg-slate-50 p-3 ${showBuyPrice ? "grid-cols-2" : "grid-cols-1"}`}>
+        {showBuyPrice && (
         <div>
           <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t("stock.buy_price")}</p>
           <p className="mt-1 font-mono text-sm font-black text-slate-900">{formatLkr(product.buyPrice)}</p>
         </div>
+        )}
         <div>
           <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t("stock.sell_price")}</p>
           <p className="mt-1 font-mono text-sm font-black text-teal-700">{formatLkr(product.sellPrice)}</p>

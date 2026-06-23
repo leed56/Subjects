@@ -1,0 +1,97 @@
+/**
+ * LakBiz org role permission matrix (Phase F).
+ *
+ * | Capability              | owner | manager | data_entry | cashier | technician |
+ * |-------------------------|-------|---------|------------|---------|------------|
+ * | View sell price         |  Y    |    Y    |     Y      |    Y    |     Y      |
+ * | View buy price / profit |  Y    |    Y    |     N      |    N    |     N      |
+ * | Stock in/out, products  |  Y    |    Y    |     Y      |    Y    |     N      |
+ * | Sales / POS             |  Y    |    Y    |     Y      |    Y    |     N      |
+ * | Customers (basic CRUD)  |  Y    |    Y    |     Y      |    Y    |     N      |
+ * | Suppliers / GRN         |  Y    |    Y    |     N      |    N    |     N      |
+ * | Banking                 |  Y    |    Y    |     N      |    N    |     N      |
+ * | Settings / plans        |  Y    |    Y    |     N      |    N    |     N      |
+ * | Team invites            |  Y    |    N    |     N      |    N    |     N      |
+ * | AC jobs / workforce     |  Y    |    Y    |     N      |    N    |     Y*     |
+ *
+ * * technician: future — not wired in UI yet.
+ *
+ * RLS follow-up: restrict SELECT on products.buy_price, purchase_lines.unit_cost,
+ * sales.profit for data_entry at the database layer (views or policies).
+ */
+
+import type { OrgRole } from "@/lib/subscription/types";
+
+export type ShopNavHref =
+  | "/dashboard"
+  | "/sales"
+  | "/vat"
+  | "/stock"
+  | "/suppliers"
+  | "/jobs"
+  | "/workforce"
+  | "/vehicles"
+  | "/bills"
+  | "/customers"
+  | "/banking";
+
+const FINANCIAL_ROLES: OrgRole[] = ["owner", "manager"];
+
+const DATA_ENTRY_ROUTES: ShopNavHref[] = [
+  "/dashboard",
+  "/sales",
+  "/stock",
+  "/customers",
+  "/bills",
+];
+
+const MANAGER_PLUS_SETTINGS = ["/settings/shop", "/settings/plans", "/settings/notifications"];
+
+export function parseOrgRole(value: string | null | undefined): OrgRole {
+  if (
+    value === "owner" ||
+    value === "manager" ||
+    value === "data_entry" ||
+    value === "cashier" ||
+    value === "technician"
+  ) {
+    return value;
+  }
+  return "owner";
+}
+
+export function canSeeFinancials(role: OrgRole): boolean {
+  return FINANCIAL_ROLES.includes(role);
+}
+
+export function canManageTeam(role: OrgRole): boolean {
+  return role === "owner";
+}
+
+export function canAccessShopRoute(role: OrgRole, href: string): boolean {
+  if (role === "owner" || role === "manager") return true;
+  if (role === "data_entry") {
+    return DATA_ENTRY_ROUTES.some(
+      (allowed) => href === allowed || href.startsWith(`${allowed}/`),
+    );
+  }
+  return false;
+}
+
+export function canAccessSettingsPath(role: OrgRole, pathname: string): boolean {
+  if (role === "owner") return true;
+  if (role === "manager") {
+    return MANAGER_PLUS_SETTINGS.some(
+      (p) => pathname === p || pathname.startsWith(`${p}/`),
+    );
+  }
+  return false;
+}
+
+export function canUseSuppliersModule(role: OrgRole): boolean {
+  return canSeeFinancials(role);
+}
+
+export function canUseBankingModule(role: OrgRole): boolean {
+  return canSeeFinancials(role);
+}

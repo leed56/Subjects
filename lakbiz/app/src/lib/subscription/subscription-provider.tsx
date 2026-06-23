@@ -17,10 +17,18 @@ import {
 import { createBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { canAccess, daysUntil, isReadOnlyStatus } from "./can";
 import { defaultTrialSubscription } from "./plans";
+import {
+  canAccessSettingsPath as checkSettingsPath,
+  canAccessShopRoute as checkShopRoute,
+  canManageTeam,
+  canSeeFinancials,
+  parseOrgRole,
+} from "@/lib/org-role/permissions";
 import type {
   BillingCycle,
   FeatureKey,
   OrganizationState,
+  OrgRole,
   PlanId,
   SubscriptionContextValue,
   SubscriptionState,
@@ -53,7 +61,7 @@ function loadDemoSubscription(): SubscriptionState {
 
 function loadDemoOrg(): OrganizationState {
   if (typeof window === "undefined") {
-    return { id: null, name: "Demo Shop", sector: "grocery", isAuthenticated: false };
+    return { id: null, name: "Demo Shop", sector: "grocery", isAuthenticated: false, role: "owner" };
   }
   try {
     const raw = localStorage.getItem(DEMO_ORG_KEY);
@@ -64,12 +72,13 @@ function loadDemoOrg(): OrganizationState {
         name: parsed.name ?? "Demo Shop",
         sector: parsed.sector ?? "grocery",
         isAuthenticated: parsed.isAuthenticated ?? false,
+        role: parseOrgRole(parsed.role),
       };
     }
   } catch {
     /* use default */
   }
-  return { id: null, name: "Demo Shop", sector: "grocery", isAuthenticated: false };
+  return { id: null, name: "Demo Shop", sector: "grocery", isAuthenticated: false, role: "owner" };
 }
 
 function toPlanId(id: string): PlanId {
@@ -93,6 +102,7 @@ export function SubscriptionProvider({
     name: "Demo Shop",
     sector: "grocery",
     isAuthenticated: false,
+    role: "owner",
   });
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
@@ -107,6 +117,7 @@ export function SubscriptionProvider({
         name: "LakBiz Platform",
         sector: "grocery",
         isAuthenticated: true,
+        role: "owner",
       });
       setSubscription({
         planId: "pro",
@@ -144,6 +155,7 @@ export function SubscriptionProvider({
       name: data.org.name,
       sector: data.org.sector,
       isAuthenticated: true,
+      role: parseOrgRole(data.role),
     });
 
     if (data.subscription) {
@@ -208,12 +220,18 @@ export function SubscriptionProvider({
   }, [subscription.status, subscription.trialEndsAt]);
 
   const isReadOnly = isReadOnlyStatus(subscription.status);
+  const orgRole = org.role;
 
   const value = useMemo<SubscriptionContextValue>(
     () => ({
       org,
       subscription,
       isPlatformAdmin,
+      orgRole,
+      canSeeFinancials: canSeeFinancials(orgRole),
+      canManageTeam: canManageTeam(orgRole),
+      canAccessShopRoute: (href: string) => checkShopRoute(orgRole, href),
+      canAccessSettingsPath: (pathname: string) => checkSettingsPath(orgRole, pathname),
       can,
       daysLeftInTrial,
       isReadOnly,
@@ -225,6 +243,7 @@ export function SubscriptionProvider({
       org,
       subscription,
       isPlatformAdmin,
+      orgRole,
       can,
       daysLeftInTrial,
       isReadOnly,
@@ -247,9 +266,14 @@ export function useSubscription(): SubscriptionContextValue {
     const trial = defaultTrialSubscription();
     const sub: SubscriptionState = { ...trial, isDemo: true };
     return {
-      org: { id: null, name: "Demo Shop", sector: "grocery", isAuthenticated: false },
+      org: { id: null, name: "Demo Shop", sector: "grocery", isAuthenticated: false, role: "owner" },
       subscription: sub,
       isPlatformAdmin: false,
+      orgRole: "owner" as OrgRole,
+      canSeeFinancials: true,
+      canManageTeam: true,
+      canAccessShopRoute: () => true,
+      canAccessSettingsPath: () => true,
       can: (feature) => canAccess(sub, feature, "grocery"),
       daysLeftInTrial: daysUntil(trial.trialEndsAt),
       isReadOnly: false,

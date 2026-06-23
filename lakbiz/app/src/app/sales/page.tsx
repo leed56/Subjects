@@ -27,7 +27,7 @@ import type { PaymentMethod } from "@/lib/types";
 export default function SalesPage() {
   const { data, ready, createSale } = useAppStore();
   const { t } = useLocale();
-  const { org, can } = useSubscription();
+  const { org, can, canSeeFinancials } = useSubscription();
   const canWrite = useCanWrite();
   const showAcBuyerPanel = org.sector === "ac_hvac" && can("ac_jobs");
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -598,7 +598,7 @@ export default function SalesPage() {
                       <th className="px-4 py-3">{t("common.customer")}</th>
                       <th className="px-4 py-3">{t("common.payment")}</th>
                       <th className="px-4 py-3">{t("common.total")}</th>
-                      <th className="px-4 py-3">{t("common.profit")}</th>
+                      {canSeeFinancials && <th className="px-4 py-3">{t("common.profit")}</th>}
                       <th className="px-4 py-3"></th>
                     </tr>
                   </thead>
@@ -609,7 +609,9 @@ export default function SalesPage() {
                         <td className="px-4 py-3 font-black text-slate-900">{s.customerName || "—"}</td>
                         <td className="px-4 py-3"><ProBadge tone="slate">{paymentLabel(t, s.paymentMethod)}</ProBadge></td>
                         <td className="px-4 py-3 font-mono font-black text-slate-900">{formatLkr(s.total)}</td>
-                        <td className="px-4 py-3 font-mono font-black text-teal-700">{formatLkr(s.profit)}</td>
+                        {canSeeFinancials && (
+                          <td className="px-4 py-3 font-mono font-black text-teal-700">{formatLkr(s.profit)}</td>
+                        )}
                         <td className="px-4 py-3 text-right">
                           <Link href={`/bills/${s.id}`} className="font-black text-teal-700 hover:underline">{t("sales.bill")}</Link>
                         </td>

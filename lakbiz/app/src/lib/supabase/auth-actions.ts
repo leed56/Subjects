@@ -2,6 +2,7 @@
 
 import { createBrowserClient } from "./client";
 import { parseSectorId } from "@/lib/sectors";
+import { parseOrgRole } from "@/lib/org-role/permissions";
 import type { SectorId } from "@/lib/types";
 
 export class AuthFlowError extends Error {
@@ -216,7 +217,7 @@ export async function fetchUserOrg() {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (!member) return { user, org: null, subscription: null };
+    if (!member) return { user, org: null, subscription: null, role: null };
 
     const { data: subscription } = await supabase
       .from("subscriptions")
@@ -229,6 +230,7 @@ export async function fetchUserOrg() {
 
     return {
       user,
+      role: parseOrgRole(member.role as string),
       org: orgRow
         ? {
             id: orgRow.id as string,

@@ -18,10 +18,12 @@ import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { paymentLabel } from "@/lib/i18n/payment";
 import { useAppStore } from "@/lib/store/use-app-store";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 export default function BillsPage() {
   const { data, ready, updateBusiness } = useAppStore();
   const { t } = useLocale();
+  const { canSeeFinancials } = useSubscription();
   const [editBiz, setEditBiz] = useState(false);
   const [bizName, setBizName] = useState("");
   const [bizNameSi, setBizNameSi] = useState("");
@@ -90,8 +92,12 @@ export default function BillsPage() {
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <ProStatCard label={t("bills.count")} value={String(data.sales.length)} hint="Invoices issued" icon="🧾" tone="teal" />
           <ProStatCard label={t("common.total")} value={formatLkr(salesTotal)} hint="Total billed value" icon="💸" tone="emerald" />
-          <ProStatCard label={t("common.profit")} value={formatLkr(profitTotal)} hint="Recorded sale profit" icon="📈" tone="blue" />
-          <ProStatCard label="Credit bills" value={formatLkr(creditTotal)} hint="Customer credit sales" icon="🤝" tone="amber" />
+          {canSeeFinancials && (
+            <ProStatCard label={t("common.profit")} value={formatLkr(profitTotal)} hint="Recorded sale profit" icon="📈" tone="blue" />
+          )}
+          {canSeeFinancials && (
+            <ProStatCard label="Credit bills" value={formatLkr(creditTotal)} hint="Customer credit sales" icon="🤝" tone="amber" />
+          )}
         </section>
 
         {editBiz && (

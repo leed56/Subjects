@@ -18,7 +18,7 @@ export type AddonType =
   | "vehicles"
   | "sector_pack";
 
-export type OrgRole = "owner" | "manager" | "cashier" | "technician";
+export type OrgRole = "owner" | "manager" | "data_entry" | "cashier" | "technician";
 
 export type FeatureKey =
   | "sales"
@@ -61,12 +61,18 @@ export interface OrganizationState {
   name: string;
   sector: SectorId;
   isAuthenticated: boolean;
+  role: OrgRole;
 }
 
 export interface SubscriptionContextValue {
   org: OrganizationState;
   subscription: SubscriptionState;
   isPlatformAdmin: boolean;
+  orgRole: OrgRole;
+  canSeeFinancials: boolean;
+  canManageTeam: boolean;
+  canAccessShopRoute: (href: string) => boolean;
+  canAccessSettingsPath: (pathname: string) => boolean;
   can: (feature: FeatureKey) => boolean;
   daysLeftInTrial: number | null;
   isReadOnly: boolean;
