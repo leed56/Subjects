@@ -1,17 +1,21 @@
-import { whatsappShareUrl } from "./channels";
+import { smsShareUrl, whatsappShareUrl } from "./channels";
 import { normalizeSlPhone } from "./phone";
+import type { MessageChannel } from "./types";
 
-export type BulkWhatsAppRecipient = {
+export type BulkMessageRecipient = {
   id: string;
   name: string;
   phone: string;
   creditBalance?: number;
 };
 
+/** @deprecated use BulkMessageRecipient */
+export type BulkWhatsAppRecipient = BulkMessageRecipient;
+
 /** Replace {{customerName}} and {{creditBalance}} in a bulk template body. */
 export function personalizeBulkMessage(
   body: string,
-  recipient: BulkWhatsAppRecipient,
+  recipient: BulkMessageRecipient,
   formatCredit: (amount: number) => string,
 ): string {
   return body
@@ -27,9 +31,23 @@ export function openWhatsAppShare(text: string, phone?: string): void {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+export function openSmsShare(text: string, phone?: string): void {
+  const url = smsShareUrl(text, phone);
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+export function openBulkMessageChannel(
+  channel: Extract<MessageChannel, "sms" | "whatsapp">,
+  text: string,
+  phone?: string,
+): void {
+  if (channel === "sms") openSmsShare(text, phone);
+  else openWhatsAppShare(text, phone);
+}
+
 export function recipientsWithPhone<
   T extends { id: string; name: string; phone?: string; creditBalance?: number },
->(rows: T[]): BulkWhatsAppRecipient[] {
+>(rows: T[]): BulkMessageRecipient[] {
   return rows
     .filter((r) => normalizeSlPhone(r.phone))
     .map((r) => ({

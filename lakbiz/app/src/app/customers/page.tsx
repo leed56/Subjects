@@ -216,9 +216,9 @@ export default function CustomersPage() {
               <button
                 type="button"
                 onClick={() => setBulkWaOpen(true)}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-black text-green-800 shadow-sm transition hover:bg-green-100 active:scale-[0.98]"
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-black text-sky-800 shadow-sm transition hover:bg-sky-100 active:scale-[0.98]"
               >
-                {t("msg.bulk_whatsapp")}
+                {t("msg.bulk_messages")}
               </button>
               <ProButton href="/sales">{t("nav.sales")}</ProButton>
               <ProButton href="/bills" variant="secondary">{t("nav.bills")}</ProButton>
