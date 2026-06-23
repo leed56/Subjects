@@ -63,7 +63,7 @@ export function MessageComposer({
   defaultTemplate,
   contextId,
 }: MessageComposerProps) {
-  const { t, locale } = useLocale();
+  const { t } = useLocale();
   const settings = loadNotificationSettings();
   const [channel, setChannel] = useState<MessageChannel>(settings.defaultChannel);
   const [templateId, setTemplateId] = useState<MessageTemplateId>(

@@ -573,6 +573,7 @@ function useAppStoreState(): AppStoreValue {
     persist,
     scheduleCloudPush,
     org.sector,
+    org.id,
     org.isAuthenticated,
     orgRole,
     canSeeFinancials,

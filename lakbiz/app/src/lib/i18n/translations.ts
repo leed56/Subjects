@@ -118,6 +118,7 @@ const si: Dict = {
 
   "admin.platform": "LakBiz Platform",
   "admin.super_admin": "Super Admin",
+  "admin.nav": "ප්‍රශාසක",
   "admin.nav_dashboard": "පාලක පුවරුව",
   "admin.nav_shops": "වෙළඳසැල්",
   "admin.nav_create": "වෙළඳසැල සාදන්න",
@@ -488,6 +489,7 @@ const si: Dict = {
   "bills.shop_details": "වෙළඳසැල් විස්තර",
   "bills.print": "බිල්පත මුද්‍රණය",
   "bills.whatsapp": "WhatsApp හරහා යවන්න",
+  "bills.wa_short": "WA",
   "bills.quote_whatsapp": "WhatsApp ඇස්තමේන්තුව",
   "bills.thank_you": "ස්තූතියි",
   "bills.credit_note": "ණය බිල — ගෙවීම අවශ්‍ය",
@@ -1076,6 +1078,7 @@ const en: Dict = {
 
   "admin.platform": "LakBiz Platform",
   "admin.super_admin": "Super Admin",
+  "admin.nav": "Admin",
   "admin.nav_dashboard": "Dashboard",
   "admin.nav_shops": "Shops",
   "admin.nav_create": "Create shop",
@@ -1438,6 +1441,7 @@ const en: Dict = {
   "bills.shop_details": "Shop details",
   "bills.print": "Print bill",
   "bills.whatsapp": "Share on WhatsApp",
+  "bills.wa_short": "WA",
   "bills.quote_whatsapp": "Quote via WhatsApp",
   "bills.thank_you": "Thank you",
   "bills.credit_note": "Credit bill — payment due",

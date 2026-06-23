@@ -92,7 +92,7 @@ export function SubscriptionProvider({
   children: React.ReactNode;
 }) {
   const { user, loading: authLoading } = useAuth();
-  const [ready, setReady] = useState(true);
+  const [ready] = useState(true);
   const [subscription, setSubscription] = useState<SubscriptionState>(() => ({
     ...defaultTrialSubscription(),
     isDemo: true,

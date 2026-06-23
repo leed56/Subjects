@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
 import {
   ProButton,
@@ -33,7 +33,7 @@ export default function TeamSettingsPage() {
   const [role, setRole] = useState<OrgRole>("data_entry");
   const [submitting, setSubmitting] = useState(false);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     void fetch("/api/settings/team")
       .then((r) => r.json())
@@ -42,11 +42,11 @@ export default function TeamSettingsPage() {
         else setMessage(json.error ?? t("team.load_error"));
       })
       .finally(() => setLoading(false));
-  };
+  }, [t]);
 
   useEffect(() => {
     if (canManageTeam) load();
-  }, [canManageTeam]);
+  }, [canManageTeam, load]);
 
   const handleCreateUser = async (e: FormEvent) => {
     e.preventDefault();

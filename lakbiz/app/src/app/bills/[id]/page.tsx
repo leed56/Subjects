@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { InvoiceView } from "@/components/invoice-view";

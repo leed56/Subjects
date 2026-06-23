@@ -1,6 +1,5 @@
 import type { ContactType, PaymentMethod, Product, SectorId, ProductCondition } from "@/lib/types";
 import type { BusinessInfo } from "@/lib/invoice";
-import { defaultBusiness } from "@/lib/invoice";
 import type { ACJobStatus } from "@/lib/ac-jobs";
 import type { ACJobType } from "@/lib/ac-job-types";
 

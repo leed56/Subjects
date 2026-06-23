@@ -1019,11 +1019,6 @@ export function sellVehicle(
   const customerName =
     customer?.name ?? (input.customerName?.trim() || undefined);
 
-  const cost = vehicleTotalCost(
-    vehicle.purchasePrice,
-    vehicle.reconditionCost,
-  );
-  const profit = input.sellPrice - cost;
   const soldDate = new Date().toISOString();
 
   let customers = data.customers;

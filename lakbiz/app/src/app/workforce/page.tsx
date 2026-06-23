@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
-import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -74,7 +73,6 @@ export default function WorkforcePage() {
     recordContractorPayment,
   } = useAppStore();
   const { t } = useLocale();
-  const { isReadOnly, can } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
 
   const specialtyLabels: Record<WorkSpecialty, string> = {

@@ -26,7 +26,7 @@ const navKeys = [
 
 export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
   const { locale, setLocale, t } = useLocale();
-  const { can, org, isPlatformAdmin, canAccessShopRoute, canAccessSettingsPath, canManageTeam } =
+  const { can, isPlatformAdmin, canAccessShopRoute, canAccessSettingsPath, canManageTeam } =
     useSubscription();
   const { user, logout } = useAuth();
   const pathname = usePathname();
@@ -129,7 +129,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
                 href="/admin"
                 className="rounded-lg bg-slate-900 px-2 py-1 text-sm font-medium text-teal-300 hover:bg-slate-800"
               >
-                Admin
+                {t("admin.nav")}
               </Link>
             )}
             <Link

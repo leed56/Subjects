@@ -17,10 +17,7 @@ function fillTemplate(body: string, vars: MessageVariables): string {
   });
 }
 
-export function variablesFromContext(
-  context: MessageContext,
-  locale: Locale,
-): MessageVariables {
+export function variablesFromContext(context: MessageContext): MessageVariables {
   const shopPhone = context.business.phone
     ? `Tel: ${context.business.phone}`
     : "";
@@ -98,7 +95,7 @@ export function composeFromContext(
   templateId: MessageTemplateId,
   locale: Locale,
 ): string {
-  const vars = variablesFromContext(context, locale);
+  const vars = variablesFromContext(context);
 
   if (context.type === "sale" && templateId === "bill_receipt") {
     return buildInvoiceText(context.sale, context.business);

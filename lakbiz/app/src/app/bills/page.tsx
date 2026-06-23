@@ -265,7 +265,7 @@ export default function BillsPage() {
                               rel="noopener noreferrer"
                               className="rounded-lg bg-green-600 px-2 py-1 text-xs font-black text-white hover:bg-green-700"
                             >
-                              WA
+                              {t("bills.wa_short")}
                             </a>
                             <a
                               href={quoteWa}

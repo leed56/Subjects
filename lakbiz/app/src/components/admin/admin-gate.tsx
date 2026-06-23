@@ -53,7 +53,7 @@ export function AdminGate({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, user?.email]);
 
   if (state === "loading") {
     return (

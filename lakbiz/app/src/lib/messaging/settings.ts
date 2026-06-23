@@ -1,8 +1,6 @@
 import { newId } from "@/lib/format";
 import { DEFAULT_SERVICE_DUE_REMIND_DAYS } from "@/lib/ac-service";
 import type {
-  MessageChannel,
-  MessageTemplateId,
   NotificationLogEntry,
   NotificationSettings,
 } from "./types";
