@@ -196,7 +196,7 @@ export default function CustomersPage() {
       <SiteHeader />
       <ProMain>
         <ProPageHeader
-          eyebrow="Customer CRM"
+          eyebrow={t("cust.crm_eyebrow")}
           title={t("cust.title")}
           description={`${t("cust.subtitle")} · ${t("cust.total_owed")} ${formatLkr(totalCredit)}`}
           actions={
@@ -233,10 +233,10 @@ export default function CustomersPage() {
         )}
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("nav.customers")} value={String(data.customers.length)} hint="Saved customer profiles" icon="👥" tone="teal" />
+          <ProStatCard label={t("nav.customers")} value={String(data.customers.length)} hint={t("cust.saved_profiles")} icon="👥" tone="teal" />
           <ProStatCard label={t("cust.credit_owed")} value={formatLkr(totalCredit)} hint={`${payingCustomers} customers with credit`} icon="🤝" tone="amber" />
-          <ProStatCard label={t("cust.over_limit")} value={String(overLimitCount)} hint={overLimitCount ? "Needs attention" : "All within limits"} icon="⚠️" tone={overLimitCount ? "rose" : "slate"} />
-          <ProStatCard label={t("cust.recent_payments")} value={formatLkr(recentPaymentsTotal)} hint="Latest 8 records" icon="💸" tone="emerald" />
+          <ProStatCard label={t("cust.over_limit")} value={String(overLimitCount)} hint={overLimitCount ? t("cust.needs_attention") : t("cust.within_limits")} icon="⚠️" tone={overLimitCount ? "rose" : "slate"} />
+          <ProStatCard label={t("cust.recent_payments")} value={formatLkr(recentPaymentsTotal)} hint={t("cust.latest_records")} icon="💸" tone="emerald" />
         </section>
 
         <div className="mt-6 flex flex-wrap gap-2">
@@ -264,7 +264,7 @@ export default function CustomersPage() {
         </div>
 
         <section className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <ProCard eyebrow={editing ? "Edit customer" : "Create customer"} title={editing ? t("cust.edit") : t("cust.add")}>
+          <ProCard eyebrow={editing ? t("cust.edit_create_eyebrow_edit") : t("cust.edit_create_eyebrow_create")} title={editing ? t("cust.edit") : t("cust.add")}>
             <form onSubmit={handleSave}>
               <div className="mb-3 flex flex-wrap gap-2">
                 {(["individual", "company"] as const).map((type) => (
@@ -345,13 +345,13 @@ export default function CustomersPage() {
             </form>
           </ProCard>
 
-          <ProCard title="Find customers" eyebrow="Search CRM" action={<ProBadge tone={customers.length === typeFiltered.length ? "slate" : "teal"}>{customers.length} shown</ProBadge>}>
+          <ProCard title={t("cust.find_customers")} eyebrow={t("cust.search_crm_eyebrow")} action={<ProBadge tone={customers.length === typeFiltered.length ? "slate" : "teal"}>{customers.length} {t("cust.shown")}</ProBadge>}>
             <div className="relative">
               <input
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name, phone or address..."
+                placeholder={t("cust.search_placeholder")}
                 className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pl-11 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
               />
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
@@ -369,10 +369,10 @@ export default function CustomersPage() {
             </ProCard>
           ) : customers.length === 0 ? (
             <ProCard>
-              <ProEmptyState title={t("sales.no_match")} description="Try searching by customer name, phone, or address." />
+              <ProEmptyState title={t("sales.no_match")} description={t("cust.search_no_match_desc")} />
             </ProCard>
           ) : (
-            <ProCard title="Customer list" action={<ProBadge tone="teal">{customers.length} customers</ProBadge>}>
+            <ProCard title={t("cust.customer_list")} action={<ProBadge tone="teal">{customers.length} {t("cust.customers_count")}</ProBadge>}>
               <div className="hidden overflow-hidden rounded-2xl border border-slate-200 lg:block">
                 <table className="w-full text-left text-sm">
                   <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">

@@ -37,13 +37,15 @@ export type ShopNavHref =
 
 const FINANCIAL_ROLES: OrgRole[] = ["owner", "manager"];
 
-const DATA_ENTRY_ROUTES: ShopNavHref[] = [
+const SHOP_STAFF_ROUTES: ShopNavHref[] = [
   "/dashboard",
   "/sales",
   "/stock",
   "/customers",
   "/bills",
 ];
+
+const TECHNICIAN_ROUTES: ShopNavHref[] = ["/jobs", "/workforce"];
 
 const MANAGER_PLUS_SETTINGS = ["/settings/shop", "/settings/plans", "/settings/notifications"];
 
@@ -68,12 +70,19 @@ export function canManageTeam(role: OrgRole): boolean {
   return role === "owner";
 }
 
+function routeAllowed(href: string, allowedRoutes: ShopNavHref[]): boolean {
+  return allowedRoutes.some(
+    (allowed) => href === allowed || href.startsWith(`${allowed}/`),
+  );
+}
+
 export function canAccessShopRoute(role: OrgRole, href: string): boolean {
   if (role === "owner" || role === "manager") return true;
-  if (role === "data_entry") {
-    return DATA_ENTRY_ROUTES.some(
-      (allowed) => href === allowed || href.startsWith(`${allowed}/`),
-    );
+  if (role === "data_entry" || role === "cashier") {
+    return routeAllowed(href, SHOP_STAFF_ROUTES);
+  }
+  if (role === "technician") {
+    return routeAllowed(href, TECHNICIAN_ROUTES);
   }
   return false;
 }

@@ -99,7 +99,7 @@ export default function BillsPage() {
       <SiteHeader />
       <ProMain>
         <ProPageHeader
-          eyebrow="Billing archive"
+          eyebrow={t("bills.archive_eyebrow")}
           title={t("bills.title")}
           description={`${t("bills.subtitle")} · ${data.sales.length} ${t("bills.count")}`}
           actions={
@@ -137,19 +137,19 @@ export default function BillsPage() {
         />
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("bills.count")} value={String(data.sales.length)} hint="Invoices issued" icon="🧾" tone="teal" />
-          <ProStatCard label={t("common.total")} value={formatLkr(salesTotal)} hint="Total billed value" icon="💸" tone="emerald" />
+          <ProStatCard label={t("bills.count")} value={String(data.sales.length)} hint={t("bills.invoices_issued")} icon="🧾" tone="teal" />
+          <ProStatCard label={t("common.total")} value={formatLkr(salesTotal)} hint={t("bills.total_billed")} icon="💸" tone="emerald" />
           {canSeeFinancials && (
-            <ProStatCard label={t("common.profit")} value={formatLkr(profitTotal)} hint="Recorded sale profit" icon="📈" tone="blue" />
+            <ProStatCard label={t("common.profit")} value={formatLkr(profitTotal)} hint={t("bills.recorded_profit")} icon="📈" tone="blue" />
           )}
           {canSeeFinancials && (
-            <ProStatCard label="Credit bills" value={formatLkr(creditTotal)} hint="Customer credit sales" icon="🤝" tone="amber" />
+            <ProStatCard label={t("bills.credit_bills")} value={formatLkr(creditTotal)} hint={t("bills.credit_sales")} icon="🤝" tone="amber" />
           )}
         </section>
 
         {editBiz && (
           <section className="mt-6">
-            <ProCard eyebrow="Invoice branding" title={t("bills.shop_header")}>
+            <ProCard eyebrow={t("bills.invoice_branding_eyebrow")} title={t("bills.shop_header")}>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -185,7 +185,7 @@ export default function BillsPage() {
         )}
 
         <section className="mt-6 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-          <ProCard eyebrow="Invoice identity" title={data.business.name || "LakBiz"} action={<ProBadge tone={data.business.tin ? "emerald" : "slate"}>{data.business.tin ? "TIN ready" : "Basic"}</ProBadge>}>
+          <ProCard eyebrow={t("bills.invoice_identity_eyebrow")} title={data.business.name || "LakBiz"} action={<ProBadge tone={data.business.tin ? "emerald" : "slate"}>{data.business.tin ? t("bills.tin_ready") : t("bills.basic")}</ProBadge>}>
             <div className="space-y-3 text-sm font-semibold text-slate-600">
               {data.business.nameSi && <p>{data.business.nameSi}</p>}
               {data.business.phone && <p>{t("bills.tel")}: {data.business.phone}</p>}
@@ -197,13 +197,13 @@ export default function BillsPage() {
             </div>
           </ProCard>
 
-          <ProCard title="Find invoices" eyebrow="Search archive" action={<ProBadge tone={bills.length === data.sales.length ? "slate" : "teal"}>{bills.length} shown</ProBadge>}>
+          <ProCard title={t("bills.find_invoices")} eyebrow={t("bills.search_archive_eyebrow")} action={<ProBadge tone={bills.length === data.sales.length ? "slate" : "teal"}>{bills.length} {t("bills.shown")}</ProBadge>}>
             <div className="relative">
               <input
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search bill number, customer, or payment type..."
+                placeholder={t("bills.search_placeholder")}
                 className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pl-11 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
               />
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
@@ -216,16 +216,16 @@ export default function BillsPage() {
             <ProCard>
               <ProEmptyState
                 title={t("bills.no_bills")}
-                description="Create a sale first, then invoices will appear here for print, sharing and records."
+                description={t("bills.no_bills_desc")}
                 action={<ProButton href="/sales">{t("bills.create_sale")}</ProButton>}
               />
             </ProCard>
           ) : bills.length === 0 ? (
             <ProCard>
-              <ProEmptyState title={t("sales.no_match")} description="Try searching by bill number, customer or payment type." />
+              <ProEmptyState title={t("sales.no_match")} description={t("bills.search_no_match_desc")} />
             </ProCard>
           ) : (
-            <ProCard title="Invoice history" action={<ProBadge tone="teal">{bills.length} invoices</ProBadge>}>
+            <ProCard title={t("bills.invoice_history")} action={<ProBadge tone="teal">{bills.length} {t("bills.invoices_count")}</ProBadge>}>
               <div className="hidden overflow-hidden rounded-2xl border border-slate-200 lg:block">
                 <table className="w-full text-left text-sm">
                   <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
@@ -298,7 +298,7 @@ export default function BillsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-mono text-xs font-black uppercase tracking-wide text-teal-700">{s.billNo ?? s.id.slice(0, 8)}</p>
-                        <p className="mt-2 text-base font-black text-slate-950">{s.customerName || "Walk-in customer"}</p>
+                        <p className="mt-2 text-base font-black text-slate-950">{s.customerName || t("bills.walk_in_customer")}</p>
                         <p className="mt-1 text-xs font-semibold text-slate-500">{new Date(s.date).toLocaleString("en-LK")}</p>
                       </div>
                       <ProBadge tone="slate">{paymentLabel(t, s.paymentMethod)}</ProBadge>

@@ -91,7 +91,7 @@ export default function StockPage() {
     qty: t("common.items"),
     sellPrice: t("stock.sell_price"),
     buyPrice: t("stock.buy_price"),
-    reorderLevel: "Reorder level",
+    reorderLevel: t("stock.reorder_level"),
   };
 
   return (
@@ -99,7 +99,7 @@ export default function StockPage() {
       <SiteHeader />
       <ProMain>
         <ProPageHeader
-          eyebrow="Inventory control"
+          eyebrow={t("stock.inventory_eyebrow")}
           title={t("stock.title")}
           description={`${products.length} ${t("common.items")} · ${t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}`}
           actions={
@@ -178,7 +178,7 @@ export default function StockPage() {
           />
           {canSeeFinancials && (
           <ProStatCard
-            label="Cost value"
+            label={t("stock.cost_value")}
             value={formatLkr(inventoryValue)}
             hint={t("stock.buy_price")}
             icon="🏷️"
@@ -186,7 +186,7 @@ export default function StockPage() {
           />
           )}
           <ProStatCard
-            label="Sell value"
+            label={t("stock.sell_value")}
             value={formatLkr(sellValue)}
             hint={t("stock.sell_price")}
             icon="💸"
@@ -197,7 +197,7 @@ export default function StockPage() {
         {(showForm && !editing) || editing ? (
           <section className="mt-6">
             <ProCard
-              eyebrow={editing ? "Edit inventory item" : "Create inventory item"}
+              eyebrow={editing ? t("stock.edit_inventory_eyebrow") : t("stock.create_inventory_eyebrow")}
               title={editing ? editing.name : t("stock.add_item")}
               action={
                 editing ? (
@@ -255,8 +255,8 @@ export default function StockPage() {
         {data.products.length > 0 && (
           <section className="mt-6">
             <ProCard
-              title="Inventory catalogue"
-              eyebrow="Search and manage"
+              title={t("stock.catalogue_title")}
+              eyebrow={t("stock.catalogue_eyebrow")}
               action={<ProBadge tone={products.length === data.products.length ? "slate" : "teal"}>{products.length} shown</ProBadge>}
             >
               <div className="relative">
@@ -292,7 +292,7 @@ export default function StockPage() {
             </ProCard>
           ) : products.length === 0 ? (
             <ProCard>
-              <ProEmptyState title={t("sales.no_match")} description="Try product name, SKU, or category." />
+              <ProEmptyState title={t("sales.no_match")} description={t("stock.search_no_match_desc")} />
             </ProCard>
           ) : (
             <>

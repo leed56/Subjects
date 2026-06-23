@@ -1,7 +1,7 @@
 /** Normalize Sri Lankan mobile numbers to international digits (947XXXXXXXX). */
 export function normalizeSlPhone(phone?: string | null): string | null {
   if (!phone) return null;
-  let digits = phone.replace(/\D/g, "");
+  const digits = phone.replace(/\D/g, "");
   if (digits.startsWith("94") && digits.length === 11) return digits;
   if (digits.startsWith("07") && digits.length === 10) return `94${digits.slice(1)}`;
   if (digits.startsWith("7") && digits.length === 9) return `94${digits}`;

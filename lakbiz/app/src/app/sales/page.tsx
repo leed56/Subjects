@@ -258,7 +258,7 @@ export default function SalesPage() {
       <SiteHeader />
       <ProMain>
         <ProPageHeader
-          eyebrow="Point of sale"
+          eyebrow={t("sales.pos_eyebrow")}
           title={t("sales.title")}
           description={t("sales.subtitle")}
           actions={
@@ -281,8 +281,8 @@ export default function SalesPage() {
         )}
 
         <section className="grid gap-4 sm:grid-cols-3">
-          <ProStatCard label="Cart items" value={String(cartCount)} hint={lines.length ? `${lines.length} product lines` : t("sales.no_selected")} icon="🛒" tone="teal" />
-          <ProStatCard label={t("sales.gross")} value={formatLkr(gross)} hint={discountClamped > 0 ? `${t("sales.discount")} ${formatLkr(discountClamped)}` : "Before discount"} icon="🧾" tone="slate" />
+          <ProStatCard label={t("sales.cart_items")} value={String(cartCount)} hint={lines.length ? `${lines.length} ${t("sales.product_lines")}` : t("sales.no_selected")} icon="🛒" tone="teal" />
+          <ProStatCard label={t("sales.gross")} value={formatLkr(gross)} hint={discountClamped > 0 ? `${t("sales.discount")} ${formatLkr(discountClamped)}` : t("sales.before_discount")} icon="🧾" tone="slate" />
           <ProStatCard label={t("common.total")} value={formatLkr(netTotal)} hint={paymentLabel(t, payment)} icon="💸" tone="emerald" />
         </section>
 
@@ -291,7 +291,7 @@ export default function SalesPage() {
             <ProCard>
               <ProEmptyState
                 title={t("sales.no_stock")}
-                description="Add products and stock quantities before creating your first sale."
+                description={t("sales.add_stock_first_desc")}
                 action={<ProButton href="/stock">{t("sales.add_stock_link")}</ProButton>}
               />
             </ProCard>
@@ -300,8 +300,8 @@ export default function SalesPage() {
           <section className="mt-6 grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
             <div className="space-y-4">
               <ProCard
-                title="Products"
-                eyebrow="Fast checkout"
+                title={t("sales.products_title")}
+                eyebrow={t("sales.fast_checkout_eyebrow")}
                 action={<ProBadge tone="emerald">{inStock.length} available</ProBadge>}
               >
                 <div className="relative">
@@ -340,7 +340,7 @@ export default function SalesPage() {
 
               {filtered.length === 0 ? (
                 <ProCard>
-                  <ProEmptyState title={t("sales.no_match")} description="Try searching by product name, SKU, or category." />
+                  <ProEmptyState title={t("sales.no_match")} description={t("sales.search_no_match_desc")} />
                 </ProCard>
               ) : (
                 <div className="grid gap-3 md:grid-cols-2">
@@ -441,10 +441,10 @@ export default function SalesPage() {
             </div>
 
             <aside className="xl:sticky xl:top-24 xl:self-start">
-              <ProCard title={t("sales.bill_summary")} eyebrow="Checkout" action={<ProBadge tone={lines.length ? "teal" : "slate"}>{cartCount} items</ProBadge>}>
+              <ProCard title={t("sales.bill_summary")} eyebrow={t("sales.checkout_eyebrow")} action={<ProBadge tone={lines.length ? "teal" : "slate"}>{cartCount} {t("sales.items_badge")}</ProBadge>}>
                 <div className="space-y-3">
                   {lines.length === 0 ? (
-                    <ProEmptyState title={t("sales.no_selected")} description="Choose products from the left to build the bill." />
+                    <ProEmptyState title={t("sales.no_selected")} description={t("sales.choose_products_desc")} />
                   ) : (
                     <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
                       {lines.map((l) => (
@@ -747,7 +747,7 @@ export default function SalesPage() {
                   <Link key={s.id} href={`/bills/${s.id}`} className="block rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-black text-slate-950">{s.customerName || "Walk-in"}</p>
+                        <p className="font-black text-slate-950">{s.customerName || t("sales.walk_in_label")}</p>
                         <p className="mt-1 text-xs font-semibold text-slate-500">{new Date(s.date).toLocaleString("en-LK")}</p>
                       </div>
                       <ProBadge tone="slate">{paymentLabel(t, s.paymentMethod)}</ProBadge>

@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     );
   }
 
-  await supabase.from("notification_log").insert({
+  const { error: logError } = await supabase.from("notification_log").insert({
     organization_id: member.organization_id,
     channel: "api_sms",
     template_id: body.templateId ?? null,
@@ -100,6 +100,18 @@ export async function POST(request: Request) {
     status: "sent",
     provider_ref: sms.providerRef ?? null,
   });
+
+  if (logError) {
+    console.error("notification_log insert failed after SMS send:", logError);
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "SMS sent but delivery log failed — contact support if this repeats",
+        providerRef: sms.providerRef,
+      },
+      { status: 500 },
+    );
+  }
 
   return NextResponse.json({
     ok: true,

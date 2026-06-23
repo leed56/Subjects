@@ -165,9 +165,9 @@ export default function DashboardPage() {
 
         <section className="mt-6 grid gap-6 xl:grid-cols-[1.5fr_0.95fr]">
           <ProCard
-            eyebrow="Command center"
-            title="Quick actions"
-            action={<ProBadge tone={org.isAuthenticated ? "emerald" : "slate"}>{org.isAuthenticated ? "Cloud" : "Browser"}</ProBadge>}
+            eyebrow={t("dash.quick_actions_eyebrow")}
+            title={t("dash.quick_actions_title")}
+            action={<ProBadge tone={org.isAuthenticated ? "emerald" : "slate"}>{org.isAuthenticated ? t("dash.cloud") : t("dash.browser")}</ProBadge>}
           >
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-2">
               {primaryActions.map((action) => (
@@ -225,7 +225,7 @@ export default function DashboardPage() {
             action={<ProButton href="/stock" variant="ghost">{t("nav.stock")}</ProButton>}
           >
             {stats.lowStockItems.length === 0 ? (
-              <ProEmptyState title={t("dash.all_good_stock")} description="Your reorder list is clear right now." />
+              <ProEmptyState title={t("dash.all_good_stock")} description={t("dash.reorder_clear_desc")} />
             ) : (
               <div className="space-y-3">
                 {stats.lowStockItems.slice(0, 6).map((p) => (
@@ -249,7 +249,7 @@ export default function DashboardPage() {
             action={<ProButton href="/customers" variant="ghost">{t("dash.manage_customers")}</ProButton>}
           >
             {stats.topDebtors.length === 0 ? (
-              <ProEmptyState title={t("dash.no_credit")} description="No outstanding customer credit at the moment." />
+              <ProEmptyState title={t("dash.no_credit")} description={t("dash.no_credit_desc")} />
             ) : (
               <div className="space-y-3">
                 {stats.topDebtors.slice(0, 6).map((c) => (
@@ -269,7 +269,7 @@ export default function DashboardPage() {
             action={<ProButton href="/suppliers" variant="ghost">{t("dash.manage_suppliers")}</ProButton>}
           >
             {stats.topPayables.length === 0 ? (
-              <ProEmptyState title={t("dash.no_payables")} description="Supplier payable list is clear." />
+              <ProEmptyState title={t("dash.no_payables")} description={t("dash.no_payables_desc")} />
             ) : (
               <div className="space-y-3">
                 {stats.topPayables.slice(0, 6).map((s) => (
@@ -340,7 +340,7 @@ export default function DashboardPage() {
             <ProCard>
               <ProEmptyState
                 title={t("dash.get_started")}
-                description="Add stock, customers and your first sale to activate the full dashboard experience."
+                description={t("dash.get_started_desc")}
                 action={
                   <div className="flex flex-col justify-center gap-2 sm:flex-row">
                     <ProButton href="/stock">{t("nav.stock")}</ProButton>
