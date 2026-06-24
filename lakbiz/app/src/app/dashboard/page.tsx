@@ -34,6 +34,7 @@ export default function DashboardPage() {
   const { t } = useLocale();
   const { can, org, isReadOnly, canSeeFinancials } = useSubscription();
   const canExport = can("export");
+  const showAcJobs = can("ac_jobs");
   const notificationLogs = useNotificationLogs(org.id);
   const showVehicles = can("vehicles");
   const [serviceDoneJob, setServiceDoneJob] = useState<ACJob | null>(null);
@@ -376,7 +377,7 @@ export default function DashboardPage() {
           )}
         </section>
 
-        {(showVehicles && stats.aging60VehicleCount > 0) || stats.pendingACJobCount > 0 ? (
+        {(showVehicles && stats.aging60VehicleCount > 0) || (showAcJobs && stats.pendingACJobCount > 0) ? (
           <section className="mt-6 grid gap-6 lg:grid-cols-2">
             {showVehicles && stats.aging60VehicleCount > 0 && (
               <ProCard
@@ -394,7 +395,7 @@ export default function DashboardPage() {
               </ProCard>
             )}
 
-            {stats.pendingACJobCount > 0 && (
+            {showAcJobs && stats.pendingACJobCount > 0 && (
               <ProCard
                 title={`${stats.pendingACJobCount} ${t("dash.ac_pending")}`}
                 action={<ProButton href="/jobs" variant="secondary">{t("dash.view_jobs")}</ProButton>}
@@ -412,6 +413,7 @@ export default function DashboardPage() {
           </section>
         ) : null}
 
+        {showAcJobs && (
         <section className="mt-6">
           <AcServiceDuePanel
             dueTodayJobs={stats.acServiceDueToday}
@@ -426,6 +428,7 @@ export default function DashboardPage() {
             onServiceDone={setServiceDoneJob}
           />
         </section>
+        )}
 
         {data.products.length === 0 && (
           <section className="mt-6">

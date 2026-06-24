@@ -16,8 +16,12 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 export function useAcInAppAlerts() {
   const { data, ready } = useAppStore();
-  const { org, can, isPlatformAdmin } = useSubscription();
-  const enabled = !isPlatformAdmin && org.isAuthenticated && can("ac_jobs");
+  const { org, can, isPlatformAdmin, canAccessShopRoute } = useSubscription();
+  const enabled =
+    !isPlatformAdmin &&
+    org.isAuthenticated &&
+    can("ac_jobs") &&
+    canAccessShopRoute("/jobs");
   const [prefs, setPrefs] = useState<AcInAppAlertPrefs>(loadAcInAppAlertPrefs);
   const [seen, setSeen] = useState<Set<string>>(() =>
     org.id ? loadAcAlertsSeen(org.id) : new Set(),

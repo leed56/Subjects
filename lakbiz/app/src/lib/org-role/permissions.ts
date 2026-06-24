@@ -12,9 +12,9 @@
  * | Banking                 |  Y    |    Y    |     N      |    N    |     N      |
  * | Settings / plans        |  Y    |    Y    |     N      |    N    |     N      |
  * | Team invites            |  Y    |    N    |     N      |    N    |     N      |
- * | AC jobs / workforce     |  Y    |    Y    |     N      |    N    |     Y*     |
+ * | AC jobs / workforce     |  Y    |    Y    |     Y*     |    N    |     Y*     |
  *
- * * technician: future — not wired in UI yet.
+ * * data_entry: /jobs for service tracking (no quotes/margins); technician: /jobs + /workforce.
  *
  * RLS follow-up: restrict SELECT on products.buy_price, purchase_lines.unit_cost,
  * sales.profit for data_entry at the database layer (views or policies).
@@ -44,6 +44,9 @@ const SHOP_STAFF_ROUTES: ShopNavHref[] = [
   "/customers",
   "/bills",
 ];
+
+/** data_entry: shop floor + AC job tracking (service due, status — no financials). */
+const DATA_ENTRY_ROUTES: ShopNavHref[] = [...SHOP_STAFF_ROUTES, "/jobs"];
 
 const TECHNICIAN_ROUTES: ShopNavHref[] = ["/jobs", "/workforce"];
 
@@ -78,13 +81,21 @@ function routeAllowed(href: string, allowedRoutes: ShopNavHref[]): boolean {
 
 export function canAccessShopRoute(role: OrgRole, href: string): boolean {
   if (role === "owner" || role === "manager") return true;
-  if (role === "data_entry" || role === "cashier") {
+  if (role === "data_entry") {
+    return routeAllowed(href, DATA_ENTRY_ROUTES);
+  }
+  if (role === "cashier") {
     return routeAllowed(href, SHOP_STAFF_ROUTES);
   }
   if (role === "technician") {
     return routeAllowed(href, TECHNICIAN_ROUTES);
   }
   return false;
+}
+
+/** Create, edit, delete jobs and see quote/margin fields. */
+export function canManageAcJobs(role: OrgRole): boolean {
+  return role === "owner" || role === "manager";
 }
 
 export function canAccessSettingsPath(role: OrgRole, pathname: string): boolean {
