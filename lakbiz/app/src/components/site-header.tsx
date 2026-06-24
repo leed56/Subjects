@@ -7,6 +7,7 @@ import { TrialBanner } from "@/components/trial-banner";
 import { CloudSyncBanner } from "@/components/cloud-sync-banner";
 import { OfflineBanner } from "@/components/offline-banner";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
+import { AcAlertsBell } from "@/components/ac-alerts-bell";
 import { useAuth } from "@/components/auth-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -104,6 +105,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
             >
               {t("nav.lang")}
             </button>
+            <AcAlertsBell />
             <Link
               href="/settings/notifications"
               className={`rounded-lg px-2 py-1 text-sm font-medium ${
@@ -164,6 +166,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
           </div>
 
           <div className="flex items-center gap-2 md:hidden">
+            <AcAlertsBell />
             <button
               type="button"
               onClick={() => setLocale(locale === "si" ? "en" : "si")}

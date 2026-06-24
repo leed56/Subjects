@@ -1,9 +1,11 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { AcJobReminderTimeline } from "@/components/ac-job-reminder-timeline";
 import { AcRemindersBanner } from "@/components/ac-reminders-banner";
+import { AcInAppAlertSettings } from "@/components/ac-in-app-alert-settings";
 import { AcServiceDoneDialog } from "@/components/ac-service-done-dialog";
+import { useAcInAppAlerts } from "@/hooks/use-ac-in-app-alerts";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { SiteHeader } from "@/components/site-header";
 import {
@@ -61,6 +63,7 @@ export default function JobsPage() {
   const { org } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
   const notificationLogs = useNotificationLogs(org.id);
+  const { markAllSeen } = useAcInAppAlerts();
   const notifySettings = loadNotificationSettings();
   const [showForm, setShowForm] = useState(true);
   const [editing, setEditing] = useState<ACJob | null>(null);
@@ -91,6 +94,10 @@ export default function JobsPage() {
   const [serviceDueDate, setServiceDueDate] = useState("");
   const [amcContract, setAmcContract] = useState(false);
   const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    markAllSeen();
+  }, [markAllSeen]);
 
   if (!ready || !data) {
     return (
@@ -220,6 +227,7 @@ export default function JobsPage() {
           <ProStatCard label={t("jobs.quote_label")} value={formatLkr(quoteTotal)} hint="Total quoted value" icon="💸" tone="emerald" />
         </section>
         <section className="mt-6"><AcRemindersBanner /></section>
+        <section className="mt-4"><AcInAppAlertSettings /></section>
         {showForm && (
           <section className="mt-6">
             <ProCard eyebrow={editing ? "Edit AC job" : "Create AC job"} title={editing ? `${t("jobs.edit_job")} ${editing.jobNo}` : t("jobs.new_job")} action={<ProBadge tone="teal">{formatLkr(quotedAmount)}</ProBadge>}>
