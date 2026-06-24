@@ -1477,6 +1477,22 @@ export function updateBusiness(
   };
 }
 
+function monthKeyFromDate(d = new Date()): string {
+  return d.toISOString().slice(0, 7);
+}
+
+function previousMonthKey(key: string): string {
+  const [year, month] = key.split("-").map(Number);
+  const d = new Date(year, month - 2, 1);
+  return monthKeyFromDate(d);
+}
+
+function sumSalesInMonth(sales: AppData["sales"], key: string): number {
+  return sales
+    .filter((s) => s.date.startsWith(key))
+    .reduce((sum, s) => sum + s.total, 0);
+}
+
 export function getLowStockProducts(products: AppData["products"]) {
   return products
     .filter(
@@ -1493,6 +1509,14 @@ export function getDashboardStats(data: AppData) {
   const salesTotal = todaySales.reduce((s, sale) => s + sale.total, 0);
   const profitTotal = todaySales.reduce((s, sale) => s + sale.profit, 0);
   const lowStock = getLowStockProducts(data.products);
+  const monthKey = monthKeyFromDate();
+  const lastMonthKey = previousMonthKey(monthKey);
+  const monthSales = sumSalesInMonth(data.sales, monthKey);
+  const lastMonthSales = sumSalesInMonth(data.sales, lastMonthKey);
+  const monthSalesChangePct =
+    lastMonthSales > 0
+      ? Math.round(((monthSales - lastMonthSales) / lastMonthSales) * 100)
+      : null;
   const stockValue = data.products.reduce(
     (s, p) => s + p.buyPrice * p.stockQty,
     0,
@@ -1571,6 +1595,9 @@ export function getDashboardStats(data: AppData) {
     supplierCount: data.suppliers.length,
     lowStockCount: lowStock.length,
     lowStockItems: lowStock,
+    monthSales,
+    lastMonthSales,
+    monthSalesChangePct,
     stockValue,
     creditOutstanding,
     payableOutstanding,

@@ -17,7 +17,10 @@ import {
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
+import { contactTypeI18nKey } from "@/lib/contact-type";
+import { exportAccountantPack } from "@/lib/export";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { paymentLabel } from "@/lib/i18n/payment";
 import { getDashboardStats } from "@/lib/store/actions";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { ACJob } from "@/lib/store/types";
@@ -29,6 +32,7 @@ export default function DashboardPage() {
   const { data, ready, resetAll, recordACService } = useAppStore();
   const { t } = useLocale();
   const { can, org, isReadOnly, canSeeFinancials } = useSubscription();
+  const canExport = can("export");
   const notificationLogs = useNotificationLogs(org.id);
   const showVehicles = can("vehicles");
   const [serviceDoneJob, setServiceDoneJob] = useState<ACJob | null>(null);
@@ -75,6 +79,65 @@ export default function DashboardPage() {
           }
           actions={
             <>
+              {canExport && canSeeFinancials && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    exportAccountantPack(
+                      data.business,
+                      {
+                        sales: data.sales,
+                        products: data.products,
+                        customers: data.customers,
+                      },
+                      {
+                        includeProfit: true,
+                        includeBuyPrice: true,
+                        salesLabels: {
+                          billNo: t("bills.bill_no"),
+                          date: t("common.date"),
+                          customer: t("common.customer"),
+                          payment: t("common.payment"),
+                          items: t("common.items"),
+                          discount: t("sales.discount"),
+                          subtotal: t("vat.subtotal"),
+                          vat: t("vat.output_vat"),
+                          total: t("common.total"),
+                          profit: t("common.profit"),
+                        },
+                        stockLabels: {
+                          name: t("common.name"),
+                          sku: t("stock.sku"),
+                          category: t("stock.category"),
+                          condition: t("stock.condition"),
+                          qty: t("common.qty"),
+                          sellPrice: t("stock.sell_price"),
+                          buyPrice: t("stock.buy_price"),
+                          reorderLevel: t("stock.reorder_level"),
+                        },
+                        customerLabels: {
+                          name: t("common.name"),
+                          type: t("cust.contact_type"),
+                          contactPerson: t("cust.contact_person"),
+                          phone: t("common.phone"),
+                          address: t("common.address"),
+                          vatNumber: t("cust.vat_number"),
+                          creditBalance: t("cust.credit_owed"),
+                          creditLimit: t("cust.credit_limit"),
+                        },
+                        paymentLabel: (m) => paymentLabel(t, m),
+                        typeLabel: (type) => t(contactTypeI18nKey(type)),
+                        conditionLabel: (c) =>
+                          t(c === "used" ? "stock.condition_used" : "stock.condition_new"),
+                      },
+                    )
+                  }
+                  className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98]"
+                  title={t("export.accountant_pack_hint")}
+                >
+                  {t("export.accountant_pack")}
+                </button>
+              )}
               <ProButton href="/sales">{t("dash.new_sale")}</ProButton>
               <ProButton href="/stock" variant="secondary">
                 {t("dash.add_stock")}
@@ -99,6 +162,20 @@ export default function DashboardPage() {
             hint={`${stats.saleCount} ${t("dash.sales_today")}`}
             icon="💸"
             tone="teal"
+          />
+          <ProStatCard
+            label={t("dash.month_sales")}
+            value={formatLkr(stats.monthSales)}
+            hint={
+              stats.monthSalesChangePct != null
+                ? t("dash.month_vs_last").replace(
+                    "{pct}",
+                    String(stats.monthSalesChangePct),
+                  )
+                : t("dash.month_no_compare")
+            }
+            icon="📅"
+            tone="blue"
           />
           {canSeeFinancials && (
             <ProStatCard

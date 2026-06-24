@@ -240,6 +240,71 @@ export function exportVatCsv(
   );
 }
 
+export type AccountantPackOptions = {
+  includeProfit: boolean;
+  includeBuyPrice: boolean;
+  salesLabels: SalesExportLabels;
+  stockLabels: StockExportLabels;
+  customerLabels: CustomerExportLabels;
+  paymentLabel: (method: PaymentMethod) => string;
+  typeLabel: (type: Customer["contactType"]) => string;
+  conditionLabel: (condition: Product["condition"]) => string;
+};
+
+export function buildAccountantPackCsv(
+  business: BusinessInfo,
+  data: {
+    sales: Sale[];
+    products: Product[];
+    customers: Customer[];
+  },
+  options: AccountantPackOptions,
+): string {
+  const generated = new Date().toLocaleString("en-LK");
+  const sections = [
+    ["LakBiz Accountant Export"],
+    [`Shop`, business.name],
+    [`Generated`, generated],
+    [],
+    ["=== SALES ==="],
+    buildSalesCsv(data.sales, {
+      includeProfit: options.includeProfit,
+      labels: options.salesLabels,
+      paymentLabel: options.paymentLabel,
+    }).split("\n"),
+    [],
+    ["=== STOCK ==="],
+    buildStockCsv(data.products, {
+      includeBuyPrice: options.includeBuyPrice,
+      labels: options.stockLabels,
+      conditionLabel: options.conditionLabel,
+    }).split("\n"),
+    [],
+    ["=== CUSTOMERS ==="],
+    buildCustomersCsv(data.customers, {
+      labels: options.customerLabels,
+      typeLabel: options.typeLabel,
+    }).split("\n"),
+  ];
+
+  return sections.flat().join("\n");
+}
+
+export function exportAccountantPack(
+  business: BusinessInfo,
+  data: {
+    sales: Sale[];
+    products: Product[];
+    customers: Customer[];
+  },
+  options: AccountantPackOptions,
+): void {
+  downloadCsv(
+    exportFilename(business.name, "accountant-pack"),
+    buildAccountantPackCsv(business, data, options),
+  );
+}
+
 export function printSalesReport(
   business: BusinessInfo,
   sales: Sale[],
