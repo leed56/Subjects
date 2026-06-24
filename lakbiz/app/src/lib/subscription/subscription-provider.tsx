@@ -135,20 +135,8 @@ export function SubscriptionProvider({
 
     let data = await fetchUserOrg();
     if (!data?.org) {
-      if (supabase) {
-        const emailPrefix = user.email?.split("@")[0]?.trim();
-        try {
-          await ensureUserOrg(supabase, user.id, {
-            shopName: emailPrefix,
-          });
-          data = await fetchUserOrg();
-        } catch {
-          /* org creation may fail if RLS blocks — shop save can retry */
-        }
-      }
+      return false;
     }
-
-    if (!data?.org) return false;
 
     setOrg({
       id: data.org.id,

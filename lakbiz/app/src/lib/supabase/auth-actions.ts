@@ -39,13 +39,13 @@ async function findUserOrgId(
   supabase: NonNullable<ReturnType<typeof createBrowserClient>>,
   userId: string,
 ): Promise<string | null> {
-  const { data: existing } = await supabase
+  const { data: rows } = await supabase
     .from("org_members")
     .select("organization_id")
     .eq("user_id", userId)
-    .maybeSingle();
+    .limit(1);
 
-  return existing?.organization_id ?? null;
+  return rows?.[0]?.organization_id ?? null;
 }
 
 /** Create org + owner membership when the user has none yet. */
@@ -221,12 +221,13 @@ export async function fetchUserOrg() {
     } = await supabase.auth.getUser();
     if (!user) return null;
 
-    const { data: member } = await supabase
+    const { data: memberRows } = await supabase
       .from("org_members")
       .select("organization_id, role, organizations(id, name, name_si, phone, sector)")
       .eq("user_id", user.id)
-      .maybeSingle();
+      .limit(1);
 
+    const member = memberRows?.[0];
     if (!member) return { user, org: null, subscription: null, role: null };
 
     const { data: subscription } = await supabase

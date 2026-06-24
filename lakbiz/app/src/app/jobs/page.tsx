@@ -215,7 +215,7 @@ export default function JobsPage() {
       <SiteHeader />
       <ProMain>
         <ProPageHeader
-          eyebrow="AC service operations"
+          eyebrow={t("jobs.eyebrow_ops")}
           title={t("jobs.title")}
           description={`${t("jobs.subtitle")} — ${pending.length} ${t("jobs.pending")}`}
           actions={
@@ -241,11 +241,11 @@ export default function JobsPage() {
         <WriteDisabledHint className="mb-5" />
         {message && <div className="mb-5 rounded-[1.25rem] border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900 shadow-sm">{message}</div>}
         <section className={`grid gap-4 sm:grid-cols-2 ${canSeeFinancials ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
-          <ProStatCard label={t("jobs.pending")} value={String(pending.length)} hint="Quotes, deposits and scheduled" icon="🛠️" tone="amber" />
-          <ProStatCard label={t("jobs.schedule")} value={String(scheduled.length)} hint="Scheduled work" icon="📅" tone="blue" />
-          <ProStatCard label={t("jobs.service_due_section")} value={String(serviceDue.length)} hint="Ready to mark done" icon="❄️" tone={serviceDue.length ? "amber" : "slate"} />
+          <ProStatCard label={t("jobs.pending")} value={String(pending.length)} hint={t("jobs.stat_pending_hint")} icon="🛠️" tone="amber" />
+          <ProStatCard label={t("jobs.schedule")} value={String(scheduled.length)} hint={t("jobs.stat_scheduled_hint")} icon="📅" tone="blue" />
+          <ProStatCard label={t("jobs.service_due_section")} value={String(serviceDue.length)} hint={t("jobs.stat_service_due_hint")} icon="❄️" tone={serviceDue.length ? "amber" : "slate"} />
           {canSeeFinancials && (
-            <ProStatCard label={t("jobs.quote_label")} value={formatLkr(quoteTotal)} hint="Total quoted value" icon="💸" tone="emerald" />
+            <ProStatCard label={t("jobs.quote_label")} value={formatLkr(quoteTotal)} hint={t("jobs.stat_quote_total_hint")} icon="💸" tone="emerald" />
           )}
         </section>
         {canManageJobs && (
@@ -254,7 +254,7 @@ export default function JobsPage() {
         <section className="mt-4"><AcInAppAlertSettings /></section>
         {canManageJobs && showForm && (
           <section className="mt-6">
-            <ProCard eyebrow={editing ? "Edit AC job" : "Create AC job"} title={editing ? `${t("jobs.edit_job")} ${editing.jobNo}` : t("jobs.new_job")} action={<ProBadge tone="teal">{formatLkr(quotedAmount)}</ProBadge>}>
+            <ProCard eyebrow={editing ? t("jobs.eyebrow_edit_job") : t("jobs.eyebrow_create_job")} title={editing ? `${t("jobs.edit_job")} ${editing.jobNo}` : t("jobs.new_job")} action={<ProBadge tone="teal">{formatLkr(quotedAmount)}</ProBadge>}>
               <form onSubmit={handleJobSubmit}>
                 <div className="flex flex-wrap gap-2">
                   {AC_JOB_TYPES.map((tpe) => <button key={tpe.value} type="button" onClick={() => { setJobType(tpe.value); if (!editing) setStatus(defaultStatusForJobType(tpe.value)); }} className={`rounded-full px-3 py-2 text-xs font-black ${jobType === tpe.value ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{locale === "si" ? tpe.labelSi : tpe.labelEn}</button>)}
@@ -299,8 +299,8 @@ export default function JobsPage() {
           </section>
         )}
         <section className="mt-6 grid gap-4 lg:grid-cols-2">
-          <ProCard title={t("jobs.all_types")} eyebrow="Type filter"><div className="flex flex-wrap gap-2"><button onClick={() => setTypeFilter("all")} className={`rounded-full px-3 py-2 text-xs font-black ${typeFilter === "all" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{t("jobs.all_types")}</button>{AC_JOB_TYPES.map((tpe) => <button key={tpe.value} onClick={() => setTypeFilter(tpe.value)} className={`rounded-full px-3 py-2 text-xs font-black ${typeFilter === tpe.value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{locale === "si" ? tpe.labelSi : tpe.labelEn}</button>)}</div></ProCard>
-          <ProCard title={t("jobs.all")} eyebrow="Status filter" action={<ProBadge tone="teal">{jobs.length} shown</ProBadge>}><div className="flex flex-wrap gap-2"><button onClick={() => setFilter("all")} className={`rounded-full px-3 py-2 text-xs font-black ${filter === "all" ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{t("jobs.all")} ({data.acJobs.length})</button>{AC_JOB_STATUSES.map((s) => <button key={s.value} onClick={() => setFilter(s.value)} className={`rounded-full px-3 py-2 text-xs font-black ${filter === s.value ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{locale === "si" ? s.labelSi : s.labelEn}</button>)}</div></ProCard>
+          <ProCard title={t("jobs.all_types")} eyebrow={t("jobs.eyebrow_type_filter")}><div className="flex flex-wrap gap-2"><button onClick={() => setTypeFilter("all")} className={`rounded-full px-3 py-2 text-xs font-black ${typeFilter === "all" ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{t("jobs.all_types")}</button>{AC_JOB_TYPES.map((tpe) => <button key={tpe.value} onClick={() => setTypeFilter(tpe.value)} className={`rounded-full px-3 py-2 text-xs font-black ${typeFilter === tpe.value ? "bg-slate-950 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{locale === "si" ? tpe.labelSi : tpe.labelEn}</button>)}</div></ProCard>
+          <ProCard title={t("jobs.all")} eyebrow={t("jobs.eyebrow_status_filter")} action={<ProBadge tone="teal">{t("jobs.filter_shown").replace("{count}", String(jobs.length))}</ProBadge>}><div className="flex flex-wrap gap-2"><button onClick={() => setFilter("all")} className={`rounded-full px-3 py-2 text-xs font-black ${filter === "all" ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{t("jobs.all")} ({data.acJobs.length})</button>{AC_JOB_STATUSES.map((s) => <button key={s.value} onClick={() => setFilter(s.value)} className={`rounded-full px-3 py-2 text-xs font-black ${filter === s.value ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-700"}`}>{locale === "si" ? s.labelSi : s.labelEn}</button>)}</div></ProCard>
         </section>
         <section className="mt-6">
           {jobs.length === 0 ? (

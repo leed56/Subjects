@@ -505,9 +505,11 @@ export async function pullBusinessData(
 async function upsertOrgRows(
   table:
     | "products"
+    | "products_base"
     | "customers"
     | "suppliers"
     | "sales"
+    | "sales_base"
     | "purchases"
     | "customer_payments"
     | "customer_product_prices"
@@ -1006,10 +1008,12 @@ export async function pushBusinessData(
   const upsertSteps: Array<{
     table:
       | "products"
+      | "products_base"
       | "customers"
       | "suppliers"
       | "bank_accounts"
       | "sales"
+      | "sales_base"
       | "purchases"
       | "customer_payments"
       | "customer_product_prices"
@@ -1027,13 +1031,13 @@ export async function pushBusinessData(
       | "vehicles";
     rows: Record<string, unknown>[];
   }> = [
-    { table: "products", rows: productRows },
+    { table: "products_base", rows: productRows },
     { table: "customers", rows: customerRows },
     { table: "suppliers", rows: supplierRows },
     { table: "bank_accounts", rows: bankRows },
     { table: "bank_transactions", rows: bankTransactionRows },
     { table: "bank_transfers", rows: bankTransferRows },
-    { table: "sales", rows: saleRows },
+    { table: "sales_base", rows: saleRows },
     { table: "purchases", rows: purchaseRows },
     { table: "customer_payments", rows: customerPaymentRows },
     { table: "customer_product_prices", rows: customerProductPriceRows },
@@ -1064,6 +1068,18 @@ export async function pushBusinessData(
     const lines = purchaseLineRows.filter((row) => row.purchase_id === purchase.id);
     const err = await replacePurchaseLines(organizationId, purchase.id, lines);
     if (err) return err;
+  }
+
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+  const { count: memberCount } = await supabase
+    .from("org_members")
+    .select("*", { count: "exact", head: true })
+    .eq("organization_id", organizationId);
+
+  // Multi-staff shops: skip prune so one device cannot delete another user's rows.
+  if ((memberCount ?? 0) > 1) {
+    return null;
   }
 
   const pruneSteps: Array<{

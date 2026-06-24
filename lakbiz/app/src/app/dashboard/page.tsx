@@ -270,7 +270,7 @@ export default function DashboardPage() {
                     {action.icon}
                   </span>
                   <p className="mt-4 text-sm font-black text-slate-950">{action.label}</p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">Open module →</p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">{t("dash.open_module")}</p>
                 </Link>
               ))}
             </div>
