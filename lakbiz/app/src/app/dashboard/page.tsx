@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { AcServiceDoneDialog } from "@/components/ac-service-done-dialog";
 import { AcServiceDuePanel } from "@/components/ac-service-due-panel";
+import { OfflineSyncNotice } from "@/components/offline-sync-notice";
 import { SiteHeader } from "@/components/site-header";
 import {
   ProBadge,
@@ -145,6 +146,8 @@ export default function DashboardPage() {
             </>
           }
         />
+
+        <OfflineSyncNotice />
 
         {stats.lowStockCount > 0 && (
           <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">

@@ -3,11 +3,13 @@
 import { useEffect } from "react";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { useOnlineStatus } from "@/lib/offline/connectivity";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 export function CloudSyncBanner() {
   const { cloudSyncError, cloudSyncing, cloudRemoteNotice, dismissCloudRemoteNotice } =
     useAppStore();
+  const isOnline = useOnlineStatus();
   const { t } = useLocale();
   const { org, isPlatformAdmin } = useSubscription();
 
@@ -17,7 +19,7 @@ export function CloudSyncBanner() {
     return () => window.clearTimeout(timer);
   }, [cloudRemoteNotice, dismissCloudRemoteNotice]);
 
-  if (isPlatformAdmin || !org.isAuthenticated) return null;
+  if (isPlatformAdmin || !org.isAuthenticated || !isOnline) return null;
 
   if (cloudSyncing) {
     return (

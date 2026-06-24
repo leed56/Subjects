@@ -5,7 +5,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { TrialBanner } from "@/components/trial-banner";
 import { CloudSyncBanner } from "@/components/cloud-sync-banner";
+import { OfflineBanner } from "@/components/offline-banner";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { useAuth } from "@/components/auth-provider";
+import { useAppStore } from "@/lib/store/use-app-store";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { ROUTE_FEATURES } from "@/lib/subscription/can";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
@@ -26,13 +29,20 @@ const navKeys = [
 
 export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
   const { locale, setLocale, t } = useLocale();
-  const { can, isPlatformAdmin, canAccessShopRoute, canAccessSettingsPath, canManageTeam } =
-    useSubscription();
   const { user, logout } = useAuth();
+  const { offlinePendingSync, cloudSyncing } = useAppStore();
+  const { can, isPlatformAdmin, canAccessShopRoute, canAccessSettingsPath, canManageTeam, org } =
+    useSubscription();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
   const handleLogout = async () => {
+    if (org.isAuthenticated && offlinePendingSync) {
+      if (!window.confirm(t("offline.logout_confirm"))) return;
+    }
+    if (cloudSyncing) {
+      if (!window.confirm(t("offline.logout_syncing_confirm"))) return;
+    }
     await logout();
     window.location.href = "/login";
   };
@@ -67,6 +77,8 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
         }
       >
         <TrialBanner />
+        <PwaInstallPrompt />
+        <OfflineBanner />
         <CloudSyncBanner />
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:py-4">
           <Link href={logoHref} className="flex min-w-0 items-center gap-2">

@@ -28,6 +28,15 @@ export const metadata: Metadata = {
   title: "LakBiz — ශ්‍රී ලංකා තොග සහ ගිණුම්",
   description:
     "තොග, විකුණුම්, බැංකු — සිල්ලර, AC, වාහන ව්‍යාපාර සඳහා",
+  applicationName: "LakBiz",
+  appleWebApp: {
+    capable: true,
+    title: "LakBiz",
+    statusBarStyle: "default",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export default function RootLayout({
