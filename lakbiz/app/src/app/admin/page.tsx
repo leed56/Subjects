@@ -62,7 +62,7 @@ export default function AdminDashboardPage() {
         />
         <StatCard
           label={t("admin.templates")}
-          value={templateCount != null ? String(templateCount) : "—"}
+          value={templateCount != null ? String(templateCount) : t("admin.trial_none")}
           hint={t("admin.templates_hint")}
         />
       </div>

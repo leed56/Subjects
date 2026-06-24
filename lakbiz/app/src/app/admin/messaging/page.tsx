@@ -34,7 +34,7 @@ export default function AdminMessagingPage() {
             setPolicy(json.policy);
             setTextLkConfigured(json.textLkConfigured ?? null);
           } else {
-            setMessage(json.error ?? "Failed to load");
+            setMessage(json.error ?? t("admin.load_failed"));
           }
         },
       )
@@ -61,7 +61,7 @@ export default function AdminMessagingPage() {
       setPolicy(json.policy);
       setMessage(t("admin.messaging_saved"));
     } else {
-      setMessage(json.error ?? "Save failed");
+      setMessage(json.error ?? t("admin.save_failed"));
     }
   };
 
@@ -78,7 +78,7 @@ export default function AdminMessagingPage() {
       setPolicy(json.policy);
       setMessage(t("admin.messaging_reset"));
     } else {
-      setMessage(json.error ?? "Reset failed");
+      setMessage(json.error ?? t("admin.reset_failed"));
     }
   };
 
@@ -156,7 +156,7 @@ export default function AdminMessagingPage() {
           <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
             <h3 className="font-semibold text-white">{t("admin.messaging_status")}</h3>
             <p className="mt-2 text-sm text-slate-400">
-              Text.lk:{" "}
+              {t("admin.messaging_textlk")}:{" "}
               <span className={textLkConfigured ? "text-teal-300" : "text-amber-300"}>
                 {textLkConfigured ? t("admin.messaging_sms_ready") : t("admin.messaging_sms_missing")}
               </span>

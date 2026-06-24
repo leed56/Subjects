@@ -3,8 +3,15 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { daysUntilIso, isTrialExpiringSoon } from "@/lib/admin/trial-ops";
+import {
+  adminPlanLabel,
+  adminSectorLabel,
+  adminStatusLabel,
+  formatAdminDate,
+} from "@/lib/admin/admin-labels";
 import { sectorById } from "@/lib/sectors";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import type { Locale } from "@/lib/i18n/translations";
 import type { SectorId } from "@/lib/types";
 
 import type { BillingCycle } from "@/lib/subscription/types";
@@ -27,17 +34,12 @@ function trialDateInputValue(iso: string | null): string {
   return iso.slice(0, 10);
 }
 
-function formatTrialEnd(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-LK", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+function formatTrialEnd(iso: string | null, locale: Locale, emptyLabel: string): string {
+  return formatAdminDate(iso, locale, emptyLabel);
 }
 
 export default function AdminShopsPage() {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [shops, setShops] = useState<ShopRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
@@ -163,17 +165,17 @@ export default function AdminShopsPage() {
                   >
                     <td className="px-4 py-3">
                       <p className="font-medium text-white">{shop.name}</p>
-                      <p className="text-xs text-slate-500">{shop.phone ?? "—"}</p>
+                      <p className="text-xs text-slate-500">{shop.phone ?? t("admin.trial_none")}</p>
                     </td>
                     <td className="px-4 py-3">
                       <span className="mr-1">{sector?.icon ?? "🏪"}</span>
-                      {sector?.nameEn ?? shop.sector}
+                      {adminSectorLabel(locale, shop.sector)}
                     </td>
                     <td className="px-4 py-3 text-slate-300">
-                      {shop.ownerEmail ?? "—"}
+                      {shop.ownerEmail ?? t("admin.trial_none")}
                     </td>
                     <td className="px-4 py-3 text-slate-300">
-                      <p className="capitalize">{shop.planId}</p>
+                      <p>{adminPlanLabel(t, shop.planId)}</p>
                       <select
                         value={shop.billingCycle}
                         onChange={(e) =>
@@ -186,8 +188,8 @@ export default function AdminShopsPage() {
                         <option value="annual">{t("sub.annual")}</option>
                       </select>
                     </td>
-                    <td className="px-4 py-3 capitalize text-slate-300">
-                      {shop.status}
+                    <td className="px-4 py-3 text-slate-300">
+                      {adminStatusLabel(t, shop.status)}
                       {expiringSoon && daysLeft != null && (
                         <span className="ml-2 rounded-full bg-amber-900/80 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-100">
                           {t("admin.trial_days_left").replace("{days}", String(daysLeft))}
@@ -197,7 +199,7 @@ export default function AdminShopsPage() {
                     <td className="px-4 py-3">
                       <p className="text-slate-300">
                         {shop.trialEndsAt
-                          ? formatTrialEnd(shop.trialEndsAt)
+                          ? formatTrialEnd(shop.trialEndsAt, locale, t("admin.trial_none"))
                           : t("admin.trial_none")}
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">

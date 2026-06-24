@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { BusinessTemplate } from "@/lib/admin/templates";
 import { BUSINESS_TEMPLATES } from "@/lib/admin/templates";
+import { adminPlanLabel, adminSectorLabel, adminTemplateLabel } from "@/lib/admin/admin-labels";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { PlanId } from "@/lib/subscription/types";
 
@@ -12,7 +13,7 @@ const PLANS: PlanId[] = ["starter", "business", "pro"];
 
 export default function AdminCreateShopPage() {
   const router = useRouter();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [templates, setTemplates] = useState<BusinessTemplate[]>(BUSINESS_TEMPLATES);
   const [templateId, setTemplateId] = useState("grocery");
   const [shopName, setShopName] = useState("");
@@ -123,7 +124,7 @@ export default function AdminCreateShopPage() {
             </div>
             <div>
               <dt className="text-slate-400">{t("admin.business_type")}</dt>
-              <dd className="capitalize text-white">{created.sector.replace("_", " ")}</dd>
+              <dd className="text-white">{adminSectorLabel(locale, created.sector)}</dd>
             </div>
           </dl>
           <div className="mt-6 flex flex-wrap gap-3">
@@ -180,7 +181,7 @@ export default function AdminCreateShopPage() {
               >
                 <span className="text-xl">{template.icon}</span>
                 <span className="mt-1 block text-xs font-semibold text-white">
-                  {template.nameEn}
+                  {adminTemplateLabel(template, locale)}
                 </span>
               </button>
             ))}
@@ -240,7 +241,7 @@ export default function AdminCreateShopPage() {
             >
               {PLANS.map((p) => (
                 <option key={p} value={p}>
-                  {p}
+                  {adminPlanLabel(t, p)}
                 </option>
               ))}
             </select>
