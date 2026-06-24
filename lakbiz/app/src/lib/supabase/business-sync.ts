@@ -599,6 +599,42 @@ async function upsertOrgRows(
   return error?.message ?? null;
 }
 
+/** Masked views (sales/products): avoid upsert — SELECT on *_base is revoked. */
+async function upsertMaskedViewRows(
+  table: "sales" | "products",
+  organizationId: string,
+  rows: Record<string, unknown>[],
+): Promise<string | null> {
+  if (rows.length === 0) return null;
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const ids = rows.map((row) => String(row.id));
+  const { data: existing, error: fetchErr } = await supabase
+    .from(table)
+    .select("id")
+    .eq("organization_id", organizationId)
+    .in("id", ids);
+  if (fetchErr) return fetchErr.message;
+
+  const existingIds = new Set((existing ?? []).map((row) => String(row.id)));
+  const toInsert = rows.filter((row) => !existingIds.has(String(row.id)));
+  const toUpdate = rows.filter((row) => existingIds.has(String(row.id)));
+
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from(table).insert(toInsert);
+    if (error) return error.message;
+  }
+
+  for (const row of toUpdate) {
+    const { id, ...patch } = row;
+    const { error } = await supabase.from(table).update(patch).eq("id", id);
+    if (error) return error.message;
+  }
+
+  return null;
+}
+
 async function deleteOrgRowsNotIn(
   table:
     | "products"
@@ -1119,7 +1155,10 @@ export async function pushBusinessData(
   ];
 
   for (const step of upsertSteps) {
-    const err = await upsertOrgRows(step.table, step.rows);
+    const err =
+      step.table === "sales" || step.table === "products"
+        ? await upsertMaskedViewRows(step.table, organizationId, step.rows)
+        : await upsertOrgRows(step.table, step.rows);
     if (err) return { error: err, stale: false, generation: seenGeneration };
   }
 
