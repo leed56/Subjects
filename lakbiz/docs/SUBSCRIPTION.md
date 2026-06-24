@@ -105,7 +105,7 @@ All subscription billing is handled **outside the app**:
 
 1. Customer pays LakBiz via bank transfer or agreed method.
 2. Platform admin activates or extends the subscription in the admin panel / Supabase.
-3. Customers see a **read-only plans page** at `/settings/plans` — no checkout, no PayHere, no Stripe.
+3. Customers see a **read-only plans page** at `/settings/plans` — LakBiz assigns plans manually; there is no in-app checkout.
 
 Business payments (customer credit, supplier payables, contractor payouts, POS cash/cheque) remain in-app — those are operational ledger features, not SaaS billing.
 

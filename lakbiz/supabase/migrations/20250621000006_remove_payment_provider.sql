@@ -1,5 +1,5 @@
 -- Remove unused payment gateway columns from subscriptions.
--- LakBiz uses manual plan management via platform admin — no PayHere/Stripe integration.
+-- LakBiz uses manual plan management via platform admin — no in-app SaaS checkout.
 
 alter table public.subscriptions
   drop column if exists payment_provider,
