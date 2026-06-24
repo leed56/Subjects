@@ -1155,7 +1155,7 @@ export async function pushBusinessData(
 
   const pruneSteps: Array<{
     table:
-      | "sales_base"
+      | "sales"
       | "purchases"
       | "customer_payments"
       | "customer_product_prices"
@@ -1164,7 +1164,7 @@ export async function pushBusinessData(
       | "cheques"
       | "ac_jobs"
       | "vehicles"
-      | "products_base"
+      | "products"
       | "customers"
       | "suppliers"
       | "bank_accounts"
