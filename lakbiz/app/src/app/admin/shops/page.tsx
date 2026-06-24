@@ -259,7 +259,7 @@ export default function AdminShopsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
-                        {shop.status === "read_only" || shop.status === "canceled" ? (
+                        {shop.status !== "active" && (
                           <button
                             type="button"
                             onClick={() => activate(shop.id)}
@@ -268,7 +268,8 @@ export default function AdminShopsPage() {
                           >
                             {t("admin.activate")}
                           </button>
-                        ) : (
+                        )}
+                        {(shop.status === "active" || shop.status === "trialing") && (
                           <button
                             type="button"
                             onClick={() => suspend(shop.id)}
