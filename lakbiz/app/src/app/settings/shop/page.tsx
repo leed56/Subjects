@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useAuth } from "@/components/auth-provider";
+import { SignOutButton } from "@/components/sign-out-button";
 import { SiteHeader } from "@/components/site-header";
 import {
   ProBadge,
@@ -318,6 +319,19 @@ export default function ShopSettingsPage() {
             </form>
           </ProCard>
         </section>
+
+        {user && (
+          <section className="mt-6">
+            <ProCard title={t("shop.account_title")} eyebrow="Session">
+              <p className="text-sm font-semibold text-slate-600">{t("shop.account_desc")}</p>
+              <p className="mt-2 text-sm font-bold text-slate-900">{user.email}</p>
+              <SignOutButton
+                redirectTo="/login"
+                className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-3 text-sm font-black text-rose-700 transition hover:bg-rose-100"
+              />
+            </ProCard>
+          </section>
+        )}
 
         <p className="mt-6 text-center text-sm font-semibold text-slate-500">
           <Link href="/vat" className="text-teal-700 underline">{t("vat.view_return")}</Link>

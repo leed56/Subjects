@@ -151,6 +151,8 @@ const si: Dict = {
   "common.saved_browser": "දත්ත මෙම බ්‍රවුසරයේ සුරකින ලදී",
   "common.saved_cloud": "දත්ත සුරකින ලදී — බ්‍රවුසරය + cloud",
   "common.reset_data": "සියල්ල මකන්න",
+  "common.clear_local_data": "දේශීය දත්ත මකන්න",
+  "common.clear_local_confirm": "මෙම බ්‍රවුසරයේ දත්ත මකන්නද? Cloud දත්ත මකනු නොලැබේ.",
   "common.confirm_delete": "මකන්නද?",
   "common.no_data": "තවම දත්ත නැත",
   "common.view_print": "බලන්න / මුද්‍රණය",
@@ -652,6 +654,8 @@ const si: Dict = {
   "shop.br_placeholder": "උදා: PV 12345",
   "shop.invoice_footer": "ඉන්වොයිස් පාදක සටහන / කොන්දේසි",
   "shop.invoice_footer_placeholder": "උදා: විකුණූ භාණ්ඩ ආපසු ගනු නොලැබේ. වගකීම මාස 12.",
+  "shop.account_title": "ගිණුම",
+  "shop.account_desc": "Sign in කළ ගිණුම. වෙනස් user එකට මාරු වීමට sign out කරන්න.",
 
   // Jobs
   "jobs.title": "AC රැකියා",
@@ -1303,6 +1307,8 @@ const en: Dict = {
   "common.saved_browser": "Data saved in this browser",
   "common.saved_cloud": "Data saved — browser + cloud sync",
   "common.reset_data": "Reset all data",
+  "common.clear_local_data": "Clear local data",
+  "common.clear_local_confirm": "Clear data stored in this browser? Your cloud data will not be deleted.",
   "common.confirm_delete": "Delete?",
   "common.no_data": "No data yet",
   "common.view_print": "View / Print",
@@ -1795,6 +1801,8 @@ const en: Dict = {
   "shop.br_placeholder": "e.g. PV 12345",
   "shop.invoice_footer": "Invoice footer / terms note",
   "shop.invoice_footer_placeholder": "e.g. Goods sold are not returnable. 12-month warranty.",
+  "shop.account_title": "Account",
+  "shop.account_desc": "Signed-in account. Sign out to switch to a different user.",
 
   "jobs.title": "AC Jobs",
   "jobs.subtitle": "quote → install → service",

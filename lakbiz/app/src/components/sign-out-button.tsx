@@ -2,6 +2,8 @@
 
 import { useAuth } from "@/components/auth-provider";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { useAppStore } from "@/lib/store/use-app-store";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 const DEMO_ORG_KEY = "lakbiz-org-demo";
 const DEMO_SUBSCRIPTION_KEY = "lakbiz-subscription-demo";
@@ -29,10 +31,18 @@ export function SignOutButton({
 }: SignOutButtonProps) {
   const { user, logout } = useAuth();
   const { t } = useLocale();
+  const { offlinePendingSync, cloudSyncing } = useAppStore();
+  const { org } = useSubscription();
 
   if (!user) return null;
 
   const handleClick = async () => {
+    if (org.isAuthenticated && offlinePendingSync) {
+      if (!window.confirm(t("offline.logout_confirm"))) return;
+    }
+    if (cloudSyncing) {
+      if (!window.confirm(t("offline.logout_syncing_confirm"))) return;
+    }
     clearLocalSession();
     await logout();
     window.location.href = redirectTo;

@@ -448,16 +448,19 @@ export default function DashboardPage() {
           </section>
         )}
 
-        <div className="mt-8 flex flex-col items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 text-center text-xs font-semibold text-slate-500 shadow-sm sm:flex-row sm:text-left">
+        <div className="mt-8 rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 text-center text-xs font-semibold text-slate-500 shadow-sm sm:text-left">
           <span>{t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}</span>
-          <button
-            onClick={() => {
-              if (confirm(t("common.confirm_delete"))) resetAll();
-            }}
-            className="rounded-full px-3 py-1.5 font-black text-rose-600 transition hover:bg-rose-50"
-          >
-            {t("common.reset_data")}
-          </button>
+          {!org.isAuthenticated && (
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(t("common.clear_local_confirm"))) resetAll();
+              }}
+              className="mt-3 block w-full rounded-full px-3 py-1.5 font-black text-rose-600 transition hover:bg-rose-50 sm:mt-2 sm:w-auto"
+            >
+              {t("common.clear_local_data")}
+            </button>
+          )}
         </div>
 
         <AcServiceDoneDialog
