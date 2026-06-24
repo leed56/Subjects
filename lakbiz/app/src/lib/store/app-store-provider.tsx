@@ -14,13 +14,15 @@ import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { useOfflineLeaveGuard } from "@/hooks/use-offline-leave-guard";
 import type { PaymentMethod } from "@/lib/types";
 import type { BusinessInfo } from "@/lib/invoice";
-import { useSubscription } from "@/lib/subscription/subscription-provider";
 import {
+  canManageAcJobs,
+  canUpdateAcJob,
   canUseBankingModule,
   canUseSuppliersModule,
 } from "@/lib/org-role/permissions";
 import { stripFinancialData } from "@/lib/org-role/strip-financials";
 import { getPlan } from "@/lib/subscription/plans";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 import {
   pushBusinessData,
   pullBusinessData,
@@ -832,18 +834,18 @@ function useAppStoreState(): AppStoreValue {
         });
       },
       addACJob: (input) => {
-        if (!data) return false;
+        if (!data || !canManageAcJobs(orgRole)) return false;
         const before = data.acJobs.length;
         const next = addACJob(data, input);
         if (next.acJobs.length === before) return false;
         return persist(next);
       },
       updateACJob: (id, input) => {
-        if (!data) return false;
+        if (!data || !canUpdateAcJob(orgRole, input)) return false;
         return persist(updateACJob(data, id, input));
       },
       deleteACJob: (id) => {
-        if (!data || isReadOnly) return;
+        if (!data || isReadOnly || !canManageAcJobs(orgRole)) return;
         persist(deleteACJob(data, id));
       },
       recordACService: (jobId, input) => {
@@ -851,14 +853,14 @@ function useAppStoreState(): AppStoreValue {
         return persist(recordACService(data, jobId, input));
       },
       addJobItem: (input) => {
-        if (!data) return false;
+        if (!data || !canManageAcJobs(orgRole)) return false;
         const before = data.jobItems.length;
         const next = addJobItem(data, input);
         if (next.jobItems.length === before) return false;
         return persist(next);
       },
       deleteJobItem: (id) => {
-        if (!data) return false;
+        if (!data || !canManageAcJobs(orgRole)) return false;
         return persist(deleteJobItem(data, id));
       },
       addTechnician: (input) => {

@@ -21,6 +21,7 @@
  */
 
 import type { OrgRole } from "@/lib/subscription/types";
+import type { ACJobInput } from "@/lib/store/types";
 
 export type ShopNavHref =
   | "/dashboard"
@@ -96,6 +97,26 @@ export function canAccessShopRoute(role: OrgRole, href: string): boolean {
 /** Create, edit, delete jobs and see quote/margin fields. */
 export function canManageAcJobs(role: OrgRole): boolean {
   return role === "owner" || role === "manager";
+}
+
+const AC_JOB_OPERATIONAL_UPDATE_KEYS = new Set<keyof ACJobInput>([
+  "status",
+  "scheduledDate",
+  "installedDate",
+  "serviceDueDate",
+  "serviceDueManual",
+  "lastServiceDate",
+  "serviceIntervalDays",
+  "serviceIntervalMonths",
+  "notes",
+]);
+
+/** data_entry: status / service schedule only — not quotes, assignees, or financials. */
+export function canUpdateAcJob(role: OrgRole, input: Partial<ACJobInput>): boolean {
+  if (canManageAcJobs(role)) return true;
+  const keys = Object.keys(input) as (keyof ACJobInput)[];
+  if (keys.length === 0) return false;
+  return keys.every((key) => AC_JOB_OPERATIONAL_UPDATE_KEYS.has(key));
 }
 
 export function canAccessSettingsPath(role: OrgRole, pathname: string): boolean {

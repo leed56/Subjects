@@ -53,6 +53,17 @@ function customFieldsFromDb(
   return { ...base, unit };
 }
 
+function rowsOrEmpty<T>(
+  res: { data: T[] | null; error: { message: string } | null },
+  label: string,
+): T[] {
+  if (res.error) {
+    console.warn(`[pullBusinessData] ${label}:`, res.error.message);
+    return [];
+  }
+  return res.data ?? [];
+}
+
 export function isEmptyBusinessData(data: AppData): boolean {
   return (
     data.products.length === 0 &&
@@ -162,44 +173,42 @@ export async function pullBusinessData(
     fetchOrgShopSettings(organizationId),
   ]);
 
-  const firstError =
-    productsRes.error ??
-    customersRes.error ??
-    suppliersRes.error ??
-    salesRes.error ??
-    saleLinesRes.error ??
-    purchasesRes.error ??
-    purchaseLinesRes.error ??
-    customerPaymentsRes.error ??
-    customerProductPricesRes.error ??
-    supplierPaymentsRes.error ??
-    stockLogsRes.error ??
-    bankAccountsRes.error ??
-    bankTransactionsRes.error ??
-    bankTransfersRes.error ??
-    chequesRes.error ??
-    acJobsRes.error ??
-    jobItemsRes.error ??
-    jobStatusHistoryRes.error ??
-    techniciansRes.error ??
-    contractorsRes.error ??
-    contractorPaymentsRes.error ??
-    vehiclesRes.error;
+  if (productsRes.error || customersRes.error || salesRes.error) {
+    return null;
+  }
 
-  if (firstError) return null;
+  const saleLines = rowsOrEmpty(saleLinesRes, "sale_lines");
+  const purchaseLines = rowsOrEmpty(purchaseLinesRes, "purchase_lines");
+  const suppliers = rowsOrEmpty(suppliersRes, "suppliers");
+  const purchases = rowsOrEmpty(purchasesRes, "purchases");
+  const customerPayments = rowsOrEmpty(customerPaymentsRes, "customer_payments");
+  const customerProductPrices = rowsOrEmpty(
+    customerProductPricesRes,
+    "customer_product_prices",
+  );
+  const supplierPayments = rowsOrEmpty(supplierPaymentsRes, "supplier_payments");
+  const stockLogs = rowsOrEmpty(stockLogsRes, "stock_logs");
+  const bankAccounts = rowsOrEmpty(bankAccountsRes, "bank_accounts");
+  const bankTransactions = rowsOrEmpty(bankTransactionsRes, "bank_transactions");
+  const bankTransfers = rowsOrEmpty(bankTransfersRes, "bank_transfers");
+  const cheques = rowsOrEmpty(chequesRes, "cheques");
+  const acJobs = rowsOrEmpty(acJobsRes, "ac_jobs");
+  const jobItems = rowsOrEmpty(jobItemsRes, "job_items");
+  const jobStatusHistory = rowsOrEmpty(jobStatusHistoryRes, "job_status_history");
+  const technicians = rowsOrEmpty(techniciansRes, "technicians");
+  const contractors = rowsOrEmpty(contractorsRes, "contractors");
+  const contractorPayments = rowsOrEmpty(contractorPaymentsRes, "contractor_payments");
+  const vehicles = rowsOrEmpty(vehiclesRes, "vehicles");
 
-  const saleLinesBySale = new Map<string, typeof saleLinesRes.data>();
-  for (const line of saleLinesRes.data ?? []) {
+  const saleLinesBySale = new Map<string, typeof saleLines>();
+  for (const line of saleLines) {
     const list = saleLinesBySale.get(line.sale_id) ?? [];
     list.push(line);
     saleLinesBySale.set(line.sale_id, list);
   }
 
-  const purchaseLinesByPurchase = new Map<
-    string,
-    typeof purchaseLinesRes.data
-  >();
-  for (const line of purchaseLinesRes.data ?? []) {
+  const purchaseLinesByPurchase = new Map<string, typeof purchaseLines>();
+  for (const line of purchaseLines) {
     const list = purchaseLinesByPurchase.get(line.purchase_id) ?? [];
     list.push(line);
     purchaseLinesByPurchase.set(line.purchase_id, list);
@@ -234,7 +243,7 @@ export async function pullBusinessData(
       creditBalance: num(row.credit_balance),
       creditLimit: row.credit_limit != null ? num(row.credit_limit) : undefined,
     })),
-    suppliers: (suppliersRes.data ?? []).map((row) => ({
+    suppliers: suppliers.map((row) => ({
       id: row.id,
       name: row.name,
       phone: row.phone ?? undefined,
@@ -271,7 +280,7 @@ export async function pullBusinessData(
         chequeId: row.cheque_id ?? undefined,
       };
     }),
-    purchases: (purchasesRes.data ?? []).map((row) => {
+    purchases: purchases.map((row) => {
       const lines = (purchaseLinesByPurchase.get(row.id) ?? [])
         .sort((a, b) => a.line_order - b.line_order)
         .map((line) => ({
@@ -296,7 +305,7 @@ export async function pullBusinessData(
         note: row.note ?? undefined,
       };
     }),
-    customerPayments: (customerPaymentsRes.data ?? []).map((row) => ({
+    customerPayments: customerPayments.map((row) => ({
       id: row.id,
       customerId: row.customer_id,
       customerName: row.customer_name,
@@ -305,13 +314,13 @@ export async function pullBusinessData(
       method: asPaymentMethod(row.method),
       note: row.note ?? undefined,
     })),
-    customerProductPrices: (customerProductPricesRes.data ?? []).map((row) => ({
+    customerProductPrices: customerProductPrices.map((row) => ({
       id: row.id,
       customerId: row.customer_id,
       productId: row.product_id,
       price: num(row.price),
     })),
-    supplierPayments: (supplierPaymentsRes.data ?? []).map((row) => ({
+    supplierPayments: supplierPayments.map((row) => ({
       id: row.id,
       supplierId: row.supplier_id,
       supplierName: row.supplier_name,
@@ -320,7 +329,7 @@ export async function pullBusinessData(
       method: asPaymentMethod(row.method),
       note: row.note ?? undefined,
     })),
-    stockLogs: (stockLogsRes.data ?? []).map((row) => ({
+    stockLogs: stockLogs.map((row) => ({
       id: row.id,
       productId: row.product_id,
       productName: row.product_name,
@@ -329,7 +338,7 @@ export async function pullBusinessData(
       note: row.note ?? undefined,
       date: row.log_date,
     })),
-    bankAccounts: (bankAccountsRes.data ?? []).map((row) => ({
+    bankAccounts: bankAccounts.map((row) => ({
       id: row.id,
       bankName: row.bank_name,
       branch: row.branch ?? undefined,
@@ -337,7 +346,7 @@ export async function pullBusinessData(
       accountNumber: row.account_number,
       balance: num(row.balance),
     })),
-    bankTransactions: (bankTransactionsRes.data ?? []).map((row) => ({
+    bankTransactions: bankTransactions.map((row) => ({
       id: row.id,
       accountId: row.account_id,
       type: row.type as AppData["bankTransactions"][number]["type"],
@@ -346,7 +355,7 @@ export async function pullBusinessData(
       reference: row.reference ?? undefined,
       date: row.txn_date,
     })),
-    bankTransfers: (bankTransfersRes.data ?? []).map((row) => ({
+    bankTransfers: bankTransfers.map((row) => ({
       id: row.id,
       fromAccountId: row.from_account_id,
       toAccountId: row.to_account_id,
@@ -354,7 +363,7 @@ export async function pullBusinessData(
       description: row.description ?? undefined,
       date: row.transfer_date,
     })),
-    cheques: (chequesRes.data ?? []).map((row) => ({
+    cheques: cheques.map((row) => ({
       id: row.id,
       direction: row.direction as "received" | "paid",
       chequeNo: row.cheque_no,
@@ -369,7 +378,7 @@ export async function pullBusinessData(
       bankAccountId: row.bank_account_id ?? undefined,
       note: row.note ?? undefined,
     })),
-    acJobs: (acJobsRes.data ?? []).map((row) => ({
+    acJobs: acJobs.map((row) => ({
       id: row.id,
       jobNo: row.job_no,
       date: row.job_date,
@@ -403,7 +412,7 @@ export async function pullBusinessData(
         row.subcontract_cost != null ? num(row.subcontract_cost) : undefined,
       notes: row.notes ?? undefined,
     })),
-    jobItems: (jobItemsRes.data ?? []).map((row) => ({
+    jobItems: jobItems.map((row) => ({
       id: row.id,
       jobId: row.job_id,
       itemType: row.item_type as AppData["jobItems"][number]["itemType"],
@@ -412,7 +421,7 @@ export async function pullBusinessData(
       unitPrice: num(row.unit_price),
       lineTotal: num(row.line_total),
     })),
-    jobStatusHistory: (jobStatusHistoryRes.data ?? []).map((row) => ({
+    jobStatusHistory: jobStatusHistory.map((row) => ({
       id: row.id,
       jobId: row.job_id,
       oldStatus: row.old_status ?? undefined,
@@ -420,7 +429,7 @@ export async function pullBusinessData(
       note: row.note ?? undefined,
       date: row.created_at,
     })),
-    technicians: (techniciansRes.data ?? []).map((row) => ({
+    technicians: technicians.map((row) => ({
       id: row.id,
       name: row.name,
       phone: row.phone ?? undefined,
@@ -430,7 +439,7 @@ export async function pullBusinessData(
       active: row.active ?? true,
       notes: row.notes ?? undefined,
     })),
-    contractors: (contractorsRes.data ?? []).map((row) => ({
+    contractors: contractors.map((row) => ({
       id: row.id,
       name: row.name,
       company: row.company ?? undefined,
@@ -445,7 +454,7 @@ export async function pullBusinessData(
       active: row.active ?? true,
       notes: row.notes ?? undefined,
     })),
-    contractorPayments: (contractorPaymentsRes.data ?? []).map((row) => ({
+    contractorPayments: contractorPayments.map((row) => ({
       id: row.id,
       contractorId: row.contractor_id,
       contractorName: row.contractor_name ?? "",
@@ -454,7 +463,7 @@ export async function pullBusinessData(
       method: asPaymentMethod(row.method),
       note: row.note ?? undefined,
     })),
-    vehicles: (vehiclesRes.data ?? []).map((row) => ({
+    vehicles: vehicles.map((row) => ({
       id: row.id,
       stockId: row.stock_id,
       dateAdded: row.date_added,

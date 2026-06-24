@@ -1,5 +1,5 @@
 /* LakBiz app-shell service worker — cache static assets + offline page fallback. */
-const CACHE_VERSION = "lakbiz-v1";
+const CACHE_VERSION = "lakbiz-v2";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 
