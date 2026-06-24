@@ -1096,13 +1096,13 @@ export async function pushBusinessData(
       | "vehicles";
     rows: Record<string, unknown>[];
   }> = [
-    { table: "products_base", rows: productRows },
+    { table: "products", rows: productRows },
     { table: "customers", rows: customerRows },
     { table: "suppliers", rows: supplierRows },
     { table: "bank_accounts", rows: bankRows },
     { table: "bank_transactions", rows: bankTransactionRows },
     { table: "bank_transfers", rows: bankTransferRows },
-    { table: "sales_base", rows: saleRows },
+    { table: "sales", rows: saleRows },
     { table: "purchases", rows: purchaseRows },
     { table: "customer_payments", rows: customerPaymentRows },
     { table: "customer_product_prices", rows: customerProductPriceRows },
@@ -1177,7 +1177,7 @@ export async function pushBusinessData(
       | "job_status_history";
     ids: string[];
   }> = [
-    { table: "sales_base", ids: data.sales.map((s) => s.id) },
+    { table: "sales", ids: data.sales.map((s) => s.id) },
     { table: "purchases", ids: data.purchases.map((p) => p.id) },
     { table: "customer_payments", ids: data.customerPayments.map((p) => p.id) },
     {
@@ -1196,7 +1196,7 @@ export async function pushBusinessData(
     { table: "contractors", ids: data.contractors.map((c) => c.id) },
     { table: "contractor_payments", ids: data.contractorPayments.map((p) => p.id) },
     { table: "vehicles", ids: data.vehicles.map((v) => v.id) },
-    { table: "products_base", ids: data.products.map((p) => p.id) },
+    { table: "products", ids: data.products.map((p) => p.id) },
     { table: "customers", ids: data.customers.map((c) => c.id) },
     { table: "suppliers", ids: data.suppliers.map((s) => s.id) },
     { table: "bank_accounts", ids: data.bankAccounts.map((b) => b.id) },

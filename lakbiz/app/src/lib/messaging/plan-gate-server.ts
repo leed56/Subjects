@@ -10,19 +10,10 @@ export function planAllowsBulkMessaging(planId: string | null | undefined): bool
   return getPlan(planId).features.bulk_messaging;
 }
 
-export async function orgAllowsBulkMessaging(
+async function subscriptionAllowsBulkMessaging(
   supabase: SupabaseClient,
   organizationId: string,
 ): Promise<boolean> {
-  const { data, error } = await supabase.rpc("org_has_module", {
-    org_id: organizationId,
-    module_key: "bulk_messaging",
-  });
-
-  if (!error && typeof data === "boolean") {
-    return data;
-  }
-
   const { data: sub } = await supabase
     .from("subscriptions")
     .select("plan_id, status")
@@ -32,4 +23,21 @@ export async function orgAllowsBulkMessaging(
   if (!sub) return false;
   if (sub.status !== "trialing" && sub.status !== "active") return false;
   return planAllowsBulkMessaging(sub.plan_id as PlanId);
+}
+
+export async function orgAllowsBulkMessaging(
+  supabase: SupabaseClient,
+  organizationId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc("org_has_module", {
+    org_id: organizationId,
+    module_key: "bulk_messaging",
+  });
+
+  if (!error && data === true) {
+    return true;
+  }
+
+  // RPC false or unavailable — align with app plan matrix (Business/Pro) when subscription is active.
+  return subscriptionAllowsBulkMessaging(supabase, organizationId);
 }

@@ -65,7 +65,7 @@ export function MessageComposer({
   contextId,
 }: MessageComposerProps) {
   const { t } = useLocale();
-  const { can } = useSubscription();
+  const { can, refreshOrg } = useSubscription();
   const canApiSms = can("bulk_messaging");
   const settings = loadNotificationSettings();
   const [channel, setChannel] = useState<MessageChannel>(settings.defaultChannel);
@@ -85,6 +85,7 @@ export function MessageComposer({
 
   useEffect(() => {
     if (!open) return;
+    void refreshOrg();
     setTemplateId(defaultTemplate ?? defaultTemplateForContext(context));
     setChannel(
       settings.defaultChannel === "api_sms" && !canApiSms
@@ -93,7 +94,7 @@ export function MessageComposer({
     );
     setMessageLang(settings.preferredLanguage);
     setFeedback(null);
-  }, [open, defaultTemplate, context, settings.defaultChannel, settings.preferredLanguage, canApiSms]);
+  }, [open, defaultTemplate, context, settings.defaultChannel, settings.preferredLanguage, canApiSms, refreshOrg]);
 
   useEffect(() => {
     if (!open) return;
