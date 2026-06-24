@@ -52,7 +52,7 @@ export function OfflineSyncNotice({ className = "mb-4" }: { className?: string }
         )}
       </div>
       {cloudSyncError && isOnline && (
-        <p className="mt-1 text-xs font-medium opacity-90">{cloudSyncError}</p>
+        <p className="mt-1 text-xs font-medium opacity-90">{t("common.cloud_sync_error")}</p>
       )}
     </div>
   );

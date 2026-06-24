@@ -67,7 +67,7 @@ export default function DashboardPage() {
       <SiteHeader />
       <ProMain>
         <ProPageHeader
-          eyebrow={org.isAuthenticated ? t("common.saved_cloud") : t("common.saved_browser")}
+          eyebrow={org.isAuthenticated ? t("common.saved") : t("common.saved_browser")}
           title={`${t("dash.title")} · ${shopName}`}
           description={
             <span>
@@ -449,7 +449,7 @@ export default function DashboardPage() {
         )}
 
         <div className="mt-8 rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 text-center text-xs font-semibold text-slate-500 shadow-sm sm:text-left">
-          <span>{t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}</span>
+          <span>{t(org.isAuthenticated ? "common.saved" : "common.saved_browser")}</span>
           {!org.isAuthenticated && (
             <button
               type="button"
