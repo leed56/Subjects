@@ -8,7 +8,7 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 export function OfflineBanner() {
   const isOnline = useOnlineStatus();
-  const { offlinePendingSync, offlinePendingChangeCount, cloudSyncing } = useAppStore();
+  const { offlinePendingSync, offlinePendingChangeCount } = useAppStore();
   const { t } = useLocale();
   const { org, isPlatformAdmin, can } = useSubscription();
 
@@ -21,21 +21,6 @@ export function OfflineBanner() {
           String(offlinePendingChangeCount),
         )
       : null;
-
-  if (isOnline && offlinePendingSync && cloudSyncing) {
-    return (
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-1.5 text-center text-xs font-semibold text-slate-600">
-        {offlinePendingChangeCount > 0
-          ? t("offline.sync_pending_count").replace(
-              "{count}",
-              String(Math.max(offlinePendingChangeCount, 1)),
-            )
-          : t("offline.sync_pending")}
-      </div>
-    );
-  }
-
-  if (isOnline && offlinePendingSync) return null;
 
   if (isOnline) return null;
 

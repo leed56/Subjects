@@ -9,7 +9,12 @@ import { emptyAppData } from "@/lib/store/storage";
 import type { AppData } from "@/lib/store/types";
 import { businessFromOrg, fetchOrgShopSettings } from "./org-settings";
 import { createBrowserClient } from "./client";
-import { hasSyncConflict } from "@/lib/offline/sync-conflict";
+import {
+  hasSyncConflict,
+  localHasUnsyncedRecordsFromData,
+  mergeAppData,
+  mergePullWithLocal,
+} from "@/lib/offline/sync-conflict";
 import { localDataWatermark } from "./sync-watermark";
 
 export type CloudPushResult = {
@@ -599,6 +604,57 @@ async function upsertOrgRows(
   return error?.message ?? null;
 }
 
+function customerRowsForOrg(
+  organizationId: string,
+  customers: AppData["customers"],
+): Record<string, unknown>[] {
+  return customers.map((c) => ({
+    id: c.id,
+    organization_id: organizationId,
+    name: c.name,
+    contact_type: c.contactType,
+    contact_person: c.contactPerson ?? null,
+    vat_number: c.vatNumber ?? null,
+    phone: c.phone ?? null,
+    address: c.address ?? null,
+    credit_balance: c.creditBalance,
+    credit_limit: c.creditLimit ?? null,
+  }));
+}
+
+/** Upsert customers only — used for immediate save-to-cloud on the Customers screen. */
+export async function pushCustomersToCloud(
+  organizationId: string,
+  customers: AppData["customers"],
+): Promise<string | null> {
+  return upsertOrgRows("customers", customerRowsForOrg(organizationId, customers));
+}
+
+/** Upsert customers and mirror deletions (single-staff shops only). */
+export async function syncCustomersSnapshot(
+  organizationId: string,
+  customers: AppData["customers"],
+): Promise<string | null> {
+  const upsertErr = await pushCustomersToCloud(organizationId, customers);
+  if (upsertErr) return upsertErr;
+
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const { count: memberCount } = await supabase
+    .from("org_members")
+    .select("*", { count: "exact", head: true })
+    .eq("organization_id", organizationId);
+
+  if ((memberCount ?? 0) > 1) return null;
+
+  return deleteOrgRowsNotIn(
+    "customers",
+    organizationId,
+    customers.map((c) => c.id),
+  );
+}
+
 /** Masked views (sales/products): avoid upsert — SELECT on *_base is revoked. */
 async function upsertMaskedViewRows(
   table: "sales" | "products",
@@ -816,18 +872,7 @@ export async function pushBusinessData(
     custom_fields: p.customFields,
   }));
 
-  const customerRows = data.customers.map((c) => ({
-    id: c.id,
-    organization_id: organizationId,
-    name: c.name,
-    contact_type: c.contactType,
-    contact_person: c.contactPerson ?? null,
-    vat_number: c.vatNumber ?? null,
-    phone: c.phone ?? null,
-    address: c.address ?? null,
-    credit_balance: c.creditBalance,
-    credit_limit: c.creditLimit ?? null,
-  }));
+  const customerRows = customerRowsForOrg(organizationId, data.customers);
 
   const supplierRows = data.suppliers.map((s) => ({
     id: s.id,
@@ -1132,14 +1177,11 @@ export async function pushBusinessData(
       | "vehicles";
     rows: Record<string, unknown>[];
   }> = [
-    { table: "products", rows: productRows },
     { table: "customers", rows: customerRows },
     { table: "suppliers", rows: supplierRows },
     { table: "bank_accounts", rows: bankRows },
     { table: "bank_transactions", rows: bankTransactionRows },
     { table: "bank_transfers", rows: bankTransferRows },
-    { table: "sales", rows: saleRows },
-    { table: "purchases", rows: purchaseRows },
     { table: "customer_payments", rows: customerPaymentRows },
     { table: "customer_product_prices", rows: customerProductPriceRows },
     { table: "supplier_payments", rows: supplierPaymentRows },
@@ -1152,6 +1194,9 @@ export async function pushBusinessData(
     { table: "contractors", rows: contractorRows },
     { table: "contractor_payments", rows: contractorPaymentRows },
     { table: "vehicles", rows: vehicleRows },
+    { table: "products", rows: productRows },
+    { table: "sales", rows: saleRows },
+    { table: "purchases", rows: purchaseRows },
   ];
 
   for (const step of upsertSteps) {
@@ -1313,6 +1358,26 @@ export async function syncBusinessData(
   }
 
   if (cloud && cloudGen > localGeneration) {
+    if (localHasUnsyncedRecordsFromData(local, cloud)) {
+      const merged = mergeAppData(local, cloud);
+      const push = await pushBusinessData(organizationId, merged, {
+        seenGeneration: cloudGen,
+      });
+      if (push.stale && hasSyncConflict(local, cloud)) {
+        return {
+          data: merged,
+          error: null,
+          generation: push.generation,
+          conflictRemote: cloud,
+        };
+      }
+      return {
+        data: merged,
+        error: push.error,
+        generation: push.generation,
+        conflictRemote: null,
+      };
+    }
     return { data: cloud, error: null, generation: cloudGen, conflictRemote: null };
   }
 
@@ -1344,8 +1409,11 @@ export async function syncBusinessData(
           conflictRemote: fresh,
         };
       }
+      const resolved = fresh
+        ? mergePullWithLocal(local, fresh)
+        : cloud;
       return {
-        data: fresh ?? cloud,
+        data: resolved ?? cloud,
         error: null,
         generation: push.generation,
         conflictRemote: null,
@@ -1359,7 +1427,12 @@ export async function syncBusinessData(
     };
   }
 
-  return { data: cloud!, error: null, generation: cloudGen, conflictRemote: null };
+  return {
+    data: mergePullWithLocal(local, cloud!),
+    error: null,
+    generation: cloudGen,
+    conflictRemote: null,
+  };
 }
 
 export async function fetchCloudSyncWatermark(organizationId: string): Promise<number> {
@@ -1407,5 +1480,11 @@ export async function pullRemoteIfNewer(
     };
   }
 
-  return { data: cloud, cloudTs, cloudGen, refreshed: true, error: null };
+  return {
+    data: mergePullWithLocal(local, cloud),
+    cloudTs,
+    cloudGen,
+    refreshed: true,
+    error: null,
+  };
 }

@@ -7,7 +7,7 @@ import { useOnlineStatus } from "@/lib/offline/connectivity";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 export function CloudSyncBanner() {
-  const { cloudSyncError, cloudSyncing, cloudRemoteNotice, dismissCloudRemoteNotice } =
+  const { cloudSyncError, cloudRemoteNotice, dismissCloudRemoteNotice } =
     useAppStore();
   const isOnline = useOnlineStatus();
   const { t } = useLocale();
@@ -20,14 +20,6 @@ export function CloudSyncBanner() {
   }, [cloudRemoteNotice, dismissCloudRemoteNotice]);
 
   if (isPlatformAdmin || !org.isAuthenticated || !isOnline) return null;
-
-  if (cloudSyncing) {
-    return (
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-1.5 text-center text-xs font-semibold text-slate-600">
-        {t("common.cloud_syncing")}
-      </div>
-    );
-  }
 
   if (cloudSyncError) {
     return (

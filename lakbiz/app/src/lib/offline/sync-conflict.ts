@@ -151,3 +151,30 @@ export function mergeAppData(local: AppData, remote: AppData): AppData {
 export function hasSyncConflict(local: AppData, remote: AppData): boolean {
   return summarizeSyncConflict(local, remote).hasConflict;
 }
+
+/** Local rows that exist only on this device and must not be dropped by a cloud pull. */
+export function localHasUnsyncedRecords(
+  summary: SyncConflictSummary,
+): boolean {
+  return (
+    summary.localOnlySales > 0 ||
+    summary.localOnlyPurchases > 0 ||
+    summary.localOnlyCustomers > 0 ||
+    summary.localOnlyAcJobs > 0
+  );
+}
+
+export function localHasUnsyncedRecordsFromData(
+  local: AppData,
+  remote: AppData,
+): boolean {
+  return localHasUnsyncedRecords(summarizeSyncConflict(local, remote));
+}
+
+/** Apply a cloud snapshot without discarding unsynced local rows. */
+export function mergePullWithLocal(local: AppData, remote: AppData): AppData {
+  if (!localHasUnsyncedRecordsFromData(local, remote)) {
+    return remote;
+  }
+  return mergeAppData(local, remote);
+}

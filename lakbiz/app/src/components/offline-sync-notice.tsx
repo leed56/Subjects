@@ -19,6 +19,7 @@ export function OfflineSyncNotice({ className = "mb-4" }: { className?: string }
   const { org, isPlatformAdmin } = useSubscription();
 
   if (isPlatformAdmin || !org.isAuthenticated || !offlinePendingSync) return null;
+  if (isOnline && cloudSyncing) return null;
 
   const count = Math.max(offlinePendingChangeCount, 1);
 

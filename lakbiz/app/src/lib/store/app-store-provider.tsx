@@ -27,6 +27,7 @@ import { getPlan } from "@/lib/subscription/plans";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import {
   pushBusinessData,
+  syncCustomersSnapshot,
   pullBusinessData,
   pullRemoteIfNewer,
   syncBusinessData,
@@ -55,7 +56,9 @@ import {
 } from "@/lib/offline/sync-retry";
 import {
   hasSyncConflict,
+  localHasUnsyncedRecordsFromData,
   mergeAppData,
+  mergePullWithLocal,
   summarizeSyncConflict,
   type SyncConflictResolution,
   type SyncConflictSummary,
@@ -147,7 +150,12 @@ export type AppStoreValue = {
   stockOut: (productId: string, qty: number, note?: string) => void;
   addCustomer: (input: CustomerInput) => boolean;
   updateCustomer: (id: string, input: CustomerInput) => boolean;
+  saveCustomerToCloud: (
+    input: CustomerInput,
+    existingId?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   deleteCustomer: (id: string) => void;
+  deleteCustomerToCloud: (id: string) => Promise<{ ok: boolean; error?: string }>;
   setCustomerProductPrice: (
     customerId: string,
     productId: string,
@@ -320,17 +328,18 @@ function useAppStoreState(): AppStoreValue {
       payload: AppData,
       orgId: string,
     ): Promise<{ err: string | null; conflict: boolean }> => {
+      let workingPayload = payload;
       const [cloudTs, cloudGen] = await Promise.all([
         fetchCloudSyncWatermark(orgId),
         fetchOrgSyncGeneration(orgId),
       ]);
-      const localTs = localDataWatermark(payload, orgId);
+      const localTs = localDataWatermark(workingPayload, orgId);
       const localGen = getLocalSyncGeneration(orgId);
 
       if (cloudGen > localGen || cloudTs > localTs) {
         const pulled = await pullRemoteIfNewer(
           orgId,
-          payload,
+          workingPayload,
           lastCloudWatermarkRef.current,
           lastCloudGenerationRef.current,
         );
@@ -342,27 +351,36 @@ function useAppStoreState(): AppStoreValue {
           lastCloudGenerationRef.current,
           pulled.cloudGen,
         );
+        if (pulled.error) {
+          return { err: pulled.error, conflict: false };
+        }
         if (pulled.refreshed) {
-          if (hasSyncConflict(payload, pulled.data)) {
-            raiseSyncConflict(payload, pulled.data, pulled.cloudGen);
+          if (hasSyncConflict(workingPayload, pulled.data)) {
+            raiseSyncConflict(workingPayload, pulled.data, pulled.cloudGen);
             return { err: null, conflict: true };
           }
-          setData(pulled.data);
-          latestDataRef.current = pulled.data;
-          saveAppData(pulled.data, orgId);
-          setLocalSyncGeneration(orgId, pulled.cloudGen);
-          setCloudRemoteNotice(true);
+          const hadUnsynced = localHasUnsyncedRecordsFromData(
+            workingPayload,
+            pulled.data,
+          );
+          workingPayload = pulled.data;
+          setData(workingPayload);
+          latestDataRef.current = workingPayload;
+          saveAppData(workingPayload, orgId);
+          if (!hadUnsynced) {
+            setLocalSyncGeneration(orgId, pulled.cloudGen);
+            setCloudRemoteNotice(true);
+            clearOfflinePendingSync(orgId);
+            refreshOfflinePendingState(orgId);
+          }
           setCloudSyncError(null);
-          clearOfflinePendingSync(orgId);
-          refreshOfflinePendingState(orgId);
         }
-        return { err: pulled.error, conflict: false };
       }
 
       if (!skipConflictCheckRef.current) {
-        const cloud = await pullBusinessData(orgId, payload.business);
-        if (cloud && !isEmptyBusinessData(cloud) && hasSyncConflict(payload, cloud)) {
-          raiseSyncConflict(payload, cloud, cloudGen);
+        const cloud = await pullBusinessData(orgId, workingPayload.business);
+        if (cloud && !isEmptyBusinessData(cloud) && hasSyncConflict(workingPayload, cloud)) {
+          raiseSyncConflict(workingPayload, cloud, cloudGen);
           return { err: null, conflict: true };
         }
       }
@@ -370,7 +388,7 @@ function useAppStoreState(): AppStoreValue {
       const push = await withCloudSyncRetry(
         async () => {
           const seenGeneration = await fetchOrgSyncGeneration(orgId);
-          return pushBusinessData(orgId, payload, {
+          return pushBusinessData(orgId, workingPayload, {
             preserveBuyPrices: !canSeeFinancials,
             seenGeneration,
           });
@@ -379,22 +397,29 @@ function useAppStoreState(): AppStoreValue {
       );
 
       if (push.stale) {
-        const remote = await pullBusinessData(orgId, payload.business);
-        if (remote && hasSyncConflict(payload, remote)) {
-          raiseSyncConflict(payload, remote, push.generation);
+        const remote = await pullBusinessData(orgId, workingPayload.business);
+        if (remote && hasSyncConflict(workingPayload, remote)) {
+          raiseSyncConflict(workingPayload, remote, push.generation);
           return { err: null, conflict: true };
         }
         if (remote) {
-          setData(remote);
-          latestDataRef.current = remote;
-          saveAppData(remote, orgId);
+          const hadUnsynced = localHasUnsyncedRecordsFromData(workingPayload, remote);
+          const resolved = mergePullWithLocal(workingPayload, remote);
+          setData(resolved);
+          latestDataRef.current = resolved;
+          saveAppData(resolved, orgId);
           setLocalSyncGeneration(orgId, push.generation);
           lastCloudGenerationRef.current = push.generation;
           lastCloudWatermarkRef.current = await fetchCloudSyncWatermark(orgId);
           setCloudRemoteNotice(true);
           setCloudSyncError(null);
-          clearOfflinePendingSync(orgId);
-          refreshOfflinePendingState(orgId);
+          if (hadUnsynced) {
+            touchOfflinePending(orgId);
+            refreshOfflinePendingState(orgId);
+          } else {
+            clearOfflinePendingSync(orgId);
+            refreshOfflinePendingState(orgId);
+          }
         }
         skipConflictCheckRef.current = false;
         return { err: null, conflict: false };
@@ -571,15 +596,17 @@ function useAppStoreState(): AppStoreValue {
     const pullIfIdle = () => {
       if (!isBrowserOnline()) return;
       if (syncConflict) return;
+      if (cloudSyncing) return;
       if (document.visibilityState === "hidden") return;
       if (pushTimerRef.current) return;
       const payload = latestDataRef.current;
       if (!payload || !org.id) return;
+      if (hasOfflinePendingSync(org.id)) return;
 
       const localTs = localDataWatermark(payload, org.id);
       const localGen = getLocalSyncGeneration(org.id);
       if (
-        localTs > lastCloudWatermarkRef.current &&
+        localTs > lastCloudWatermarkRef.current ||
         localGen > lastCloudGenerationRef.current
       ) {
         return;
@@ -604,12 +631,19 @@ function useAppStoreState(): AppStoreValue {
           raiseSyncConflict(payload, result.data, result.cloudGen);
           return;
         }
+        const hadUnsynced = localHasUnsyncedRecordsFromData(payload, result.data);
         setData(result.data);
         latestDataRef.current = result.data;
         saveAppData(result.data, org.id);
-        setLocalSyncGeneration(org.id!, result.cloudGen);
-        setCloudRemoteNotice(true);
-        setCloudSyncError(null);
+        if (!hadUnsynced) {
+          setLocalSyncGeneration(org.id!, result.cloudGen);
+          setCloudRemoteNotice(true);
+          setCloudSyncError(null);
+          return;
+        }
+        touchOfflinePending(org.id!);
+        refreshOfflinePendingState(org.id!);
+        scheduleCloudPush(result.data);
       });
     };
 
@@ -626,7 +660,17 @@ function useAppStoreState(): AppStoreValue {
       window.removeEventListener("focus", pullIfIdle);
       window.clearInterval(interval);
     };
-  }, [ready, user, org.id, org.isAuthenticated, syncConflict, raiseSyncConflict]);
+  }, [
+    ready,
+    user,
+    org.id,
+    org.isAuthenticated,
+    syncConflict,
+    cloudSyncing,
+    raiseSyncConflict,
+    scheduleCloudPush,
+    refreshOfflinePendingState,
+  ]);
 
   const dismissCloudRemoteNotice = useCallback(() => {
     setCloudRemoteNotice(false);
@@ -703,6 +747,111 @@ function useAppStoreState(): AppStoreValue {
     [syncConflict, org.id, canSeeFinancials, refreshOfflinePendingState],
   );
 
+  const saveCustomerToCloud = useCallback(
+    async (
+      input: CustomerInput,
+      existingId?: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const next = existingId
+        ? updateCustomer(data, existingId, input)
+        : addCustomer(data, input);
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncCustomersSnapshot(org.id, next.customers);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const deleteCustomerToCloud = useCallback(
+    async (id: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!data || isReadOnly) return { ok: false, error: "Read-only mode" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+
+      const next = deleteCustomer(data, id);
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncCustomersSnapshot(org.id, next.customers);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      isReadOnly,
+      syncConflict,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
   const persist = useCallback(
     (next: AppData): boolean => {
       if (syncConflict) return false;
@@ -718,7 +867,15 @@ function useAppStoreState(): AppStoreValue {
       scheduleCloudPush(next);
       return true;
     },
-    [syncConflict, isReadOnly, can, isOnline, org.id, scheduleCloudPush, refreshOfflinePendingState],
+    [
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
   );
 
   const canAddProduct = useCallback(
@@ -783,10 +940,12 @@ function useAppStoreState(): AppStoreValue {
         if (!data) return false;
         return persist(updateCustomer(data, id, input));
       },
+      saveCustomerToCloud,
       deleteCustomer: (id) => {
         if (!data || isReadOnly) return;
         persist(deleteCustomer(data, id));
       },
+      deleteCustomerToCloud,
       setCustomerProductPrice: (customerId, productId, price) => {
         if (!data || !can("write")) return false;
         const before = data.customerProductPrices.find(
@@ -1031,6 +1190,8 @@ function useAppStoreState(): AppStoreValue {
     can,
     canAddProduct,
     persist,
+    saveCustomerToCloud,
+    deleteCustomerToCloud,
     scheduleCloudPush,
     org.sector,
     org.id,

@@ -40,9 +40,8 @@ export default function CustomersPage() {
   const {
     data,
     ready,
-    addCustomer,
-    updateCustomer,
-    deleteCustomer,
+    saveCustomerToCloud,
+    deleteCustomerToCloud,
     recordCustomerPayment,
     setCustomerProductPrice,
     removeCustomerProductPrice,
@@ -69,6 +68,8 @@ export default function CustomersPage() {
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [bulkWaOpen, setBulkWaOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   if (!ready || !data) {
     return (
@@ -103,9 +104,9 @@ export default function CustomersPage() {
     setCreditLimit(customer.creditLimit ?? "");
   };
 
-  const handleSave = (e: FormEvent) => {
+  const handleSave = async (e: FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || saving) return;
     const limit = creditLimit === "" ? undefined : Number(creditLimit);
     const payload = {
       name,
@@ -116,16 +117,33 @@ export default function CustomersPage() {
       address,
       creditLimit: limit,
     };
-    const ok = editing
-      ? updateCustomer(editing.id, payload)
-      : addCustomer(payload);
-    if (!ok) {
-      setMessage(t("common.save_failed"));
-      setTimeout(() => setMessage(""), 2500);
+    setSaving(true);
+    setMessage("");
+    const result = await saveCustomerToCloud(payload, editing?.id);
+    setSaving(false);
+    if (!result.ok) {
+      setMessage(result.error ?? t("common.save_failed"));
+      setTimeout(() => setMessage(""), 4000);
       return;
     }
     resetForm();
     setMessage(editing ? t("cust.updated") : t("cust.added"));
+    setTimeout(() => setMessage(""), 2500);
+  };
+
+  const handleDelete = async (customer: Customer) => {
+    if (deletingId) return;
+    if (!confirm(`${t("cust.delete_confirm")} ${customer.name}?`)) return;
+    setDeletingId(customer.id);
+    const result = await deleteCustomerToCloud(customer.id);
+    setDeletingId(null);
+    if (!result.ok) {
+      setMessage(result.error ?? t("common.save_failed"));
+      setTimeout(() => setMessage(""), 4000);
+      return;
+    }
+    if (editing?.id === customer.id) resetForm();
+    setMessage(t("cust.deleted"));
     setTimeout(() => setMessage(""), 2500);
   };
 
@@ -348,8 +366,8 @@ export default function CustomersPage() {
                 />
               </div>
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <button type="submit" disabled={!canWrite} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
-                  {editing ? t("common.update") : t("cust.add")}
+                <button type="submit" disabled={!canWrite || saving} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  {saving ? t("common.saving") : editing ? t("common.update") : t("cust.add")}
                 </button>
                 {editing && (
                   <button type="button" onClick={resetForm} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
@@ -415,9 +433,7 @@ export default function CustomersPage() {
                         }}
                         wholesaleCount={wholesalePriceCount(data.customerProductPrices, c.id)}
                         onEdit={() => startEdit(c)}
-                        onDelete={() => {
-                          if (confirm(`${t("cust.delete_confirm")} ${c.name}?`)) deleteCustomer(c.id);
-                        }}
+                        onDelete={() => void handleDelete(c)}
                       />
                     ))}
                   </tbody>
@@ -441,9 +457,7 @@ export default function CustomersPage() {
                     }}
                     wholesaleCount={wholesalePriceCount(data.customerProductPrices, c.id)}
                     onEdit={() => startEdit(c)}
-                    onDelete={() => {
-                      if (confirm(`${t("cust.delete_confirm")} ${c.name}?`)) deleteCustomer(c.id);
-                    }}
+                    onDelete={() => void handleDelete(c)}
                   />
                 ))}
               </div>
