@@ -29,9 +29,14 @@ import {
   pullRemoteIfNewer,
   syncBusinessData,
   fetchCloudSyncWatermark,
+  fetchOrgSyncGeneration,
   isEmptyBusinessData,
 } from "@/lib/supabase/business-sync";
-import { localDataWatermark } from "@/lib/supabase/sync-watermark";
+import {
+  getLocalSyncGeneration,
+  localDataWatermark,
+  setLocalSyncGeneration,
+} from "@/lib/supabase/sync-watermark";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { isBrowserOnline, useOnlineStatus } from "@/lib/offline/connectivity";
 import {
@@ -241,6 +246,7 @@ function useAppStoreState(): AppStoreValue {
   } | null>(null);
   const cloudLoadedRef = useRef(false);
   const lastCloudWatermarkRef = useRef(0);
+  const lastCloudGenerationRef = useRef(0);
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryAttemptRef = useRef(0);
@@ -275,6 +281,7 @@ function useAppStoreState(): AppStoreValue {
     setReady(true);
     cloudLoadedRef.current = false;
     lastCloudWatermarkRef.current = 0;
+    lastCloudGenerationRef.current = 0;
     setCloudRemoteNotice(false);
     setSyncConflict(null);
     if (org.id) refreshOfflinePendingState(org.id);
@@ -310,27 +317,37 @@ function useAppStoreState(): AppStoreValue {
       payload: AppData,
       orgId: string,
     ): Promise<{ err: string | null; conflict: boolean }> => {
-      const cloudTs = await fetchCloudSyncWatermark(orgId);
+      const [cloudTs, cloudGen] = await Promise.all([
+        fetchCloudSyncWatermark(orgId),
+        fetchOrgSyncGeneration(orgId),
+      ]);
       const localTs = localDataWatermark(payload, orgId);
+      const localGen = getLocalSyncGeneration(orgId);
 
-      if (cloudTs > localTs) {
+      if (cloudGen > localGen || cloudTs > localTs) {
         const pulled = await pullRemoteIfNewer(
           orgId,
           payload,
           lastCloudWatermarkRef.current,
+          lastCloudGenerationRef.current,
         );
         lastCloudWatermarkRef.current = Math.max(
           lastCloudWatermarkRef.current,
           pulled.cloudTs,
         );
+        lastCloudGenerationRef.current = Math.max(
+          lastCloudGenerationRef.current,
+          pulled.cloudGen,
+        );
         if (pulled.refreshed) {
           if (hasSyncConflict(payload, pulled.data)) {
-            raiseSyncConflict(payload, pulled.data, pulled.cloudTs);
+            raiseSyncConflict(payload, pulled.data, pulled.cloudGen);
             return { err: null, conflict: true };
           }
           setData(pulled.data);
           latestDataRef.current = pulled.data;
           saveAppData(pulled.data, orgId);
+          setLocalSyncGeneration(orgId, pulled.cloudGen);
           setCloudRemoteNotice(true);
           setCloudSyncError(null);
           clearOfflinePendingSync(orgId);
@@ -342,20 +359,47 @@ function useAppStoreState(): AppStoreValue {
       if (!skipConflictCheckRef.current) {
         const cloud = await pullBusinessData(orgId, payload.business);
         if (cloud && !isEmptyBusinessData(cloud) && hasSyncConflict(payload, cloud)) {
-          raiseSyncConflict(payload, cloud, cloudTs);
+          raiseSyncConflict(payload, cloud, cloudGen);
           return { err: null, conflict: true };
         }
       }
 
-      const err = await withCloudSyncRetry(
-        () =>
-          pushBusinessData(orgId, payload, {
+      const push = await withCloudSyncRetry(
+        async () => {
+          const seenGeneration = await fetchOrgSyncGeneration(orgId);
+          return pushBusinessData(orgId, payload, {
             preserveBuyPrices: !canSeeFinancials,
-          }),
-        (error) => error != null,
+            seenGeneration,
+          });
+        },
+        (result) => result.error != null && !result.stale,
       );
 
-      if (!err) {
+      if (push.stale) {
+        const remote = await pullBusinessData(orgId, payload.business);
+        if (remote && hasSyncConflict(payload, remote)) {
+          raiseSyncConflict(payload, remote, push.generation);
+          return { err: null, conflict: true };
+        }
+        if (remote) {
+          setData(remote);
+          latestDataRef.current = remote;
+          saveAppData(remote, orgId);
+          setLocalSyncGeneration(orgId, push.generation);
+          lastCloudGenerationRef.current = push.generation;
+          lastCloudWatermarkRef.current = await fetchCloudSyncWatermark(orgId);
+          setCloudRemoteNotice(true);
+          setCloudSyncError(null);
+          clearOfflinePendingSync(orgId);
+          refreshOfflinePendingState(orgId);
+        }
+        skipConflictCheckRef.current = false;
+        return { err: null, conflict: false };
+      }
+
+      if (!push.error) {
+        setLocalSyncGeneration(orgId, push.generation);
+        lastCloudGenerationRef.current = push.generation;
         lastCloudWatermarkRef.current = await fetchCloudSyncWatermark(orgId);
         setCloudRemoteNotice(false);
         clearOfflinePendingSync(orgId);
@@ -363,7 +407,7 @@ function useAppStoreState(): AppStoreValue {
       }
 
       skipConflictCheckRef.current = false;
-      return { err, conflict: false };
+      return { err: push.error, conflict: false };
     },
     [canSeeFinancials, refreshOfflinePendingState, raiseSyncConflict],
   );
@@ -480,25 +524,32 @@ function useAppStoreState(): AppStoreValue {
     setCloudSyncing(true);
     setCloudSyncError(null);
 
-    void syncBusinessData(org.id, local).then(async ({ data: synced, error }) => {
-      if (cancelled) return;
-      cloudLoadedRef.current = true;
-      setData(synced);
-      latestDataRef.current = synced;
-      saveAppData(synced, org.id);
-      lastCloudWatermarkRef.current = await fetchCloudSyncWatermark(org.id!);
-      if (!error) {
-        clearOfflinePendingSync(org.id!);
-        refreshOfflinePendingState(org.id!);
-      }
-      setCloudSyncing(false);
-      setCloudSyncError(error);
-    });
+    void syncBusinessData(org.id, local, getLocalSyncGeneration(org.id)).then(
+      async ({ data: synced, error, generation, conflictRemote }) => {
+        if (cancelled) return;
+        cloudLoadedRef.current = true;
+        setData(synced);
+        latestDataRef.current = synced;
+        saveAppData(synced, org.id);
+        lastCloudWatermarkRef.current = await fetchCloudSyncWatermark(org.id!);
+        lastCloudGenerationRef.current = generation;
+        setLocalSyncGeneration(org.id!, generation);
+        if (conflictRemote) {
+          raiseSyncConflict(local, conflictRemote, generation);
+        }
+        if (!error) {
+          clearOfflinePendingSync(org.id!);
+          refreshOfflinePendingState(org.id!);
+        }
+        setCloudSyncing(false);
+        setCloudSyncError(error);
+      },
+    );
 
     return () => {
       cancelled = true;
     };
-  }, [ready, user, org.id, org.isAuthenticated, isOnline, refreshOfflinePendingState]);
+  }, [ready, user, org.id, org.isAuthenticated, isOnline, refreshOfflinePendingState, raiseSyncConflict]);
 
   useEffect(() => {
     if (!ready || !user || !org.id || !org.isAuthenticated || !isOnline) return;
@@ -521,26 +572,40 @@ function useAppStoreState(): AppStoreValue {
       if (!payload || !org.id) return;
 
       const localTs = localDataWatermark(payload, org.id);
-      if (localTs > lastCloudWatermarkRef.current) return;
+      const localGen = getLocalSyncGeneration(org.id);
+      if (
+        localTs > lastCloudWatermarkRef.current &&
+        localGen > lastCloudGenerationRef.current
+      ) {
+        return;
+      }
 
-      void pullRemoteIfNewer(org.id, payload, lastCloudWatermarkRef.current).then(
-        (result) => {
-          lastCloudWatermarkRef.current = Math.max(
-            lastCloudWatermarkRef.current,
-            result.cloudTs,
-          );
-          if (!result.refreshed) return;
-          if (hasSyncConflict(payload, result.data)) {
-            raiseSyncConflict(payload, result.data, result.cloudTs);
-            return;
-          }
-          setData(result.data);
-          latestDataRef.current = result.data;
-          saveAppData(result.data, org.id);
-          setCloudRemoteNotice(true);
-          setCloudSyncError(null);
-        },
-      );
+      void pullRemoteIfNewer(
+        org.id,
+        payload,
+        lastCloudWatermarkRef.current,
+        lastCloudGenerationRef.current,
+      ).then((result) => {
+        lastCloudWatermarkRef.current = Math.max(
+          lastCloudWatermarkRef.current,
+          result.cloudTs,
+        );
+        lastCloudGenerationRef.current = Math.max(
+          lastCloudGenerationRef.current,
+          result.cloudGen,
+        );
+        if (!result.refreshed) return;
+        if (hasSyncConflict(payload, result.data)) {
+          raiseSyncConflict(payload, result.data, result.cloudGen);
+          return;
+        }
+        setData(result.data);
+        latestDataRef.current = result.data;
+        saveAppData(result.data, org.id);
+        setLocalSyncGeneration(org.id!, result.cloudGen);
+        setCloudRemoteNotice(true);
+        setCloudSyncError(null);
+      });
     };
 
     const onVisible = () => {
@@ -588,30 +653,44 @@ function useAppStoreState(): AppStoreValue {
         saveAppData(next, orgId);
 
         if (resolution === "use_remote") {
-          lastCloudWatermarkRef.current = pending.cloudTs;
+          lastCloudGenerationRef.current = pending.cloudTs;
+          setLocalSyncGeneration(orgId, pending.cloudTs);
           clearOfflinePendingSync(orgId);
           refreshOfflinePendingState(orgId);
           setCloudSyncing(false);
           return;
         }
 
-        const err = await withCloudSyncRetry(
-          () =>
-            pushBusinessData(orgId, next, {
+        const push = await withCloudSyncRetry(
+          async () => {
+            const seenGeneration = await fetchOrgSyncGeneration(orgId);
+            return pushBusinessData(orgId, next, {
               preserveBuyPrices: !canSeeFinancials,
-            }),
-          (error) => error != null,
+              seenGeneration,
+            });
+          },
+          (result) => result.error != null && !result.stale,
         );
         skipConflictCheckRef.current = false;
 
-        if (!err) {
+        if (push.stale) {
+          setCloudSyncError(
+            "Another device saved while resolving — pull latest data and try again.",
+          );
+          setCloudSyncing(false);
+          return;
+        }
+
+        if (!push.error) {
+          setLocalSyncGeneration(orgId, push.generation);
+          lastCloudGenerationRef.current = push.generation;
           lastCloudWatermarkRef.current = await fetchCloudSyncWatermark(orgId);
           clearOfflinePendingSync(orgId);
           refreshOfflinePendingState(orgId);
         } else {
           touchOfflinePending(orgId);
           refreshOfflinePendingState(orgId);
-          setCloudSyncError(err);
+          setCloudSyncError(push.error);
         }
         setCloudSyncing(false);
       })();

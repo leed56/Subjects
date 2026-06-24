@@ -83,6 +83,38 @@ export function SyncConflictDialog({
               )}
             </li>
           )}
+          {summary.localOnlyCustomers > 0 && (
+            <li>
+              {t("sync.conflict_local_customers").replace(
+                "{count}",
+                String(summary.localOnlyCustomers),
+              )}
+            </li>
+          )}
+          {summary.remoteOnlyCustomers > 0 && (
+            <li>
+              {t("sync.conflict_remote_customers").replace(
+                "{count}",
+                String(summary.remoteOnlyCustomers),
+              )}
+            </li>
+          )}
+          {summary.localOnlyAcJobs > 0 && (
+            <li>
+              {t("sync.conflict_local_ac_jobs").replace(
+                "{count}",
+                String(summary.localOnlyAcJobs),
+              )}
+            </li>
+          )}
+          {summary.remoteOnlyAcJobs > 0 && (
+            <li>
+              {t("sync.conflict_remote_ac_jobs").replace(
+                "{count}",
+                String(summary.remoteOnlyAcJobs),
+              )}
+            </li>
+          )}
         </ul>
 
         <p className="mt-3 text-xs font-medium text-slate-500">

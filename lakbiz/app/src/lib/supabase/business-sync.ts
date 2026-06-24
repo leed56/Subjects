@@ -9,7 +9,59 @@ import { emptyAppData } from "@/lib/store/storage";
 import type { AppData } from "@/lib/store/types";
 import { businessFromOrg, fetchOrgShopSettings } from "./org-settings";
 import { createBrowserClient } from "./client";
+import { hasSyncConflict } from "@/lib/offline/sync-conflict";
 import { localDataWatermark } from "./sync-watermark";
+
+export type CloudPushResult = {
+  error: string | null;
+  stale: boolean;
+  generation: number;
+};
+
+export async function fetchOrgSyncGeneration(organizationId: string): Promise<number> {
+  const supabase = createBrowserClient();
+  if (!supabase) return 0;
+
+  const { data, error } = await supabase.rpc("get_org_sync_generation", {
+    p_org_id: organizationId,
+  });
+  if (error) {
+    console.warn("[sync] get_org_sync_generation:", error.message);
+    return 0;
+  }
+  const n = Number(data);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+async function advanceOrgSyncGeneration(
+  organizationId: string,
+  seenGeneration: number,
+): Promise<{ ok: boolean; generation: number }> {
+  const supabase = createBrowserClient();
+  if (!supabase) return { ok: false, generation: seenGeneration };
+
+  const { data, error } = await supabase.rpc("try_advance_org_sync_generation", {
+    p_org_id: organizationId,
+    p_seen_generation: seenGeneration,
+  });
+  if (error) {
+    if (
+      error.message.includes("try_advance_org_sync_generation") ||
+      error.message.includes("get_org_sync_generation")
+    ) {
+      return { ok: true, generation: seenGeneration };
+    }
+    console.warn("[sync] try_advance_org_sync_generation:", error.message);
+    return { ok: false, generation: seenGeneration };
+  }
+
+  const n = Number(data);
+  if (n === -1) {
+    const current = await fetchOrgSyncGeneration(organizationId);
+    return { ok: false, generation: current };
+  }
+  return { ok: true, generation: n };
+}
 
 function num(value: number | string | null | undefined, fallback = 0): number {
   if (value == null) return fallback;
@@ -550,9 +602,11 @@ async function upsertOrgRows(
 async function deleteOrgRowsNotIn(
   table:
     | "products"
+    | "products_base"
     | "customers"
     | "suppliers"
     | "sales"
+    | "sales_base"
     | "purchases"
     | "customer_payments"
     | "customer_product_prices"
@@ -688,8 +742,10 @@ async function replacePurchaseLines(
 export async function pushBusinessData(
   organizationId: string,
   data: AppData,
-  options?: { preserveBuyPrices?: boolean },
-): Promise<string | null> {
+  options?: { preserveBuyPrices?: boolean; seenGeneration?: number },
+): Promise<CloudPushResult> {
+  const seenGeneration =
+    options?.seenGeneration ?? (await fetchOrgSyncGeneration(organizationId));
   let products = data.products;
   if (options?.preserveBuyPrices) {
     const supabase = createBrowserClient();
@@ -1064,23 +1120,25 @@ export async function pushBusinessData(
 
   for (const step of upsertSteps) {
     const err = await upsertOrgRows(step.table, step.rows);
-    if (err) return err;
+    if (err) return { error: err, stale: false, generation: seenGeneration };
   }
 
   for (const sale of data.sales) {
     const lines = saleLineRows.filter((row) => row.sale_id === sale.id);
     const err = await replaceSaleLines(organizationId, sale.id, lines);
-    if (err) return err;
+    if (err) return { error: err, stale: false, generation: seenGeneration };
   }
 
   for (const purchase of data.purchases) {
     const lines = purchaseLineRows.filter((row) => row.purchase_id === purchase.id);
     const err = await replacePurchaseLines(organizationId, purchase.id, lines);
-    if (err) return err;
+    if (err) return { error: err, stale: false, generation: seenGeneration };
   }
 
   const supabase = createBrowserClient();
-  if (!supabase) return "Supabase not configured";
+  if (!supabase) {
+    return { error: "Supabase not configured", stale: false, generation: seenGeneration };
+  }
   const { count: memberCount } = await supabase
     .from("org_members")
     .select("*", { count: "exact", head: true })
@@ -1088,12 +1146,16 @@ export async function pushBusinessData(
 
   // Multi-staff shops: skip prune so one device cannot delete another user's rows.
   if ((memberCount ?? 0) > 1) {
-    return null;
+    const advanced = await advanceOrgSyncGeneration(organizationId, seenGeneration);
+    if (!advanced.ok) {
+      return { error: null, stale: true, generation: advanced.generation };
+    }
+    return { error: null, stale: false, generation: advanced.generation };
   }
 
   const pruneSteps: Array<{
     table:
-      | "sales"
+      | "sales_base"
       | "purchases"
       | "customer_payments"
       | "customer_product_prices"
@@ -1102,7 +1164,7 @@ export async function pushBusinessData(
       | "cheques"
       | "ac_jobs"
       | "vehicles"
-      | "products"
+      | "products_base"
       | "customers"
       | "suppliers"
       | "bank_accounts"
@@ -1115,7 +1177,7 @@ export async function pushBusinessData(
       | "job_status_history";
     ids: string[];
   }> = [
-    { table: "sales", ids: data.sales.map((s) => s.id) },
+    { table: "sales_base", ids: data.sales.map((s) => s.id) },
     { table: "purchases", ids: data.purchases.map((p) => p.id) },
     { table: "customer_payments", ids: data.customerPayments.map((p) => p.id) },
     {
@@ -1134,7 +1196,7 @@ export async function pushBusinessData(
     { table: "contractors", ids: data.contractors.map((c) => c.id) },
     { table: "contractor_payments", ids: data.contractorPayments.map((p) => p.id) },
     { table: "vehicles", ids: data.vehicles.map((v) => v.id) },
-    { table: "products", ids: data.products.map((p) => p.id) },
+    { table: "products_base", ids: data.products.map((p) => p.id) },
     { table: "customers", ids: data.customers.map((c) => c.id) },
     { table: "suppliers", ids: data.suppliers.map((s) => s.id) },
     { table: "bank_accounts", ids: data.bankAccounts.map((b) => b.id) },
@@ -1142,31 +1204,77 @@ export async function pushBusinessData(
 
   for (const step of pruneSteps) {
     const err = await deleteOrgRowsNotIn(step.table, organizationId, step.ids);
-    if (err) return err;
+    if (err) return { error: err, stale: false, generation: seenGeneration };
   }
 
-  return null;
+  const advanced = await advanceOrgSyncGeneration(organizationId, seenGeneration);
+  if (!advanced.ok) {
+    return { error: null, stale: true, generation: advanced.generation };
+  }
+  return { error: null, stale: false, generation: advanced.generation };
 }
+
+export type SyncBusinessResult = {
+  data: AppData;
+  error: string | null;
+  generation: number;
+  conflictRemote: AppData | null;
+};
 
 export async function syncBusinessData(
   organizationId: string,
   local: AppData,
-): Promise<{ data: AppData; error: string | null }> {
+  localGeneration: number,
+): Promise<SyncBusinessResult> {
+  const cloudGen = await fetchOrgSyncGeneration(organizationId);
   const cloud = await pullBusinessData(organizationId, local.business);
   const cloudHasData = cloud != null && !isEmptyBusinessData(cloud);
   const localHasData = !isEmptyBusinessData(local);
 
   if (!cloudHasData && localHasData) {
-    const pushError = await pushBusinessData(organizationId, local);
-    return { data: local, error: pushError };
+    const push = await pushBusinessData(organizationId, local, {
+      seenGeneration: cloudGen,
+    });
+    if (push.stale && cloud && hasSyncConflict(local, cloud)) {
+      return {
+        data: local,
+        error: null,
+        generation: push.generation,
+        conflictRemote: cloud,
+      };
+    }
+    return {
+      data: local,
+      error: push.error,
+      generation: push.generation,
+      conflictRemote: null,
+    };
   }
 
   if (cloudHasData && !localHasData) {
-    return { data: cloud, error: null };
+    return { data: cloud, error: null, generation: cloudGen, conflictRemote: null };
   }
 
   if (!cloudHasData && !localHasData) {
-    return { data: cloud ?? emptyAppData(), error: null };
+    return {
+      data: cloud ?? emptyAppData(),
+      error: null,
+      generation: cloudGen,
+      conflictRemote: null,
+    };
+  }
+
+  if (cloud && cloudGen > localGeneration && hasSyncConflict(local, cloud)) {
+    return {
+      data: local,
+      error: null,
+      generation: cloudGen,
+      conflictRemote: cloud,
+    };
+  }
+
+  if (cloud && cloudGen > localGeneration) {
+    return { data: cloud, error: null, generation: cloudGen, conflictRemote: null };
   }
 
   const [cloudTs, localTs] = await Promise.all([
@@ -1174,12 +1282,45 @@ export async function syncBusinessData(
     Promise.resolve(localDataWatermark(local, organizationId)),
   ]);
 
-  if (localTs >= cloudTs) {
-    const pushError = await pushBusinessData(organizationId, local);
-    return { data: local, error: pushError };
+  if (cloud && hasSyncConflict(local, cloud)) {
+    return {
+      data: local,
+      error: null,
+      generation: cloudGen,
+      conflictRemote: cloud,
+    };
   }
 
-  return { data: cloud!, error: null };
+  if (localTs >= cloudTs || localGeneration >= cloudGen) {
+    const push = await pushBusinessData(organizationId, local, {
+      seenGeneration: cloudGen,
+    });
+    if (push.stale && cloud) {
+      const fresh = await pullBusinessData(organizationId, local.business);
+      if (fresh && hasSyncConflict(local, fresh)) {
+        return {
+          data: local,
+          error: null,
+          generation: push.generation,
+          conflictRemote: fresh,
+        };
+      }
+      return {
+        data: fresh ?? cloud,
+        error: null,
+        generation: push.generation,
+        conflictRemote: null,
+      };
+    }
+    return {
+      data: local,
+      error: push.error,
+      generation: push.generation,
+      conflictRemote: null,
+    };
+  }
+
+  return { data: cloud!, error: null, generation: cloudGen, conflictRemote: null };
 }
 
 export async function fetchCloudSyncWatermark(organizationId: string): Promise<number> {
@@ -1191,20 +1332,29 @@ export async function pullRemoteIfNewer(
   organizationId: string,
   local: AppData,
   lastKnownCloudTs: number,
+  lastKnownGeneration: number,
 ): Promise<{
   data: AppData;
   cloudTs: number;
+  cloudGen: number;
   refreshed: boolean;
   error: string | null;
 }> {
-  const cloudTs = await fetchCloudWatermark(organizationId);
-  if (cloudTs <= lastKnownCloudTs) {
-    return { data: local, cloudTs, refreshed: false, error: null };
+  const [cloudTs, cloudGen] = await Promise.all([
+    fetchCloudWatermark(organizationId),
+    fetchOrgSyncGeneration(organizationId),
+  ]);
+
+  const generationAhead = cloudGen > lastKnownGeneration;
+  const timestampAhead = cloudTs > lastKnownCloudTs;
+
+  if (!generationAhead && !timestampAhead) {
+    return { data: local, cloudTs, cloudGen, refreshed: false, error: null };
   }
 
   const localTs = localDataWatermark(local, organizationId);
-  if (localTs > cloudTs) {
-    return { data: local, cloudTs, refreshed: false, error: null };
+  if (!generationAhead && localTs > cloudTs) {
+    return { data: local, cloudTs, cloudGen, refreshed: false, error: null };
   }
 
   const cloud = await pullBusinessData(organizationId, local.business);
@@ -1212,10 +1362,11 @@ export async function pullRemoteIfNewer(
     return {
       data: local,
       cloudTs,
+      cloudGen,
       refreshed: false,
       error: "Could not load cloud data",
     };
   }
 
-  return { data: cloud, cloudTs, refreshed: true, error: null };
+  return { data: cloud, cloudTs, cloudGen, refreshed: true, error: null };
 }

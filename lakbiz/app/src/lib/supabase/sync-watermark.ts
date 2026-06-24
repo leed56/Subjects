@@ -1,6 +1,23 @@
 import type { AppData } from "@/lib/store/types";
 
 const LOCAL_TOUCH_PREFIX = "lakbiz-local-touch";
+const LOCAL_GEN_PREFIX = "lakbiz-sync-gen";
+
+export function getLocalSyncGeneration(orgId: string | null | undefined): number {
+  if (typeof window === "undefined" || !orgId) return 0;
+  const raw = localStorage.getItem(`${LOCAL_GEN_PREFIX}-${orgId}`);
+  if (!raw) return 0;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+export function setLocalSyncGeneration(
+  orgId: string | null | undefined,
+  generation: number,
+): void {
+  if (typeof window === "undefined" || !orgId) return;
+  localStorage.setItem(`${LOCAL_GEN_PREFIX}-${orgId}`, String(Math.max(0, generation)));
+}
 
 export function touchLocalSyncWatermark(orgId: string | null | undefined): void {
   if (typeof window === "undefined" || !orgId) return;

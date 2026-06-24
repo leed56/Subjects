@@ -9,6 +9,10 @@ export type SyncConflictSummary = {
   localOnlyPurchases: number;
   remoteOnlyPurchases: number;
   changedProducts: number;
+  localOnlyCustomers: number;
+  remoteOnlyCustomers: number;
+  localOnlyAcJobs: number;
+  remoteOnlyAcJobs: number;
   hasConflict: boolean;
 };
 
@@ -38,11 +42,19 @@ export function summarizeSyncConflict(
   const localSaleIds = idSet(local.sales);
   const remotePurchaseIds = idSet(remote.purchases);
   const localPurchaseIds = idSet(local.purchases);
+  const remoteCustomerIds = idSet(remote.customers);
+  const localCustomerIds = idSet(local.customers);
+  const remoteAcJobIds = idSet(remote.acJobs);
+  const localAcJobIds = idSet(local.acJobs);
 
   const localOnlySales = countOnlyIn(local.sales, remoteSaleIds);
   const remoteOnlySales = countOnlyIn(remote.sales, localSaleIds);
   const localOnlyPurchases = countOnlyIn(local.purchases, remotePurchaseIds);
   const remoteOnlyPurchases = countOnlyIn(remote.purchases, localPurchaseIds);
+  const localOnlyCustomers = countOnlyIn(local.customers, remoteCustomerIds);
+  const remoteOnlyCustomers = countOnlyIn(remote.customers, localCustomerIds);
+  const localOnlyAcJobs = countOnlyIn(local.acJobs, remoteAcJobIds);
+  const remoteOnlyAcJobs = countOnlyIn(remote.acJobs, localAcJobIds);
 
   const remoteProducts = new Map(remote.products.map((p) => [p.id, p]));
   let changedProducts = 0;
@@ -54,6 +66,8 @@ export function summarizeSyncConflict(
   const hasConflict =
     (localOnlySales > 0 && remoteOnlySales > 0) ||
     (localOnlyPurchases > 0 && remoteOnlyPurchases > 0) ||
+    (localOnlyCustomers > 0 && remoteOnlyCustomers > 0) ||
+    (localOnlyAcJobs > 0 && remoteOnlyAcJobs > 0) ||
     changedProducts > 0;
 
   return {
@@ -62,6 +76,10 @@ export function summarizeSyncConflict(
     localOnlyPurchases,
     remoteOnlyPurchases,
     changedProducts,
+    localOnlyCustomers,
+    remoteOnlyCustomers,
+    localOnlyAcJobs,
+    remoteOnlyAcJobs,
     hasConflict,
   };
 }
