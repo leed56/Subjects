@@ -52,7 +52,7 @@ import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { ACJob, JobAssigneeType, JobItem, JobItemType, JobItemInput, JobStatusEntry } from "@/lib/store/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
-import { canManageAcJobs } from "@/lib/org-role/permissions";
+import { canManageAcJobs, canOperateAcJobs } from "@/lib/org-role/permissions";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 
@@ -63,6 +63,7 @@ export default function JobsPage() {
   const { t, locale } = useLocale();
   const { org, orgRole, canSeeFinancials } = useSubscription();
   const canManageJobs = canManageAcJobs(orgRole);
+  const canOperateJobs = canOperateAcJobs(orgRole);
   const { canWrite, disabledHint } = useWriteAccess();
   const notificationLogs = useNotificationLogs(org.id);
   const { markAllSeen } = useAcInAppAlerts();
@@ -153,7 +154,7 @@ export default function JobsPage() {
     assignedTechnician: assigneeName,
     assigneeType: aType,
     assigneeId: aId,
-    subcontractCost: aType === "contractor" ? subcontractCost : undefined,
+    subcontractCost: canManageJobs && aType === "contractor" ? subcontractCost : undefined,
     serviceDueManual,
     serviceDueDate: serviceDueManual ? serviceDueDate || undefined : autoServiceDuePreview(),
     serviceIntervalDays,
@@ -221,7 +222,7 @@ export default function JobsPage() {
           actions={
             <>
               <ProButton href="/customers" variant="secondary">{t("nav.customers")}</ProButton>
-              {canManageJobs && (
+              {canOperateJobs && (
                 <button
                   type="button"
                   disabled={!canWrite}
@@ -240,19 +241,19 @@ export default function JobsPage() {
         />
         <WriteDisabledHint className="mb-5" />
         {message && <div className="mb-5 rounded-[1.25rem] border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900 shadow-sm">{message}</div>}
-        <section className={`grid gap-4 sm:grid-cols-2 ${canSeeFinancials ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
+        <section className={`grid gap-4 sm:grid-cols-2 ${canOperateJobs ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
           <ProStatCard label={t("jobs.pending")} value={String(pending.length)} hint={t("jobs.stat_pending_hint")} icon="🛠️" tone="amber" />
           <ProStatCard label={t("jobs.schedule")} value={String(scheduled.length)} hint={t("jobs.stat_scheduled_hint")} icon="📅" tone="blue" />
           <ProStatCard label={t("jobs.service_due_section")} value={String(serviceDue.length)} hint={t("jobs.stat_service_due_hint")} icon="❄️" tone={serviceDue.length ? "amber" : "slate"} />
-          {canSeeFinancials && (
+          {canOperateJobs && (
             <ProStatCard label={t("jobs.quote_label")} value={formatLkr(quoteTotal)} hint={t("jobs.stat_quote_total_hint")} icon="💸" tone="emerald" />
           )}
         </section>
-        {canManageJobs && (
+        {canOperateJobs && (
           <section className="mt-6"><AcRemindersBanner /></section>
         )}
         <section className="mt-4"><AcInAppAlertSettings /></section>
-        {canManageJobs && showForm && (
+        {canOperateJobs && showForm && (
           <section className="mt-6">
             <ProCard eyebrow={editing ? t("jobs.eyebrow_edit_job") : t("jobs.eyebrow_create_job")} title={editing ? `${t("jobs.edit_job")} ${editing.jobNo}` : t("jobs.new_job")} action={<ProBadge tone="teal">{formatLkr(quotedAmount)}</ProBadge>}>
               <form onSubmit={handleJobSubmit}>
@@ -282,7 +283,7 @@ export default function JobsPage() {
                       </optgroup>
                     )}
                   </select>
-                  {assigneeKey.startsWith("contractor:") && <input type="number" placeholder={t("jobs.subcontract_cost")} value={subcontractCost || ""} onChange={(e) => setSubcontractCost(Number(e.target.value))} className="h-12 rounded-2xl border border-amber-200 bg-amber-50 px-4 text-sm font-semibold outline-none focus:border-amber-300" />}
+                  {canManageJobs && assigneeKey.startsWith("contractor:") && <input type="number" placeholder={t("jobs.subcontract_cost")} value={subcontractCost || ""} onChange={(e) => setSubcontractCost(Number(e.target.value))} className="h-12 rounded-2xl border border-amber-200 bg-amber-50 px-4 text-sm font-semibold outline-none focus:border-amber-300" />}
                   {jobType === "installation" && <><input type="number" placeholder={t("jobs.deposit")} value={depositAmount || ""} onChange={(e) => setDepositAmount(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 px-4 text-sm font-semibold outline-none focus:border-teal-300" /><input type="number" placeholder={t("jobs.pipe_est")} value={pipeMeters || ""} onChange={(e) => setPipeMeters(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 px-4 text-sm font-semibold outline-none focus:border-teal-300" /></>}
                   <select value={status} onChange={(e) => setStatus(e.target.value as ACJobStatus)} className="h-12 rounded-2xl border border-slate-200 px-4 text-sm font-semibold outline-none focus:border-teal-300">{AC_JOB_STATUSES.map((s) => <option key={s.value} value={s.value}>{locale === "si" ? s.labelSi : s.labelEn}</option>)}</select>
                   <input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} className="h-12 rounded-2xl border border-slate-200 px-4 text-sm font-semibold outline-none focus:border-teal-300" />
@@ -309,7 +310,7 @@ export default function JobsPage() {
                 title={t("jobs.no_jobs")}
                 description={t("jobs.no_jobs_hint")}
                 action={
-                  data.acJobs.length === 0 && canWrite && canManageJobs ? (
+                  data.acJobs.length === 0 && canWrite && canOperateJobs ? (
                     <button
                       type="button"
                       onClick={() => {
@@ -335,6 +336,7 @@ export default function JobsPage() {
                 notificationLogs={notificationLogs}
                 notifySettings={notifySettings}
                 canManageJobs={canManageJobs}
+                canOperateJobs={canOperateJobs}
                 canSeeFinancials={canSeeFinancials}
                 canWrite={canWrite}
                 disabledHint={disabledHint}
@@ -374,6 +376,7 @@ export default function JobsPage() {
           history={data.jobStatusHistory.filter((h) => h.jobId === sheetJob.id)}
           canSeeFinancials={canSeeFinancials}
           canManageJobs={canManageJobs}
+          canOperateJobs={canOperateJobs}
           canWrite={canWrite}
           onAddItem={addJobItem}
           onDeleteItem={deleteJobItem}
@@ -384,7 +387,7 @@ export default function JobsPage() {
   );
 }
 
-function JobCard({ job, assigneePhone, locale, business, notificationLogs, notifySettings, canManageJobs, canSeeFinancials, canWrite, disabledHint, onServiceDone, onJobSheet, onEdit, onSchedule, onInstalled, onComplete, onDelete }: { job: ACJob; assigneePhone?: string; locale: Locale; business: BusinessInfo; notificationLogs: ReturnType<typeof useNotificationLogs>; notifySettings: ReturnType<typeof loadNotificationSettings>; canManageJobs: boolean; canSeeFinancials: boolean; canWrite: boolean; disabledHint: string | null; onServiceDone: () => void; onJobSheet: () => void; onEdit: () => void; onSchedule: () => void; onInstalled: () => void; onComplete: () => void; onDelete: () => void }) {
+function JobCard({ job, assigneePhone, locale, business, notificationLogs, notifySettings, canManageJobs, canOperateJobs, canSeeFinancials, canWrite, disabledHint, onServiceDone, onJobSheet, onEdit, onSchedule, onInstalled, onComplete, onDelete }: { job: ACJob; assigneePhone?: string; locale: Locale; business: BusinessInfo; notificationLogs: ReturnType<typeof useNotificationLogs>; notifySettings: ReturnType<typeof loadNotificationSettings>; canManageJobs: boolean; canOperateJobs: boolean; canSeeFinancials: boolean; canWrite: boolean; disabledHint: string | null; onServiceDone: () => void; onJobSheet: () => void; onEdit: () => void; onSchedule: () => void; onInstalled: () => void; onComplete: () => void; onDelete: () => void }) {
   const { t } = useLocale();
   const balance = job.quotedAmount - job.depositAmount;
   const isContractor = job.assigneeType === "contractor";
@@ -409,25 +412,27 @@ function JobCard({ job, assigneePhone, locale, business, notificationLogs, notif
         )}
         <p className="mt-2 text-sm font-semibold text-slate-500">{job.address}</p>
         <p className="mt-2 text-sm font-semibold text-slate-700">{job.description}{job.btu && ` · ${job.btu} BTU`}{job.pipeMeters != null && ` · ${job.pipeMeters}m pipe`}</p>
-        {canSeeFinancials && (
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <Metric label={t("jobs.quote_label")} value={formatLkr(job.quotedAmount)} />
-            <Metric label={t("jobs.deposit_label")} value={formatLkr(job.depositAmount)} />
-            <Metric label={t("jobs.balance_label")} value={formatLkr(balance)} />
-            {isContractor && job.subcontractCost != null && <Metric label={t("jobs.subcontract_cost")} value={formatLkr(job.subcontractCost)} />}
-            {margin != null && <Metric label={t("jobs.margin")} value={formatLkr(margin)} />}
-          </div>
-        )}
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Metric label={t("jobs.quote_label")} value={formatLkr(job.quotedAmount)} />
+          <Metric label={t("jobs.deposit_label")} value={formatLkr(job.depositAmount)} />
+          <Metric label={t("jobs.balance_label")} value={formatLkr(balance)} />
+          {canSeeFinancials && isContractor && job.subcontractCost != null && (
+            <Metric label={t("jobs.subcontract_cost")} value={formatLkr(job.subcontractCost)} />
+          )}
+          {canSeeFinancials && margin != null && (
+            <Metric label={t("jobs.margin")} value={formatLkr(margin)} />
+          )}
+        </div>
         {(job.scheduledDate || job.serviceDueDate) && <div className="mt-4 flex flex-wrap gap-2 text-xs font-black">{job.scheduledDate && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{t("jobs.install_label")}: {job.scheduledDate}</span>}{job.serviceDueDate && <span className={`rounded-full border px-2.5 py-1 ${serviceDueUrgencyClass(serviceDueUrgency(job.serviceDueDate))}`}>{t("jobs.service_due_label")}: {job.serviceDueDate} ({serviceDueLabel(job.serviceDueDate, locale)}){job.serviceDueManual && ` · ${t("jobs.service_due_manual_short")}`}</span>}</div>}
         <div className="mt-4"><AcJobReminderTimeline job={job} logs={notificationLogs} settings={notifySettings} /></div>
         <div className="mt-4 flex flex-wrap gap-2">
           {job.phone && <MessageSendButton phone={job.phone} recipientName={job.customerName} context={{ type: "ac_job", job, business }} defaultTemplate={defaultTemplateForJob(job.status)} contextId={job.id} />}
-          {canManageJobs && assigneePhone && job.assignedTechnician && <MessageSendButton phone={assigneePhone} recipientName={job.assignedTechnician} context={{ type: "ac_job", job, business }} defaultTemplate="job_assignee_dispatch" contextId={job.id} label={t("jobs.notify_assignee")} />}
+          {canOperateJobs && assigneePhone && job.assignedTechnician && <MessageSendButton phone={assigneePhone} recipientName={job.assignedTechnician} context={{ type: "ac_job", job, business }} defaultTemplate="job_assignee_dispatch" contextId={job.id} label={t("jobs.notify_assignee")} />}
           {canMarkServiceDone(job) && (
             <ActionButton onClick={onServiceDone} {...statusActionProps}>{t("jobs.service_done")}</ActionButton>
           )}
           <ActionButton onClick={onJobSheet}>{t("jobs.job_sheet")}</ActionButton>
-          {canManageJobs && <ActionButton onClick={onEdit} {...statusActionProps}>{t("common.edit")}</ActionButton>}
+          {canOperateJobs && <ActionButton onClick={onEdit} {...statusActionProps}>{t("common.edit")}</ActionButton>}
           {job.status === "deposit_received" && (
             <ActionButton onClick={onSchedule} {...statusActionProps}>{t("jobs.schedule")}</ActionButton>
           )}
@@ -472,7 +477,7 @@ function ActionButton({ children, onClick, disabled, title }: { children: ReactN
 
 const JOB_ITEM_TYPES: JobItemType[] = ["part", "labour", "service"];
 
-function JobSheetModal({ job, locale, items, history, canSeeFinancials, canManageJobs, canWrite, onAddItem, onDeleteItem, onClose }: { job: ACJob; locale: Locale; items: JobItem[]; history: JobStatusEntry[]; canSeeFinancials: boolean; canManageJobs: boolean; canWrite: boolean; onAddItem: (input: JobItemInput) => boolean; onDeleteItem: (id: string) => boolean; onClose: () => void }) {
+function JobSheetModal({ job, locale, items, history, canSeeFinancials, canManageJobs, canOperateJobs, canWrite, onAddItem, onDeleteItem, onClose }: { job: ACJob; locale: Locale; items: JobItem[]; history: JobStatusEntry[]; canSeeFinancials: boolean; canManageJobs: boolean; canOperateJobs: boolean; canWrite: boolean; onAddItem: (input: JobItemInput) => boolean; onDeleteItem: (id: string) => boolean; onClose: () => void }) {
   const { t } = useLocale();
   const [itemType, setItemType] = useState<JobItemType>("part");
   const [name, setName] = useState("");
@@ -537,7 +542,7 @@ function JobSheetModal({ job, locale, items, history, canSeeFinancials, canManag
                     <td className="px-3 py-2.5 text-right font-mono">{formatLkr(i.unitPrice)}</td>
                     <td className="px-3 py-2.5 text-right font-mono font-black">{formatLkr(i.lineTotal)}</td>
                     <td className="px-3 py-2.5 text-right">
-                      {canManageJobs && (
+                      {canOperateJobs && (
                         <button onClick={() => { if (!onDeleteItem(i.id)) setItemMessage(t("common.save_failed")); }} className="rounded-full bg-rose-50 px-2 py-1 text-xs font-black text-rose-700 hover:bg-rose-100">✕</button>
                       )}
                     </td>
@@ -595,6 +600,32 @@ function JobSheetModal({ job, locale, items, history, canSeeFinancials, canManag
             </select>
             <input type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} className="h-11 w-20 rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-teal-300" />
             <input type="number" min={0} placeholder={t("jobs.unit_price")} value={unitPrice || ""} onChange={(e) => setUnitPrice(Number(e.target.value))} className="h-11 w-28 rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-teal-300" />
+            <button type="submit" disabled={!canWrite} className="h-11 rounded-xl bg-teal-600 px-4 text-sm font-black text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{t("jobs.add_item")}</button>
+          </form>
+          )}
+
+          {canOperateJobs && !canSeeFinancials && (
+          <form
+            className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!name.trim() || !canWrite) return;
+              const ok = onAddItem({ jobId: job.id, itemType, name, qty, unitPrice: 0 });
+              if (!ok) {
+                setItemMessage(t("common.save_failed"));
+                return;
+              }
+              setItemMessage("");
+              setName("");
+              setQty(1);
+            }}
+          >
+            {itemMessage && <p className="col-span-full text-sm font-semibold text-amber-700">{itemMessage}</p>}
+            <input placeholder={t("jobs.item_name")} value={name} onChange={(e) => setName(e.target.value)} className="h-11 rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-teal-300" />
+            <select value={itemType} onChange={(e) => setItemType(e.target.value as JobItemType)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-teal-300">
+              {JOB_ITEM_TYPES.map((ty) => <option key={ty} value={ty}>{itemTypeLabels[ty]}</option>)}
+            </select>
+            <input type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} className="h-11 w-20 rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-teal-300" />
             <button type="submit" disabled={!canWrite} className="h-11 rounded-xl bg-teal-600 px-4 text-sm font-black text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{t("jobs.add_item")}</button>
           </form>
           )}

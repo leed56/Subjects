@@ -16,7 +16,9 @@ import type { PaymentMethod } from "@/lib/types";
 import type { BusinessInfo } from "@/lib/invoice";
 import {
   canManageAcJobs,
+  canOperateAcJobs,
   canUpdateAcJob,
+  sanitizeAcJobInputForRole,
   canUseBankingModule,
   canUseSuppliersModule,
 } from "@/lib/org-role/permissions";
@@ -251,6 +253,7 @@ function useAppStoreState(): AppStoreValue {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryAttemptRef = useRef(0);
   const skipConflictCheckRef = useRef(false);
+  const scheduleRetryPushRef = useRef<() => void>(() => {});
   const latestDataRef = useRef<AppData | null>(null);
 
   const raiseSyncConflict = useCallback(
@@ -434,10 +437,12 @@ function useAppStoreState(): AppStoreValue {
         }
         touchOfflinePending(org.id!);
         refreshOfflinePendingState(org.id!);
-        scheduleRetryPush();
+        scheduleRetryPushRef.current();
       });
     }, cloudSyncRetryDelayMs(attempt));
   }, [org.id, executeCloudPush, refreshOfflinePendingState]);
+
+  scheduleRetryPushRef.current = scheduleRetryPush;
 
   const runCloudPush = useCallback(
     (payload: AppData) => {
@@ -913,15 +918,17 @@ function useAppStoreState(): AppStoreValue {
         });
       },
       addACJob: (input) => {
-        if (!data || !canManageAcJobs(orgRole)) return false;
+        if (!data || !canOperateAcJobs(orgRole)) return false;
+        const safe = sanitizeAcJobInputForRole(input, orgRole) as ACJobInput;
         const before = data.acJobs.length;
-        const next = addACJob(data, input);
+        const next = addACJob(data, safe);
         if (next.acJobs.length === before) return false;
         return persist(next);
       },
       updateACJob: (id, input) => {
-        if (!data || !canUpdateAcJob(orgRole, input)) return false;
-        return persist(updateACJob(data, id, input));
+        const safe = sanitizeAcJobInputForRole(input, orgRole);
+        if (!data || !canUpdateAcJob(orgRole, safe)) return false;
+        return persist(updateACJob(data, id, safe));
       },
       deleteACJob: (id) => {
         if (!data || isReadOnly || !canManageAcJobs(orgRole)) return;
@@ -932,14 +939,14 @@ function useAppStoreState(): AppStoreValue {
         return persist(recordACService(data, jobId, input));
       },
       addJobItem: (input) => {
-        if (!data || !canManageAcJobs(orgRole)) return false;
+        if (!data || !canOperateAcJobs(orgRole)) return false;
         const before = data.jobItems.length;
         const next = addJobItem(data, input);
         if (next.jobItems.length === before) return false;
         return persist(next);
       },
       deleteJobItem: (id) => {
-        if (!data || !canManageAcJobs(orgRole)) return false;
+        if (!data || !canOperateAcJobs(orgRole)) return false;
         return persist(deleteJobItem(data, id));
       },
       addTechnician: (input) => {

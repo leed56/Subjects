@@ -18,9 +18,9 @@ Full capability matrix: `app/src/lib/org-role/permissions.ts`.
 
 **Cannot access:** Suppliers, Banking, VAT, Workforce, Vehicles, Settings (except owner-only Team page), Plans, Notifications.
 
-**Jobs (data_entry):** View job list, filters, service due dates, mark service done, update status (scheduled → installed → complete). No create/edit/delete jobs, quotes, deposits, margins, or job-sheet financials.
+**Jobs (data_entry):** Front desk — create/edit AC jobs (installation, service, repair), quotes & deposits, assign technicians, WhatsApp customer/assignee, mark service done, job sheet line items (no prices). No delete jobs, subcontract cost, margin, or net profit.
 
-**Hidden in UI:** buy price, profit, margin, supplier payables, bank balances, dashboard profit stats, AC quote totals and job financials.
+**Hidden in UI:** buy price, profit, margin, supplier payables, bank balances, dashboard profit stats, AC subcontract cost and job-sheet profit totals.
 
 **Store layer:**
 
@@ -63,8 +63,8 @@ Implementation is **code-complete** in the app (see `app/src/lib/org-role/`). Ru
 
 - [ ] Nav limited to Dashboard, Sales, Stock, Customers, Bills, Jobs (when AC plan enabled).
 - [ ] Direct URL to `/suppliers`, `/banking`, `/settings/shop` redirects to dashboard.
-- [ ] `/jobs` accessible when plan includes `ac_jobs`; no New job button; no quote/margin on cards.
-- [ ] Jobs: can filter, mark service done, advance status; cannot create, edit, or delete jobs.
+- [ ] `/jobs` accessible when plan includes `ac_jobs`; **+ New job** visible; quote/deposit on cards; no margin/subcontract.
+- [ ] Jobs: create all types, edit, assign tech, WhatsApp, mark service done, advance status; **cannot delete** jobs or see margin/profit.
 - [ ] AC alerts bell shows overdue/due today/upcoming when enabled on Jobs page.
 - [ ] Dashboard hides profit, bank, credit, supplier, VAT cards.
 - [ ] Stock: no buy price field in form, no buy price column, no cost value stat.

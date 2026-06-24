@@ -10,7 +10,6 @@ import {
 } from "react";
 import { useAuth } from "@/components/auth-provider";
 import {
-  ensureUserOrg,
   fetchUserOrg,
   isPlatformAdminClient,
 } from "@/lib/supabase/auth-actions";
@@ -133,7 +132,7 @@ export function SubscriptionProvider({
 
     setIsPlatformAdmin(false);
 
-    let data = await fetchUserOrg();
+    const data = await fetchUserOrg();
     if (!data?.org) {
       return false;
     }
