@@ -14,7 +14,9 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import type { Locale } from "@/lib/i18n/translations";
 import type { SectorId } from "@/lib/types";
 
-import type { BillingCycle } from "@/lib/subscription/types";
+import type { BillingCycle, PlanId } from "@/lib/subscription/types";
+
+const PLAN_IDS: PlanId[] = ["starter", "business", "pro"];
 
 type ShopRow = {
   id: string;
@@ -102,6 +104,9 @@ export default function AdminShopsPage() {
   const setBillingCycle = (id: string, billingCycle: BillingCycle) =>
     void patchShop(id, { billingCycle }, t("admin.billing_cycle_updated"));
 
+  const setPlan = (id: string, planId: PlanId) =>
+    void patchShop(id, { planId }, t("admin.plan_updated"));
+
   const expiringCount = useMemo(
     () => shops.filter((shop) => isTrialExpiringSoon(shop.status, shop.trialEndsAt)).length,
     [shops],
@@ -175,7 +180,18 @@ export default function AdminShopsPage() {
                       {shop.ownerEmail ?? t("admin.trial_none")}
                     </td>
                     <td className="px-4 py-3 text-slate-300">
-                      <p>{adminPlanLabel(t, shop.planId)}</p>
+                      <select
+                        value={shop.planId}
+                        onChange={(e) => setPlan(shop.id, e.target.value as PlanId)}
+                        disabled={saving}
+                        className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-white"
+                      >
+                        {PLAN_IDS.map((planId) => (
+                          <option key={planId} value={planId}>
+                            {adminPlanLabel(t, planId)}
+                          </option>
+                        ))}
+                      </select>
                       <select
                         value={shop.billingCycle}
                         onChange={(e) =>
