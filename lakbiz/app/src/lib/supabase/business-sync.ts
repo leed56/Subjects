@@ -655,40 +655,13 @@ export async function syncCustomersSnapshot(
   );
 }
 
-/** Masked views (sales/products): avoid upsert — SELECT on *_base is revoked. */
+/** Upsert via masked views (INSTEAD OF triggers write to *_base). */
 async function upsertMaskedViewRows(
   table: "sales" | "products",
-  organizationId: string,
+  _organizationId: string,
   rows: Record<string, unknown>[],
 ): Promise<string | null> {
-  if (rows.length === 0) return null;
-  const supabase = createBrowserClient();
-  if (!supabase) return "Supabase not configured";
-
-  const ids = rows.map((row) => String(row.id));
-  const { data: existing, error: fetchErr } = await supabase
-    .from(table)
-    .select("id")
-    .eq("organization_id", organizationId)
-    .in("id", ids);
-  if (fetchErr) return fetchErr.message;
-
-  const existingIds = new Set((existing ?? []).map((row) => String(row.id)));
-  const toInsert = rows.filter((row) => !existingIds.has(String(row.id)));
-  const toUpdate = rows.filter((row) => existingIds.has(String(row.id)));
-
-  if (toInsert.length > 0) {
-    const { error } = await supabase.from(table).insert(toInsert);
-    if (error) return error.message;
-  }
-
-  for (const row of toUpdate) {
-    const { id, ...patch } = row;
-    const { error } = await supabase.from(table).update(patch).eq("id", id);
-    if (error) return error.message;
-  }
-
-  return null;
+  return upsertOrgRows(table, rows);
 }
 
 async function deleteOrgRowsNotIn(
@@ -838,23 +811,8 @@ export async function pushBusinessData(
 ): Promise<CloudPushResult> {
   const seenGeneration =
     options?.seenGeneration ?? (await fetchOrgSyncGeneration(organizationId));
-  let products = data.products;
-  if (options?.preserveBuyPrices) {
-    const supabase = createBrowserClient();
-    if (supabase) {
-      const { data: rows } = await supabase
-        .from("products")
-        .select("id, buy_price")
-        .eq("organization_id", organizationId);
-      const buyMap = new Map(
-        (rows ?? []).map((row) => [row.id as string, num(row.buy_price)]),
-      );
-      products = data.products.map((p) => ({
-        ...p,
-        buyPrice: buyMap.has(p.id) ? buyMap.get(p.id)! : p.buyPrice,
-      }));
-    }
-  }
+  // When preserveBuyPrices is set, callers lack financial SELECT; *_base triggers keep cloud buy_price on update.
+  const products = data.products;
 
   const productRows = products.map((p) => ({
     id: p.id,
