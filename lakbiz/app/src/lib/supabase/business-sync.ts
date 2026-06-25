@@ -6,7 +6,15 @@ import type { PaymentMethod, Product, SectorId } from "@/lib/types";
 import type { BusinessInfo } from "@/lib/invoice";
 import { defaultBusiness } from "@/lib/invoice";
 import { emptyAppData } from "@/lib/store/storage";
-import type { AppData, Sale, StockLog, ACJob, ChequeRecord } from "@/lib/store/types";
+import type {
+  AppData,
+  Sale,
+  StockLog,
+  ACJob,
+  ChequeRecord,
+  Purchase,
+  SupplierPayment,
+} from "@/lib/store/types";
 import { businessFromOrg, fetchOrgShopSettings } from "./org-settings";
 import { createBrowserClient } from "./client";
 import {
@@ -1129,6 +1137,182 @@ export async function syncSaleSnapshot(
   }
 
   return null;
+}
+
+function supplierRowsForOrg(
+  organizationId: string,
+  suppliers: AppData["suppliers"],
+): Record<string, unknown>[] {
+  return suppliers.map((s) => ({
+    id: s.id,
+    organization_id: organizationId,
+    name: s.name,
+    phone: s.phone ?? null,
+    address: s.address ?? null,
+    vat_number: s.vatNumber ?? null,
+    contact_person: s.contactPerson ?? null,
+    payable_balance: s.payableBalance,
+  }));
+}
+
+export async function syncSuppliersSnapshot(
+  organizationId: string,
+  suppliers: AppData["suppliers"],
+): Promise<string | null> {
+  const upsertErr = await upsertOrgRows(
+    "suppliers",
+    supplierRowsForOrg(organizationId, suppliers),
+  );
+  if (upsertErr) return upsertErr;
+
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const { count: memberCount } = await supabase
+    .from("org_members")
+    .select("*", { count: "exact", head: true })
+    .eq("organization_id", organizationId);
+
+  if ((memberCount ?? 0) > 1) return null;
+
+  return deleteOrgRowsNotIn(
+    "suppliers",
+    organizationId,
+    suppliers.map((s) => s.id),
+  );
+}
+
+function purchaseRowFromPurchase(
+  organizationId: string,
+  purchase: Purchase,
+): Record<string, unknown> {
+  return {
+    id: purchase.id,
+    organization_id: organizationId,
+    grn_no: purchase.grnNo,
+    purchase_date: purchase.date,
+    supplier_id: purchase.supplierId || null,
+    supplier_name: purchase.supplierName,
+    subtotal: purchase.subtotal ?? null,
+    input_vat: purchase.inputVat ?? null,
+    total: purchase.total,
+    payment_method: purchase.paymentMethod,
+    credit_amount: purchase.creditAmount,
+    note: purchase.note ?? null,
+  };
+}
+
+function purchaseLineRowsFromPurchase(
+  organizationId: string,
+  purchase: Purchase,
+): Record<string, unknown>[] {
+  return purchase.lines.map((line, index) => ({
+    organization_id: organizationId,
+    purchase_id: purchase.id,
+    product_id: line.productId || null,
+    product_name: line.productName,
+    qty: line.qty,
+    unit_cost: line.unitCost,
+    line_order: index,
+  }));
+}
+
+function supplierPaymentRow(
+  organizationId: string,
+  payment: SupplierPayment,
+): Record<string, unknown> {
+  return {
+    id: payment.id,
+    organization_id: organizationId,
+    supplier_id: payment.supplierId,
+    supplier_name: payment.supplierName,
+    amount: payment.amount,
+    payment_date: payment.date,
+    method: payment.method,
+    note: payment.note ?? null,
+  };
+}
+
+/** Upsert a purchase (GRN) and related stock/supplier/cheque rows directly to Supabase. */
+export async function syncPurchaseSnapshot(
+  organizationId: string,
+  data: AppData,
+  purchaseId: string,
+  options?: { newChequeIds?: string[] },
+): Promise<string | null> {
+  const purchase = data.purchases.find((row) => row.id === purchaseId);
+  if (!purchase) return "Purchase not found locally";
+
+  const supErr = await syncSuppliersSnapshot(organizationId, data.suppliers);
+  if (supErr) return supErr;
+
+  const productIds = [
+    ...new Set(purchase.lines.map((line) => line.productId).filter(Boolean)),
+  ];
+  const prodErr = await upsertMaskedViewRows(
+    "products",
+    organizationId,
+    productRowsFromList(
+      organizationId,
+      data.products.filter((p) => productIds.includes(p.id)),
+    ),
+  );
+  if (prodErr) return prodErr;
+
+  const purchaseErr = await upsertOrgRows("purchases", [
+    purchaseRowFromPurchase(organizationId, purchase),
+  ]);
+  if (purchaseErr) return purchaseErr;
+
+  const linesErr = await replacePurchaseLines(
+    organizationId,
+    purchaseId,
+    purchaseLineRowsFromPurchase(organizationId, purchase),
+  );
+  if (linesErr) return linesErr;
+
+  const grnTag = purchase.grnNo;
+  const purchaseLogs = data.stockLogs.filter(
+    (log) => log.type === "in" && log.note?.includes(grnTag),
+  );
+  if (purchaseLogs.length > 0) {
+    const logErr = await upsertOrgRows(
+      "stock_logs",
+      purchaseLogs.map((log) => stockLogRow(organizationId, log)),
+    );
+    if (logErr) return logErr;
+  }
+
+  const newChequeIds = options?.newChequeIds ?? [];
+  if (newChequeIds.length > 0) {
+    const cheques = data.cheques.filter((row) => newChequeIds.includes(row.id));
+    if (cheques.length > 0) {
+      const chequeErr = await upsertOrgRows(
+        "cheques",
+        cheques.map((cheque) => chequeRowFromCheque(organizationId, cheque)),
+      );
+      if (chequeErr) return chequeErr;
+    }
+  }
+
+  return null;
+}
+
+/** Upsert a supplier payment and updated payable balance directly to Supabase. */
+export async function syncSupplierPaymentSnapshot(
+  organizationId: string,
+  data: AppData,
+  paymentId: string,
+): Promise<string | null> {
+  const payment = data.supplierPayments.find((row) => row.id === paymentId);
+  if (!payment) return "Payment not found locally";
+
+  const supErr = await syncSuppliersSnapshot(organizationId, data.suppliers);
+  if (supErr) return supErr;
+
+  return upsertOrgRows("supplier_payments", [
+    supplierPaymentRow(organizationId, payment),
+  ]);
 }
 
 export async function pushBusinessData(

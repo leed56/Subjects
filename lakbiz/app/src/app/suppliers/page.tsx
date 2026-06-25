@@ -30,11 +30,10 @@ export default function SuppliersPage() {
   const {
     data,
     ready,
-    addSupplier,
-    updateSupplier,
-    deleteSupplier,
-    createPurchase,
-    recordSupplierPayment,
+    saveSupplierToCloud,
+    deleteSupplierToCloud,
+    createPurchaseToCloud,
+    recordSupplierPaymentToCloud,
   } = useAppStore();
   const { t } = useLocale();
   const { canWrite, disabledHint } = useWriteAccess();
@@ -48,6 +47,10 @@ export default function SuppliersPage() {
   const [ledgerSupplier, setLedgerSupplier] = useState<Supplier | null>(null);
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
+  const [savingSupplier, setSavingSupplier] = useState(false);
+  const [savingPurchase, setSavingPurchase] = useState(false);
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [showPurchase, setShowPurchase] = useState(false);
   const [purchaseSupplierId, setPurchaseSupplierId] = useState("");
@@ -120,19 +123,97 @@ export default function SuppliersPage() {
     setContactPerson(supplier.contactPerson ?? "");
   };
 
-  const saveSupplier = (e: FormEvent) => {
+  const saveSupplier = async (e: FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    const ok = editing
-      ? updateSupplier(editing.id, { name, phone, address, vatNumber, contactPerson })
-      : addSupplier({ name, phone, address, vatNumber, contactPerson });
-    if (!ok) {
-      setMessage(t("common.save_failed"));
-      setTimeout(() => setMessage(""), 2500);
+    if (!name.trim() || savingSupplier) return;
+    setSavingSupplier(true);
+    setMessage("");
+    const result = await saveSupplierToCloud(
+      { name, phone, address, vatNumber, contactPerson },
+      editing?.id,
+    );
+    setSavingSupplier(false);
+    if (!result.ok) {
+      setMessage(result.error ?? t("common.save_failed"));
+      setTimeout(() => setMessage(""), 4000);
       return;
     }
     resetSupplierForm();
-    setMessage(t("common.saved"));
+    setMessage(editing ? t("sup.updated") : t("sup.added"));
+    setTimeout(() => setMessage(""), 2500);
+  };
+
+  const handleDeleteSupplier = async (supplier: Supplier) => {
+    if (deletingId) return;
+    if (!confirm(`${t("common.confirm_delete")} ${supplier.name}?`)) return;
+    setDeletingId(supplier.id);
+    const result = await deleteSupplierToCloud(supplier.id);
+    setDeletingId(null);
+    if (!result.ok) {
+      setMessage(result.error ?? t("common.save_failed"));
+      setTimeout(() => setMessage(""), 4000);
+      return;
+    }
+    if (editing?.id === supplier.id) resetSupplierForm();
+    setMessage(t("sup.deleted"));
+    setTimeout(() => setMessage(""), 2500);
+  };
+
+  const handlePurchase = async () => {
+    if (savingPurchase) return;
+    if (!purchaseSupplierId) {
+      setMessage(t("sup.select_supplier"));
+      return;
+    }
+    const lines = Object.entries(purchaseLines)
+      .filter(([, l]) => l.qty > 0)
+      .map(([productId, l]) => ({ productId, qty: l.qty, unitCost: l.unitCost }));
+    if (lines.length === 0) {
+      setMessage(t("sup.add_qty"));
+      return;
+    }
+    setSavingPurchase(true);
+    setMessage("");
+    const result = await createPurchaseToCloud({
+      supplierId: purchaseSupplierId,
+      lines,
+      paymentMethod: purchasePayment,
+      inputVat: vatRegistered ? effectiveInputVat : 0,
+      chequeNo: purchasePayment === "cheque" ? chequeNo : undefined,
+      chequeBank: purchasePayment === "cheque" ? chequeBank : undefined,
+      chequeDate: purchasePayment === "cheque" ? chequeDate : undefined,
+      postDated: purchasePayment === "cheque" ? postDated : undefined,
+    });
+    setSavingPurchase(false);
+    if (!result.ok) {
+      setMessage(result.error ?? t("sup.failed"));
+      setTimeout(() => setMessage(""), 4000);
+      return;
+    }
+    setShowPurchase(false);
+    setPurchaseLines({});
+    setPurchaseInputVat("");
+    setMessage(t("sup.saved"));
+    setTimeout(() => setMessage(""), 3000);
+  };
+
+  const handleSupplierPayment = async () => {
+    if (!paySupplierId || savingPayment || payAmount <= 0) return;
+    setSavingPayment(true);
+    setMessage("");
+    const result = await recordSupplierPaymentToCloud(
+      paySupplierId,
+      payAmount,
+      payMethod,
+    );
+    setSavingPayment(false);
+    if (!result.ok) {
+      setMessage(result.error ?? t("common.save_failed"));
+      setTimeout(() => setMessage(""), 4000);
+      return;
+    }
+    setPaySupplierId(null);
+    setMessage(t("sup.pay_saved"));
     setTimeout(() => setMessage(""), 2500);
   };
 
@@ -153,39 +234,6 @@ export default function SuppliersPage() {
 
   const setLine = (productId: string, qty: number, unitCost: number) => {
     setPurchaseLines((prev) => ({ ...prev, [productId]: { qty, unitCost } }));
-  };
-
-  const handlePurchase = () => {
-    if (!purchaseSupplierId) {
-      setMessage(t("sup.select_supplier"));
-      return;
-    }
-    const lines = Object.entries(purchaseLines)
-      .filter(([, l]) => l.qty > 0)
-      .map(([productId, l]) => ({ productId, qty: l.qty, unitCost: l.unitCost }));
-    if (lines.length === 0) {
-      setMessage(t("sup.add_qty"));
-      return;
-    }
-    const ok = createPurchase({
-      supplierId: purchaseSupplierId,
-      lines,
-      paymentMethod: purchasePayment,
-      inputVat: vatRegistered ? effectiveInputVat : 0,
-      chequeNo: purchasePayment === "cheque" ? chequeNo : undefined,
-      chequeBank: purchasePayment === "cheque" ? chequeBank : undefined,
-      chequeDate: purchasePayment === "cheque" ? chequeDate : undefined,
-      postDated: purchasePayment === "cheque" ? postDated : undefined,
-    });
-    if (ok) {
-      setShowPurchase(false);
-      setPurchaseLines({});
-      setPurchaseInputVat("");
-      setMessage(t("sup.saved"));
-      setTimeout(() => setMessage(""), 3000);
-    } else {
-      setMessage(t("sup.failed"));
-    }
   };
 
   const openPurchase = () => {
@@ -241,8 +289,8 @@ export default function SuppliersPage() {
                 <input placeholder={t("sup.vat_number")} value={vatNumber} onChange={(e) => setVatNumber(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
               </div>
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <button type="submit" disabled={!canWrite} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
-                  {editing ? t("common.update") : t("sup.add")}
+                <button type="submit" disabled={!canWrite || savingSupplier} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  {savingSupplier ? t("common.saving") : editing ? t("common.update") : t("sup.add")}
                 </button>
                 {editing && (
                   <button type="button" onClick={resetSupplierForm} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
@@ -341,8 +389,8 @@ export default function SuppliersPage() {
               </div>
 
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <button onClick={handlePurchase} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">
-                  {t("common.save")}
+                <button onClick={() => void handlePurchase()} disabled={savingPurchase} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  {savingPurchase ? t("common.saving") : t("common.save")}
                 </button>
                 <button onClick={() => setShowPurchase(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
                   {t("common.cancel")}
@@ -384,9 +432,7 @@ export default function SuppliersPage() {
                         }}
                         onLedger={() => setLedgerSupplier(s)}
                         onEdit={() => startEdit(s)}
-                        onDelete={() => {
-                          if (confirm(`${t("common.confirm_delete")} ${s.name}?`)) deleteSupplier(s.id);
-                        }}
+                        onDelete={() => void handleDeleteSupplier(s)}
                       />
                     ))}
                   </tbody>
@@ -404,9 +450,7 @@ export default function SuppliersPage() {
                     }}
                     onLedger={() => setLedgerSupplier(s)}
                     onEdit={() => startEdit(s)}
-                    onDelete={() => {
-                      if (confirm(`${t("common.confirm_delete")} ${s.name}?`)) deleteSupplier(s.id);
-                    }}
+                    onDelete={() => void handleDeleteSupplier(s)}
                   />
                 ))}
               </div>
@@ -483,20 +527,11 @@ export default function SuppliersPage() {
               </label>
               <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                 <button
-                  onClick={() => {
-                    const ok = recordSupplierPayment(paySupplierId, payAmount, payMethod);
-                    if (ok) {
-                      setPaySupplierId(null);
-                      setMessage(t("sup.pay_saved"));
-                      setTimeout(() => setMessage(""), 2500);
-                    } else {
-                      setMessage(t("common.save_failed"));
-                      setTimeout(() => setMessage(""), 2500);
-                    }
-                  }}
-                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700"
+                  onClick={() => void handleSupplierPayment()}
+                  disabled={savingPayment || payAmount <= 0}
+                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {t("common.save")}
+                  {savingPayment ? t("common.saving") : t("common.save")}
                 </button>
                 <button onClick={() => setPaySupplierId(null)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
                   {t("common.cancel")}

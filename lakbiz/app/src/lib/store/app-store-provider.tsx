@@ -30,6 +30,9 @@ import {
   syncCustomersSnapshot,
   syncProductSnapshot,
   syncSaleSnapshot,
+  syncSuppliersSnapshot,
+  syncPurchaseSnapshot,
+  syncSupplierPaymentSnapshot,
   pullBusinessData,
   pullRemoteIfNewer,
   syncBusinessData,
@@ -170,14 +173,28 @@ export type AppStoreValue = {
   removeCustomerProductPrice: (customerId: string, productId: string) => boolean;
   addSupplier: (input: SupplierInput) => boolean;
   updateSupplier: (id: string, input: SupplierInput) => boolean;
+  saveSupplierToCloud: (
+    input: SupplierInput,
+    existingId?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   deleteSupplier: (id: string) => void;
+  deleteSupplierToCloud: (id: string) => Promise<{ ok: boolean; error?: string }>;
   createPurchase: (input: PurchaseInput) => boolean;
+  createPurchaseToCloud: (
+    input: PurchaseInput,
+  ) => Promise<{ ok: boolean; error?: string }>;
   recordSupplierPayment: (
     supplierId: string,
     amount: number,
     method: PaymentMethod,
     note?: string,
   ) => boolean;
+  recordSupplierPaymentToCloud: (
+    supplierId: string,
+    amount: number,
+    method: PaymentMethod,
+    note?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   recordCustomerPayment: (
     customerId: string,
     amount: number,
@@ -1029,6 +1046,250 @@ function useAppStoreState(): AppStoreValue {
     ],
   );
 
+  const saveSupplierToCloud = useCallback(
+    async (
+      input: SupplierInput,
+      existingId?: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canUseSuppliersModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const next = existingId
+        ? updateSupplier(data, existingId, input)
+        : addSupplier(data, input);
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncSuppliersSnapshot(org.id, next.suppliers);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const deleteSupplierToCloud = useCallback(
+    async (id: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!data || isReadOnly || !canUseSuppliersModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+
+      const next = deleteSupplier(data, id);
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncSuppliersSnapshot(org.id, next.suppliers);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      isReadOnly,
+      orgRole,
+      syncConflict,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const createPurchaseToCloud = useCallback(
+    async (input: PurchaseInput): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canUseSuppliersModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevChequeIds = new Set(data.cheques.map((cheque) => cheque.id));
+      const prevPurchasesLen = data.purchases.length;
+      const next = createPurchase(data, input);
+      if (next.purchases.length === prevPurchasesLen) {
+        return { ok: false, error: "Could not record purchase" };
+      }
+
+      const purchaseId = next.purchases[0].id;
+      const newChequeIds = next.cheques
+        .filter((cheque) => !prevChequeIds.has(cheque.id))
+        .map((cheque) => cheque.id);
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncPurchaseSnapshot(org.id, next, purchaseId, {
+        newChequeIds,
+      });
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const recordSupplierPaymentToCloud = useCallback(
+    async (
+      supplierId: string,
+      amount: number,
+      method: PaymentMethod,
+      note?: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canUseSuppliersModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevPaymentsLen = data.supplierPayments.length;
+      const next = recordSupplierPayment(data, supplierId, amount, method, note);
+      if (next.supplierPayments.length === prevPaymentsLen) {
+        return { ok: false, error: "Could not record payment" };
+      }
+
+      const paymentId = next.supplierPayments[0].id;
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncSupplierPaymentSnapshot(org.id, next, paymentId);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
   const persist = useCallback(
     (next: AppData): boolean => {
       if (syncConflict) return false;
@@ -1144,10 +1405,12 @@ function useAppStoreState(): AppStoreValue {
         if (!data || !canUseSuppliersModule(orgRole)) return false;
         return persist(updateSupplier(data, id, input));
       },
+      saveSupplierToCloud,
       deleteSupplier: (id) => {
         if (!data || isReadOnly || !canUseSuppliersModule(orgRole)) return;
         persist(deleteSupplier(data, id));
       },
+      deleteSupplierToCloud,
       createPurchase: (input) => {
         if (!data || !can("write") || !canUseSuppliersModule(orgRole)) return false;
         const before = data.purchases.length;
@@ -1155,6 +1418,7 @@ function useAppStoreState(): AppStoreValue {
         if (next.purchases.length === before) return false;
         return persist(next);
       },
+      createPurchaseToCloud,
       recordSupplierPayment: (supplierId, amount, method, note) => {
         if (!data || !can("write") || !canUseSuppliersModule(orgRole)) return false;
         const before = data.supplierPayments.length;
@@ -1168,6 +1432,7 @@ function useAppStoreState(): AppStoreValue {
         if (next.supplierPayments.length === before) return false;
         return persist(next);
       },
+      recordSupplierPaymentToCloud,
       recordCustomerPayment: (customerId, amount, method, note) => {
         if (!data || !can("write")) return false;
         const before = data.customerPayments.length;
@@ -1364,6 +1629,10 @@ function useAppStoreState(): AppStoreValue {
     deleteCustomerToCloud,
     saveProductToCloud,
     createSaleToCloud,
+    saveSupplierToCloud,
+    deleteSupplierToCloud,
+    createPurchaseToCloud,
+    recordSupplierPaymentToCloud,
     scheduleCloudPush,
     org.sector,
     org.id,
