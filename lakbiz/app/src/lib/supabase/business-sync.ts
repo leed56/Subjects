@@ -1764,6 +1764,63 @@ export async function syncVehicleSaleSnapshot(
   return syncVehicleSnapshot(organizationId, data, vehicleId);
 }
 
+/** Delete a product row from Supabase. */
+export async function deleteProductFromCloud(
+  organizationId: string,
+  productId: string,
+): Promise<string | null> {
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const { error } = await supabase
+    .from("products")
+    .delete()
+    .eq("id", productId)
+    .eq("organization_id", organizationId);
+  return error?.message ?? null;
+}
+
+/** Delete an AC job and related rows from Supabase. */
+export async function deleteACJobFromCloud(
+  organizationId: string,
+  jobId: string,
+): Promise<string | null> {
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const tables = ["job_items", "job_status_history", "ac_jobs"] as const;
+  for (const table of tables) {
+    const column = table === "ac_jobs" ? "id" : "job_id";
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq(column, jobId)
+      .eq("organization_id", organizationId);
+    if (error) return error.message;
+  }
+
+  return null;
+}
+
+/** Delete an AC job from Supabase and sync contractor payable balances. */
+export async function deleteACJobSnapshot(
+  organizationId: string,
+  data: AppData,
+  jobId: string,
+): Promise<string | null> {
+  const err = await deleteACJobFromCloud(organizationId, jobId);
+  if (err) return err;
+
+  if (data.contractors.length > 0) {
+    return upsertOrgRows(
+      "contractors",
+      contractorRowsFromList(organizationId, data.contractors),
+    );
+  }
+
+  return null;
+}
+
 function customerProductPriceRow(
   organizationId: string,
   price: AppData["customerProductPrices"][number],

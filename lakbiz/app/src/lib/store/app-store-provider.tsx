@@ -25,6 +25,7 @@ import {
 import { stripFinancialData } from "@/lib/org-role/strip-financials";
 import { getPlan } from "@/lib/subscription/plans";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { saveOrgShopSettings } from "@/lib/supabase/org-settings";
 import {
   pushBusinessData,
   syncCustomersSnapshot,
@@ -48,6 +49,9 @@ import {
   syncVehicleSnapshot,
   deleteVehicleFromCloud,
   syncVehicleSaleSnapshot,
+  deleteProductFromCloud,
+  deleteACJobFromCloud,
+  deleteACJobSnapshot,
   syncCustomerProductPriceSnapshot,
   syncTechnicianSnapshot,
   deleteTechnicianFromCloud,
@@ -175,8 +179,14 @@ export type AppStoreValue = {
     existingId?: string,
   ) => Promise<{ ok: boolean; error?: string }>;
   deleteProduct: (id: string) => void;
+  deleteProductToCloud: (id: string) => Promise<{ ok: boolean; error?: string }>;
   stockIn: (productId: string, qty: number, note?: string) => void;
   stockOut: (productId: string, qty: number, note?: string) => void;
+  stockInToCloud: (
+    productId: string,
+    qty: number,
+    note?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   addCustomer: (input: CustomerInput) => boolean;
   updateCustomer: (id: string, input: CustomerInput) => boolean;
   saveCustomerToCloud: (
@@ -281,6 +291,9 @@ export type AppStoreValue = {
     options?: SaleOptions,
   ) => Promise<{ ok: boolean; saleId?: string; error?: string }>;
   updateBusiness: (business: BusinessInfo) => void;
+  updateBusinessToCloud: (
+    business: Partial<BusinessInfo> & Pick<BusinessInfo, "name">,
+  ) => Promise<{ ok: boolean; error?: string }>;
   addACJob: (input: ACJobInput) => boolean;
   saveACJobToCloud: (
     input: ACJobInput,
@@ -292,6 +305,7 @@ export type AppStoreValue = {
     input: Partial<ACJobInput>,
   ) => Promise<{ ok: boolean; error?: string }>;
   deleteACJob: (id: string) => void;
+  deleteACJobToCloud: (id: string) => Promise<{ ok: boolean; error?: string }>;
   recordACService: (jobId: string, input?: RecordACServiceInput) => boolean;
   recordACServiceToCloud: (
     jobId: string,
@@ -2999,6 +3013,235 @@ function useAppStoreState(): AppStoreValue {
     ],
   );
 
+  const updateBusinessToCloud = useCallback(
+    async (
+      business: Partial<BusinessInfo> & Pick<BusinessInfo, "name">,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const next = mergeBusiness(data, business);
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await saveOrgShopSettings(org.id, next.business);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const stockInToCloud = useCallback(
+    async (
+      productId: string,
+      qty: number,
+      note?: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
+      const next = adjustStock(data, productId, qty, "in", note);
+      if (next === data) return { ok: false, error: "Could not adjust stock" };
+
+      const newStockLogIds = next.stockLogs
+        .filter((log) => !prevLogIds.has(log.id))
+        .map((log) => log.id);
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncProductSnapshot(org.id, next, [productId], {
+        preserveBuyPrices: !canSeeFinancials,
+        stockLogIds: newStockLogIds,
+      });
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      canSeeFinancials,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const deleteProductToCloud = useCallback(
+    async (id: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      if (!data.products.some((product) => product.id === id)) {
+        return { ok: false, error: "Product not found" };
+      }
+
+      const next = deleteProduct(data, id);
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await deleteProductFromCloud(org.id, id);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const deleteACJobToCloud = useCallback(
+    async (id: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !canManageAcJobs(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      if (!data.acJobs.some((job) => job.id === id)) {
+        return { ok: false, error: "Job not found" };
+      }
+
+      const next = deleteACJob(data, id);
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await deleteACJobSnapshot(org.id, next, id);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      orgRole,
+      isOnline,
+      can,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
   const persist = useCallback(
     (next: AppData): boolean => {
       if (syncConflict) return false;
@@ -3063,6 +3306,7 @@ function useAppStoreState(): AppStoreValue {
         if (!data || isReadOnly) return;
         persist(deleteProduct(data, id));
       },
+      deleteProductToCloud,
       stockIn: (productId, qty, note) => {
         if (!data || isReadOnly || qty <= 0) return;
         persist(adjustStock(data, productId, qty, "in", note));
@@ -3071,6 +3315,7 @@ function useAppStoreState(): AppStoreValue {
         if (!data || isReadOnly || qty <= 0) return;
         persist(adjustStock(data, productId, qty, "out", note));
       },
+      stockInToCloud,
       addCustomer: (input) => {
         if (!data) return false;
         return persist(addCustomer(data, input));
@@ -3230,6 +3475,7 @@ function useAppStoreState(): AppStoreValue {
           return next;
         });
       },
+      updateBusinessToCloud,
       addACJob: (input) => {
         if (!data || !canOperateAcJobs(orgRole)) return false;
         const safe = sanitizeAcJobInputForRole(input, orgRole) as ACJobInput;
@@ -3249,6 +3495,7 @@ function useAppStoreState(): AppStoreValue {
         if (!data || isReadOnly || !canManageAcJobs(orgRole)) return;
         persist(deleteACJob(data, id));
       },
+      deleteACJobToCloud,
       recordACService: (jobId, input) => {
         if (!data) return false;
         return persist(recordACService(data, jobId, input));
@@ -3363,6 +3610,10 @@ function useAppStoreState(): AppStoreValue {
     saveCustomerToCloud,
     deleteCustomerToCloud,
     saveProductToCloud,
+    deleteProductToCloud,
+    stockInToCloud,
+    updateBusinessToCloud,
+    deleteACJobToCloud,
     createSaleToCloud,
     saveSupplierToCloud,
     deleteSupplierToCloud,

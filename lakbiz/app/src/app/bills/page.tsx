@@ -34,10 +34,12 @@ function customerPhoneForSale(
 }
 
 export default function BillsPage() {
-  const { data, ready, updateBusiness } = useAppStore();
+  const { data, ready, updateBusinessToCloud } = useAppStore();
   const { t } = useLocale();
   const { canSeeFinancials, can } = useSubscription();
   const [editBiz, setEditBiz] = useState(false);
+  const [savingBiz, setSavingBiz] = useState(false);
+  const [bizMessage, setBizMessage] = useState("");
   const [bizName, setBizName] = useState("");
   const [bizNameSi, setBizNameSi] = useState("");
   const [bizPhone, setBizPhone] = useState("");
@@ -150,10 +152,18 @@ export default function BillsPage() {
         {editBiz && (
           <section className="mt-6">
             <ProCard eyebrow={t("bills.invoice_branding_eyebrow")} title={t("bills.shop_header")}>
+              {bizMessage && (
+                <div className="mb-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+                  {bizMessage}
+                </div>
+              )}
               <form
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
-                  updateBusiness({
+                  if (savingBiz) return;
+                  setSavingBiz(true);
+                  setBizMessage("");
+                  const result = await updateBusinessToCloud({
                     ...data.business,
                     name: bizName,
                     nameSi: bizNameSi,
@@ -161,6 +171,11 @@ export default function BillsPage() {
                     address: bizAddress,
                     tin: bizTin,
                   });
+                  setSavingBiz(false);
+                  if (!result.ok) {
+                    setBizMessage(result.error ?? t("common.save_failed"));
+                    return;
+                  }
                   setEditBiz(false);
                 }}
               >
@@ -172,10 +187,19 @@ export default function BillsPage() {
                   <input placeholder={t("common.address")} value={bizAddress} onChange={(e) => setBizAddress(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 sm:col-span-2" />
                 </div>
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">
-                    {t("common.save")}
+                  <button
+                    type="submit"
+                    disabled={savingBiz}
+                    className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingBiz ? t("common.saving") : t("common.save")}
                   </button>
-                  <button type="button" onClick={() => setEditBiz(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
+                  <button
+                    type="button"
+                    onClick={() => setEditBiz(false)}
+                    disabled={savingBiz}
+                    className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
                     {t("common.cancel")}
                   </button>
                 </div>

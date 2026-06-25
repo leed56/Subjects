@@ -20,8 +20,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   fetchOrgShopSettings,
   getOrCreateOrgForUser,
-  saveOrgShopSettings,
 } from "@/lib/supabase/org-settings";
+import { useAppStore } from "@/lib/store/use-app-store";
 
 const SHOP_KEY = "lakbiz-shop-settings-v1";
 const APP_KEY = "lakbiz-app-data-v2";
@@ -132,6 +132,7 @@ export default function ShopSettingsPage() {
 
   const { user } = useAuth();
   const { org } = useSubscription();
+  const { updateBusinessToCloud } = useAppStore();
   const { t } = useLocale();
   const orgIdRef = useRef(org.id);
   const userRef = useRef(user);
@@ -177,7 +178,7 @@ export default function ShopSettingsPage() {
     if (resetBtnTimerRef.current) clearTimeout(resetBtnTimerRef.current);
   }, []);
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const payload = readForm(e.currentTarget, logoDataUrl);
     showMsg({ ok: true, text: t("vat.saving") }, "saving");
@@ -189,13 +190,8 @@ export default function ShopSettingsPage() {
       return;
     }
 
-    showMsg({ ok: true, text: `${t("vat.saved_success")} — ${payload.name}` }, "saved");
-    resetButtonLater();
-
     const currentUser = userRef.current;
-    if (!currentUser || !isSupabaseConfigured()) return;
-
-    void (async () => {
+    if (currentUser && isSupabaseConfigured()) {
       try {
         let orgId = orgIdRef.current;
         if (!orgId) {
@@ -203,17 +199,34 @@ export default function ShopSettingsPage() {
           orgId = newId;
           orgIdRef.current = orgId;
         }
-        if (!orgId) return;
-        const err = await saveOrgShopSettings(orgId, payload);
-        showMsg(
-          err
-            ? { ok: false, text: `${t("vat.saved_success")} — ${t("vat.cloud_sync_note")}` }
-            : { ok: true, text: `${t("vat.saved_success")} — ${t("vat.settings_saved_cloud")}` },
-          "saved",
-        );
-        resetButtonLater();
-      } catch {}
-    })();
+      } catch {
+        showMsg({ ok: false, text: t("common.save_failed") }, "idle");
+        return;
+      }
+    }
+
+    const result = await updateBusinessToCloud(payload);
+    if (!result.ok) {
+      showMsg(
+        {
+          ok: false,
+          text: result.error ?? `${t("vat.saved_success")} — ${t("vat.cloud_sync_note")}`,
+        },
+        "idle",
+      );
+      return;
+    }
+
+    showMsg(
+      {
+        ok: true,
+        text: isSupabaseConfigured() && userRef.current
+          ? `${t("vat.saved_success")} — ${t("vat.settings_saved_cloud")}`
+          : `${t("vat.saved_success")} — ${payload.name}`,
+      },
+      "saved",
+    );
+    resetButtonLater();
   }
 
   const saveLabel = btnState === "saving" ? t("vat.saving") : btnState === "saved" ? t("vat.saved_success") : t("common.save");

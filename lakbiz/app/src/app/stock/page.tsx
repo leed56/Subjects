@@ -31,7 +31,7 @@ import type { Product, ProductCondition } from "@/lib/types";
 type ConditionFilter = "all" | ProductCondition;
 
 export default function StockPage() {
-  const { data, ready, saveProductToCloud, deleteProduct, stockIn } = useAppStore();
+  const { data, ready, saveProductToCloud, deleteProductToCloud, stockInToCloud } = useAppStore();
   const { org, subscription, canSeeFinancials, can } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
   const { t } = useLocale();
@@ -43,6 +43,8 @@ export default function StockPage() {
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savingStockIn, setSavingStockIn] = useState(false);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
   if (!ready || !data) {
     return (
@@ -77,6 +79,42 @@ export default function StockPage() {
   const sellValue = data.products.reduce((sum, p) => sum + p.stockQty * p.sellPrice, 0);
   const categories = new Set(data.products.map((p) => p.category).filter(Boolean)).size;
   const stockInProduct = stockInId ? data.products.find((p) => p.id === stockInId) : null;
+
+  const handleDelete = async (product: Product) => {
+    if (deletingProductId) return;
+    if (!confirm(`${t("common.confirm_delete")} ${product.name}?`)) return;
+    setDeletingProductId(product.id);
+    setMessage("");
+    const result = await deleteProductToCloud(product.id);
+    setDeletingProductId(null);
+    if (!result.ok) {
+      setMessage(result.error ?? t("common.save_failed"));
+      setTimeout(() => setMessage(""), 4000);
+      return;
+    }
+    if (editing?.id === product.id) {
+      setEditing(null);
+      setShowForm(true);
+    }
+    if (stockInId === product.id) setStockInId(null);
+  };
+
+  const handleStockIn = async () => {
+    if (!stockInId || savingStockIn) return;
+    setSavingStockIn(true);
+    setMessage("");
+    const result = await stockInToCloud(stockInId, stockInQty, "Purchase / GRN");
+    setSavingStockIn(false);
+    if (!result.ok) {
+      setMessage(result.error ?? t("common.save_failed"));
+      setTimeout(() => setMessage(""), 4000);
+      return;
+    }
+    setStockInId(null);
+    setStockInQty(1);
+    setMessage(t("stock.updated"));
+    setTimeout(() => setMessage(""), 2500);
+  };
 
   const openCreate = () => {
     setShowForm((v) => !v);
@@ -325,9 +363,8 @@ export default function StockPage() {
                       setShowForm(false);
                     }}
                     onStockIn={() => setStockInId(p.id)}
-                    onDelete={() => {
-                      if (confirm(`${t("common.confirm_delete")} ${p.name}?`)) deleteProduct(p.id);
-                    }}
+                    onDelete={() => void handleDelete(p)}
+                    deleting={deletingProductId === p.id}
                   />
                 ))}
               </div>
@@ -390,12 +427,11 @@ export default function StockPage() {
                                   {t("stock.stock_in")}
                                 </button>
                                 <button
-                                  onClick={() => {
-                                    if (confirm(`${t("common.confirm_delete")} ${p.name}?`)) deleteProduct(p.id);
-                                  }}
-                                  className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100"
+                                  onClick={() => void handleDelete(p)}
+                                  disabled={deletingProductId === p.id}
+                                  className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                  {t("common.delete")}
+                                  {deletingProductId === p.id ? t("common.saving") : t("common.delete")}
                                 </button>
                               </div>
                             </td>
@@ -447,17 +483,17 @@ export default function StockPage() {
               </label>
               <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                 <button
-                  onClick={() => {
-                    stockIn(stockInId, stockInQty, "Purchase / GRN");
-                    setStockInId(null);
-                    setStockInQty(1);
-                  }}
-                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700"
+                  type="button"
+                  onClick={() => void handleStockIn()}
+                  disabled={savingStockIn}
+                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {t("stock.add_stock_btn")}
+                  {savingStockIn ? t("common.saving") : t("stock.add_stock_btn")}
                 </button>
                 <button
+                  type="button"
                   onClick={() => setStockInId(null)}
+                  disabled={savingStockIn}
                   className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"
                 >
                   {t("common.cancel")}
@@ -476,12 +512,14 @@ function ProductMobileCard({
   onEdit,
   onStockIn,
   onDelete,
+  deleting,
   showBuyPrice,
 }: {
   product: Product;
   onEdit: () => void;
   onStockIn: () => void;
   onDelete: () => void;
+  deleting?: boolean;
   showBuyPrice: boolean;
 }) {
   const { t } = useLocale();
@@ -531,8 +569,12 @@ function ProductMobileCard({
         <button onClick={onStockIn} className="rounded-2xl bg-slate-100 px-3 py-3 text-xs font-black text-slate-700">
           {t("stock.stock_in")}
         </button>
-        <button onClick={onDelete} className="rounded-2xl bg-rose-50 px-3 py-3 text-xs font-black text-rose-700">
-          {t("common.delete")}
+        <button
+          onClick={onDelete}
+          disabled={deleting}
+          className="rounded-2xl bg-rose-50 px-3 py-3 text-xs font-black text-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {deleting ? t("common.saving") : t("common.delete")}
         </button>
       </div>
     </article>

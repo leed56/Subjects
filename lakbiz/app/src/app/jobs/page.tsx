@@ -59,7 +59,7 @@ import { useWriteAccess } from "@/lib/subscription/use-can-write";
 const UNIT_TYPES = ["Wall mounted", "Cassette", "Ducted", "Ceiling suspended", "Portable", "Window"];
 
 export default function JobsPage() {
-  const { data, ready, saveACJobToCloud, updateACJobToCloud, deleteACJob, recordACServiceToCloud, addJobItemToCloud, deleteJobItemToCloud } = useAppStore();
+  const { data, ready, saveACJobToCloud, updateACJobToCloud, deleteACJobToCloud, recordACServiceToCloud, addJobItemToCloud, deleteJobItemToCloud } = useAppStore();
   const { t, locale } = useLocale();
   const { org, orgRole, canSeeFinancials } = useSubscription();
   const canManageJobs = canManageAcJobs(orgRole);
@@ -78,6 +78,7 @@ export default function JobsPage() {
   const [message, setMessage] = useState("");
   const [savingJob, setSavingJob] = useState(false);
   const [updatingJobId, setUpdatingJobId] = useState<string | null>(null);
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [serviceDoneJob, setServiceDoneJob] = useState<ACJob | null>(null);
   const [savingServiceDone, setSavingServiceDone] = useState(false);
   const [sheetJob, setSheetJob] = useState<ACJob | null>(null);
@@ -220,6 +221,26 @@ export default function JobsPage() {
       setMessage(result.error ?? t("common.save_failed"));
       setTimeout(() => setMessage(""), 4000);
     }
+  };
+
+  const handleDeleteJob = async (job: ACJob) => {
+    if (deletingJobId) return;
+    if (!confirm(`${t("jobs.delete_confirm")} ${job.jobNo}?`)) return;
+    setDeletingJobId(job.id);
+    setMessage("");
+    const result = await deleteACJobToCloud(job.id);
+    setDeletingJobId(null);
+    if (!result.ok) {
+      setMessage(result.error ?? t("common.save_failed"));
+      setTimeout(() => setMessage(""), 4000);
+      return;
+    }
+    if (editing?.id === job.id) {
+      resetForm();
+      setShowForm(false);
+    }
+    if (serviceDoneJob?.id === job.id) setServiceDoneJob(null);
+    if (sheetJob?.id === job.id) setSheetJob(null);
   };
 
   const jobs = data.acJobs.filter((j) => {
@@ -373,7 +394,8 @@ export default function JobsPage() {
                   })
                 }
                 onComplete={() => void handleJobStatusUpdate(job.id, { status: "completed" })}
-                onDelete={() => { if (confirm(`${t("jobs.delete_confirm")} ${job.jobNo}?`)) deleteACJob(job.id); }}
+                onDelete={() => void handleDeleteJob(job)}
+                deleting={deletingJobId === job.id}
               />
             ))}</div>
           )}
@@ -418,7 +440,7 @@ export default function JobsPage() {
   );
 }
 
-function JobCard({ job, assigneePhone, locale, business, notificationLogs, notifySettings, canManageJobs, canOperateJobs, canSeeFinancials, canWrite, disabledHint, onServiceDone, onJobSheet, onEdit, onSchedule, onInstalled, onComplete, onDelete }: { job: ACJob; assigneePhone?: string; locale: Locale; business: BusinessInfo; notificationLogs: ReturnType<typeof useNotificationLogs>; notifySettings: ReturnType<typeof loadNotificationSettings>; canManageJobs: boolean; canOperateJobs: boolean; canSeeFinancials: boolean; canWrite: boolean; disabledHint: string | null; onServiceDone: () => void; onJobSheet: () => void; onEdit: () => void; onSchedule: () => void; onInstalled: () => void; onComplete: () => void; onDelete: () => void }) {
+function JobCard({ job, assigneePhone, locale, business, notificationLogs, notifySettings, canManageJobs, canOperateJobs, canSeeFinancials, canWrite, disabledHint, onServiceDone, onJobSheet, onEdit, onSchedule, onInstalled, onComplete, onDelete, deleting }: { job: ACJob; assigneePhone?: string; locale: Locale; business: BusinessInfo; notificationLogs: ReturnType<typeof useNotificationLogs>; notifySettings: ReturnType<typeof loadNotificationSettings>; canManageJobs: boolean; canOperateJobs: boolean; canSeeFinancials: boolean; canWrite: boolean; disabledHint: string | null; onServiceDone: () => void; onJobSheet: () => void; onEdit: () => void; onSchedule: () => void; onInstalled: () => void; onComplete: () => void; onDelete: () => void; deleting?: boolean }) {
   const { t } = useLocale();
   const balance = job.quotedAmount - job.depositAmount;
   const isContractor = job.assigneeType === "contractor";
@@ -476,11 +498,11 @@ function JobCard({ job, assigneePhone, locale, business, notificationLogs, notif
           {canManageJobs && (
             <button
               onClick={onDelete}
-              disabled={!canWrite}
+              disabled={!canWrite || deleting}
               title={!canWrite ? (disabledHint ?? undefined) : undefined}
               className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {t("common.delete")}
+              {deleting ? t("common.saving") : t("common.delete")}
             </button>
           )}
         </div>
