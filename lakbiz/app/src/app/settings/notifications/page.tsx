@@ -383,8 +383,16 @@ export default function NotificationsSettingsPage() {
                   type="tel"
                   value={settings.ownerPhone}
                   onChange={(e) =>
-                    persist({ ...settings, ownerPhone: e.target.value })
+                    setSettings((s) => ({ ...s, ownerPhone: e.target.value }))
                   }
+                  onBlur={(e) => {
+                    const ownerPhone = e.target.value;
+                    setSettings((s) => {
+                      const next = { ...s, ownerPhone };
+                      void persist(next);
+                      return next;
+                    });
+                  }}
                   className="mt-1 w-full rounded-lg border px-3 py-2"
                   placeholder="07XXXXXXXX"
                 />
@@ -395,8 +403,16 @@ export default function NotificationsSettingsPage() {
                   type="tel"
                   value={settings.technicianPhone}
                   onChange={(e) =>
-                    persist({ ...settings, technicianPhone: e.target.value })
+                    setSettings((s) => ({ ...s, technicianPhone: e.target.value }))
                   }
+                  onBlur={(e) => {
+                    const technicianPhone = e.target.value;
+                    setSettings((s) => {
+                      const next = { ...s, technicianPhone };
+                      void persist(next);
+                      return next;
+                    });
+                  }}
                   className="mt-1 w-full rounded-lg border px-3 py-2"
                   placeholder="07XXXXXXXX"
                 />

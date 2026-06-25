@@ -178,16 +178,11 @@ export type AppStoreValue = {
   retryCloudSync: () => void;
   resolveSyncConflict: (resolution: SyncConflictResolution) => void;
   dismissCloudRemoteNotice: () => void;
-  addProduct: (input: ProductInput) => boolean;
-  updateProduct: (id: string, input: ProductInput) => boolean;
   saveProductToCloud: (
     input: ProductInput,
     existingId?: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  deleteProduct: (id: string) => void;
   deleteProductToCloud: (id: string) => Promise<{ ok: boolean; error?: string }>;
-  stockIn: (productId: string, qty: number, note?: string) => void;
-  stockOut: (productId: string, qty: number, note?: string) => void;
   stockInToCloud: (
     productId: string,
     qty: number,
@@ -198,20 +193,11 @@ export type AppStoreValue = {
     qty: number,
     note?: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  addCustomer: (input: CustomerInput) => boolean;
-  updateCustomer: (id: string, input: CustomerInput) => boolean;
   saveCustomerToCloud: (
     input: CustomerInput,
     existingId?: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  deleteCustomer: (id: string) => void;
   deleteCustomerToCloud: (id: string) => Promise<{ ok: boolean; error?: string }>;
-  setCustomerProductPrice: (
-    customerId: string,
-    productId: string,
-    price: number,
-  ) => boolean;
-  removeCustomerProductPrice: (customerId: string, productId: string) => boolean;
   setCustomerProductPriceToCloud: (
     customerId: string,
     productId: string,
@@ -221,118 +207,76 @@ export type AppStoreValue = {
     customerId: string,
     productId: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  addSupplier: (input: SupplierInput) => boolean;
-  updateSupplier: (id: string, input: SupplierInput) => boolean;
   saveSupplierToCloud: (
     input: SupplierInput,
     existingId?: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  deleteSupplier: (id: string) => void;
   deleteSupplierToCloud: (id: string) => Promise<{ ok: boolean; error?: string }>;
-  createPurchase: (input: PurchaseInput) => boolean;
   createPurchaseToCloud: (
     input: PurchaseInput,
   ) => Promise<{ ok: boolean; error?: string }>;
-  recordSupplierPayment: (
-    supplierId: string,
-    amount: number,
-    method: PaymentMethod,
-    note?: string,
-  ) => boolean;
   recordSupplierPaymentToCloud: (
     supplierId: string,
     amount: number,
     method: PaymentMethod,
     note?: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  recordCustomerPayment: (
-    customerId: string,
-    amount: number,
-    method: PaymentMethod,
-    note?: string,
-  ) => boolean;
   recordCustomerPaymentToCloud: (
     customerId: string,
     amount: number,
     method: PaymentMethod,
     note?: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  addBankAccount: (input: BankAccountInput) => boolean;
-  deleteBankAccount: (id: string) => void;
   addBankAccountToCloud: (
     input: BankAccountInput,
   ) => Promise<{ ok: boolean; error?: string }>;
   deleteBankAccountToCloud: (
     id: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  addBankTransaction: (input: BankTransactionInput) => boolean;
-  deleteBankTransaction: (id: string) => void;
   addBankTransactionToCloud: (
     input: BankTransactionInput,
   ) => Promise<{ ok: boolean; error?: string }>;
   deleteBankTransactionToCloud: (
     id: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  addBankTransfer: (input: BankTransferInput) => boolean;
   addBankTransferToCloud: (
     input: BankTransferInput,
   ) => Promise<{ ok: boolean; error?: string }>;
-  addCheque: (input: ChequeInput) => boolean;
   addChequeToCloud: (
     input: ChequeInput,
   ) => Promise<{ ok: boolean; error?: string }>;
-  updateChequeStatus: (
-    chequeId: string,
-    status: ChequeStatus,
-    bankAccountId?: string,
-  ) => void;
   updateChequeStatusToCloud: (
     chequeId: string,
     status: ChequeStatus,
     bankAccountId?: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  createSale: (
-    lines: { productId: string; qty: number; unitPrice?: number }[],
-    paymentMethod: PaymentMethod,
-    options?: SaleOptions,
-  ) => string | false;
   createSaleToCloud: (
     lines: { productId: string; qty: number; unitPrice?: number }[],
     paymentMethod: PaymentMethod,
     options?: SaleOptions,
   ) => Promise<{ ok: boolean; saleId?: string; error?: string }>;
-  updateBusiness: (business: BusinessInfo) => void;
   updateBusinessToCloud: (
     business: Partial<BusinessInfo> & Pick<BusinessInfo, "name">,
   ) => Promise<{ ok: boolean; error?: string }>;
-  addACJob: (input: ACJobInput) => boolean;
   saveACJobToCloud: (
     input: ACJobInput,
     existingId?: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  updateACJob: (id: string, input: Partial<ACJobInput>) => boolean;
   updateACJobToCloud: (
     id: string,
     input: Partial<ACJobInput>,
   ) => Promise<{ ok: boolean; error?: string }>;
-  deleteACJob: (id: string) => void;
   deleteACJobToCloud: (id: string) => Promise<{ ok: boolean; error?: string }>;
-  recordACService: (jobId: string, input?: RecordACServiceInput) => boolean;
   recordACServiceToCloud: (
     jobId: string,
     input?: RecordACServiceInput,
   ) => Promise<{ ok: boolean; error?: string }>;
-  addJobItem: (input: JobItemInput) => boolean;
-  deleteJobItem: (id: string) => boolean;
   addJobItemToCloud: (
     input: JobItemInput,
   ) => Promise<{ ok: boolean; error?: string }>;
   deleteJobItemToCloud: (
     id: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  addTechnician: (input: TechnicianInput) => boolean;
-  updateTechnician: (id: string, input: Partial<TechnicianInput>) => void;
-  deleteTechnician: (id: string) => void;
   saveTechnicianToCloud: (
     input: TechnicianInput,
   ) => Promise<{ ok: boolean; error?: string }>;
@@ -343,9 +287,6 @@ export type AppStoreValue = {
   deleteTechnicianToCloud: (
     id: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  addContractor: (input: ContractorInput) => boolean;
-  updateContractor: (id: string, input: Partial<ContractorInput>) => void;
-  deleteContractor: (id: string) => void;
   saveContractorToCloud: (
     input: ContractorInput,
   ) => Promise<{ ok: boolean; error?: string }>;
@@ -356,22 +297,12 @@ export type AppStoreValue = {
   deleteContractorToCloud: (
     id: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  recordContractorPayment: (
-    contractorId: string,
-    amount: number,
-    method: PaymentMethod,
-    note?: string,
-  ) => boolean;
   recordContractorPaymentToCloud: (
     contractorId: string,
     amount: number,
     method: PaymentMethod,
     note?: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  addVehicle: (input: VehicleInput) => boolean;
-  updateVehicle: (id: string, input: Partial<VehicleInput>) => boolean;
-  sellVehicle: (input: VehicleSaleInput) => boolean;
-  deleteVehicle: (id: string) => void;
   saveVehicleToCloud: (
     input: VehicleInput,
     existingId?: string,
@@ -386,7 +317,6 @@ export type AppStoreValue = {
   deleteVehicleToCloud: (
     id: string,
   ) => Promise<{ ok: boolean; error?: string }>;
-  resetAll: () => void;
   resetAllToCloud: () => Promise<{ ok: boolean; error?: string }>;
 };
 
@@ -3389,32 +3319,6 @@ function useAppStoreState(): AppStoreValue {
     refreshOfflinePendingState,
   ]);
 
-  const persist = useCallback(
-    (next: AppData): boolean => {
-      if (syncConflict) return false;
-      if (isReadOnly || !can("write")) return false;
-      if (!isOnline && !can("offline")) return false;
-      setData(next);
-      latestDataRef.current = next;
-      saveAppData(next, org.id);
-      if (!isOnline && org.id) {
-        bumpOfflinePendingChange(org.id);
-        refreshOfflinePendingState(org.id);
-      }
-      scheduleCloudPush(next);
-      return true;
-    },
-    [
-      syncConflict,
-      isReadOnly,
-      can,
-      isOnline,
-      org.id,
-      scheduleCloudPush,
-      refreshOfflinePendingState,
-    ],
-  );
-
   return useMemo(() => {
     const store: AppStoreValue = {
       data,
@@ -3428,313 +3332,45 @@ function useAppStoreState(): AppStoreValue {
       retryCloudSync,
       resolveSyncConflict,
       dismissCloudRemoteNotice,
-      addProduct: (input) => {
-        if (!data || !canAddProduct(data)) return false;
-        const shopSector = parseSectorId(org.sector);
-        const normalized = org.isAuthenticated
-          ? normalizeProductForShop(input, shopSector)
-          : input;
-        return persist(addProduct(data, normalized));
-      },
-      updateProduct: (id, input) => {
-        if (!data) return false;
-        const shopSector = parseSectorId(org.sector);
-        let normalized = org.isAuthenticated
-          ? normalizeProductForShop(input, shopSector)
-          : input;
-        if (!canSeeFinancials) {
-          const existing = data.products.find((p) => p.id === id);
-          if (existing) normalized = { ...normalized, buyPrice: existing.buyPrice };
-        }
-        return persist(updateProduct(data, id, normalized));
-      },
       saveProductToCloud,
-      deleteProduct: (id) => {
-        if (!data || isReadOnly) return;
-        persist(deleteProduct(data, id));
-      },
       deleteProductToCloud,
-      stockIn: (productId, qty, note) => {
-        if (!data || isReadOnly || qty <= 0) return;
-        persist(adjustStock(data, productId, qty, "in", note));
-      },
-      stockOut: (productId, qty, note) => {
-        if (!data || isReadOnly || qty <= 0) return;
-        persist(adjustStock(data, productId, qty, "out", note));
-      },
       stockInToCloud,
       stockOutToCloud,
-      addCustomer: (input) => {
-        if (!data) return false;
-        return persist(addCustomer(data, input));
-      },
-      updateCustomer: (id, input) => {
-        if (!data) return false;
-        return persist(updateCustomer(data, id, input));
-      },
       saveCustomerToCloud,
-      deleteCustomer: (id) => {
-        if (!data || isReadOnly) return;
-        persist(deleteCustomer(data, id));
-      },
       deleteCustomerToCloud,
-      setCustomerProductPrice: (customerId, productId, price) => {
-        if (!data || !can("write")) return false;
-        const before = data.customerProductPrices.find(
-          (p) => p.customerId === customerId && p.productId === productId,
-        )?.price;
-        const next = setCustomerProductPrice(data, customerId, productId, price);
-        const after = next.customerProductPrices.find(
-          (p) => p.customerId === customerId && p.productId === productId,
-        )?.price;
-        if (before === after && next.customerProductPrices.length === data.customerProductPrices.length) {
-          return false;
-        }
-        return persist(next);
-      },
-      removeCustomerProductPrice: (customerId, productId) => {
-        if (!data || !can("write")) return false;
-        const before = data.customerProductPrices.length;
-        const next = removeCustomerProductPrice(data, customerId, productId);
-        if (next.customerProductPrices.length === before) return false;
-        return persist(next);
-      },
       setCustomerProductPriceToCloud,
       removeCustomerProductPriceToCloud,
-      addSupplier: (input) => {
-        if (!data || !canUseSuppliersModule(orgRole)) return false;
-        return persist(addSupplier(data, input));
-      },
-      updateSupplier: (id, input) => {
-        if (!data || !canUseSuppliersModule(orgRole)) return false;
-        return persist(updateSupplier(data, id, input));
-      },
       saveSupplierToCloud,
-      deleteSupplier: (id) => {
-        if (!data || isReadOnly || !canUseSuppliersModule(orgRole)) return;
-        persist(deleteSupplier(data, id));
-      },
       deleteSupplierToCloud,
-      createPurchase: (input) => {
-        if (!data || !can("write") || !canUseSuppliersModule(orgRole)) return false;
-        const before = data.purchases.length;
-        const next = createPurchase(data, input);
-        if (next.purchases.length === before) return false;
-        return persist(next);
-      },
       createPurchaseToCloud,
-      recordSupplierPayment: (supplierId, amount, method, note) => {
-        if (!data || !can("write") || !canUseSuppliersModule(orgRole)) return false;
-        const before = data.supplierPayments.length;
-        const next = recordSupplierPayment(
-          data,
-          supplierId,
-          amount,
-          method,
-          note,
-        );
-        if (next.supplierPayments.length === before) return false;
-        return persist(next);
-      },
       recordSupplierPaymentToCloud,
-      recordCustomerPayment: (customerId, amount, method, note) => {
-        if (!data || !can("write")) return false;
-        const before = data.customerPayments.length;
-        const next = recordCustomerPayment(
-          data,
-          customerId,
-          amount,
-          method,
-          note,
-        );
-        if (next.customerPayments.length === before) return false;
-        return persist(next);
-      },
       recordCustomerPaymentToCloud,
-      addBankAccount: (input) => {
-        if (!data || !can("write") || !canUseBankingModule(orgRole)) return false;
-        const before = data.bankAccounts.length;
-        const next = addBankAccount(data, input);
-        if (next.bankAccounts.length === before) return false;
-        return persist(next);
-      },
-      deleteBankAccount: (id) => {
-        if (!data || isReadOnly || !canUseBankingModule(orgRole)) return;
-        persist(deleteBankAccount(data, id));
-      },
       addBankAccountToCloud,
       deleteBankAccountToCloud,
-      addBankTransaction: (input) => {
-        if (!data || !can("write") || !canUseBankingModule(orgRole)) return false;
-        const before = data.bankTransactions.length;
-        const next = addBankTransaction(data, input);
-        if (next.bankTransactions.length === before) return false;
-        return persist(next);
-      },
-      deleteBankTransaction: (id) => {
-        if (!data || isReadOnly || !canUseBankingModule(orgRole)) return;
-        persist(deleteBankTransaction(data, id));
-      },
       addBankTransactionToCloud,
       deleteBankTransactionToCloud,
-      addBankTransfer: (input) => {
-        if (!data || !can("write") || !canUseBankingModule(orgRole)) return false;
-        const before = data.bankTransfers.length;
-        const next = addBankTransfer(data, input);
-        if (next.bankTransfers.length === before) return false;
-        return persist(next);
-      },
       addBankTransferToCloud,
-      addCheque: (input) => {
-        if (!data || !can("write") || !canUseBankingModule(orgRole)) return false;
-        const before = data.cheques.length;
-        const next = addCheque(data, input);
-        if (next.cheques.length === before) return false;
-        return persist(next);
-      },
       addChequeToCloud,
-      updateChequeStatus: (chequeId, status, bankAccountId) => {
-        if (!data || isReadOnly || !canUseBankingModule(orgRole)) return;
-        persist(updateChequeStatus(data, chequeId, status, bankAccountId));
-      },
       updateChequeStatusToCloud,
-      createSale: (lines, paymentMethod, options) => {
-        if (!data || !can("write")) return false;
-        const before = data.sales.length;
-        const next = createSale(data, lines, paymentMethod, options);
-        if (next.sales.length === before) return false;
-        if (!persist(next)) return false;
-        return next.sales[0].id;
-      },
       createSaleToCloud,
-      updateBusiness: (business) => {
-        if (syncConflict) return;
-        if (isReadOnly || !can("write") || (!isOnline && !can("offline"))) return;
-        setData((current) => {
-          const base = current ?? loadAppData(org.id);
-          const next = mergeBusiness(base, business);
-          latestDataRef.current = next;
-          saveAppData(next, org.id);
-          if (!isOnline && org.id) {
-            bumpOfflinePendingChange(org.id);
-            refreshOfflinePendingState(org.id);
-          }
-          scheduleCloudPush(next);
-          return next;
-        });
-      },
       updateBusinessToCloud,
-      addACJob: (input) => {
-        if (!data || !canOperateAcJobs(orgRole)) return false;
-        const safe = sanitizeAcJobInputForRole(input, orgRole) as ACJobInput;
-        const before = data.acJobs.length;
-        const next = addACJob(data, safe);
-        if (next.acJobs.length === before) return false;
-        return persist(next);
-      },
       saveACJobToCloud,
-      updateACJob: (id, input) => {
-        const safe = sanitizeAcJobInputForRole(input, orgRole);
-        if (!data || !canUpdateAcJob(orgRole, safe)) return false;
-        return persist(updateACJob(data, id, safe));
-      },
       updateACJobToCloud,
-      deleteACJob: (id) => {
-        if (!data || isReadOnly || !canManageAcJobs(orgRole)) return;
-        persist(deleteACJob(data, id));
-      },
       deleteACJobToCloud,
-      recordACService: (jobId, input) => {
-        if (!data) return false;
-        return persist(recordACService(data, jobId, input));
-      },
       recordACServiceToCloud,
-      addJobItem: (input) => {
-        if (!data || !canOperateAcJobs(orgRole)) return false;
-        const before = data.jobItems.length;
-        const next = addJobItem(data, input);
-        if (next.jobItems.length === before) return false;
-        return persist(next);
-      },
-      deleteJobItem: (id) => {
-        if (!data || !canOperateAcJobs(orgRole)) return false;
-        return persist(deleteJobItem(data, id));
-      },
       addJobItemToCloud,
       deleteJobItemToCloud,
-      addTechnician: (input) => {
-        if (!data || !can("write")) return false;
-        const next = addTechnician(data, input);
-        if (next.technicians.length === data.technicians.length) return false;
-        return persist(next);
-      },
-      updateTechnician: (id, input) => {
-        if (!data || isReadOnly) return;
-        persist(updateTechnician(data, id, input));
-      },
-      deleteTechnician: (id) => {
-        if (!data || isReadOnly) return;
-        persist(deleteTechnician(data, id));
-      },
       saveTechnicianToCloud,
       updateTechnicianToCloud,
       deleteTechnicianToCloud,
-      addContractor: (input) => {
-        if (!data || !can("write")) return false;
-        const next = addContractor(data, input);
-        if (next.contractors.length === data.contractors.length) return false;
-        return persist(next);
-      },
-      updateContractor: (id, input) => {
-        if (!data || isReadOnly) return;
-        persist(updateContractor(data, id, input));
-      },
-      deleteContractor: (id) => {
-        if (!data || isReadOnly) return;
-        persist(deleteContractor(data, id));
-      },
       saveContractorToCloud,
       updateContractorToCloud,
       deleteContractorToCloud,
-      recordContractorPayment: (contractorId, amount, method, note) => {
-        if (!data || !can("write")) return false;
-        const before = data.contractorPayments.length;
-        const next = recordContractorPayment(data, contractorId, amount, method, note);
-        if (next.contractorPayments.length === before) return false;
-        return persist(next);
-      },
       recordContractorPaymentToCloud,
-      addVehicle: (input) => {
-        if (!data || !can("write")) return false;
-        const before = data.vehicles.length;
-        const next = addVehicle(data, input);
-        if (next.vehicles.length === before) return false;
-        return persist(next);
-      },
-      updateVehicle: (id, input) => {
-        if (!data) return false;
-        return persist(updateVehicle(data, id, input));
-      },
-      sellVehicle: (input) => {
-        if (!data || !can("write")) return false;
-        const v = data.vehicles.find((x) => x.id === input.vehicleId);
-        if (!v || v.status === "sold") return false;
-        return persist(sellVehicle(data, input));
-      },
-      deleteVehicle: (id) => {
-        if (!data || isReadOnly) return;
-        persist(deleteVehicle(data, id));
-      },
       saveVehicleToCloud,
       updateVehicleToCloud,
       sellVehicleToCloud,
       deleteVehicleToCloud,
-      resetAll: () => {
-        clearAppData(org.id);
-        const fresh = loadAppData(org.id);
-        setData(fresh);
-        latestDataRef.current = fresh;
-      },
       resetAllToCloud,
     };
     return store;
@@ -3750,12 +3386,6 @@ function useAppStoreState(): AppStoreValue {
     retryCloudSync,
     resolveSyncConflict,
     dismissCloudRemoteNotice,
-    isReadOnly,
-    isOnline,
-    refreshOfflinePendingState,
-    can,
-    canAddProduct,
-    persist,
     saveCustomerToCloud,
     deleteCustomerToCloud,
     saveProductToCloud,
@@ -3796,12 +3426,7 @@ function useAppStoreState(): AppStoreValue {
     updateContractorToCloud,
     deleteContractorToCloud,
     resetAllToCloud,
-    scheduleCloudPush,
-    org.sector,
     org.id,
-    org.isAuthenticated,
-    orgRole,
-    canSeeFinancials,
   ]);
 }
 
