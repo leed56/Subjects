@@ -30,7 +30,7 @@ import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 export default function DashboardPage() {
-  const { data, ready, resetAll, recordACService } = useAppStore();
+  const { data, ready, resetAll, recordACServiceToCloud } = useAppStore();
   const { t } = useLocale();
   const { can, org, isReadOnly, canSeeFinancials } = useSubscription();
   const canExport = can("export");
@@ -465,8 +465,10 @@ export default function DashboardPage() {
           business={data.business}
           open={!!serviceDoneJob}
           onClose={() => setServiceDoneJob(null)}
-          onConfirm={(input) => {
-            if (serviceDoneJob) recordACService(serviceDoneJob.id, input);
+          onConfirm={async (input) => {
+            if (!serviceDoneJob) return;
+            const result = await recordACServiceToCloud(serviceDoneJob.id, input);
+            if (result.ok) setServiceDoneJob(null);
           }}
         />
       </ProMain>

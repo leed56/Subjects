@@ -33,6 +33,8 @@ import {
   syncSuppliersSnapshot,
   syncPurchaseSnapshot,
   syncSupplierPaymentSnapshot,
+  syncCustomerPaymentSnapshot,
+  syncACJobSnapshot,
   pullBusinessData,
   pullRemoteIfNewer,
   syncBusinessData,
@@ -201,6 +203,12 @@ export type AppStoreValue = {
     method: PaymentMethod,
     note?: string,
   ) => boolean;
+  recordCustomerPaymentToCloud: (
+    customerId: string,
+    amount: number,
+    method: PaymentMethod,
+    note?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   addBankAccount: (input: BankAccountInput) => boolean;
   deleteBankAccount: (id: string) => void;
   addBankTransaction: (input: BankTransactionInput) => boolean;
@@ -224,9 +232,21 @@ export type AppStoreValue = {
   ) => Promise<{ ok: boolean; saleId?: string; error?: string }>;
   updateBusiness: (business: BusinessInfo) => void;
   addACJob: (input: ACJobInput) => boolean;
+  saveACJobToCloud: (
+    input: ACJobInput,
+    existingId?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   updateACJob: (id: string, input: Partial<ACJobInput>) => boolean;
+  updateACJobToCloud: (
+    id: string,
+    input: Partial<ACJobInput>,
+  ) => Promise<{ ok: boolean; error?: string }>;
   deleteACJob: (id: string) => void;
   recordACService: (jobId: string, input?: RecordACServiceInput) => boolean;
+  recordACServiceToCloud: (
+    jobId: string,
+    input?: RecordACServiceInput,
+  ) => Promise<{ ok: boolean; error?: string }>;
   addJobItem: (input: JobItemInput) => boolean;
   deleteJobItem: (id: string) => boolean;
   addTechnician: (input: TechnicianInput) => boolean;
@@ -1290,6 +1310,255 @@ function useAppStoreState(): AppStoreValue {
     ],
   );
 
+  const pushJobSnapshot = useCallback(
+    async (
+      next: AppData,
+      jobId: string,
+      prevHistoryIds: Set<string>,
+    ): Promise<string | null> => {
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return "Cloud not connected";
+      }
+      const newHistoryIds = next.jobStatusHistory
+        .filter((entry) => !prevHistoryIds.has(entry.id))
+        .map((entry) => entry.id);
+      return syncACJobSnapshot(org.id, next, jobId, { newHistoryIds });
+    },
+    [org.id, org.isAuthenticated, user],
+  );
+
+  const recordCustomerPaymentToCloud = useCallback(
+    async (
+      customerId: string,
+      amount: number,
+      method: PaymentMethod,
+      note?: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevPaymentsLen = data.customerPayments.length;
+      const next = recordCustomerPayment(data, customerId, amount, method, note);
+      if (next.customerPayments.length === prevPaymentsLen) {
+        return { ok: false, error: "Could not record payment" };
+      }
+
+      const paymentId = next.customerPayments[0].id;
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncCustomerPaymentSnapshot(org.id, next, paymentId);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const saveACJobToCloud = useCallback(
+    async (
+      input: ACJobInput,
+      existingId?: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canOperateAcJobs(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const safe = sanitizeAcJobInputForRole(input, orgRole) as ACJobInput;
+      const prevHistoryIds = new Set(data.jobStatusHistory.map((entry) => entry.id));
+      const prevJobsLen = data.acJobs.length;
+      const next = existingId
+        ? updateACJob(data, existingId, safe)
+        : addACJob(data, safe);
+      const jobId = existingId ?? next.acJobs[0]?.id;
+      if (!jobId || (!existingId && next.acJobs.length === prevJobsLen)) {
+        return { ok: false, error: "Could not save job" };
+      }
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      const err = await pushJobSnapshot(next, jobId, prevHistoryIds);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id!);
+        refreshOfflinePendingState(org.id!);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      pushJobSnapshot,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const updateACJobToCloud = useCallback(
+    async (
+      id: string,
+      input: Partial<ACJobInput>,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      const safe = sanitizeAcJobInputForRole(input, orgRole);
+      if (!canUpdateAcJob(orgRole, safe)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevHistoryIds = new Set(data.jobStatusHistory.map((entry) => entry.id));
+      const next = updateACJob(data, id, safe);
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      const err = await pushJobSnapshot(next, id, prevHistoryIds);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id!);
+        refreshOfflinePendingState(org.id!);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      orgRole,
+      isOnline,
+      can,
+      org.id,
+      pushJobSnapshot,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const recordACServiceToCloud = useCallback(
+    async (
+      jobId: string,
+      input?: RecordACServiceInput,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevHistoryIds = new Set(data.jobStatusHistory.map((entry) => entry.id));
+      const next = recordACService(data, jobId, input);
+      if (!next.acJobs.some((job) => job.id === jobId)) {
+        return { ok: false, error: "Could not record service" };
+      }
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      const err = await pushJobSnapshot(next, jobId, prevHistoryIds);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id!);
+        refreshOfflinePendingState(org.id!);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      pushJobSnapshot,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
   const persist = useCallback(
     (next: AppData): boolean => {
       if (syncConflict) return false;
@@ -1446,6 +1715,7 @@ function useAppStoreState(): AppStoreValue {
         if (next.customerPayments.length === before) return false;
         return persist(next);
       },
+      recordCustomerPaymentToCloud,
       addBankAccount: (input) => {
         if (!data || !can("write") || !canUseBankingModule(orgRole)) return false;
         const before = data.bankAccounts.length;
@@ -1519,11 +1789,13 @@ function useAppStoreState(): AppStoreValue {
         if (next.acJobs.length === before) return false;
         return persist(next);
       },
+      saveACJobToCloud,
       updateACJob: (id, input) => {
         const safe = sanitizeAcJobInputForRole(input, orgRole);
         if (!data || !canUpdateAcJob(orgRole, safe)) return false;
         return persist(updateACJob(data, id, safe));
       },
+      updateACJobToCloud,
       deleteACJob: (id) => {
         if (!data || isReadOnly || !canManageAcJobs(orgRole)) return;
         persist(deleteACJob(data, id));
@@ -1532,6 +1804,7 @@ function useAppStoreState(): AppStoreValue {
         if (!data) return false;
         return persist(recordACService(data, jobId, input));
       },
+      recordACServiceToCloud,
       addJobItem: (input) => {
         if (!data || !canOperateAcJobs(orgRole)) return false;
         const before = data.jobItems.length;
@@ -1633,6 +1906,10 @@ function useAppStoreState(): AppStoreValue {
     deleteSupplierToCloud,
     createPurchaseToCloud,
     recordSupplierPaymentToCloud,
+    recordCustomerPaymentToCloud,
+    saveACJobToCloud,
+    updateACJobToCloud,
+    recordACServiceToCloud,
     scheduleCloudPush,
     org.sector,
     org.id,

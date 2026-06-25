@@ -50,7 +50,7 @@ import type { BusinessInfo } from "@/lib/invoice";
 import { defaultTemplateForJob, loadNotificationSettings } from "@/lib/messaging";
 import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useAppStore } from "@/lib/store/use-app-store";
-import type { ACJob, JobAssigneeType, JobItem, JobItemType, JobItemInput, JobStatusEntry } from "@/lib/store/types";
+import type { ACJob, ACJobInput, JobAssigneeType, JobItem, JobItemType, JobItemInput, JobStatusEntry } from "@/lib/store/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { canManageAcJobs, canOperateAcJobs } from "@/lib/org-role/permissions";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
@@ -59,7 +59,7 @@ import { useWriteAccess } from "@/lib/subscription/use-can-write";
 const UNIT_TYPES = ["Wall mounted", "Cassette", "Ducted", "Ceiling suspended", "Portable", "Window"];
 
 export default function JobsPage() {
-  const { data, ready, addACJob, updateACJob, deleteACJob, recordACService, addJobItem, deleteJobItem } = useAppStore();
+  const { data, ready, saveACJobToCloud, updateACJobToCloud, deleteACJob, recordACServiceToCloud, addJobItem, deleteJobItem } = useAppStore();
   const { t, locale } = useLocale();
   const { org, orgRole, canSeeFinancials } = useSubscription();
   const canManageJobs = canManageAcJobs(orgRole);
@@ -76,7 +76,10 @@ export default function JobsPage() {
   const [assigneeKey, setAssigneeKey] = useState("");
   const [subcontractCost, setSubcontractCost] = useState(0);
   const [message, setMessage] = useState("");
+  const [savingJob, setSavingJob] = useState(false);
+  const [updatingJobId, setUpdatingJobId] = useState<string | null>(null);
   const [serviceDoneJob, setServiceDoneJob] = useState<ACJob | null>(null);
+  const [savingServiceDone, setSavingServiceDone] = useState(false);
   const [sheetJob, setSheetJob] = useState<ACJob | null>(null);
   const [customerId, setCustomerId] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -178,18 +181,22 @@ export default function JobsPage() {
     };
   };
 
-  const handleJobSubmit = (e: FormEvent) => {
+  const handleJobSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!address.trim() || savingJob) return;
     if (!address.trim()) {
       setMessage(t("jobs.address_required"));
       setTimeout(() => setMessage(""), 2500);
       return;
     }
     const input = buildInput();
-    const ok = editing ? updateACJob(editing.id, input) : addACJob(input);
-    if (!ok) {
-      setMessage(t("common.save_failed"));
-      setTimeout(() => setMessage(""), 2500);
+    setSavingJob(true);
+    setMessage("");
+    const result = await saveACJobToCloud(input, editing?.id);
+    setSavingJob(false);
+    if (!result.ok) {
+      setMessage(result.error ?? t("common.save_failed"));
+      setTimeout(() => setMessage(""), 4000);
       return;
     }
     setMessage(editing ? t("jobs.updated") : t("jobs.created"));
@@ -198,6 +205,21 @@ export default function JobsPage() {
       setShowForm(false);
     }
     setTimeout(() => setMessage(""), 2500);
+  };
+
+  const handleJobStatusUpdate = async (
+    jobId: string,
+    input: Partial<ACJobInput>,
+  ) => {
+    if (updatingJobId) return;
+    setUpdatingJobId(jobId);
+    setMessage("");
+    const result = await updateACJobToCloud(jobId, input);
+    setUpdatingJobId(null);
+    if (!result.ok) {
+      setMessage(result.error ?? t("common.save_failed"));
+      setTimeout(() => setMessage(""), 4000);
+    }
   };
 
   const jobs = data.acJobs.filter((j) => {
@@ -294,7 +316,7 @@ export default function JobsPage() {
                   <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-black uppercase tracking-wide text-slate-500">{t("jobs.service_due_section")}</p><div className="mt-3 flex flex-wrap gap-3"><label className="flex items-center gap-2 text-sm font-bold text-slate-700"><input type="radio" checked={!serviceDueManual} onChange={() => { setServiceDueManual(false); setServiceDueDate(""); }} />{t("jobs.service_due_auto")}</label><label className="flex items-center gap-2 text-sm font-bold text-slate-700"><input type="radio" checked={serviceDueManual} onChange={() => { setServiceDueManual(true); setServiceDueDate(serviceDueDate || autoServiceDuePreview() || ""); }} />{t("jobs.service_due_manual")}</label></div>{serviceDueManual ? <input type="date" value={serviceDueDate} onChange={(e) => setServiceDueDate(e.target.value)} className="mt-3 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none" /> : <p className="mt-3 text-sm font-bold text-teal-800">{autoServiceDuePreview() ? `${t("jobs.service_due_label")}: ${autoServiceDuePreview()}` : t("jobs.service_due_auto_hint")}</p>}</div>
                 </div>
                 <label className="mt-4 flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700"><input type="checkbox" checked={amcContract} onChange={(e) => setAmcContract(e.target.checked)} />{t("jobs.amc")}</label>
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row"><button type="submit" disabled={!canWrite} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{editing ? t("jobs.update_job") : t("jobs.create")}</button>{editing && <button type="button" onClick={resetForm} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>}</div>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row"><button type="submit" disabled={!canWrite || savingJob} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingJob ? t("common.saving") : editing ? t("jobs.update_job") : t("jobs.create")}</button>{editing && <button type="button" onClick={resetForm} disabled={savingJob} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>}</div>
               </form>
             </ProCard>
           </section>
@@ -343,9 +365,14 @@ export default function JobsPage() {
                 onServiceDone={() => setServiceDoneJob(job)}
                 onJobSheet={() => setSheetJob(job)}
                 onEdit={() => loadJob(job)}
-                onSchedule={() => updateACJob(job.id, { status: "scheduled" })}
-                onInstalled={() => updateACJob(job.id, { status: "installed", installedDate: new Date().toISOString().slice(0, 10) })}
-                onComplete={() => updateACJob(job.id, { status: "completed" })}
+                onSchedule={() => void handleJobStatusUpdate(job.id, { status: "scheduled" })}
+                onInstalled={() =>
+                  void handleJobStatusUpdate(job.id, {
+                    status: "installed",
+                    installedDate: new Date().toISOString().slice(0, 10),
+                  })
+                }
+                onComplete={() => void handleJobStatusUpdate(job.id, { status: "completed" })}
                 onDelete={() => { if (confirm(`${t("jobs.delete_confirm")} ${job.jobNo}?`)) deleteACJob(job.id); }}
               />
             ))}</div>
@@ -357,15 +384,19 @@ export default function JobsPage() {
         business={data.business}
         open={!!serviceDoneJob}
         onClose={() => setServiceDoneJob(null)}
-        onConfirm={(input) => {
-          if (!serviceDoneJob) return;
-          const ok = recordACService(serviceDoneJob.id, input);
-          if (ok) {
+        onConfirm={async (input) => {
+          if (!serviceDoneJob || savingServiceDone) return;
+          setSavingServiceDone(true);
+          setMessage("");
+          const result = await recordACServiceToCloud(serviceDoneJob.id, input);
+          setSavingServiceDone(false);
+          if (result.ok) {
+            setServiceDoneJob(null);
             setMessage(t("jobs.service_done_saved"));
           } else {
-            setMessage(t("common.save_failed"));
+            setMessage(result.error ?? t("common.save_failed"));
           }
-          setTimeout(() => setMessage(""), 2500);
+          setTimeout(() => setMessage(""), 4000);
         }}
       />
       {sheetJob && (

@@ -14,6 +14,8 @@ import type {
   ChequeRecord,
   Purchase,
   SupplierPayment,
+  CustomerPayment,
+  JobStatusEntry,
 } from "@/lib/store/types";
 import { businessFromOrg, fetchOrgShopSettings } from "./org-settings";
 import { createBrowserClient } from "./client";
@@ -1313,6 +1315,108 @@ export async function syncSupplierPaymentSnapshot(
   return upsertOrgRows("supplier_payments", [
     supplierPaymentRow(organizationId, payment),
   ]);
+}
+
+function customerPaymentRow(
+  organizationId: string,
+  payment: CustomerPayment,
+): Record<string, unknown> {
+  return {
+    id: payment.id,
+    organization_id: organizationId,
+    customer_id: payment.customerId,
+    customer_name: payment.customerName,
+    amount: payment.amount,
+    payment_date: payment.date,
+    method: payment.method,
+    note: payment.note ?? null,
+  };
+}
+
+/** Upsert a customer payment and updated credit balance directly to Supabase. */
+export async function syncCustomerPaymentSnapshot(
+  organizationId: string,
+  data: AppData,
+  paymentId: string,
+): Promise<string | null> {
+  const payment = data.customerPayments.find((row) => row.id === paymentId);
+  if (!payment) return "Payment not found locally";
+
+  const custErr = await syncCustomersSnapshot(organizationId, data.customers);
+  if (custErr) return custErr;
+
+  return upsertOrgRows("customer_payments", [
+    customerPaymentRow(organizationId, payment),
+  ]);
+}
+
+function jobStatusHistoryRow(
+  organizationId: string,
+  entry: JobStatusEntry,
+): Record<string, unknown> {
+  return {
+    id: entry.id,
+    organization_id: organizationId,
+    job_id: entry.jobId,
+    old_status: entry.oldStatus ?? null,
+    new_status: entry.newStatus,
+    note: entry.note ?? null,
+    created_at: entry.date,
+  };
+}
+
+function contractorRowsFromList(
+  organizationId: string,
+  contractors: AppData["contractors"],
+): Record<string, unknown>[] {
+  return contractors.map((c) => ({
+    id: c.id,
+    organization_id: organizationId,
+    name: c.name,
+    company: c.company ?? null,
+    phone: c.phone ?? null,
+    specialties: c.specialties,
+    rate_type: c.rateType,
+    rate_amount: c.rateAmount,
+    payable_balance: c.payableBalance,
+    active: c.active,
+    notes: c.notes ?? null,
+  }));
+}
+
+/** Upsert an AC job and related status/contractor rows directly to Supabase. */
+export async function syncACJobSnapshot(
+  organizationId: string,
+  data: AppData,
+  jobId: string,
+  options?: { newHistoryIds?: string[] },
+): Promise<string | null> {
+  const job = data.acJobs.find((row) => row.id === jobId);
+  if (!job) return "Job not found locally";
+
+  const jobErr = await upsertOrgRows("ac_jobs", [
+    acJobRowFromJob(organizationId, job),
+  ]);
+  if (jobErr) return jobErr;
+
+  const historyIds = options?.newHistoryIds ?? [];
+  if (historyIds.length > 0) {
+    const historyRows = data.jobStatusHistory
+      .filter((entry) => historyIds.includes(entry.id))
+      .map((entry) => jobStatusHistoryRow(organizationId, entry));
+    const historyErr = await upsertOrgRows("job_status_history", historyRows);
+    if (historyErr) return historyErr;
+  }
+
+  if (data.contractors.length > 0) {
+    const contractorErr = await upsertOrgRows(
+      "contractors",
+      contractorRowsFromList(organizationId, data.contractors),
+    );
+    if (contractorErr) return contractorErr;
+  }
+
+  return null;
 }
 
 export async function pushBusinessData(

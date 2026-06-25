@@ -42,7 +42,7 @@ export default function CustomersPage() {
     ready,
     saveCustomerToCloud,
     deleteCustomerToCloud,
-    recordCustomerPayment,
+    recordCustomerPaymentToCloud,
     setCustomerProductPrice,
     removeCustomerProductPrice,
   } = useAppStore();
@@ -70,6 +70,7 @@ export default function CustomersPage() {
   const [bulkWaOpen, setBulkWaOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [savingPayment, setSavingPayment] = useState(false);
 
   if (!ready || !data) {
     return (
@@ -521,19 +522,29 @@ export default function CustomersPage() {
               </label>
               <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                 <button
-                  onClick={() => {
-                    const ok = recordCustomerPayment(payCustomerId, payAmount, payMethod);
-                    if (ok) {
-                      setMessage(t("cust.payment_saved"));
-                      setPayCustomerId(null);
-                    } else {
-                      setMessage(t("common.save_failed"));
-                      setTimeout(() => setMessage(""), 2500);
+                  onClick={() => void (async () => {
+                    if (savingPayment || payAmount <= 0) return;
+                    setSavingPayment(true);
+                    setMessage("");
+                    const result = await recordCustomerPaymentToCloud(
+                      payCustomerId,
+                      payAmount,
+                      payMethod,
+                    );
+                    setSavingPayment(false);
+                    if (!result.ok) {
+                      setMessage(result.error ?? t("common.save_failed"));
+                      setTimeout(() => setMessage(""), 4000);
+                      return;
                     }
-                  }}
-                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700"
+                    setPayCustomerId(null);
+                    setMessage(t("cust.payment_saved"));
+                    setTimeout(() => setMessage(""), 2500);
+                  })()}
+                  disabled={savingPayment || payAmount <= 0}
+                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {t("common.save")}
+                  {savingPayment ? t("common.saving") : t("common.save")}
                 </button>
                 <button onClick={() => setPayCustomerId(null)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
                   {t("common.cancel")}
