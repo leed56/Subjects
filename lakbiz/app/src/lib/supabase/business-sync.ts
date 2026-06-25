@@ -15,6 +15,8 @@ import type {
   Purchase,
   SupplierPayment,
   CustomerPayment,
+  ContractorPayment,
+  JobItem,
   JobStatusEntry,
 } from "@/lib/store/types";
 import { businessFromOrg, fetchOrgShopSettings } from "./org-settings";
@@ -1417,6 +1419,88 @@ export async function syncACJobSnapshot(
   }
 
   return null;
+}
+
+function jobItemRow(
+  organizationId: string,
+  item: JobItem,
+): Record<string, unknown> {
+  return {
+    id: item.id,
+    organization_id: organizationId,
+    job_id: item.jobId,
+    item_type: item.itemType,
+    name: item.name,
+    qty: item.qty,
+    unit_price: item.unitPrice,
+    line_total: item.lineTotal,
+  };
+}
+
+/** Upsert a single job line item directly to Supabase. */
+export async function syncJobItemSnapshot(
+  organizationId: string,
+  data: AppData,
+  itemId: string,
+): Promise<string | null> {
+  const item = data.jobItems.find((row) => row.id === itemId);
+  if (!item) return "Job item not found locally";
+
+  return upsertOrgRows("job_items", [jobItemRow(organizationId, item)]);
+}
+
+/** Remove a job line item from Supabase. */
+export async function deleteJobItemFromCloud(
+  organizationId: string,
+  itemId: string,
+): Promise<string | null> {
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const { error } = await supabase
+    .from("job_items")
+    .delete()
+    .eq("id", itemId)
+    .eq("organization_id", organizationId);
+  return error?.message ?? null;
+}
+
+function contractorPaymentRow(
+  organizationId: string,
+  payment: ContractorPayment,
+): Record<string, unknown> {
+  return {
+    id: payment.id,
+    organization_id: organizationId,
+    contractor_id: payment.contractorId,
+    contractor_name: payment.contractorName,
+    amount: payment.amount,
+    payment_date: payment.date,
+    method: payment.method,
+    note: payment.note ?? null,
+  };
+}
+
+/** Upsert a contractor payment and updated payable balance directly to Supabase. */
+export async function syncContractorPaymentSnapshot(
+  organizationId: string,
+  data: AppData,
+  paymentId: string,
+): Promise<string | null> {
+  const payment = data.contractorPayments.find((row) => row.id === paymentId);
+  if (!payment) return "Payment not found locally";
+
+  if (data.contractors.length > 0) {
+    const contractorErr = await upsertOrgRows(
+      "contractors",
+      contractorRowsFromList(organizationId, data.contractors),
+    );
+    if (contractorErr) return contractorErr;
+  }
+
+  return upsertOrgRows("contractor_payments", [
+    contractorPaymentRow(organizationId, payment),
+  ]);
 }
 
 export async function pushBusinessData(

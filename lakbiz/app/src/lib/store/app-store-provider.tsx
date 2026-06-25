@@ -35,6 +35,9 @@ import {
   syncSupplierPaymentSnapshot,
   syncCustomerPaymentSnapshot,
   syncACJobSnapshot,
+  syncJobItemSnapshot,
+  deleteJobItemFromCloud,
+  syncContractorPaymentSnapshot,
   pullBusinessData,
   pullRemoteIfNewer,
   syncBusinessData,
@@ -249,6 +252,12 @@ export type AppStoreValue = {
   ) => Promise<{ ok: boolean; error?: string }>;
   addJobItem: (input: JobItemInput) => boolean;
   deleteJobItem: (id: string) => boolean;
+  addJobItemToCloud: (
+    input: JobItemInput,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  deleteJobItemToCloud: (
+    id: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   addTechnician: (input: TechnicianInput) => boolean;
   updateTechnician: (id: string, input: Partial<TechnicianInput>) => void;
   deleteTechnician: (id: string) => void;
@@ -261,6 +270,12 @@ export type AppStoreValue = {
     method: PaymentMethod,
     note?: string,
   ) => boolean;
+  recordContractorPaymentToCloud: (
+    contractorId: string,
+    amount: number,
+    method: PaymentMethod,
+    note?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   addVehicle: (input: VehicleInput) => boolean;
   updateVehicle: (id: string, input: Partial<VehicleInput>) => boolean;
   sellVehicle: (input: VehicleSaleInput) => boolean;
@@ -1559,6 +1574,186 @@ function useAppStoreState(): AppStoreValue {
     ],
   );
 
+  const addJobItemToCloud = useCallback(
+    async (input: JobItemInput): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canOperateAcJobs(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLen = data.jobItems.length;
+      const next = addJobItem(data, input);
+      if (next.jobItems.length === prevLen) {
+        return { ok: false, error: "Could not add item" };
+      }
+
+      const itemId = next.jobItems[0].id;
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncJobItemSnapshot(org.id, next, itemId);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const deleteJobItemToCloud = useCallback(
+    async (id: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canOperateAcJobs(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      if (!data.jobItems.some((item) => item.id === id)) {
+        return { ok: false, error: "Item not found" };
+      }
+
+      const next = deleteJobItem(data, id);
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await deleteJobItemFromCloud(org.id, id);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const recordContractorPaymentToCloud = useCallback(
+    async (
+      contractorId: string,
+      amount: number,
+      method: PaymentMethod,
+      note?: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevPaymentsLen = data.contractorPayments.length;
+      const next = recordContractorPayment(data, contractorId, amount, method, note);
+      if (next.contractorPayments.length === prevPaymentsLen) {
+        return { ok: false, error: "Could not record payment" };
+      }
+
+      const paymentId = next.contractorPayments[0].id;
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncContractorPaymentSnapshot(org.id, next, paymentId);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
   const persist = useCallback(
     (next: AppData): boolean => {
       if (syncConflict) return false;
@@ -1816,6 +2011,8 @@ function useAppStoreState(): AppStoreValue {
         if (!data || !canOperateAcJobs(orgRole)) return false;
         return persist(deleteJobItem(data, id));
       },
+      addJobItemToCloud,
+      deleteJobItemToCloud,
       addTechnician: (input) => {
         if (!data || !can("write")) return false;
         const next = addTechnician(data, input);
@@ -1851,6 +2048,7 @@ function useAppStoreState(): AppStoreValue {
         if (next.contractorPayments.length === before) return false;
         return persist(next);
       },
+      recordContractorPaymentToCloud,
       addVehicle: (input) => {
         if (!data || !can("write")) return false;
         const before = data.vehicles.length;
@@ -1910,6 +2108,9 @@ function useAppStoreState(): AppStoreValue {
     saveACJobToCloud,
     updateACJobToCloud,
     recordACServiceToCloud,
+    addJobItemToCloud,
+    deleteJobItemToCloud,
+    recordContractorPaymentToCloud,
     scheduleCloudPush,
     org.sector,
     org.id,

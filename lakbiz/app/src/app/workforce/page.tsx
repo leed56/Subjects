@@ -70,7 +70,7 @@ export default function WorkforcePage() {
     addContractor,
     updateContractor,
     deleteContractor,
-    recordContractorPayment,
+    recordContractorPaymentToCloud,
   } = useAppStore();
   const { t } = useLocale();
   const { canWrite, disabledHint } = useWriteAccess();
@@ -105,6 +105,8 @@ export default function WorkforcePage() {
   const [payAmount, setPayAmount] = useState(0);
   const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
   const [payNote, setPayNote] = useState("");
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [payMessage, setPayMessage] = useState("");
 
   if (!ready || !data) {
     return (
@@ -472,21 +474,34 @@ export default function WorkforcePage() {
             </div>
             <form
               className="mt-5 space-y-3"
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                if (recordContractorPayment(payContractor.id, payAmount, payMethod, payNote)) {
-                  setPayContractor(null);
+                if (savingPayment || payAmount <= 0) return;
+                setSavingPayment(true);
+                setPayMessage("");
+                const result = await recordContractorPaymentToCloud(
+                  payContractor.id,
+                  payAmount,
+                  payMethod,
+                  payNote,
+                );
+                setSavingPayment(false);
+                if (!result.ok) {
+                  setPayMessage(result.error ?? t("common.save_failed"));
+                  return;
                 }
+                setPayContractor(null);
               }}
             >
+              {payMessage && <p className="text-sm font-semibold text-rose-700">{payMessage}</p>}
               <input type="number" required min={1} placeholder={t("bank.amount")} value={payAmount || ""} onChange={(e) => setPayAmount(Number(e.target.value))} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" />
               <select value={payMethod} onChange={(e) => setPayMethod(e.target.value as PaymentMethod)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-emerald-300">
                 {PAY_METHODS.map((m) => <option key={m} value={m}>{methodLabel(m)}</option>)}
               </select>
               <input placeholder={t("work.note")} value={payNote} onChange={(e) => setPayNote(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-emerald-300" />
               <div className="flex flex-col gap-2 sm:flex-row">
-                <button type="submit" className="flex-1 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-700/20 hover:bg-emerald-700">{t("work.record_payout")}</button>
-                <button type="button" onClick={() => setPayContractor(null)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+                <button type="submit" disabled={savingPayment || payAmount <= 0} className="flex-1 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-700/20 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{savingPayment ? t("common.saving") : t("work.record_payout")}</button>
+                <button type="button" onClick={() => setPayContractor(null)} disabled={savingPayment} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
               </div>
             </form>
           </div>

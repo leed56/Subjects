@@ -59,7 +59,7 @@ import { useWriteAccess } from "@/lib/subscription/use-can-write";
 const UNIT_TYPES = ["Wall mounted", "Cassette", "Ducted", "Ceiling suspended", "Portable", "Window"];
 
 export default function JobsPage() {
-  const { data, ready, saveACJobToCloud, updateACJobToCloud, deleteACJob, recordACServiceToCloud, addJobItem, deleteJobItem } = useAppStore();
+  const { data, ready, saveACJobToCloud, updateACJobToCloud, deleteACJob, recordACServiceToCloud, addJobItemToCloud, deleteJobItemToCloud } = useAppStore();
   const { t, locale } = useLocale();
   const { org, orgRole, canSeeFinancials } = useSubscription();
   const canManageJobs = canManageAcJobs(orgRole);
@@ -409,8 +409,8 @@ export default function JobsPage() {
           canManageJobs={canManageJobs}
           canOperateJobs={canOperateJobs}
           canWrite={canWrite}
-          onAddItem={addJobItem}
-          onDeleteItem={deleteJobItem}
+          onAddItem={addJobItemToCloud}
+          onDeleteItem={deleteJobItemToCloud}
           onClose={() => setSheetJob(null)}
         />
       )}
@@ -508,13 +508,15 @@ function ActionButton({ children, onClick, disabled, title }: { children: ReactN
 
 const JOB_ITEM_TYPES: JobItemType[] = ["part", "labour", "service"];
 
-function JobSheetModal({ job, locale, items, history, canSeeFinancials, canManageJobs, canOperateJobs, canWrite, onAddItem, onDeleteItem, onClose }: { job: ACJob; locale: Locale; items: JobItem[]; history: JobStatusEntry[]; canSeeFinancials: boolean; canManageJobs: boolean; canOperateJobs: boolean; canWrite: boolean; onAddItem: (input: JobItemInput) => boolean; onDeleteItem: (id: string) => boolean; onClose: () => void }) {
+function JobSheetModal({ job, locale, items, history, canSeeFinancials, canManageJobs, canOperateJobs, canWrite, onAddItem, onDeleteItem, onClose }: { job: ACJob; locale: Locale; items: JobItem[]; history: JobStatusEntry[]; canSeeFinancials: boolean; canManageJobs: boolean; canOperateJobs: boolean; canWrite: boolean; onAddItem: (input: JobItemInput) => Promise<{ ok: boolean; error?: string }>; onDeleteItem: (id: string) => Promise<{ ok: boolean; error?: string }>; onClose: () => void }) {
   const { t } = useLocale();
   const [itemType, setItemType] = useState<JobItemType>("part");
   const [name, setName] = useState("");
   const [qty, setQty] = useState(1);
   const [unitPrice, setUnitPrice] = useState(0);
   const [itemMessage, setItemMessage] = useState("");
+  const [savingItem, setSavingItem] = useState(false);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
   const itemTypeLabels: Record<JobItemType, string> = {
     part: t("jobs.item.part"),
@@ -574,7 +576,20 @@ function JobSheetModal({ job, locale, items, history, canSeeFinancials, canManag
                     <td className="px-3 py-2.5 text-right font-mono font-black">{formatLkr(i.lineTotal)}</td>
                     <td className="px-3 py-2.5 text-right">
                       {canOperateJobs && (
-                        <button onClick={() => { if (!onDeleteItem(i.id)) setItemMessage(t("common.save_failed")); }} className="rounded-full bg-rose-50 px-2 py-1 text-xs font-black text-rose-700 hover:bg-rose-100">✕</button>
+                        <button
+                          disabled={deletingItemId === i.id}
+                          onClick={async () => {
+                            if (deletingItemId) return;
+                            setDeletingItemId(i.id);
+                            setItemMessage("");
+                            const result = await onDeleteItem(i.id);
+                            setDeletingItemId(null);
+                            if (!result.ok) setItemMessage(result.error ?? t("common.save_failed"));
+                          }}
+                          className="rounded-full bg-rose-50 px-2 py-1 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                        >
+                          ✕
+                        </button>
                       )}
                     </td>
                   </tr>
@@ -610,15 +625,17 @@ function JobSheetModal({ job, locale, items, history, canSeeFinancials, canManag
           {canManageJobs && canSeeFinancials && (
           <form
             className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto_auto_auto]"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              if (!name.trim() || !canWrite) return;
-              const ok = onAddItem({ jobId: job.id, itemType, name, qty, unitPrice });
-              if (!ok) {
-                setItemMessage(t("common.save_failed"));
+              if (!name.trim() || !canWrite || savingItem) return;
+              setSavingItem(true);
+              setItemMessage("");
+              const result = await onAddItem({ jobId: job.id, itemType, name, qty, unitPrice });
+              setSavingItem(false);
+              if (!result.ok) {
+                setItemMessage(result.error ?? t("common.save_failed"));
                 return;
               }
-              setItemMessage("");
               setName("");
               setQty(1);
               setUnitPrice(0);
@@ -631,22 +648,24 @@ function JobSheetModal({ job, locale, items, history, canSeeFinancials, canManag
             </select>
             <input type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} className="h-11 w-20 rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-teal-300" />
             <input type="number" min={0} placeholder={t("jobs.unit_price")} value={unitPrice || ""} onChange={(e) => setUnitPrice(Number(e.target.value))} className="h-11 w-28 rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-teal-300" />
-            <button type="submit" disabled={!canWrite} className="h-11 rounded-xl bg-teal-600 px-4 text-sm font-black text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{t("jobs.add_item")}</button>
+            <button type="submit" disabled={!canWrite || savingItem} className="h-11 rounded-xl bg-teal-600 px-4 text-sm font-black text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingItem ? t("common.saving") : t("jobs.add_item")}</button>
           </form>
           )}
 
           {canOperateJobs && !canSeeFinancials && (
           <form
             className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              if (!name.trim() || !canWrite) return;
-              const ok = onAddItem({ jobId: job.id, itemType, name, qty, unitPrice: 0 });
-              if (!ok) {
-                setItemMessage(t("common.save_failed"));
+              if (!name.trim() || !canWrite || savingItem) return;
+              setSavingItem(true);
+              setItemMessage("");
+              const result = await onAddItem({ jobId: job.id, itemType, name, qty, unitPrice: 0 });
+              setSavingItem(false);
+              if (!result.ok) {
+                setItemMessage(result.error ?? t("common.save_failed"));
                 return;
               }
-              setItemMessage("");
               setName("");
               setQty(1);
             }}
@@ -657,7 +676,7 @@ function JobSheetModal({ job, locale, items, history, canSeeFinancials, canManag
               {JOB_ITEM_TYPES.map((ty) => <option key={ty} value={ty}>{itemTypeLabels[ty]}</option>)}
             </select>
             <input type="number" min={1} value={qty} onChange={(e) => setQty(Number(e.target.value))} className="h-11 w-20 rounded-xl border border-slate-200 px-3 text-sm font-semibold outline-none focus:border-teal-300" />
-            <button type="submit" disabled={!canWrite} className="h-11 rounded-xl bg-teal-600 px-4 text-sm font-black text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{t("jobs.add_item")}</button>
+            <button type="submit" disabled={!canWrite || savingItem} className="h-11 rounded-xl bg-teal-600 px-4 text-sm font-black text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingItem ? t("common.saving") : t("jobs.add_item")}</button>
           </form>
           )}
 
