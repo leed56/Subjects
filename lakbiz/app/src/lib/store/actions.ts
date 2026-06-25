@@ -1,5 +1,6 @@
 import { newId, todayKey } from "@/lib/format";
 import { generateBillNo, generateGrnNo, type BusinessInfo } from "@/lib/invoice";
+import { clampCompanyIncomeTaxRatePct } from "@/lib/income-tax";
 import { calcInputVat, isVatEnabled, splitInclusiveTotal } from "@/lib/vat";
 import { generateJobNo } from "@/lib/ac-jobs";
 import {
@@ -1458,11 +1459,31 @@ export function updateBusiness(
   return {
     ...data,
     business: {
+      ...prev,
       name: business.name.trim() || prev.name || "My Shop",
-      nameSi: business.nameSi?.trim() ?? prev.nameSi,
-      phone: business.phone?.trim() ?? prev.phone,
-      address: business.address?.trim() ?? prev.address,
-      tin: business.tin?.trim() ?? prev.tin,
+      nameSi:
+        "nameSi" in business
+          ? business.nameSi?.trim() || undefined
+          : prev.nameSi,
+      phone:
+        "phone" in business ? business.phone?.trim() || undefined : prev.phone,
+      email:
+        "email" in business ? business.email?.trim() || undefined : prev.email,
+      address:
+        "address" in business
+          ? business.address?.trim() || undefined
+          : prev.address,
+      tin: "tin" in business ? business.tin?.trim() || undefined : prev.tin,
+      brNumber:
+        "brNumber" in business
+          ? business.brNumber?.trim() || undefined
+          : prev.brNumber,
+      logoDataUrl:
+        "logoDataUrl" in business ? business.logoDataUrl : prev.logoDataUrl,
+      invoiceFooter:
+        "invoiceFooter" in business
+          ? business.invoiceFooter?.trim() || undefined
+          : prev.invoiceFooter,
       vatRegistered:
         "vatRegistered" in business
           ? (business.vatRegistered ?? false)
@@ -1473,24 +1494,14 @@ export function updateBusiness(
           : prev.vatNumber,
       quarterStartMonth:
         business.quarterStartMonth ?? prev.quarterStartMonth ?? 4,
+      companyIncomeTaxRate:
+        "companyIncomeTaxRate" in business
+          ? clampCompanyIncomeTaxRatePct(
+              business.companyIncomeTaxRate ?? prev.companyIncomeTaxRate,
+            )
+          : clampCompanyIncomeTaxRatePct(prev.companyIncomeTaxRate),
     },
   };
-}
-
-function monthKeyFromDate(d = new Date()): string {
-  return d.toISOString().slice(0, 7);
-}
-
-function previousMonthKey(key: string): string {
-  const [year, month] = key.split("-").map(Number);
-  const d = new Date(year, month - 2, 1);
-  return monthKeyFromDate(d);
-}
-
-function sumSalesInMonth(sales: AppData["sales"], key: string): number {
-  return sales
-    .filter((s) => s.date.startsWith(key))
-    .reduce((sum, s) => sum + s.total, 0);
 }
 
 export function getLowStockProducts(products: AppData["products"]) {
@@ -1501,6 +1512,24 @@ export function getLowStockProducts(products: AppData["products"]) {
         (p.reorderLevel != null && p.stockQty <= p.reorderLevel),
     )
     .sort((a, b) => a.stockQty - b.stockQty);
+}
+
+function monthKeyFromDate(date = new Date()): string {
+  return date.toISOString().slice(0, 7);
+}
+
+function previousMonthKey(monthKey: string): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Date(year, month - 2, 1).toISOString().slice(0, 7);
+}
+
+function sumSalesInMonth(
+  sales: AppData["sales"],
+  monthKey: string,
+): number {
+  return sales
+    .filter((s) => s.date.startsWith(monthKey))
+    .reduce((sum, s) => sum + s.total, 0);
 }
 
 export function getDashboardStats(data: AppData) {

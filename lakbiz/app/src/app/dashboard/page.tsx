@@ -26,6 +26,7 @@ import { getDashboardStats } from "@/lib/store/actions";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { ACJob } from "@/lib/store/types";
 import { getVatQuarterSummary } from "@/lib/vat";
+import { getIncomeTaxYearSummary } from "@/lib/income-tax";
 import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
@@ -54,6 +55,7 @@ export default function DashboardPage() {
 
   const stats = getDashboardStats(data);
   const vat = getVatQuarterSummary(data);
+  const incomeTax = getIncomeTaxYearSummary(data);
   const shopName = data.business.name || org.name || "LakBiz";
   const primaryActions = [
     { href: "/sales", label: t("dash.new_sale"), icon: "🧾", variant: "primary" as const },
@@ -307,6 +309,30 @@ export default function DashboardPage() {
                 </Link>
               </div>
             )}
+          </ProCard>
+          )}
+
+          {canSeeFinancials && (
+          <ProCard
+            eyebrow={`${t("tax.income_meter")} · ${incomeTax.ratePct}%`}
+            title={formatLkr(incomeTax.estimatedTax)}
+            action={<ProButton href="/vat#income-tax" variant="secondary">{t("tax.income_title")}</ProButton>}
+            className="bg-indigo-950 text-white ring-indigo-900"
+          >
+            <div>
+              <p className="text-sm font-semibold text-indigo-300/80">{incomeTax.bounds.label}</p>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs font-black uppercase tracking-wide text-indigo-400">{t("tax.revenue")}</p>
+                  <p className="mt-1 font-mono text-xl font-black text-indigo-100">{formatLkr(incomeTax.revenue)}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs font-black uppercase tracking-wide text-indigo-400">{t("tax.estimated_profit")}</p>
+                  <p className="mt-1 font-mono text-xl font-black text-emerald-300">{formatLkr(incomeTax.estimatedTaxableProfit)}</p>
+                </div>
+              </div>
+              <p className="mt-4 text-xs font-semibold text-indigo-300/60">{t("tax.owner_only")}</p>
+            </div>
           </ProCard>
           )}
         </section>

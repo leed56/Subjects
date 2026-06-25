@@ -1,5 +1,6 @@
 import type { BusinessInfo } from "@/lib/invoice";
 import { defaultBusiness } from "@/lib/invoice";
+import { clampCompanyIncomeTaxRatePct } from "@/lib/income-tax";
 import { loadAppData, saveAppData } from "./storage";
 
 const SHOP_SETTINGS_KEY = "lakbiz-shop-settings-v1";
@@ -13,6 +14,9 @@ function normalize(business: BusinessInfo): BusinessInfo {
     vatRegistered: business.vatRegistered ?? false,
     vatNumber: business.vatNumber?.trim() || undefined,
     quarterStartMonth: business.quarterStartMonth ?? 4,
+    companyIncomeTaxRate: clampCompanyIncomeTaxRatePct(
+      business.companyIncomeTaxRate,
+    ),
   };
 }
 

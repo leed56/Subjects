@@ -2,6 +2,7 @@ import { parseProductCondition } from "@/lib/product-condition";
 import { parseContactType } from "@/lib/contact-type";
 import type { AppData } from "./types";
 import { defaultBusiness, type BusinessInfo } from "@/lib/invoice";
+import { clampCompanyIncomeTaxRatePct } from "@/lib/income-tax";
 import { calcInputVat, splitInclusiveTotal } from "@/lib/vat";
 import { syncAcJobServiceStatuses } from "@/lib/ac-service";
 import { touchLocalSyncWatermark } from "@/lib/supabase/sync-watermark";
@@ -80,6 +81,9 @@ function normalizeBusiness(
     ...business,
     quarterStartMonth: business?.quarterStartMonth ?? 4,
     vatRegistered: business?.vatRegistered ?? false,
+    companyIncomeTaxRate: clampCompanyIncomeTaxRatePct(
+      business?.companyIncomeTaxRate,
+    ),
   };
 }
 

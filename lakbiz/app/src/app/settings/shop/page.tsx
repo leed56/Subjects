@@ -51,6 +51,13 @@ function writeStorage(data: BusinessInfo): void {
 
 function readForm(form: HTMLFormElement, logoDataUrl?: string): BusinessInfo {
   const fd = new FormData(form);
+  const preset = String(fd.get("companyIncomeTaxRatePreset") ?? "30");
+  const customRaw = Number(fd.get("companyIncomeTaxRateCustom"));
+  const companyIncomeTaxRate =
+    preset === "custom"
+      ? customRaw
+      : Number(preset);
+
   return {
     name: String(fd.get("name") ?? "").trim() || "My Shop",
     nameSi: String(fd.get("nameSi") ?? "").trim() || undefined,
@@ -64,7 +71,16 @@ function readForm(form: HTMLFormElement, logoDataUrl?: string): BusinessInfo {
     vatRegistered: fd.get("vatRegistered") === "on",
     vatNumber: String(fd.get("vatNumber") ?? "").trim() || undefined,
     quarterStartMonth: Number(fd.get("quarterStartMonth")) || 4,
+    companyIncomeTaxRate,
   };
+}
+
+function incomeTaxPresetValue(rate: number | undefined): string {
+  const normalized = rate ?? 30;
+  if (normalized === 30 || normalized === 15 || normalized === 45) {
+    return String(normalized);
+  }
+  return "custom";
 }
 
 function fillForm(form: HTMLFormElement, s: Partial<BusinessInfo>) {
@@ -82,6 +98,13 @@ function fillForm(form: HTMLFormElement, s: Partial<BusinessInfo>) {
   set("invoiceFooter", s.invoiceFooter ?? "");
   set("vatNumber", s.vatNumber ?? "");
   set("quarterStartMonth", String(s.quarterStartMonth ?? 4));
+  set("companyIncomeTaxRatePreset", incomeTaxPresetValue(s.companyIncomeTaxRate));
+  set(
+    "companyIncomeTaxRateCustom",
+    incomeTaxPresetValue(s.companyIncomeTaxRate) === "custom"
+      ? String(s.companyIncomeTaxRate ?? 30)
+      : "",
+  );
   const cb = form.elements.namedItem("vatRegistered");
   if (cb instanceof HTMLInputElement) cb.checked = s.vatRegistered ?? false;
 }
@@ -129,6 +152,7 @@ export default function ShopSettingsPage() {
   const [msg, setMsg] = useState<Msg | null>(null);
   const [btnState, setBtnState] = useState<BtnState>("idle");
   const [logoDataUrl, setLogoDataUrl] = useState<string | undefined>(undefined);
+  const [incomeTaxPreset, setIncomeTaxPreset] = useState("30");
 
   const { user } = useAuth();
   const { org } = useSubscription();
@@ -159,6 +183,7 @@ export default function ShopSettingsPage() {
     if (saved) {
       fillForm(form, saved);
       if (saved.logoDataUrl) setLogoDataUrl(saved.logoDataUrl);
+      setIncomeTaxPreset(incomeTaxPresetValue(saved.companyIncomeTaxRate));
     }
   }, []);
 
@@ -171,6 +196,7 @@ export default function ShopSettingsPage() {
       if (local?.name && local.name !== "My Shop") return;
       fillForm(form, cloud);
       if (cloud.logoDataUrl) setLogoDataUrl(cloud.logoDataUrl);
+      setIncomeTaxPreset(incomeTaxPresetValue(cloud.companyIncomeTaxRate));
     });
   }, [org.id]);
 
@@ -317,6 +343,41 @@ export default function ShopSettingsPage() {
                       <option value="10">{t("vat.month_oct")}</option>
                     </select>
                   </label>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-[1.25rem] border border-indigo-100 bg-indigo-50/60 p-4">
+                <p className="text-sm font-black text-slate-800">{t("tax.rate_setting")}</p>
+                <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">{t("tax.rate_setting_hint")}</p>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <label className={labelClass()}>
+                    {t("tax.income_rate")}
+                    <select
+                      name="companyIncomeTaxRatePreset"
+                      value={incomeTaxPreset}
+                      onChange={(e) => setIncomeTaxPreset(e.target.value)}
+                      className={fieldClass()}
+                    >
+                      <option value="30">{t("tax.rate_standard")}</option>
+                      <option value="15">{t("tax.rate_export")}</option>
+                      <option value="45">{t("tax.rate_special")}</option>
+                      <option value="custom">{t("tax.rate_custom")}</option>
+                    </select>
+                  </label>
+                  {incomeTaxPreset === "custom" && (
+                    <label className={labelClass()}>
+                      {t("tax.rate_custom_value")}
+                      <input
+                        name="companyIncomeTaxRateCustom"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        defaultValue="30"
+                        className={fieldClass()}
+                      />
+                    </label>
+                  )}
                 </div>
               </div>
 

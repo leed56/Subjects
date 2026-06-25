@@ -22,6 +22,8 @@ export interface BusinessInfo {
   vatNumber?: string;
   /** Fiscal quarter start month (1–12). Default 4 = April (IRD-style) */
   quarterStartMonth?: number;
+  /** Company income tax rate as % (e.g. 30 standard, 15 export, 45 special). Owner/manager only. */
+  companyIncomeTaxRate?: number;
 }
 
 export const defaultBusiness = (): BusinessInfo => ({
@@ -29,6 +31,7 @@ export const defaultBusiness = (): BusinessInfo => ({
   nameSi: "මගේ වෙළඳසැල",
   vatRegistered: false,
   quarterStartMonth: 4,
+  companyIncomeTaxRate: 30,
 });
 
 export function generateBillNo(existingSaleCount: number): string {

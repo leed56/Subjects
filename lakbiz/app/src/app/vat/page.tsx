@@ -19,6 +19,7 @@ import { exportVatCsv, printVatReport } from "@/lib/export";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { getVatQuarterSummary } from "@/lib/vat";
+import { getIncomeTaxYearSummary } from "@/lib/income-tax";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 export default function VatReturnPage() {
@@ -38,6 +39,78 @@ export default function VatReturnPage() {
   }
 
   const summary = getVatQuarterSummary(data);
+  const incomeTax = getIncomeTaxYearSummary(data);
+
+  const incomeTaxSection = (
+    <section id="income-tax" className="mt-10">
+      <ProPageHeader
+        eyebrow={t("tax.owner_only")}
+        title={t("tax.income_title")}
+        description={t("tax.rate_note")}
+        actions={<ProButton href="/settings/shop" variant="secondary">{t("tax.rate_setting")}</ProButton>}
+      />
+
+      <section className="mb-6 overflow-hidden rounded-[2rem] bg-indigo-950 p-6 text-white shadow-2xl shadow-indigo-950/20 ring-1 ring-indigo-900 sm:p-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-indigo-300">
+              {t("tax.estimated_tax")}
+            </p>
+            <p className="mt-3 font-mono text-4xl font-black tracking-tight text-indigo-200 sm:text-5xl">
+              {formatLkr(incomeTax.estimatedTax)}
+            </p>
+            <p className="mt-3 text-sm font-semibold text-indigo-300/80">
+              {t("tax.fiscal_year")}: {incomeTax.bounds.label}
+            </p>
+            <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-indigo-300/70">
+              {t("tax.disclaimer")}
+            </p>
+          </div>
+          <ProBadge tone={incomeTax.estimatedTax > 0 ? "amber" : "emerald"}>
+            {t("tax.rate_on_profit").replace("{rate}", String(incomeTax.ratePct))}
+          </ProBadge>
+        </div>
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <ProStatCard
+          label={t("tax.revenue")}
+          value={formatLkr(incomeTax.revenue)}
+          hint={`${incomeTax.salesCount} ${t("vat.sales_in_period")}`}
+          icon="💰"
+          tone="blue"
+        />
+        <ProStatCard
+          label={t("tax.sales_profit")}
+          value={formatLkr(incomeTax.salesProfit)}
+          hint={t("tax.estimated_profit")}
+          icon="📈"
+          tone="emerald"
+        />
+        <ProStatCard
+          label={t("tax.vehicle_profit")}
+          value={formatLkr(incomeTax.vehicleProfit)}
+          hint={t("nav.vehicles")}
+          icon="🚗"
+          tone="teal"
+        />
+        <ProStatCard
+          label={t("tax.subcontract_cost")}
+          value={formatLkr(incomeTax.subcontractExpense)}
+          hint={t("nav.jobs")}
+          icon="🔧"
+          tone="rose"
+        />
+        <ProStatCard
+          label={t("tax.estimated_profit")}
+          value={formatLkr(incomeTax.estimatedTaxableProfit)}
+          hint={t("tax.income_meter")}
+          icon="🏛️"
+          tone="amber"
+        />
+      </section>
+    </section>
+  );
 
   if (!summary.enabled) {
     return (
@@ -51,6 +124,7 @@ export default function VatReturnPage() {
               action={<ProButton href="/settings/shop">{t("vat.shop_settings")}</ProButton>}
             />
           </ProCard>
+          {incomeTaxSection}
         </ProMain>
       </ProPageShell>
     );
@@ -190,6 +264,8 @@ export default function VatReturnPage() {
             )}
           </ProCard>
         </section>
+
+        {incomeTaxSection}
       </ProMain>
     </ProPageShell>
   );

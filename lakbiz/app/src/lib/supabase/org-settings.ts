@@ -1,6 +1,7 @@
 "use client";
 
 import type { BusinessInfo } from "@/lib/invoice";
+import { clampCompanyIncomeTaxRatePct } from "@/lib/income-tax";
 import { ensureUserOrg } from "./auth-actions";
 import { createBrowserClient } from "./client";
 
@@ -12,6 +13,7 @@ export type OrgShopSettings = {
   vatRegistered: boolean;
   vatNumber?: string;
   quarterStartMonth: number;
+  companyIncomeTaxRate: number;
 };
 
 export function mergeBusinessSettings(
@@ -45,6 +47,8 @@ export function mergeBusinessSettings(
         : (cloud.vatRegistered ?? false),
     vatNumber: local.vatNumber ?? cloud.vatNumber,
     quarterStartMonth: local.quarterStartMonth ?? cloud.quarterStartMonth ?? 4,
+    companyIncomeTaxRate:
+      local.companyIncomeTaxRate ?? cloud.companyIncomeTaxRate ?? 30,
   };
 }
 
@@ -66,7 +70,7 @@ export async function getOrCreateOrgForUser(
     return { orgId: null, error: message };
   }
 }
-export function businessFromOrg(row: {
+type OrgSettingsRow = {
   name: string;
   name_si?: string | null;
   phone?: string | null;
@@ -79,7 +83,10 @@ export function businessFromOrg(row: {
   vat_registered?: boolean | null;
   vat_number?: string | null;
   quarter_start_month?: number | null;
-}): BusinessInfo {
+  company_income_tax_rate?: number | null;
+};
+
+export function businessFromOrg(row: OrgSettingsRow): BusinessInfo {
   return {
     name: row.name,
     nameSi: row.name_si ?? undefined,
@@ -93,11 +100,15 @@ export function businessFromOrg(row: {
     vatRegistered: row.vat_registered ?? false,
     vatNumber: row.vat_number ?? undefined,
     quarterStartMonth: row.quarter_start_month ?? 4,
+    companyIncomeTaxRate: clampCompanyIncomeTaxRatePct(
+      row.company_income_tax_rate ?? undefined,
+    ),
   };
 }
 
 const BASE_COLUMNS =
   "name, phone, address, tin, vat_registered, vat_number, quarter_start_month";
+const BASE_WITH_TAX = `${BASE_COLUMNS}, company_income_tax_rate`;
 const PREMIUM_COLUMNS = "name_si, email, br_number, logo_url, invoice_footer";
 
 export async function fetchOrgShopSettings(
@@ -106,25 +117,31 @@ export async function fetchOrgShopSettings(
   const supabase = createBrowserClient();
   if (!supabase) return null;
 
-  // Try with premium columns; fall back to base columns if migration not run.
-  const withPremium = await supabase
-    .from("organizations")
-    .select(`${BASE_COLUMNS}, ${PREMIUM_COLUMNS}`)
-    .eq("id", organizationId)
-    .maybeSingle();
+  const trySelect = async (columns: string) =>
+    supabase
+      .from("organizations")
+      .select(columns)
+      .eq("id", organizationId)
+      .maybeSingle();
 
-  if (!withPremium.error && withPremium.data) {
-    return businessFromOrg(withPremium.data);
+  const withTaxPremium = await trySelect(`${BASE_WITH_TAX}, ${PREMIUM_COLUMNS}`);
+  if (!withTaxPremium.error && withTaxPremium.data) {
+    return businessFromOrg(withTaxPremium.data as unknown as OrgSettingsRow);
   }
 
-  const base = await supabase
-    .from("organizations")
-    .select(BASE_COLUMNS)
-    .eq("id", organizationId)
-    .maybeSingle();
+  const withTax = await trySelect(BASE_WITH_TAX);
+  if (!withTax.error && withTax.data) {
+    return businessFromOrg(withTax.data as unknown as OrgSettingsRow);
+  }
 
+  const withPremium = await trySelect(`${BASE_COLUMNS}, ${PREMIUM_COLUMNS}`);
+  if (!withPremium.error && withPremium.data) {
+    return businessFromOrg(withPremium.data as unknown as OrgSettingsRow);
+  }
+
+  const base = await trySelect(BASE_COLUMNS);
   if (base.error || !base.data) return null;
-  return businessFromOrg(base.data);
+  return businessFromOrg(base.data as unknown as OrgSettingsRow);
 }
 
 export async function saveOrgShopSettings(
@@ -155,6 +172,16 @@ export async function saveOrgShopSettings(
   if (!data) {
     return "No permission to update shop (sign in as shop owner)";
   }
+
+  // Best-effort — column added in migration 20250625000001.
+  await supabase
+    .from("organizations")
+    .update({
+      company_income_tax_rate: clampCompanyIncomeTaxRatePct(
+        business.companyIncomeTaxRate,
+      ),
+    })
+    .eq("id", organizationId);
 
   // Best-effort premium fields — silently ignored until the migration runs.
   await supabase
