@@ -19,7 +19,10 @@ type AcServiceDoneDialogProps = {
   business: BusinessInfo;
   open: boolean;
   onClose: () => void;
-  onConfirm: (input: { intervalDays: number; visitNotes?: string }) => void;
+  onConfirm: (input: {
+    intervalDays: number;
+    visitNotes?: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
 };
 
 export function AcServiceDoneDialog({
@@ -35,6 +38,7 @@ export function AcServiceDoneDialog({
   const [customDays, setCustomDays] = useState("");
   const [visitNotes, setVisitNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [smsResult, setSmsResult] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,6 +51,7 @@ export function AcServiceDoneDialog({
     setIntervalDays(days);
     setCustomDays("");
     setVisitNotes("");
+    setSaveError(null);
     setSmsResult(null);
   }, [job]);
 
@@ -62,8 +67,19 @@ export function AcServiceDoneDialog({
 
   const handleConfirm = async () => {
     setSaving(true);
+    setSaveError(null);
     setSmsResult(null);
-    onConfirm({ intervalDays, visitNotes: visitNotes.trim() || undefined });
+
+    const result = await onConfirm({
+      intervalDays,
+      visitNotes: visitNotes.trim() || undefined,
+    });
+
+    if (!result.ok) {
+      setSaveError(result.error ?? t("common.save_failed"));
+      setSaving(false);
+      return;
+    }
 
     if (smsEnabled) {
       const sms = await sendServiceCompleteSms(
@@ -78,10 +94,8 @@ export function AcServiceDoneDialog({
           ? t("jobs.service_done_sms_sent")
           : (sms.error ?? t("jobs.service_done_sms_failed")),
       );
-      setTimeout(() => {
-        setSaving(false);
-        onClose();
-      }, 1200);
+      setSaving(false);
+      setTimeout(() => onClose(), 1200);
       return;
     }
 
@@ -176,20 +190,24 @@ export function AcServiceDoneDialog({
         {smsResult && (
           <p className="mt-2 text-sm text-teal-800">{smsResult}</p>
         )}
+        {saveError && (
+          <p className="mt-2 text-sm font-semibold text-rose-700">{saveError}</p>
+        )}
 
         <div className="mt-6 flex gap-2">
           <button
             type="button"
             disabled={saving}
-            onClick={handleConfirm}
+            onClick={() => void handleConfirm()}
             className="flex-1 rounded-lg bg-teal-700 py-2.5 text-sm font-medium text-white disabled:opacity-60"
           >
             {saving ? t("common.loading") : t("jobs.service_done_confirm")}
           </button>
           <button
             type="button"
+            disabled={saving}
             onClick={onClose}
-            className="rounded-lg border px-4 py-2.5 text-sm"
+            className="rounded-lg border px-4 py-2.5 text-sm disabled:opacity-60"
           >
             {t("common.cancel")}
           </button>

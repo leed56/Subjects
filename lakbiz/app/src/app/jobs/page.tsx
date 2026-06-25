@@ -80,7 +80,6 @@ export default function JobsPage() {
   const [updatingJobId, setUpdatingJobId] = useState<string | null>(null);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [serviceDoneJob, setServiceDoneJob] = useState<ACJob | null>(null);
-  const [savingServiceDone, setSavingServiceDone] = useState(false);
   const [sheetJob, setSheetJob] = useState<ACJob | null>(null);
   const [customerId, setCustomerId] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -407,18 +406,13 @@ export default function JobsPage() {
         open={!!serviceDoneJob}
         onClose={() => setServiceDoneJob(null)}
         onConfirm={async (input) => {
-          if (!serviceDoneJob || savingServiceDone) return;
-          setSavingServiceDone(true);
-          setMessage("");
+          if (!serviceDoneJob) return { ok: false, error: t("common.save_failed") };
           const result = await recordACServiceToCloud(serviceDoneJob.id, input);
-          setSavingServiceDone(false);
           if (result.ok) {
-            setServiceDoneJob(null);
             setMessage(t("jobs.service_done_saved"));
-          } else {
-            setMessage(result.error ?? t("common.save_failed"));
+            setTimeout(() => setMessage(""), 4000);
           }
-          setTimeout(() => setMessage(""), 4000);
+          return result;
         }}
       />
       {sheetJob && (

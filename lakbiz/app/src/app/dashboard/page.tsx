@@ -503,9 +503,8 @@ export default function DashboardPage() {
           open={!!serviceDoneJob}
           onClose={() => setServiceDoneJob(null)}
           onConfirm={async (input) => {
-            if (!serviceDoneJob) return;
-            const result = await recordACServiceToCloud(serviceDoneJob.id, input);
-            if (result.ok) setServiceDoneJob(null);
+            if (!serviceDoneJob) return { ok: false, error: t("common.save_failed") };
+            return recordACServiceToCloud(serviceDoneJob.id, input);
           }}
         />
       </ProMain>
