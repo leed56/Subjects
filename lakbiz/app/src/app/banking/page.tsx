@@ -36,13 +36,13 @@ export default function BankingPage() {
   const {
     data,
     ready,
-    addBankAccount,
-    deleteBankAccount,
-    addBankTransaction,
-    deleteBankTransaction,
-    addBankTransfer,
-    addCheque,
-    updateChequeStatus,
+    addBankAccountToCloud,
+    deleteBankAccountToCloud,
+    addBankTransactionToCloud,
+    deleteBankTransactionToCloud,
+    addBankTransferToCloud,
+    addChequeToCloud,
+    updateChequeStatusToCloud,
   } = useAppStore();
   const { t } = useLocale();
   const { canWrite, disabledHint } = useWriteAccess();
@@ -96,6 +96,14 @@ export default function BankingPage() {
   const [trAmount, setTrAmount] = useState(0);
   const [trDesc, setTrDesc] = useState("");
   const [trDate, setTrDate] = useState(new Date().toISOString().slice(0, 10));
+
+  const [savingBank, setSavingBank] = useState(false);
+  const [savingTxn, setSavingTxn] = useState(false);
+  const [savingTransfer, setSavingTransfer] = useState(false);
+  const [savingCheque, setSavingCheque] = useState(false);
+  const [savingChequeStatus, setSavingChequeStatus] = useState(false);
+  const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
+  const [deletingTxnId, setDeletingTxnId] = useState<string | null>(null);
 
   if (!ready || !data) {
     return (
@@ -326,12 +334,18 @@ export default function BankingPage() {
                     </div>
                     <p className="mt-5 font-mono text-2xl font-black text-slate-950">{formatLkr(acc.balance)}</p>
                     <button
-                      onClick={() => {
-                        if (confirm(t("bank.delete_account"))) deleteBankAccount(acc.id);
+                      onClick={async () => {
+                        if (deletingAccountId || !confirm(t("bank.delete_account"))) return;
+                        setDeletingAccountId(acc.id);
+                        setFormMessage("");
+                        const result = await deleteBankAccountToCloud(acc.id);
+                        setDeletingAccountId(null);
+                        if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
                       }}
-                      className="mt-4 rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100"
+                      disabled={!!deletingAccountId}
+                      className="mt-4 rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50"
                     >
-                      {t("common.delete")}
+                      {deletingAccountId === acc.id ? t("common.saving") : t("common.delete")}
                     </button>
                   </article>
                 ))}
@@ -368,12 +382,18 @@ export default function BankingPage() {
                         <td className="px-4 py-3">
                           {row.removable && (
                             <button
-                              onClick={() => {
-                                if (confirm(t("bank.delete_txn"))) deleteBankTransaction(row.removable!);
+                              onClick={async () => {
+                                if (deletingTxnId || !confirm(t("bank.delete_txn"))) return;
+                                setDeletingTxnId(row.removable!);
+                                setFormMessage("");
+                                const result = await deleteBankTransactionToCloud(row.removable!);
+                                setDeletingTxnId(null);
+                                if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
                               }}
-                              className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100"
+                              disabled={!!deletingTxnId}
+                              className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50"
                             >
-                              {t("common.delete")}
+                              {deletingTxnId === row.removable ? t("common.saving") : t("common.delete")}
                             </button>
                           )}
                         </td>
@@ -473,14 +493,25 @@ export default function BankingPage() {
               </div>
               <form
                 className="mt-5"
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
-                  if (addBankAccount({ bankName, branch, accountName, accountNumber, balance })) {
-                    setShowBankModal(false);
-                    resetBankForm();
-                  } else {
-                    setFormMessage(t("common.save_failed"));
+                  if (savingBank) return;
+                  setSavingBank(true);
+                  setFormMessage("");
+                  const result = await addBankAccountToCloud({
+                    bankName,
+                    branch,
+                    accountName,
+                    accountNumber,
+                    balance,
+                  });
+                  setSavingBank(false);
+                  if (!result.ok) {
+                    setFormMessage(result.error ?? t("common.save_failed"));
+                    return;
                   }
+                  setShowBankModal(false);
+                  resetBankForm();
                 }}
               >
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -494,8 +525,8 @@ export default function BankingPage() {
                 </div>
                 {formMessage && showBankModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("bank.save_account")}</button>
-                  <button type="button" onClick={() => setShowBankModal(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+                  <button type="submit" disabled={savingBank} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingBank ? t("common.saving") : t("bank.save_account")}</button>
+                  <button type="button" onClick={() => setShowBankModal(false)} disabled={savingBank} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
                 </div>
               </form>
             </div>
@@ -529,14 +560,25 @@ export default function BankingPage() {
               ) : (
                 <form
                   className="mt-5"
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
-                    if (addBankTransaction({ accountId: txnAccountId, type: txnType, amount: txnAmount, description: txnDesc, date: txnDate })) {
-                      setShowTxnModal(false);
-                      resetTxnForm();
-                    } else {
-                      setFormMessage(t("common.save_failed"));
+                    if (savingTxn) return;
+                    setSavingTxn(true);
+                    setFormMessage("");
+                    const result = await addBankTransactionToCloud({
+                      accountId: txnAccountId,
+                      type: txnType,
+                      amount: txnAmount,
+                      description: txnDesc,
+                      date: txnDate,
+                    });
+                    setSavingTxn(false);
+                    if (!result.ok) {
+                      setFormMessage(result.error ?? t("common.save_failed"));
+                      return;
                     }
+                    setShowTxnModal(false);
+                    resetTxnForm();
                   }}
                 >
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -553,8 +595,8 @@ export default function BankingPage() {
                   <p className="mt-2 text-xs font-semibold text-slate-500">{t("bank.adjustment_hint")}</p>
                   {formMessage && showTxnModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
                   <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                    <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("bank.save_txn")}</button>
-                    <button type="button" onClick={() => setShowTxnModal(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+                    <button type="submit" disabled={savingTxn} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingTxn ? t("common.saving") : t("bank.save_txn")}</button>
+                    <button type="button" onClick={() => setShowTxnModal(false)} disabled={savingTxn} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
                   </div>
                 </form>
               )}
@@ -589,14 +631,25 @@ export default function BankingPage() {
               ) : (
                 <form
                   className="mt-5"
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
-                    if (addBankTransfer({ fromAccountId: trFrom, toAccountId: trTo, amount: trAmount, description: trDesc, date: trDate })) {
-                      setShowTransferModal(false);
-                      resetTransferForm();
-                    } else {
-                      setFormMessage(t("common.save_failed"));
+                    if (savingTransfer) return;
+                    setSavingTransfer(true);
+                    setFormMessage("");
+                    const result = await addBankTransferToCloud({
+                      fromAccountId: trFrom,
+                      toAccountId: trTo,
+                      amount: trAmount,
+                      description: trDesc,
+                      date: trDate,
+                    });
+                    setSavingTransfer(false);
+                    if (!result.ok) {
+                      setFormMessage(result.error ?? t("common.save_failed"));
+                      return;
                     }
+                    setShowTransferModal(false);
+                    resetTransferForm();
                   }}
                 >
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -613,8 +666,8 @@ export default function BankingPage() {
                   {trFrom === trTo && <p className="mt-2 text-xs font-bold text-rose-600">{t("bank.transfer_same")}</p>}
                   {formMessage && showTransferModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
                   <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                    <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("bank.save_transfer")}</button>
-                    <button type="button" onClick={() => setShowTransferModal(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+                    <button type="submit" disabled={savingTransfer || trFrom === trTo} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingTransfer ? t("common.saving") : t("bank.save_transfer")}</button>
+                    <button type="button" onClick={() => setShowTransferModal(false)} disabled={savingTransfer} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
                   </div>
                 </form>
               )}
@@ -634,14 +687,27 @@ export default function BankingPage() {
               </div>
               <form
                 className="mt-5"
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
-                  if (addCheque({ direction: chDirection, chequeNo: chNo, bankName: chBank, partyName: chParty, amount: chAmount, chequeDate: chDate, postDated: chPostDated })) {
-                    setShowChequeModal(false);
-                    resetChequeForm();
-                  } else {
-                    setFormMessage(t("common.save_failed"));
+                  if (savingCheque) return;
+                  setSavingCheque(true);
+                  setFormMessage("");
+                  const result = await addChequeToCloud({
+                    direction: chDirection,
+                    chequeNo: chNo,
+                    bankName: chBank,
+                    partyName: chParty,
+                    amount: chAmount,
+                    chequeDate: chDate,
+                    postDated: chPostDated,
+                  });
+                  setSavingCheque(false);
+                  if (!result.ok) {
+                    setFormMessage(result.error ?? t("common.save_failed"));
+                    return;
                   }
+                  setShowChequeModal(false);
+                  resetChequeForm();
                 }}
               >
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -663,8 +729,8 @@ export default function BankingPage() {
                 </div>
                 {formMessage && showChequeModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("bank.save_cheque")}</button>
-                  <button type="button" onClick={() => setShowChequeModal(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+                  <button type="submit" disabled={savingCheque} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingCheque ? t("common.saving") : t("bank.save_cheque")}</button>
+                  <button type="button" onClick={() => setShowChequeModal(false)} disabled={savingCheque} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
                 </div>
               </form>
             </div>
@@ -720,15 +786,28 @@ export default function BankingPage() {
 
               <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                 <button
-                  onClick={() => {
-                    updateChequeStatus(statusCheque.id, selectedChequeStatus, depositAccountId || data.bankAccounts[0]?.id);
+                  onClick={async () => {
+                    if (!statusCheque || savingChequeStatus) return;
+                    setSavingChequeStatus(true);
+                    setFormMessage("");
+                    const result = await updateChequeStatusToCloud(
+                      statusCheque.id,
+                      selectedChequeStatus,
+                      depositAccountId || data.bankAccounts[0]?.id,
+                    );
+                    setSavingChequeStatus(false);
+                    if (!result.ok) {
+                      setFormMessage(result.error ?? t("common.save_failed"));
+                      return;
+                    }
                     setStatusCheque(null);
                   }}
-                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700"
+                  disabled={savingChequeStatus}
+                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {t("common.save")}
+                  {savingChequeStatus ? t("common.saving") : t("common.save")}
                 </button>
-                <button onClick={() => setStatusCheque(null)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
+                <button onClick={() => setStatusCheque(null)} disabled={savingChequeStatus} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                   {t("common.cancel")}
                 </button>
               </div>

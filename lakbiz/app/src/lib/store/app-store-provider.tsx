@@ -38,6 +38,13 @@ import {
   syncJobItemSnapshot,
   deleteJobItemFromCloud,
   syncContractorPaymentSnapshot,
+  syncBankAccountSnapshot,
+  deleteBankAccountFromCloud,
+  syncBankTransactionSnapshot,
+  syncBankTransactionDeleteSnapshot,
+  syncBankTransferSnapshot,
+  syncChequeSnapshot,
+  syncChequeStatusSnapshot,
   pullBusinessData,
   pullRemoteIfNewer,
   syncBusinessData,
@@ -214,15 +221,38 @@ export type AppStoreValue = {
   ) => Promise<{ ok: boolean; error?: string }>;
   addBankAccount: (input: BankAccountInput) => boolean;
   deleteBankAccount: (id: string) => void;
+  addBankAccountToCloud: (
+    input: BankAccountInput,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  deleteBankAccountToCloud: (
+    id: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   addBankTransaction: (input: BankTransactionInput) => boolean;
   deleteBankTransaction: (id: string) => void;
+  addBankTransactionToCloud: (
+    input: BankTransactionInput,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  deleteBankTransactionToCloud: (
+    id: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   addBankTransfer: (input: BankTransferInput) => boolean;
+  addBankTransferToCloud: (
+    input: BankTransferInput,
+  ) => Promise<{ ok: boolean; error?: string }>;
   addCheque: (input: ChequeInput) => boolean;
+  addChequeToCloud: (
+    input: ChequeInput,
+  ) => Promise<{ ok: boolean; error?: string }>;
   updateChequeStatus: (
     chequeId: string,
     status: ChequeStatus,
     bankAccountId?: string,
   ) => void;
+  updateChequeStatusToCloud: (
+    chequeId: string,
+    status: ChequeStatus,
+    bankAccountId?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   createSale: (
     lines: { productId: string; qty: number; unitPrice?: number }[],
     paymentMethod: PaymentMethod,
@@ -1754,6 +1784,436 @@ function useAppStoreState(): AppStoreValue {
     ],
   );
 
+  const addBankAccountToCloud = useCallback(
+    async (
+      input: BankAccountInput,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canUseBankingModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLen = data.bankAccounts.length;
+      const next = addBankAccount(data, input);
+      if (next.bankAccounts.length === prevLen) {
+        return { ok: false, error: "Could not save account" };
+      }
+
+      const accountId = next.bankAccounts[0].id;
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncBankAccountSnapshot(org.id, next, accountId);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const deleteBankAccountToCloud = useCallback(
+    async (id: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !canUseBankingModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      if (!data.bankAccounts.some((account) => account.id === id)) {
+        return { ok: false, error: "Account not found" };
+      }
+
+      const next = deleteBankAccount(data, id);
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await deleteBankAccountFromCloud(org.id, id);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      orgRole,
+      isOnline,
+      can,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const addBankTransactionToCloud = useCallback(
+    async (
+      input: BankTransactionInput,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canUseBankingModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLen = data.bankTransactions.length;
+      const next = addBankTransaction(data, input);
+      if (next.bankTransactions.length === prevLen) {
+        return { ok: false, error: "Could not save transaction" };
+      }
+
+      const txnId = next.bankTransactions[0].id;
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncBankTransactionSnapshot(org.id, next, txnId);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const deleteBankTransactionToCloud = useCallback(
+    async (id: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !canUseBankingModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const txn = data.bankTransactions.find((row) => row.id === id);
+      if (!txn) return { ok: false, error: "Transaction not found" };
+
+      const accountId = txn.accountId;
+      const next = deleteBankTransaction(data, id);
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncBankTransactionDeleteSnapshot(
+        org.id,
+        next,
+        id,
+        accountId,
+      );
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      orgRole,
+      isOnline,
+      can,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const addBankTransferToCloud = useCallback(
+    async (
+      input: BankTransferInput,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canUseBankingModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLen = data.bankTransfers.length;
+      const next = addBankTransfer(data, input);
+      if (next.bankTransfers.length === prevLen) {
+        return { ok: false, error: "Could not save transfer" };
+      }
+
+      const transferId = next.bankTransfers[0].id;
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncBankTransferSnapshot(org.id, next, transferId);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const addChequeToCloud = useCallback(
+    async (input: ChequeInput): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canUseBankingModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLen = data.cheques.length;
+      const next = addCheque(data, input);
+      if (next.cheques.length === prevLen) {
+        return { ok: false, error: "Could not save cheque" };
+      }
+
+      const chequeId = next.cheques[0].id;
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncChequeSnapshot(org.id, next, chequeId);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const updateChequeStatusToCloud = useCallback(
+    async (
+      chequeId: string,
+      status: ChequeStatus,
+      bankAccountId?: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canUseBankingModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prev = data.cheques.find((cheque) => cheque.id === chequeId);
+      if (!prev || prev.status === status) {
+        return { ok: false, error: "Could not update cheque" };
+      }
+
+      const next = updateChequeStatus(data, chequeId, status, bankAccountId);
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncChequeStatusSnapshot(org.id, next, chequeId);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
   const persist = useCallback(
     (next: AppData): boolean => {
       if (syncConflict) return false;
@@ -1922,6 +2382,8 @@ function useAppStoreState(): AppStoreValue {
         if (!data || isReadOnly || !canUseBankingModule(orgRole)) return;
         persist(deleteBankAccount(data, id));
       },
+      addBankAccountToCloud,
+      deleteBankAccountToCloud,
       addBankTransaction: (input) => {
         if (!data || !can("write") || !canUseBankingModule(orgRole)) return false;
         const before = data.bankTransactions.length;
@@ -1933,6 +2395,8 @@ function useAppStoreState(): AppStoreValue {
         if (!data || isReadOnly || !canUseBankingModule(orgRole)) return;
         persist(deleteBankTransaction(data, id));
       },
+      addBankTransactionToCloud,
+      deleteBankTransactionToCloud,
       addBankTransfer: (input) => {
         if (!data || !can("write") || !canUseBankingModule(orgRole)) return false;
         const before = data.bankTransfers.length;
@@ -1940,6 +2404,7 @@ function useAppStoreState(): AppStoreValue {
         if (next.bankTransfers.length === before) return false;
         return persist(next);
       },
+      addBankTransferToCloud,
       addCheque: (input) => {
         if (!data || !can("write") || !canUseBankingModule(orgRole)) return false;
         const before = data.cheques.length;
@@ -1947,10 +2412,12 @@ function useAppStoreState(): AppStoreValue {
         if (next.cheques.length === before) return false;
         return persist(next);
       },
+      addChequeToCloud,
       updateChequeStatus: (chequeId, status, bankAccountId) => {
         if (!data || isReadOnly || !canUseBankingModule(orgRole)) return;
         persist(updateChequeStatus(data, chequeId, status, bankAccountId));
       },
+      updateChequeStatusToCloud,
       createSale: (lines, paymentMethod, options) => {
         if (!data || !can("write")) return false;
         const before = data.sales.length;
@@ -2111,6 +2578,13 @@ function useAppStoreState(): AppStoreValue {
     addJobItemToCloud,
     deleteJobItemToCloud,
     recordContractorPaymentToCloud,
+    addBankAccountToCloud,
+    deleteBankAccountToCloud,
+    addBankTransactionToCloud,
+    deleteBankTransactionToCloud,
+    addBankTransferToCloud,
+    addChequeToCloud,
+    updateChequeStatusToCloud,
     scheduleCloudPush,
     org.sector,
     org.id,

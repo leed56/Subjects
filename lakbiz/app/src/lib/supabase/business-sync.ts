@@ -1503,6 +1503,187 @@ export async function syncContractorPaymentSnapshot(
   ]);
 }
 
+function bankAccountRow(
+  organizationId: string,
+  account: AppData["bankAccounts"][number],
+): Record<string, unknown> {
+  return {
+    id: account.id,
+    organization_id: organizationId,
+    bank_name: account.bankName,
+    branch: account.branch ?? null,
+    account_name: account.accountName,
+    account_number: account.accountNumber,
+    balance: account.balance,
+  };
+}
+
+function bankTransactionRow(
+  organizationId: string,
+  tx: AppData["bankTransactions"][number],
+): Record<string, unknown> {
+  return {
+    id: tx.id,
+    organization_id: organizationId,
+    account_id: tx.accountId,
+    type: tx.type,
+    amount: tx.amount,
+    description: tx.description ?? null,
+    reference: tx.reference ?? null,
+    txn_date: tx.date,
+  };
+}
+
+function bankTransferRow(
+  organizationId: string,
+  tr: AppData["bankTransfers"][number],
+): Record<string, unknown> {
+  return {
+    id: tr.id,
+    organization_id: organizationId,
+    from_account_id: tr.fromAccountId,
+    to_account_id: tr.toAccountId,
+    amount: tr.amount,
+    description: tr.description ?? null,
+    transfer_date: tr.date,
+  };
+}
+
+async function upsertBankAccounts(
+  organizationId: string,
+  accounts: AppData["bankAccounts"],
+): Promise<string | null> {
+  if (accounts.length === 0) return null;
+  return upsertOrgRows(
+    "bank_accounts",
+    accounts.map((account) => bankAccountRow(organizationId, account)),
+  );
+}
+
+/** Upsert a bank account directly to Supabase. */
+export async function syncBankAccountSnapshot(
+  organizationId: string,
+  data: AppData,
+  accountId: string,
+): Promise<string | null> {
+  const account = data.bankAccounts.find((row) => row.id === accountId);
+  if (!account) return "Bank account not found locally";
+  return upsertOrgRows("bank_accounts", [bankAccountRow(organizationId, account)]);
+}
+
+/** Remove a bank account from Supabase. */
+export async function deleteBankAccountFromCloud(
+  organizationId: string,
+  accountId: string,
+): Promise<string | null> {
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const { error } = await supabase
+    .from("bank_accounts")
+    .delete()
+    .eq("id", accountId)
+    .eq("organization_id", organizationId);
+  return error?.message ?? null;
+}
+
+/** Upsert a bank transaction and updated account balance directly to Supabase. */
+export async function syncBankTransactionSnapshot(
+  organizationId: string,
+  data: AppData,
+  txnId: string,
+): Promise<string | null> {
+  const txn = data.bankTransactions.find((row) => row.id === txnId);
+  if (!txn) return "Transaction not found locally";
+
+  const account = data.bankAccounts.find((row) => row.id === txn.accountId);
+  if (account) {
+    const accountErr = await upsertBankAccounts(organizationId, [account]);
+    if (accountErr) return accountErr;
+  }
+
+  return upsertOrgRows("bank_transactions", [
+    bankTransactionRow(organizationId, txn),
+  ]);
+}
+
+/** Remove a bank transaction and sync the updated account balance to Supabase. */
+export async function syncBankTransactionDeleteSnapshot(
+  organizationId: string,
+  data: AppData,
+  txnId: string,
+  accountId: string,
+): Promise<string | null> {
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const { error: deleteErr } = await supabase
+    .from("bank_transactions")
+    .delete()
+    .eq("id", txnId)
+    .eq("organization_id", organizationId);
+  if (deleteErr) return deleteErr.message;
+
+  const account = data.bankAccounts.find((row) => row.id === accountId);
+  if (!account) return null;
+  return upsertBankAccounts(organizationId, [account]);
+}
+
+/** Upsert a bank transfer and updated account balances directly to Supabase. */
+export async function syncBankTransferSnapshot(
+  organizationId: string,
+  data: AppData,
+  transferId: string,
+): Promise<string | null> {
+  const transfer = data.bankTransfers.find((row) => row.id === transferId);
+  if (!transfer) return "Transfer not found locally";
+
+  const accounts = data.bankAccounts.filter(
+    (row) =>
+      row.id === transfer.fromAccountId || row.id === transfer.toAccountId,
+  );
+  const accountErr = await upsertBankAccounts(organizationId, accounts);
+  if (accountErr) return accountErr;
+
+  return upsertOrgRows("bank_transfers", [
+    bankTransferRow(organizationId, transfer),
+  ]);
+}
+
+/** Upsert a cheque register row directly to Supabase. */
+export async function syncChequeSnapshot(
+  organizationId: string,
+  data: AppData,
+  chequeId: string,
+): Promise<string | null> {
+  const cheque = data.cheques.find((row) => row.id === chequeId);
+  if (!cheque) return "Cheque not found locally";
+
+  return upsertOrgRows("cheques", [chequeRowFromCheque(organizationId, cheque)]);
+}
+
+/** Upsert cheque status and any linked bank account balance to Supabase. */
+export async function syncChequeStatusSnapshot(
+  organizationId: string,
+  data: AppData,
+  chequeId: string,
+): Promise<string | null> {
+  const cheque = data.cheques.find((row) => row.id === chequeId);
+  if (!cheque) return "Cheque not found locally";
+
+  if (cheque.bankAccountId) {
+    const account = data.bankAccounts.find(
+      (row) => row.id === cheque.bankAccountId,
+    );
+    if (account) {
+      const accountErr = await upsertBankAccounts(organizationId, [account]);
+      if (accountErr) return accountErr;
+    }
+  }
+
+  return upsertOrgRows("cheques", [chequeRowFromCheque(organizationId, cheque)]);
+}
+
 export async function pushBusinessData(
   organizationId: string,
   data: AppData,
