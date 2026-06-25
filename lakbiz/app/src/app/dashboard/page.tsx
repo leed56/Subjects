@@ -30,7 +30,7 @@ import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 export default function DashboardPage() {
-  const { data, ready, resetAll, recordACServiceToCloud } = useAppStore();
+  const { data, ready, resetAllToCloud, recordACServiceToCloud } = useAppStore();
   const { t } = useLocale();
   const { can, org, isReadOnly, canSeeFinancials } = useSubscription();
   const canExport = can("export");
@@ -38,6 +38,8 @@ export default function DashboardPage() {
   const notificationLogs = useNotificationLogs(org.id);
   const showVehicles = can("vehicles");
   const [serviceDoneJob, setServiceDoneJob] = useState<ACJob | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState("");
 
   if (!ready || !data) {
     return (
@@ -449,14 +451,23 @@ export default function DashboardPage() {
         )}
 
         <div className="mt-8 flex flex-col items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 text-center text-xs font-semibold text-slate-500 shadow-sm sm:flex-row sm:text-left">
-          <span>{t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}</span>
+          <span>{resetMessage || t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}</span>
           <button
-            onClick={() => {
-              if (confirm(t("common.confirm_delete"))) resetAll();
+            onClick={async () => {
+              if (resetting || isReadOnly) return;
+              if (!confirm(t("common.confirm_delete"))) return;
+              setResetting(true);
+              setResetMessage("");
+              const result = await resetAllToCloud();
+              setResetting(false);
+              if (!result.ok) {
+                setResetMessage(result.error ?? t("common.save_failed"));
+              }
             }}
-            className="rounded-full px-3 py-1.5 font-black text-rose-600 transition hover:bg-rose-50"
+            disabled={resetting || isReadOnly}
+            className="rounded-full px-3 py-1.5 font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {t("common.reset_data")}
+            {resetting ? t("common.saving") : t("common.reset_data")}
           </button>
         </div>
 

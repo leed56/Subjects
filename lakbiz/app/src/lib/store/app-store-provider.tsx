@@ -136,7 +136,13 @@ import {
   updateSupplier,
   updateVehicle,
 } from "./actions";
-import { clearAppData, loadAppData, saveAppData, setStorageOrgId } from "./storage";
+import {
+  clearAppData,
+  emptyAppData,
+  loadAppData,
+  saveAppData,
+  setStorageOrgId,
+} from "./storage";
 import { normalizeProductCategory, parseSectorId } from "@/lib/sectors";
 import type {
   AppData,
@@ -183,6 +189,11 @@ export type AppStoreValue = {
   stockIn: (productId: string, qty: number, note?: string) => void;
   stockOut: (productId: string, qty: number, note?: string) => void;
   stockInToCloud: (
+    productId: string,
+    qty: number,
+    note?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  stockOutToCloud: (
     productId: string,
     qty: number,
     note?: string,
@@ -376,6 +387,7 @@ export type AppStoreValue = {
     id: string,
   ) => Promise<{ ok: boolean; error?: string }>;
   resetAll: () => void;
+  resetAllToCloud: () => Promise<{ ok: boolean; error?: string }>;
 };
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
@@ -3129,6 +3141,72 @@ function useAppStoreState(): AppStoreValue {
     ],
   );
 
+  const stockOutToCloud = useCallback(
+    async (
+      productId: string,
+      qty: number,
+      note?: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
+      const next = adjustStock(data, productId, qty, "out", note);
+      if (next === data) return { ok: false, error: "Could not adjust stock" };
+
+      const newStockLogIds = next.stockLogs
+        .filter((log) => !prevLogIds.has(log.id))
+        .map((log) => log.id);
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncProductSnapshot(org.id, next, [productId], {
+        preserveBuyPrices: !canSeeFinancials,
+        stockLogIds: newStockLogIds,
+      });
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      canSeeFinancials,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
   const deleteProductToCloud = useCallback(
     async (id: string): Promise<{ ok: boolean; error?: string }> => {
       if (!data) return { ok: false, error: "Not ready" };
@@ -3242,6 +3320,75 @@ function useAppStoreState(): AppStoreValue {
     ],
   );
 
+  const resetAllToCloud = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
+    if (!data) return { ok: false, error: "Not ready" };
+    if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+    if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+    if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+    const business = data.business;
+    const fresh = { ...emptyAppData(), business };
+    clearAppData(org.id);
+    setData(fresh);
+    latestDataRef.current = fresh;
+    saveAppData(fresh, org.id);
+
+    if (!isOnline) {
+      if (org.id) {
+        bumpOfflinePendingChange(org.id);
+        refreshOfflinePendingState(org.id);
+      }
+      return { ok: true };
+    }
+
+    if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+      return { ok: false, error: "Cloud not connected" };
+    }
+
+    const seenGeneration = await fetchOrgSyncGeneration(org.id);
+    const push = await pushBusinessData(org.id, fresh, {
+      preserveBuyPrices: !canSeeFinancials,
+      seenGeneration,
+    });
+    if (push.stale) {
+      return { ok: false, error: "Sync conflict — refresh and try again." };
+    }
+    if (push.error) {
+      setCloudSyncError(push.error);
+      touchOfflinePending(org.id);
+      refreshOfflinePendingState(org.id);
+      return { ok: false, error: push.error };
+    }
+
+    setLocalSyncGeneration(org.id, push.generation);
+    lastCloudGenerationRef.current = push.generation;
+    lastCloudWatermarkRef.current = await fetchCloudSyncWatermark(org.id);
+    setCloudSyncError(null);
+    clearOfflinePendingSync(org.id);
+    refreshOfflinePendingState(org.id);
+
+    const shopErr = await saveOrgShopSettings(org.id, business);
+    if (shopErr) {
+      setCloudSyncError(shopErr);
+      touchOfflinePending(org.id);
+      refreshOfflinePendingState(org.id);
+      return { ok: false, error: shopErr };
+    }
+
+    return { ok: true };
+  }, [
+    data,
+    syncConflict,
+    isReadOnly,
+    can,
+    isOnline,
+    org.id,
+    org.isAuthenticated,
+    user,
+    canSeeFinancials,
+    refreshOfflinePendingState,
+  ]);
+
   const persist = useCallback(
     (next: AppData): boolean => {
       if (syncConflict) return false;
@@ -3316,6 +3463,7 @@ function useAppStoreState(): AppStoreValue {
         persist(adjustStock(data, productId, qty, "out", note));
       },
       stockInToCloud,
+      stockOutToCloud,
       addCustomer: (input) => {
         if (!data) return false;
         return persist(addCustomer(data, input));
@@ -3587,6 +3735,7 @@ function useAppStoreState(): AppStoreValue {
         setData(fresh);
         latestDataRef.current = fresh;
       },
+      resetAllToCloud,
     };
     return store;
   }, [
@@ -3612,6 +3761,7 @@ function useAppStoreState(): AppStoreValue {
     saveProductToCloud,
     deleteProductToCloud,
     stockInToCloud,
+    stockOutToCloud,
     updateBusinessToCloud,
     deleteACJobToCloud,
     createSaleToCloud,
@@ -3645,6 +3795,7 @@ function useAppStoreState(): AppStoreValue {
     saveContractorToCloud,
     updateContractorToCloud,
     deleteContractorToCloud,
+    resetAllToCloud,
     scheduleCloudPush,
     org.sector,
     org.id,

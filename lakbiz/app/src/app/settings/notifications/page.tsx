@@ -30,6 +30,7 @@ export default function NotificationsSettingsPage() {
   const [customRemindDay, setCustomRemindDay] = useState("");
   const [log, setLog] = useState<NotificationLogEntry[]>([]);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchResult, setBatchResult] = useState<string | null>(null);
@@ -62,13 +63,25 @@ export default function NotificationsSettingsPage() {
     async (next: NotificationSettings) => {
       setSettings(next);
       saveNotificationSettings(next);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      setSaved(false);
+      setCloudError(null);
+      setSaving(true);
 
-      if (!org.id) return;
+      if (!org.id) {
+        setSaving(false);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+        return;
+      }
 
       const err = await saveOrgNotificationSettings(org.id, next);
-      setCloudError(err);
+      setSaving(false);
+      if (err) {
+        setCloudError(err);
+        return;
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
     },
     [org.id],
   );
@@ -151,7 +164,12 @@ export default function NotificationsSettingsPage() {
           <p className="text-slate-600">{t("msg.settings_subtitle")}</p>
         </div>
 
-        {saved && (
+        {saving && (
+          <div className="mb-4 rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">
+            {t("common.saving")}
+          </div>
+        )}
+        {saved && !saving && (
           <div className="mb-4 rounded-lg bg-teal-50 px-4 py-3 text-sm text-teal-800">
             {t("msg.settings_saved")}
           </div>
