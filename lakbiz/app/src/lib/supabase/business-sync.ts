@@ -6,7 +6,7 @@ import type { PaymentMethod, Product, SectorId } from "@/lib/types";
 import type { BusinessInfo } from "@/lib/invoice";
 import { defaultBusiness } from "@/lib/invoice";
 import { emptyAppData } from "@/lib/store/storage";
-import type { AppData } from "@/lib/store/types";
+import type { AppData, Sale, StockLog, ACJob, ChequeRecord } from "@/lib/store/types";
 import { businessFromOrg, fetchOrgShopSettings } from "./org-settings";
 import { createBrowserClient } from "./client";
 import {
@@ -829,6 +829,306 @@ async function replacePurchaseLines(
   if (rows.length === 0) return null;
   const { error: insErr } = await supabase.from("purchase_lines").insert(rows);
   return insErr?.message ?? null;
+}
+
+function productRowsFromList(
+  organizationId: string,
+  products: AppData["products"],
+): Record<string, unknown>[] {
+  return products.map((p) => ({
+    id: p.id,
+    organization_id: organizationId,
+    name: p.name,
+    sku: p.sku ?? null,
+    category: p.category,
+    sector_id: p.sectorId,
+    condition: parseProductCondition(p.condition),
+    buy_price: p.buyPrice,
+    sell_price: p.sellPrice,
+    stock_qty: p.stockQty,
+    reorder_level: p.reorderLevel ?? null,
+    unit: (p.customFields.unit as string) || "pcs",
+    custom_fields: p.customFields,
+  }));
+}
+
+async function productsWithPreservedBuyPrices(
+  organizationId: string,
+  products: AppData["products"],
+  preserveBuyPrices?: boolean,
+): Promise<AppData["products"]> {
+  if (!preserveBuyPrices) return products;
+  const supabase = createBrowserClient();
+  if (!supabase) return products;
+  const { data: rows } = await supabase
+    .from("products")
+    .select("id, buy_price")
+    .eq("organization_id", organizationId);
+  const buyMap = new Map(
+    (rows ?? []).map((row) => [row.id as string, num(row.buy_price)]),
+  );
+  return products.map((p) => ({
+    ...p,
+    buyPrice: buyMap.has(p.id) ? buyMap.get(p.id)! : p.buyPrice,
+  }));
+}
+
+function stockLogRow(
+  organizationId: string,
+  log: StockLog,
+): Record<string, unknown> {
+  return {
+    id: log.id,
+    organization_id: organizationId,
+    product_id: log.productId,
+    product_name: log.productName,
+    log_type: log.type,
+    qty: log.qty,
+    note: log.note ?? null,
+    log_date: log.date,
+  };
+}
+
+function saleRowFromSale(
+  organizationId: string,
+  sale: Sale,
+): Record<string, unknown> {
+  return {
+    id: sale.id,
+    organization_id: organizationId,
+    bill_no: sale.billNo ?? null,
+    sale_date: sale.date,
+    subtotal: sale.subtotal ?? null,
+    output_vat: sale.outputVat ?? null,
+    discount: sale.discount ?? 0,
+    total: sale.total,
+    profit: sale.profit,
+    payment_method: sale.paymentMethod,
+    customer_id: sale.customerId ?? null,
+    customer_name: sale.customerName ?? null,
+    credit_amount: sale.creditAmount,
+    cheque_id: sale.chequeId ?? null,
+  };
+}
+
+function saleLineRowsFromSale(
+  organizationId: string,
+  sale: Sale,
+): Record<string, unknown>[] {
+  return sale.lines.map((line, index) => ({
+    organization_id: organizationId,
+    sale_id: sale.id,
+    product_id: line.productId || null,
+    product_name: line.productName,
+    qty: line.qty,
+    unit_price: line.unitPrice,
+    buy_price: line.buyPrice,
+    line_order: index,
+  }));
+}
+
+function chequeRowFromCheque(
+  organizationId: string,
+  cheque: ChequeRecord,
+): Record<string, unknown> {
+  return {
+    id: cheque.id,
+    organization_id: organizationId,
+    direction: cheque.direction,
+    cheque_no: cheque.chequeNo,
+    bank_name: cheque.bankName,
+    party_name: cheque.partyName,
+    customer_id: cheque.customerId ?? null,
+    amount: cheque.amount,
+    cheque_date: cheque.chequeDate,
+    post_dated: cheque.postDated,
+    status: cheque.status,
+    linked_sale_id: cheque.linkedSaleId ?? null,
+    bank_account_id: cheque.bankAccountId ?? null,
+    note: cheque.note ?? null,
+  };
+}
+
+function acJobRowFromJob(
+  organizationId: string,
+  job: ACJob,
+): Record<string, unknown> {
+  return {
+    id: job.id,
+    organization_id: organizationId,
+    job_no: job.jobNo,
+    job_date: job.date,
+    customer_id: job.customerId ?? null,
+    customer_name: job.customerName,
+    phone: job.phone ?? null,
+    address: job.address,
+    brand: job.brand ?? null,
+    btu: job.btu ?? null,
+    unit_type: job.unitType ?? null,
+    unit_count: job.unitCount,
+    description: job.description,
+    quoted_amount: job.quotedAmount,
+    deposit_amount: job.depositAmount,
+    pipe_meters: job.pipeMeters ?? null,
+    status: job.status,
+    scheduled_date: job.scheduledDate ?? null,
+    installed_date: job.installedDate ?? null,
+    service_due_date: job.serviceDueDate ?? null,
+    service_due_manual: job.serviceDueManual ?? false,
+    last_service_date: job.lastServiceDate ?? null,
+    service_interval_months: job.serviceIntervalMonths ?? null,
+    service_interval_days: job.serviceIntervalDays ?? null,
+    amc_contract: job.amcContract ?? null,
+    job_type: job.jobType ?? "installation",
+    assigned_technician: job.assignedTechnician ?? null,
+    assignee_type: job.assigneeType ?? null,
+    assignee_id: job.assigneeId ?? null,
+    subcontract_cost: job.subcontractCost ?? null,
+    notes: job.notes ?? null,
+  };
+}
+
+/** Upsert one or more products (and optional stock logs) directly to Supabase. */
+export async function syncProductSnapshot(
+  organizationId: string,
+  data: AppData,
+  productIds: string[],
+  options?: { preserveBuyPrices?: boolean; stockLogIds?: string[] },
+): Promise<string | null> {
+  if (productIds.length === 0) return null;
+  const products = await productsWithPreservedBuyPrices(
+    organizationId,
+    data.products,
+    options?.preserveBuyPrices,
+  );
+  const rows = productRowsFromList(
+    organizationId,
+    products.filter((p) => productIds.includes(p.id)),
+  );
+  const err = await upsertMaskedViewRows("products", organizationId, rows);
+  if (err) return err;
+
+  const logIds = options?.stockLogIds ?? [];
+  if (logIds.length === 0) return null;
+  const logRows = data.stockLogs
+    .filter((log) => logIds.includes(log.id))
+    .map((log) => stockLogRow(organizationId, log));
+  return upsertOrgRows("stock_logs", logRows);
+}
+
+/** Upsert all products and mirror deletions (single-staff shops only). */
+export async function syncProductsSnapshot(
+  organizationId: string,
+  data: AppData,
+  options?: { preserveBuyPrices?: boolean },
+): Promise<string | null> {
+  const products = await productsWithPreservedBuyPrices(
+    organizationId,
+    data.products,
+    options?.preserveBuyPrices,
+  );
+  const err = await upsertMaskedViewRows(
+    "products",
+    organizationId,
+    productRowsFromList(organizationId, products),
+  );
+  if (err) return err;
+
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const { count: memberCount } = await supabase
+    .from("org_members")
+    .select("*", { count: "exact", head: true })
+    .eq("organization_id", organizationId);
+
+  if ((memberCount ?? 0) > 1) return null;
+
+  return deleteOrgRowsNotIn(
+    "products",
+    organizationId,
+    products.map((p) => p.id),
+  );
+}
+
+/** Upsert a sale and related stock/customer/cheque/job rows directly to Supabase. */
+export async function syncSaleSnapshot(
+  organizationId: string,
+  data: AppData,
+  saleId: string,
+  options?: { preserveBuyPrices?: boolean; newAcJobIds?: string[] },
+): Promise<string | null> {
+  const sale = data.sales.find((row) => row.id === saleId);
+  if (!sale) return "Sale not found locally";
+
+  const custErr = await syncCustomersSnapshot(organizationId, data.customers);
+  if (custErr) return custErr;
+
+  const productIds = [
+    ...new Set(sale.lines.map((line) => line.productId).filter(Boolean)),
+  ];
+  const products = await productsWithPreservedBuyPrices(
+    organizationId,
+    data.products,
+    options?.preserveBuyPrices,
+  );
+  const prodErr = await upsertMaskedViewRows(
+    "products",
+    organizationId,
+    productRowsFromList(
+      organizationId,
+      products.filter((p) => productIds.includes(p.id)),
+    ),
+  );
+  if (prodErr) return prodErr;
+
+  const saleErr = await upsertMaskedViewRows("sales", organizationId, [
+    saleRowFromSale(organizationId, sale),
+  ]);
+  if (saleErr) return saleErr;
+
+  const linesErr = await replaceSaleLines(
+    organizationId,
+    saleId,
+    saleLineRowsFromSale(organizationId, sale),
+  );
+  if (linesErr) return linesErr;
+
+  const billTag = sale.id.slice(0, 8);
+  const saleLogs = data.stockLogs.filter(
+    (log) => log.type === "sale" && log.note?.includes(billTag),
+  );
+  if (saleLogs.length > 0) {
+    const logErr = await upsertOrgRows(
+      "stock_logs",
+      saleLogs.map((log) => stockLogRow(organizationId, log)),
+    );
+    if (logErr) return logErr;
+  }
+
+  if (sale.chequeId) {
+    const cheque = data.cheques.find((row) => row.id === sale.chequeId);
+    if (cheque) {
+      const chequeErr = await upsertOrgRows("cheques", [
+        chequeRowFromCheque(organizationId, cheque),
+      ]);
+      if (chequeErr) return chequeErr;
+    }
+  }
+
+  const newAcJobIds = options?.newAcJobIds ?? [];
+  if (newAcJobIds.length > 0) {
+    const jobs = data.acJobs.filter((job) => newAcJobIds.includes(job.id));
+    if (jobs.length > 0) {
+      const jobErr = await upsertOrgRows(
+        "ac_jobs",
+        jobs.map((job) => acJobRowFromJob(organizationId, job)),
+      );
+      if (jobErr) return jobErr;
+    }
+  }
+
+  return null;
 }
 
 export async function pushBusinessData(

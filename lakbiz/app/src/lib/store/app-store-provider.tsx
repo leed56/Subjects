@@ -28,6 +28,8 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 import {
   pushBusinessData,
   syncCustomersSnapshot,
+  syncProductSnapshot,
+  syncSaleSnapshot,
   pullBusinessData,
   pullRemoteIfNewer,
   syncBusinessData,
@@ -145,6 +147,10 @@ export type AppStoreValue = {
   dismissCloudRemoteNotice: () => void;
   addProduct: (input: ProductInput) => boolean;
   updateProduct: (id: string, input: ProductInput) => boolean;
+  saveProductToCloud: (
+    input: ProductInput,
+    existingId?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   deleteProduct: (id: string) => void;
   stockIn: (productId: string, qty: number, note?: string) => void;
   stockOut: (productId: string, qty: number, note?: string) => void;
@@ -194,6 +200,11 @@ export type AppStoreValue = {
     paymentMethod: PaymentMethod,
     options?: SaleOptions,
   ) => string | false;
+  createSaleToCloud: (
+    lines: { productId: string; qty: number; unitPrice?: number }[],
+    paymentMethod: PaymentMethod,
+    options?: SaleOptions,
+  ) => Promise<{ ok: boolean; saleId?: string; error?: string }>;
   updateBusiness: (business: BusinessInfo) => void;
   addACJob: (input: ACJobInput) => boolean;
   updateACJob: (id: string, input: Partial<ACJobInput>) => boolean;
@@ -852,6 +863,172 @@ function useAppStoreState(): AppStoreValue {
     ],
   );
 
+  const canAddProduct = useCallback(
+    (current: AppData) => {
+      const plan = getPlan(subscription.planId);
+      if (plan.maxProducts == null) return true;
+      return current.products.length < plan.maxProducts;
+    },
+    [subscription.planId],
+  );
+
+  const saveProductToCloud = useCallback(
+    async (
+      input: ProductInput,
+      existingId?: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const shopSector = parseSectorId(org.sector);
+      let normalized = org.isAuthenticated
+        ? normalizeProductForShop(input, shopSector)
+        : input;
+      if (existingId && !canSeeFinancials) {
+        const existing = data.products.find((p) => p.id === existingId);
+        if (existing) normalized = { ...normalized, buyPrice: existing.buyPrice };
+      }
+
+      let next: AppData;
+      let productId: string;
+      let newStockLogIds: string[] = [];
+
+      if (existingId) {
+        next = updateProduct(data, existingId, normalized);
+        productId = existingId;
+      } else {
+        if (!canAddProduct(data)) {
+          return { ok: false, error: "Product limit reached" };
+        }
+        const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
+        next = addProduct(data, normalized);
+        productId = next.products[0].id;
+        newStockLogIds = next.stockLogs
+          .filter((log) => !prevLogIds.has(log.id))
+          .map((log) => log.id);
+      }
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncProductSnapshot(org.id, next, [productId], {
+        preserveBuyPrices: !canSeeFinancials,
+        stockLogIds: newStockLogIds,
+      });
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      org.sector,
+      user,
+      canSeeFinancials,
+      canAddProduct,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const createSaleToCloud = useCallback(
+    async (
+      lines: { productId: string; qty: number; unitPrice?: number }[],
+      paymentMethod: PaymentMethod,
+      options?: SaleOptions,
+    ): Promise<{ ok: boolean; saleId?: string; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevJobIds = new Set(data.acJobs.map((job) => job.id));
+      const prevSalesLen = data.sales.length;
+      const next = createSale(data, lines, paymentMethod, options ?? {});
+      if (next.sales.length === prevSalesLen) {
+        return { ok: false, error: "Could not create sale" };
+      }
+
+      const saleId = next.sales[0].id;
+      const newAcJobIds = next.acJobs
+        .filter((job) => !prevJobIds.has(job.id))
+        .map((job) => job.id);
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true, saleId };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncSaleSnapshot(org.id, next, saleId, {
+        preserveBuyPrices: !canSeeFinancials,
+        newAcJobIds,
+      });
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true, saleId };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      canSeeFinancials,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
   const persist = useCallback(
     (next: AppData): boolean => {
       if (syncConflict) return false;
@@ -876,15 +1053,6 @@ function useAppStoreState(): AppStoreValue {
       scheduleCloudPush,
       refreshOfflinePendingState,
     ],
-  );
-
-  const canAddProduct = useCallback(
-    (current: AppData) => {
-      const plan = getPlan(subscription.planId);
-      if (plan.maxProducts == null) return true;
-      return current.products.length < plan.maxProducts;
-    },
-    [subscription.planId],
   );
 
   return useMemo(() => {
@@ -920,6 +1088,7 @@ function useAppStoreState(): AppStoreValue {
         }
         return persist(updateProduct(data, id, normalized));
       },
+      saveProductToCloud,
       deleteProduct: (id) => {
         if (!data || isReadOnly) return;
         persist(deleteProduct(data, id));
@@ -1060,6 +1229,7 @@ function useAppStoreState(): AppStoreValue {
         if (!persist(next)) return false;
         return next.sales[0].id;
       },
+      createSaleToCloud,
       updateBusiness: (business) => {
         if (syncConflict) return;
         if (isReadOnly || !can("write") || (!isOnline && !can("offline"))) return;
@@ -1192,6 +1362,8 @@ function useAppStoreState(): AppStoreValue {
     persist,
     saveCustomerToCloud,
     deleteCustomerToCloud,
+    saveProductToCloud,
+    createSaleToCloud,
     scheduleCloudPush,
     org.sector,
     org.id,

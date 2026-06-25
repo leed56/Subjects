@@ -31,7 +31,7 @@ import type { Product, ProductCondition } from "@/lib/types";
 type ConditionFilter = "all" | ProductCondition;
 
 export default function StockPage() {
-  const { data, ready, addProduct, updateProduct, deleteProduct, stockIn } = useAppStore();
+  const { data, ready, saveProductToCloud, deleteProduct, stockIn } = useAppStore();
   const { org, subscription, canSeeFinancials, can } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
   const { t } = useLocale();
@@ -42,6 +42,7 @@ export default function StockPage() {
   const [search, setSearch] = useState("");
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
   const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
 
   if (!ready || !data) {
     return (
@@ -219,35 +220,49 @@ export default function StockPage() {
                   initial={editing}
                   lockedSectorId={org.isAuthenticated ? org.sector : undefined}
                   defaultSectorId={org.sector}
-                  submitLabel={t("common.update")}
+                  submitLabel={saving ? t("common.saving") : t("common.update")}
                   onCancel={() => setEditing(null)}
-                  onSubmit={(input) => {
-                    const ok = updateProduct(editing.id, input);
-                    if (!ok) {
-                      setMessage(t("common.save_failed"));
-                      setTimeout(() => setMessage(""), 3000);
+                  onSubmit={async (input) => {
+                    setSaving(true);
+                    setMessage("");
+                    const result = await saveProductToCloud(input, editing.id);
+                    setSaving(false);
+                    if (!result.ok) {
+                      setMessage(result.error ?? t("common.save_failed"));
+                      setTimeout(() => setMessage(""), 4000);
                       return;
                     }
                     setEditing(null);
-                    setMessage("");
+                    setMessage(t("stock.updated"));
+                    setTimeout(() => setMessage(""), 2500);
                   }}
                 />
               ) : (
                 <ProductForm
                   lockedSectorId={org.isAuthenticated ? org.sector : undefined}
                   defaultSectorId={org.sector}
-                  onSubmit={(input) => {
+                  submitLabel={saving ? t("common.saving") : undefined}
+                  onSubmit={async (input) => {
                     const plan = getPlan(subscription.planId);
                     const atCap =
                       plan.maxProducts != null && data.products.length >= plan.maxProducts;
-                    const ok = addProduct(input);
-                    if (!ok) {
-                      setMessage(t(atCap ? "stock.limit_reached" : "common.save_failed"));
+                    if (atCap) {
+                      setMessage(t("stock.limit_reached"));
+                      setTimeout(() => setMessage(""), 4000);
+                      return;
+                    }
+                    setSaving(true);
+                    setMessage("");
+                    const result = await saveProductToCloud(input);
+                    setSaving(false);
+                    if (!result.ok) {
+                      setMessage(result.error ?? t("common.save_failed"));
                       setTimeout(() => setMessage(""), 4000);
                       return;
                     }
                     setShowForm(false);
-                    setMessage("");
+                    setMessage(t("stock.added"));
+                    setTimeout(() => setMessage(""), 2500);
                   }}
                 />
               )}

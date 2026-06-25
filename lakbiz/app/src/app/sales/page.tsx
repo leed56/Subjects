@@ -32,7 +32,7 @@ import type { PaymentMethod, ProductCondition } from "@/lib/types";
 type ConditionFilter = "all" | ProductCondition;
 
 export default function SalesPage() {
-  const { data, ready, createSale } = useAppStore();
+  const { data, ready, createSaleToCloud } = useAppStore();
   const { t } = useLocale();
   const { org, can, canSeeFinancials } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
@@ -55,6 +55,7 @@ export default function SalesPage() {
   const [chequeDate, setChequeDate] = useState(new Date().toISOString().slice(0, 10));
   const [postDated, setPostDated] = useState(false);
   const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
   const [lastBillId, setLastBillId] = useState<string | null>(null);
 
   const lines = useMemo(() => {
@@ -159,7 +160,8 @@ export default function SalesPage() {
     }
   };
 
-  const handleSale = () => {
+  const handleSale = async () => {
+    if (saving || lines.length === 0) return;
     if (payment === "credit" && !customerId) {
       setMessage(t("sales.credit_need_customer"));
       return;
@@ -193,7 +195,9 @@ export default function SalesPage() {
       }
     }
 
-    const saleId = createSale(
+    setSaving(true);
+    setMessage("");
+    const result = await createSaleToCloud(
       lines.map((l) => ({
         productId: l.product.id,
         qty: l.qty,
@@ -214,29 +218,32 @@ export default function SalesPage() {
         postDated: payment === "cheque" ? postDated : undefined,
       },
     );
+    setSaving(false);
 
-    if (saleId) {
-      resetAfterSale();
-      setLastBillId(saleId);
-      const savedCustomer = showAcBuyerPanel && addToCustomers && !customerId;
-      const savedJob = showAcBuyerPanel && createInstallJob;
-      setMessage(
-        savedCustomer && savedJob
-          ? t("sales.saved_with_customer_and_job")
-          : savedCustomer
-            ? t("sales.saved_with_customer")
-            : savedJob
-              ? t("sales.saved_with_job")
-              : payment === "credit"
-                ? t("sales.credit_saved")
-                : payment === "cheque"
-                  ? t("sales.cheque_saved")
-                  : t("sales.saved"),
-      );
-      setTimeout(() => setMessage(""), 6000);
-    } else {
-      setMessage(t("sales.failed"));
+    if (!result.ok || !result.saleId) {
+      setMessage(result.error ?? t("sales.failed"));
+      return;
     }
+
+    const saleId = result.saleId;
+    resetAfterSale();
+    setLastBillId(saleId);
+    const savedCustomer = showAcBuyerPanel && addToCustomers && !customerId;
+    const savedJob = showAcBuyerPanel && createInstallJob;
+    setMessage(
+      savedCustomer && savedJob
+        ? t("sales.saved_with_customer_and_job")
+        : savedCustomer
+          ? t("sales.saved_with_customer")
+          : savedJob
+            ? t("sales.saved_with_job")
+            : payment === "credit"
+              ? t("sales.credit_saved")
+              : payment === "cheque"
+                ? t("sales.cheque_saved")
+                : t("sales.saved"),
+    );
+    setTimeout(() => setMessage(""), 6000);
   };
 
   const inStock = data.products.filter((p) => p.stockQty > 0);
@@ -699,12 +706,12 @@ export default function SalesPage() {
                   )}
 
                   <button
-                    disabled={lines.length === 0 || !canWrite}
+                    disabled={lines.length === 0 || !canWrite || saving}
                     title={!canWrite ? (disabledHint ?? undefined) : undefined}
-                    onClick={handleSale}
+                    onClick={() => void handleSale()}
                     className="w-full rounded-2xl bg-teal-600 py-4 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {t("sales.complete")}
+                    {saving ? t("common.saving") : t("sales.complete")}
                   </button>
                 </div>
               </ProCard>
@@ -776,10 +783,11 @@ export default function SalesPage() {
               <p className="text-lg font-black text-slate-950">{formatLkr(netTotal)}</p>
             </div>
             <button
-              onClick={handleSale}
-              className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20"
+              disabled={!canWrite || saving}
+              onClick={() => void handleSale()}
+              className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {t("sales.complete")}
+              {saving ? t("common.saving") : t("sales.complete")}
             </button>
           </div>
         </div>
