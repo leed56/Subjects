@@ -1764,6 +1764,131 @@ export async function syncVehicleSaleSnapshot(
   return syncVehicleSnapshot(organizationId, data, vehicleId);
 }
 
+function customerProductPriceRow(
+  organizationId: string,
+  price: AppData["customerProductPrices"][number],
+): Record<string, unknown> {
+  return {
+    id: price.id,
+    organization_id: organizationId,
+    customer_id: price.customerId,
+    product_id: price.productId,
+    price: price.price,
+  };
+}
+
+/** Upsert or delete a customer wholesale price row directly to Supabase. */
+export async function syncCustomerProductPriceSnapshot(
+  organizationId: string,
+  data: AppData,
+  customerId: string,
+  productId: string,
+  removedPriceId?: string,
+): Promise<string | null> {
+  const row = data.customerProductPrices.find(
+    (entry) => entry.customerId === customerId && entry.productId === productId,
+  );
+  if (row) {
+    return upsertOrgRows("customer_product_prices", [
+      customerProductPriceRow(organizationId, row),
+    ]);
+  }
+
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  if (removedPriceId) {
+    const { error } = await supabase
+      .from("customer_product_prices")
+      .delete()
+      .eq("id", removedPriceId)
+      .eq("organization_id", organizationId);
+    return error?.message ?? null;
+  }
+
+  const { error } = await supabase
+    .from("customer_product_prices")
+    .delete()
+    .eq("organization_id", organizationId)
+    .eq("customer_id", customerId)
+    .eq("product_id", productId);
+  return error?.message ?? null;
+}
+
+function technicianRow(
+  organizationId: string,
+  technician: AppData["technicians"][number],
+): Record<string, unknown> {
+  return {
+    id: technician.id,
+    organization_id: organizationId,
+    name: technician.name,
+    phone: technician.phone ?? null,
+    specialties: technician.specialties,
+    active: technician.active,
+    notes: technician.notes ?? null,
+  };
+}
+
+/** Upsert a technician directly to Supabase. */
+export async function syncTechnicianSnapshot(
+  organizationId: string,
+  data: AppData,
+  technicianId: string,
+): Promise<string | null> {
+  const technician = data.technicians.find((row) => row.id === technicianId);
+  if (!technician) return "Technician not found locally";
+
+  return upsertOrgRows("technicians", [technicianRow(organizationId, technician)]);
+}
+
+/** Remove a technician from Supabase. */
+export async function deleteTechnicianFromCloud(
+  organizationId: string,
+  technicianId: string,
+): Promise<string | null> {
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const { error } = await supabase
+    .from("technicians")
+    .delete()
+    .eq("id", technicianId)
+    .eq("organization_id", organizationId);
+  return error?.message ?? null;
+}
+
+/** Upsert a contractor directly to Supabase. */
+export async function syncContractorSnapshot(
+  organizationId: string,
+  data: AppData,
+  contractorId: string,
+): Promise<string | null> {
+  const contractor = data.contractors.find((row) => row.id === contractorId);
+  if (!contractor) return "Contractor not found locally";
+
+  return upsertOrgRows(
+    "contractors",
+    contractorRowsFromList(organizationId, [contractor]),
+  );
+}
+
+/** Remove a contractor from Supabase. */
+export async function deleteContractorFromCloud(
+  organizationId: string,
+  contractorId: string,
+): Promise<string | null> {
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const { error } = await supabase
+    .from("contractors")
+    .delete()
+    .eq("id", contractorId)
+    .eq("organization_id", organizationId);
+  return error?.message ?? null;
+}
+
 export async function pushBusinessData(
   organizationId: string,
   data: AppData,

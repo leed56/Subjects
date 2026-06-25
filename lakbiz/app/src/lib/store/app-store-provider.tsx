@@ -48,6 +48,11 @@ import {
   syncVehicleSnapshot,
   deleteVehicleFromCloud,
   syncVehicleSaleSnapshot,
+  syncCustomerProductPriceSnapshot,
+  syncTechnicianSnapshot,
+  deleteTechnicianFromCloud,
+  syncContractorSnapshot,
+  deleteContractorFromCloud,
   pullBusinessData,
   pullRemoteIfNewer,
   syncBusinessData,
@@ -186,6 +191,15 @@ export type AppStoreValue = {
     price: number,
   ) => boolean;
   removeCustomerProductPrice: (customerId: string, productId: string) => boolean;
+  setCustomerProductPriceToCloud: (
+    customerId: string,
+    productId: string,
+    price: number,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  removeCustomerProductPriceToCloud: (
+    customerId: string,
+    productId: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   addSupplier: (input: SupplierInput) => boolean;
   updateSupplier: (id: string, input: SupplierInput) => boolean;
   saveSupplierToCloud: (
@@ -294,9 +308,29 @@ export type AppStoreValue = {
   addTechnician: (input: TechnicianInput) => boolean;
   updateTechnician: (id: string, input: Partial<TechnicianInput>) => void;
   deleteTechnician: (id: string) => void;
+  saveTechnicianToCloud: (
+    input: TechnicianInput,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  updateTechnicianToCloud: (
+    id: string,
+    input: Partial<TechnicianInput>,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  deleteTechnicianToCloud: (
+    id: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   addContractor: (input: ContractorInput) => boolean;
   updateContractor: (id: string, input: Partial<ContractorInput>) => void;
   deleteContractor: (id: string) => void;
+  saveContractorToCloud: (
+    input: ContractorInput,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  updateContractorToCloud: (
+    id: string,
+    input: Partial<ContractorInput>,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  deleteContractorToCloud: (
+    id: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   recordContractorPayment: (
     contractorId: string,
     amount: number,
@@ -2479,6 +2513,492 @@ function useAppStoreState(): AppStoreValue {
     ],
   );
 
+  const setCustomerProductPriceToCloud = useCallback(
+    async (
+      customerId: string,
+      productId: string,
+      price: number,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const existing = data.customerProductPrices.find(
+        (row) => row.customerId === customerId && row.productId === productId,
+      );
+      const before = existing ? JSON.stringify(existing) : null;
+      const next = setCustomerProductPrice(data, customerId, productId, price);
+      const afterRow = next.customerProductPrices.find(
+        (row) => row.customerId === customerId && row.productId === productId,
+      );
+      const after = afterRow ? JSON.stringify(afterRow) : null;
+      if (before === after) {
+        return { ok: false, error: "Could not save price" };
+      }
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncCustomerProductPriceSnapshot(
+        org.id,
+        next,
+        customerId,
+        productId,
+        existing && !afterRow ? existing.id : undefined,
+      );
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const removeCustomerProductPriceToCloud = useCallback(
+    async (
+      customerId: string,
+      productId: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const existing = data.customerProductPrices.find(
+        (row) => row.customerId === customerId && row.productId === productId,
+      );
+      if (!existing) return { ok: true };
+
+      const next = removeCustomerProductPrice(data, customerId, productId);
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncCustomerProductPriceSnapshot(
+        org.id,
+        next,
+        customerId,
+        productId,
+        existing.id,
+      );
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const saveTechnicianToCloud = useCallback(
+    async (
+      input: TechnicianInput,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLen = data.technicians.length;
+      const next = addTechnician(data, input);
+      if (next.technicians.length === prevLen) {
+        return { ok: false, error: "Could not save technician" };
+      }
+
+      const technicianId = next.technicians[0].id;
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncTechnicianSnapshot(org.id, next, technicianId);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const updateTechnicianToCloud = useCallback(
+    async (
+      id: string,
+      input: Partial<TechnicianInput>,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const before = data.technicians.find((row) => row.id === id);
+      const next = updateTechnician(data, id, input);
+      const after = next.technicians.find((row) => row.id === id);
+      if (!before || !after || JSON.stringify(before) === JSON.stringify(after)) {
+        return { ok: false, error: "Could not update technician" };
+      }
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncTechnicianSnapshot(org.id, next, id);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const deleteTechnicianToCloud = useCallback(
+    async (id: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      if (!data.technicians.some((row) => row.id === id)) {
+        return { ok: false, error: "Technician not found" };
+      }
+
+      const next = deleteTechnician(data, id);
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await deleteTechnicianFromCloud(org.id, id);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const saveContractorToCloud = useCallback(
+    async (
+      input: ContractorInput,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLen = data.contractors.length;
+      const next = addContractor(data, input);
+      if (next.contractors.length === prevLen) {
+        return { ok: false, error: "Could not save contractor" };
+      }
+
+      const contractorId = next.contractors[0].id;
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncContractorSnapshot(org.id, next, contractorId);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const updateContractorToCloud = useCallback(
+    async (
+      id: string,
+      input: Partial<ContractorInput>,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const before = data.contractors.find((row) => row.id === id);
+      const next = updateContractor(data, id, input);
+      const after = next.contractors.find((row) => row.id === id);
+      if (!before || !after || JSON.stringify(before) === JSON.stringify(after)) {
+        return { ok: false, error: "Could not update contractor" };
+      }
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncContractorSnapshot(org.id, next, id);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const deleteContractorToCloud = useCallback(
+    async (id: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      if (!data.contractors.some((row) => row.id === id)) {
+        return { ok: false, error: "Contractor not found" };
+      }
+
+      const next = deleteContractor(data, id);
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await deleteContractorFromCloud(org.id, id);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
   const persist = useCallback(
     (next: AppData): boolean => {
       if (syncConflict) return false;
@@ -2586,6 +3106,8 @@ function useAppStoreState(): AppStoreValue {
         if (next.customerProductPrices.length === before) return false;
         return persist(next);
       },
+      setCustomerProductPriceToCloud,
+      removeCustomerProductPriceToCloud,
       addSupplier: (input) => {
         if (!data || !canUseSuppliersModule(orgRole)) return false;
         return persist(addSupplier(data, input));
@@ -2759,6 +3281,9 @@ function useAppStoreState(): AppStoreValue {
         if (!data || isReadOnly) return;
         persist(deleteTechnician(data, id));
       },
+      saveTechnicianToCloud,
+      updateTechnicianToCloud,
+      deleteTechnicianToCloud,
       addContractor: (input) => {
         if (!data || !can("write")) return false;
         const next = addContractor(data, input);
@@ -2773,6 +3298,9 @@ function useAppStoreState(): AppStoreValue {
         if (!data || isReadOnly) return;
         persist(deleteContractor(data, id));
       },
+      saveContractorToCloud,
+      updateContractorToCloud,
+      deleteContractorToCloud,
       recordContractorPayment: (contractorId, amount, method, note) => {
         if (!data || !can("write")) return false;
         const before = data.contractorPayments.length;
@@ -2858,6 +3386,14 @@ function useAppStoreState(): AppStoreValue {
     updateVehicleToCloud,
     sellVehicleToCloud,
     deleteVehicleToCloud,
+    setCustomerProductPriceToCloud,
+    removeCustomerProductPriceToCloud,
+    saveTechnicianToCloud,
+    updateTechnicianToCloud,
+    deleteTechnicianToCloud,
+    saveContractorToCloud,
+    updateContractorToCloud,
+    deleteContractorToCloud,
     scheduleCloudPush,
     org.sector,
     org.id,

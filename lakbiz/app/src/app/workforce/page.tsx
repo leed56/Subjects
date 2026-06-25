@@ -64,12 +64,12 @@ export default function WorkforcePage() {
   const {
     data,
     ready,
-    addTechnician,
-    updateTechnician,
-    deleteTechnician,
-    addContractor,
-    updateContractor,
-    deleteContractor,
+    saveTechnicianToCloud,
+    updateTechnicianToCloud,
+    deleteTechnicianToCloud,
+    saveContractorToCloud,
+    updateContractorToCloud,
+    deleteContractorToCloud,
     recordContractorPaymentToCloud,
   } = useAppStore();
   const { t } = useLocale();
@@ -107,6 +107,12 @@ export default function WorkforcePage() {
   const [payNote, setPayNote] = useState("");
   const [savingPayment, setSavingPayment] = useState(false);
   const [payMessage, setPayMessage] = useState("");
+  const [savingTech, setSavingTech] = useState(false);
+  const [savingCon, setSavingCon] = useState(false);
+  const [updatingTechId, setUpdatingTechId] = useState<string | null>(null);
+  const [deletingTechId, setDeletingTechId] = useState<string | null>(null);
+  const [updatingConId, setUpdatingConId] = useState<string | null>(null);
+  const [deletingConId, setDeletingConId] = useState<string | null>(null);
 
   if (!ready || !data) {
     return (
@@ -253,11 +259,33 @@ export default function WorkforcePage() {
                       )}
                     </div>
                     <div className="mt-4 flex gap-2">
-                      <button onClick={() => updateTechnician(tch.id, { active: !tch.active })} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-200">
-                        {tch.active ? t("work.deactivate") : t("work.activate")}
+                      <button
+                        disabled={updatingTechId === tch.id || deletingTechId === tch.id}
+                        onClick={async () => {
+                          if (updatingTechId || deletingTechId) return;
+                          setUpdatingTechId(tch.id);
+                          setFormMessage("");
+                          const result = await updateTechnicianToCloud(tch.id, { active: !tch.active });
+                          setUpdatingTechId(null);
+                          if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
+                        }}
+                        className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                      >
+                        {updatingTechId === tch.id ? t("common.saving") : tch.active ? t("work.deactivate") : t("work.activate")}
                       </button>
-                      <button onClick={() => { if (confirm(t("work.delete_tech"))) deleteTechnician(tch.id); }} className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100">
-                        {t("common.delete")}
+                      <button
+                        disabled={updatingTechId === tch.id || deletingTechId === tch.id}
+                        onClick={async () => {
+                          if (updatingTechId || deletingTechId || !confirm(t("work.delete_tech"))) return;
+                          setDeletingTechId(tch.id);
+                          setFormMessage("");
+                          const result = await deleteTechnicianToCloud(tch.id);
+                          setDeletingTechId(null);
+                          if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
+                        }}
+                        className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                      >
+                        {deletingTechId === tch.id ? t("common.saving") : t("common.delete")}
                       </button>
                     </div>
                   </article>
@@ -318,11 +346,33 @@ export default function WorkforcePage() {
                           {t("work.pay")}
                         </button>
                       )}
-                      <button onClick={() => updateContractor(c.id, { active: !c.active })} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-200">
-                        {c.active ? t("work.deactivate") : t("work.activate")}
+                      <button
+                        disabled={updatingConId === c.id || deletingConId === c.id}
+                        onClick={async () => {
+                          if (updatingConId || deletingConId) return;
+                          setUpdatingConId(c.id);
+                          setFormMessage("");
+                          const result = await updateContractorToCloud(c.id, { active: !c.active });
+                          setUpdatingConId(null);
+                          if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
+                        }}
+                        className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                      >
+                        {updatingConId === c.id ? t("common.saving") : c.active ? t("work.deactivate") : t("work.activate")}
                       </button>
-                      <button onClick={() => { if (confirm(t("work.delete_contractor"))) deleteContractor(c.id); }} className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100">
-                        {t("common.delete")}
+                      <button
+                        disabled={updatingConId === c.id || deletingConId === c.id}
+                        onClick={async () => {
+                          if (updatingConId || deletingConId || !confirm(t("work.delete_contractor"))) return;
+                          setDeletingConId(c.id);
+                          setFormMessage("");
+                          const result = await deleteContractorToCloud(c.id);
+                          setDeletingConId(null);
+                          if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
+                        }}
+                        className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                      >
+                        {deletingConId === c.id ? t("common.saving") : t("common.delete")}
                       </button>
                     </div>
                   </article>
@@ -375,14 +425,23 @@ export default function WorkforcePage() {
             </div>
             <form
               className="mt-5"
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                if (addTechnician({ name: techName, phone: techPhone, specialties: techSpecs })) {
-                  setShowTechModal(false);
-                  resetTechForm();
-                } else {
-                  setFormMessage(t("sub.read_only"));
+                if (savingTech) return;
+                setSavingTech(true);
+                setFormMessage("");
+                const result = await saveTechnicianToCloud({
+                  name: techName,
+                  phone: techPhone,
+                  specialties: techSpecs,
+                });
+                setSavingTech(false);
+                if (!result.ok) {
+                  setFormMessage(result.error ?? t("sub.read_only"));
+                  return;
                 }
+                setShowTechModal(false);
+                resetTechForm();
               }}
             >
               <div className="grid gap-3 sm:grid-cols-2">
@@ -395,8 +454,8 @@ export default function WorkforcePage() {
               </div>
               {formMessage && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("common.save")}</button>
-                <button type="button" onClick={() => setShowTechModal(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+                <button type="submit" disabled={savingTech} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingTech ? t("common.saving") : t("common.save")}</button>
+                <button type="button" onClick={() => setShowTechModal(false)} disabled={savingTech} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
               </div>
             </form>
           </div>
@@ -415,23 +474,26 @@ export default function WorkforcePage() {
             </div>
             <form
               className="mt-5"
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                if (
-                  addContractor({
-                    name: conName,
-                    company: conCompany,
-                    phone: conPhone,
-                    specialties: conSpecs,
-                    rateType: conRateType,
-                    rateAmount: conRate,
-                  })
-                ) {
-                  setShowConModal(false);
-                  resetConForm();
-                } else {
-                  setFormMessage(t("sub.read_only"));
+                if (savingCon) return;
+                setSavingCon(true);
+                setFormMessage("");
+                const result = await saveContractorToCloud({
+                  name: conName,
+                  company: conCompany,
+                  phone: conPhone,
+                  specialties: conSpecs,
+                  rateType: conRateType,
+                  rateAmount: conRate,
+                });
+                setSavingCon(false);
+                if (!result.ok) {
+                  setFormMessage(result.error ?? t("sub.read_only"));
+                  return;
                 }
+                setShowConModal(false);
+                resetConForm();
               }}
             >
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -453,8 +515,8 @@ export default function WorkforcePage() {
               </div>
               {formMessage && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <button type="submit" className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700">{t("common.save")}</button>
-                <button type="button" onClick={() => setShowConModal(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">{t("common.cancel")}</button>
+                <button type="submit" disabled={savingCon} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingCon ? t("common.saving") : t("common.save")}</button>
+                <button type="button" onClick={() => setShowConModal(false)} disabled={savingCon} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
               </div>
             </form>
           </div>

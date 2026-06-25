@@ -43,8 +43,8 @@ export default function CustomersPage() {
     saveCustomerToCloud,
     deleteCustomerToCloud,
     recordCustomerPaymentToCloud,
-    setCustomerProductPrice,
-    removeCustomerProductPrice,
+    setCustomerProductPriceToCloud,
+    removeCustomerProductPriceToCloud,
   } = useAppStore();
   const { t } = useLocale();
   const { canWrite, disabledHint } = useWriteAccess();
@@ -71,6 +71,7 @@ export default function CustomersPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [savingPayment, setSavingPayment] = useState(false);
+  const [savingPriceProductId, setSavingPriceProductId] = useState<string | null>(null);
 
   if (!ready || !data) {
     return (
@@ -611,18 +612,36 @@ export default function CustomersPage() {
             onSearchChange={setPriceSearch}
             canWrite={canWrite}
             onClose={() => setPricingCustomer(null)}
-            onSave={(productId, price) => {
-              const ok = setCustomerProductPrice(pricingCustomer.id, productId, price);
-              if (ok) {
-                setMessage(t("cust.wholesale_saved"));
-                setTimeout(() => setMessage(""), 2500);
-              } else {
-                setMessage(t("common.save_failed"));
-                setTimeout(() => setMessage(""), 2500);
+            savingProductId={savingPriceProductId}
+            onSave={async (productId, price) => {
+              setSavingPriceProductId(productId);
+              setMessage("");
+              const result = await setCustomerProductPriceToCloud(
+                pricingCustomer.id,
+                productId,
+                price,
+              );
+              setSavingPriceProductId(null);
+              if (!result.ok) {
+                setMessage(result.error ?? t("common.save_failed"));
+                setTimeout(() => setMessage(""), 4000);
+                return;
               }
+              setMessage(t("cust.wholesale_saved"));
+              setTimeout(() => setMessage(""), 2500);
             }}
-            onClear={(productId) => {
-              removeCustomerProductPrice(pricingCustomer.id, productId);
+            onClear={async (productId) => {
+              setSavingPriceProductId(productId);
+              setMessage("");
+              const result = await removeCustomerProductPriceToCloud(
+                pricingCustomer.id,
+                productId,
+              );
+              setSavingPriceProductId(null);
+              if (!result.ok) {
+                setMessage(result.error ?? t("common.save_failed"));
+                setTimeout(() => setMessage(""), 4000);
+              }
             }}
           />
         )}
@@ -645,6 +664,7 @@ function WholesalePricingModal({
   onSearchChange,
   canWrite,
   onClose,
+  savingProductId,
   onSave,
   onClear,
 }: {
@@ -655,8 +675,9 @@ function WholesalePricingModal({
   onSearchChange: (value: string) => void;
   canWrite: boolean;
   onClose: () => void;
-  onSave: (productId: string, price: number) => void;
-  onClear: (productId: string) => void;
+  savingProductId: string | null;
+  onSave: (productId: string, price: number) => Promise<void>;
+  onClear: (productId: string) => Promise<void>;
 }) {
   const { t } = useLocale();
   const query = search.trim().toLowerCase();
@@ -720,6 +741,7 @@ function WholesalePricingModal({
                       product={product}
                       savedPrice={saved?.price}
                       canWrite={canWrite}
+                      saving={savingProductId === product.id}
                       onSave={onSave}
                       onClear={onClear}
                     />
@@ -738,14 +760,16 @@ function WholesalePriceRow({
   product,
   savedPrice,
   canWrite,
+  saving,
   onSave,
   onClear,
 }: {
   product: Product;
   savedPrice?: number;
   canWrite: boolean;
-  onSave: (productId: string, price: number) => void;
-  onClear: (productId: string) => void;
+  saving?: boolean;
+  onSave: (productId: string, price: number) => Promise<void>;
+  onClear: (productId: string) => Promise<void>;
 }) {
   const { t } = useLocale();
   const [draft, setDraft] = useState(savedPrice ?? product.sellPrice);
@@ -774,19 +798,18 @@ function WholesalePriceRow({
         <div className="flex justify-end gap-2">
           <button
             type="button"
-            disabled={!canWrite}
-            onClick={() => onSave(product.id, draft)}
+            disabled={!canWrite || saving}
+            onClick={() => void onSave(product.id, draft)}
             className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700 hover:bg-teal-100 disabled:opacity-50"
           >
-            {t("common.save")}
+            {saving ? t("common.saving") : t("common.save")}
           </button>
           {savedPrice != null && (
             <button
               type="button"
-              disabled={!canWrite}
+              disabled={!canWrite || saving}
               onClick={() => {
-                onClear(product.id);
-                setDraft(product.sellPrice);
+                void onClear(product.id).then(() => setDraft(product.sellPrice));
               }}
               className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600 hover:bg-slate-200 disabled:opacity-50"
             >
