@@ -31,19 +31,23 @@ import type { Product, ProductCondition } from "@/lib/types";
 type ConditionFilter = "all" | ProductCondition;
 
 export default function StockPage() {
-  const { data, ready, saveProductToCloud, deleteProductToCloud, stockInToCloud } = useAppStore();
+  const { data, ready, saveProductToCloud, deleteProductToCloud, stockInToCloud, stockOutToCloud } = useAppStore();
   const { org, subscription, canSeeFinancials, can } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
   const { t } = useLocale();
   const [editing, setEditing] = useState<Product | null>(null);
   const [stockInId, setStockInId] = useState<string | null>(null);
   const [stockInQty, setStockInQty] = useState(1);
+  const [stockOutId, setStockOutId] = useState<string | null>(null);
+  const [stockOutQty, setStockOutQty] = useState(1);
+  const [stockOutNote, setStockOutNote] = useState("");
   const [showForm, setShowForm] = useState(true);
   const [search, setSearch] = useState("");
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [savingStockIn, setSavingStockIn] = useState(false);
+  const [savingStockOut, setSavingStockOut] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
   if (!ready || !data) {
@@ -79,6 +83,7 @@ export default function StockPage() {
   const sellValue = data.products.reduce((sum, p) => sum + p.stockQty * p.sellPrice, 0);
   const categories = new Set(data.products.map((p) => p.category).filter(Boolean)).size;
   const stockInProduct = stockInId ? data.products.find((p) => p.id === stockInId) : null;
+  const stockOutProduct = stockOutId ? data.products.find((p) => p.id === stockOutId) : null;
 
   const handleDelete = async (product: Product) => {
     if (deletingProductId) return;
@@ -97,6 +102,7 @@ export default function StockPage() {
       setShowForm(true);
     }
     if (stockInId === product.id) setStockInId(null);
+    if (stockOutId === product.id) setStockOutId(null);
   };
 
   const handleStockIn = async () => {
@@ -112,6 +118,37 @@ export default function StockPage() {
     }
     setStockInId(null);
     setStockInQty(1);
+    setMessage(t("stock.updated"));
+    setTimeout(() => setMessage(""), 2500);
+  };
+
+  const openStockOut = (productId: string) => {
+    setStockOutId(productId);
+    setStockOutQty(1);
+    setStockOutNote("");
+  };
+
+  const handleStockOut = async () => {
+    if (!stockOutId || !stockOutProduct || savingStockOut) return;
+    if (stockOutQty < 1) return;
+    if (stockOutQty > stockOutProduct.stockQty) {
+      setMessage(t("stock.out_qty_exceeds"));
+      setTimeout(() => setMessage(""), 4000);
+      return;
+    }
+    setSavingStockOut(true);
+    setMessage("");
+    const note = stockOutNote.trim() || t("stock.stock_out");
+    const result = await stockOutToCloud(stockOutId, stockOutQty, note);
+    setSavingStockOut(false);
+    if (!result.ok) {
+      setMessage(result.error ?? t("common.save_failed"));
+      setTimeout(() => setMessage(""), 4000);
+      return;
+    }
+    setStockOutId(null);
+    setStockOutQty(1);
+    setStockOutNote("");
     setMessage(t("stock.updated"));
     setTimeout(() => setMessage(""), 2500);
   };
@@ -363,6 +400,7 @@ export default function StockPage() {
                       setShowForm(false);
                     }}
                     onStockIn={() => setStockInId(p.id)}
+                    onStockOut={() => openStockOut(p.id)}
                     onDelete={() => void handleDelete(p)}
                     deleting={deletingProductId === p.id}
                   />
@@ -425,6 +463,13 @@ export default function StockPage() {
                                   className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-200"
                                 >
                                   {t("stock.stock_in")}
+                                </button>
+                                <button
+                                  onClick={() => openStockOut(p.id)}
+                                  disabled={p.stockQty <= 0}
+                                  className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  {t("stock.stock_out")}
                                 </button>
                                 <button
                                   onClick={() => void handleDelete(p)}
@@ -502,6 +547,77 @@ export default function StockPage() {
             </div>
           </div>
         )}
+
+        {stockOutId && stockOutProduct && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-600">{t("stock.stock_out")}</p>
+                  <h3 className="mt-2 text-xl font-black text-slate-950">{stockOutProduct.name}</h3>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">{t("stock.stock_out_hint")}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStockOutId(null)}
+                  disabled={savingStockOut}
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:opacity-50"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t("stock.current_qty")}</p>
+                <p className="mt-1 text-2xl font-black text-slate-950">
+                  {stockOutProduct.stockQty} {String(stockOutProduct.customFields.unit ?? "pcs")}
+                </p>
+              </div>
+
+              <label className="mt-5 block text-sm font-black text-slate-700">
+                {t("stock.stock_out")}
+                <input
+                  type="number"
+                  min={1}
+                  max={stockOutProduct.stockQty}
+                  value={stockOutQty}
+                  onChange={(e) => setStockOutQty(Number(e.target.value))}
+                  className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-amber-300 focus:ring-4 focus:ring-amber-100"
+                />
+              </label>
+
+              <label className="mt-4 block text-sm font-black text-slate-700">
+                {t("stock.out_note")}
+                <input
+                  type="text"
+                  value={stockOutNote}
+                  onChange={(e) => setStockOutNote(e.target.value)}
+                  placeholder={t("stock.out_note_ph")}
+                  className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none focus:border-amber-300 focus:ring-4 focus:ring-amber-100"
+                />
+              </label>
+
+              <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => void handleStockOut()}
+                  disabled={savingStockOut || stockOutProduct.stockQty <= 0}
+                  className="flex-1 rounded-2xl bg-amber-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-amber-700/20 hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {savingStockOut ? t("common.saving") : t("stock.remove_stock_btn")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStockOutId(null)}
+                  disabled={savingStockOut}
+                  className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {t("common.cancel")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </ProMain>
     </ProPageShell>
   );
@@ -511,6 +627,7 @@ function ProductMobileCard({
   product,
   onEdit,
   onStockIn,
+  onStockOut,
   onDelete,
   deleting,
   showBuyPrice,
@@ -518,6 +635,7 @@ function ProductMobileCard({
   product: Product;
   onEdit: () => void;
   onStockIn: () => void;
+  onStockOut: () => void;
   onDelete: () => void;
   deleting?: boolean;
   showBuyPrice: boolean;
@@ -562,12 +680,19 @@ function ProductMobileCard({
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2">
+      <div className="mt-4 grid grid-cols-2 gap-2">
         <button onClick={onEdit} className="rounded-2xl bg-teal-50 px-3 py-3 text-xs font-black text-teal-700">
           {t("common.edit")}
         </button>
         <button onClick={onStockIn} className="rounded-2xl bg-slate-100 px-3 py-3 text-xs font-black text-slate-700">
           {t("stock.stock_in")}
+        </button>
+        <button
+          onClick={onStockOut}
+          disabled={product.stockQty <= 0}
+          className="rounded-2xl bg-amber-50 px-3 py-3 text-xs font-black text-amber-800 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {t("stock.stock_out")}
         </button>
         <button
           onClick={onDelete}
