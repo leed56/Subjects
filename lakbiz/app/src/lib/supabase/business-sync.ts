@@ -667,9 +667,9 @@ export async function syncCustomersSnapshot(
   );
 }
 
-/** Masked views (sales/products): avoid upsert — SELECT on *_base is revoked. */
+/** Masked views (sales/products/ac_jobs/contractors/vehicles): avoid upsert — SELECT on *_base is revoked. */
 async function upsertMaskedViewRows(
-  table: "sales" | "products",
+  table: "sales" | "products" | "ac_jobs" | "contractors" | "vehicles",
   organizationId: string,
   rows: Record<string, unknown>[],
 ): Promise<string | null> {
@@ -1132,8 +1132,9 @@ export async function syncSaleSnapshot(
   if (newAcJobIds.length > 0) {
     const jobs = data.acJobs.filter((job) => newAcJobIds.includes(job.id));
     if (jobs.length > 0) {
-      const jobErr = await upsertOrgRows(
+      const jobErr = await upsertMaskedViewRows(
         "ac_jobs",
+        organizationId,
         jobs.map((job) => acJobRowFromJob(organizationId, job)),
       );
       if (jobErr) return jobErr;
@@ -1396,7 +1397,7 @@ export async function syncACJobSnapshot(
   const job = data.acJobs.find((row) => row.id === jobId);
   if (!job) return "Job not found locally";
 
-  const jobErr = await upsertOrgRows("ac_jobs", [
+  const jobErr = await upsertMaskedViewRows("ac_jobs", organizationId, [
     acJobRowFromJob(organizationId, job),
   ]);
   if (jobErr) return jobErr;
@@ -1411,8 +1412,9 @@ export async function syncACJobSnapshot(
   }
 
   if (data.contractors.length > 0) {
-    const contractorErr = await upsertOrgRows(
+    const contractorErr = await upsertMaskedViewRows(
       "contractors",
+      organizationId,
       contractorRowsFromList(organizationId, data.contractors),
     );
     if (contractorErr) return contractorErr;
@@ -1491,8 +1493,9 @@ export async function syncContractorPaymentSnapshot(
   if (!payment) return "Payment not found locally";
 
   if (data.contractors.length > 0) {
-    const contractorErr = await upsertOrgRows(
+    const contractorErr = await upsertMaskedViewRows(
       "contractors",
+      organizationId,
       contractorRowsFromList(organizationId, data.contractors),
     );
     if (contractorErr) return contractorErr;
@@ -1728,7 +1731,9 @@ export async function syncVehicleSnapshot(
   const vehicle = data.vehicles.find((row) => row.id === vehicleId);
   if (!vehicle) return "Vehicle not found locally";
 
-  return upsertOrgRows("vehicles", [vehicleRow(organizationId, vehicle)]);
+  return upsertMaskedViewRows("vehicles", organizationId, [
+    vehicleRow(organizationId, vehicle),
+  ]);
 }
 
 /** Remove a vehicle from Supabase. */
@@ -1812,8 +1817,9 @@ export async function deleteACJobSnapshot(
   if (err) return err;
 
   if (data.contractors.length > 0) {
-    return upsertOrgRows(
+    return upsertMaskedViewRows(
       "contractors",
+      organizationId,
       contractorRowsFromList(organizationId, data.contractors),
     );
   }
@@ -1924,8 +1930,9 @@ export async function syncContractorSnapshot(
   const contractor = data.contractors.find((row) => row.id === contractorId);
   if (!contractor) return "Contractor not found locally";
 
-  return upsertOrgRows(
+  return upsertMaskedViewRows(
     "contractors",
+    organizationId,
     contractorRowsFromList(organizationId, [contractor]),
   );
 }
@@ -2315,10 +2322,20 @@ export async function pushBusinessData(
   ];
 
   for (const step of upsertSteps) {
-    const err =
-      step.table === "sales" || step.table === "products"
-        ? await upsertMaskedViewRows(step.table, organizationId, step.rows)
-        : await upsertOrgRows(step.table, step.rows);
+    const maskedTables = new Set([
+      "sales",
+      "products",
+      "ac_jobs",
+      "contractors",
+      "vehicles",
+    ]);
+    const err = maskedTables.has(step.table)
+      ? await upsertMaskedViewRows(
+          step.table as "sales" | "products" | "ac_jobs" | "contractors" | "vehicles",
+          organizationId,
+          step.rows,
+        )
+      : await upsertOrgRows(step.table, step.rows);
     if (err) return { error: err, stale: false, generation: seenGeneration };
   }
 

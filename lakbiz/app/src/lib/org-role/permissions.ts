@@ -17,8 +17,8 @@
  * * data_entry: /jobs front desk — create/edit jobs, quotes, alerts; no margin/subcontract/buy cost.
  *   technician: /jobs + /workforce.
  *
- * RLS follow-up: restrict SELECT on products.buy_price, purchase_lines.unit_cost,
- * sales.profit for data_entry at the database layer (views or policies).
+ * RLS: products/sales buy_price & profit masked via views; ac_jobs subcontract_cost;
+ * contractors rate/payable; vehicles cost fields; financial tables owner/manager SELECT.
  */
 
 import type { OrgRole } from "@/lib/subscription/types";
