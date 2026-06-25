@@ -31,7 +31,14 @@ import {
 } from "@/lib/vehicles";
 
 export default function VehiclesPage() {
-  const { data, ready, addVehicle, updateVehicle, sellVehicle, deleteVehicle } = useAppStore();
+  const {
+    data,
+    ready,
+    saveVehicleToCloud,
+    updateVehicleToCloud,
+    sellVehicleToCloud,
+    deleteVehicleToCloud,
+  } = useAppStore();
   const { t } = useLocale();
   const { canWrite, disabledHint } = useWriteAccess();
 
@@ -39,6 +46,10 @@ export default function VehiclesPage() {
   const [editing, setEditing] = useState<VehicleRecord | null>(null);
   const [filter, setFilter] = useState<VehicleStatus | "all" | "aging">("all");
   const [message, setMessage] = useState("");
+  const [savingVehicle, setSavingVehicle] = useState(false);
+  const [updatingVehicleId, setUpdatingVehicleId] = useState<string | null>(null);
+  const [deletingVehicleId, setDeletingVehicleId] = useState<string | null>(null);
+  const [savingSale, setSavingSale] = useState(false);
 
   const [make, setMake] = useState(CAR_MAKES[0]);
   const [model, setModel] = useState("");
@@ -194,8 +205,9 @@ export default function VehiclesPage() {
               action={<ProBadge tone="teal">{formatLkr(currentCost)}</ProBadge>}
             >
               <form
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
+                  if (!model.trim() || !chassisNo.trim() || savingVehicle) return;
                   if (!model.trim() || !chassisNo.trim()) {
                     setMessage(t("veh.model_required"));
                     return;
@@ -219,27 +231,22 @@ export default function VehiclesPage() {
                     status,
                     notes,
                   };
-                  if (editing) {
-                    const ok = updateVehicle(editing.id, input);
-                    if (!ok) {
-                      setMessage(t("common.save_failed"));
-                    } else {
-                      setMessage(t("veh.updated"));
-                      resetForm();
-                      setShowForm(false);
-                    }
-                  } else {
-                    const ok = addVehicle(input);
-                    if (ok) {
-                      setMessage(t("veh.added"));
-                      resetForm();
-                      setShowForm(false);
-                    } else if (!canWrite) {
-                      setMessage(t("common.save_failed"));
-                    } else {
-                      setMessage(t("veh.duplicate_chassis"));
-                    }
+                  setSavingVehicle(true);
+                  setMessage("");
+                  const result = await saveVehicleToCloud(input, editing?.id);
+                  setSavingVehicle(false);
+                  if (!result.ok) {
+                    setMessage(
+                      result.error === "Duplicate chassis number"
+                        ? t("veh.duplicate_chassis")
+                        : result.error ?? t("common.save_failed"),
+                    );
+                    setTimeout(() => setMessage(""), 4000);
+                    return;
                   }
+                  setMessage(editing ? t("veh.updated") : t("veh.added"));
+                  resetForm();
+                  setShowForm(false);
                   setTimeout(() => setMessage(""), 3000);
                 }}
               >
@@ -289,11 +296,11 @@ export default function VehiclesPage() {
                 </div>
 
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button type="submit" disabled={!canWrite} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
-                    {editing ? t("common.update") : t("veh.add")}
+                  <button type="submit" disabled={!canWrite || savingVehicle} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
+                    {savingVehicle ? t("common.saving") : editing ? t("common.update") : t("veh.add")}
                   </button>
                   {editing && (
-                    <button type="button" onClick={resetForm} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
+                    <button type="button" onClick={resetForm} disabled={savingVehicle} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                       {t("common.cancel")}
                     </button>
                   )}
@@ -349,14 +356,34 @@ export default function VehiclesPage() {
                   vehicle={v}
                   statusLabel={vehStatusLabel(v.status)}
                   onEdit={() => loadVehicle(v)}
-                  onListForSale={() => updateVehicle(v.id, { status: "for_sale" })}
+                  onListForSale={async () => {
+                    if (updatingVehicleId) return;
+                    setUpdatingVehicleId(v.id);
+                    setMessage("");
+                    const result = await updateVehicleToCloud(v.id, { status: "for_sale" });
+                    setUpdatingVehicleId(null);
+                    if (!result.ok) {
+                      setMessage(result.error ?? t("common.save_failed"));
+                      setTimeout(() => setMessage(""), 4000);
+                    }
+                  }}
                   onSell={() => {
                     setSellId(v.id);
                     setSellPrice(v.askPrice);
                   }}
-                  onDelete={() => {
-                    if (confirm(`${t("common.confirm_delete")} ${v.stockId}?`)) deleteVehicle(v.id);
+                  onDelete={async () => {
+                    if (deletingVehicleId || !confirm(`${t("common.confirm_delete")} ${v.stockId}?`)) return;
+                    setDeletingVehicleId(v.id);
+                    setMessage("");
+                    const result = await deleteVehicleToCloud(v.id);
+                    setDeletingVehicleId(null);
+                    if (!result.ok) {
+                      setMessage(result.error ?? t("common.save_failed"));
+                      setTimeout(() => setMessage(""), 4000);
+                    }
                   }}
+                  updating={updatingVehicleId === v.id}
+                  deleting={deletingVehicleId === v.id}
                 />
               ))}
             </div>
@@ -406,13 +433,16 @@ export default function VehiclesPage() {
               </div>
               <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
+                    if (savingSale) return;
                     if (sellPayment === "credit" && !sellCustomerId) {
                       setMessage(t("veh.credit_need"));
                       setSellId(null);
                       return;
                     }
-                    const ok = sellVehicle({
+                    setSavingSale(true);
+                    setMessage("");
+                    const result = await sellVehicleToCloud({
                       vehicleId: sellId,
                       sellPrice,
                       customerId: sellCustomerId || undefined,
@@ -420,16 +450,22 @@ export default function VehiclesPage() {
                       paymentMethod: sellPayment,
                       financePartner: financePartner === "Cash only" ? undefined : financePartner,
                     });
-                    if (ok) {
-                      setMessage(t("veh.sold_msg"));
-                      setSellId(null);
+                    setSavingSale(false);
+                    if (!result.ok) {
+                      setMessage(result.error ?? t("common.save_failed"));
+                      setTimeout(() => setMessage(""), 4000);
+                      return;
                     }
+                    setMessage(t("veh.sold_msg"));
+                    setSellId(null);
+                    setTimeout(() => setMessage(""), 3000);
                   }}
-                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700"
+                  disabled={savingSale}
+                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {t("veh.confirm_sale")}
+                  {savingSale ? t("common.saving") : t("veh.confirm_sale")}
                 </button>
-                <button onClick={() => setSellId(null)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
+                <button onClick={() => setSellId(null)} disabled={savingSale} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                   {t("common.cancel")}
                 </button>
               </div>
@@ -448,13 +484,17 @@ function VehicleCard({
   onListForSale,
   onSell,
   onDelete,
+  updating,
+  deleting,
 }: {
   vehicle: VehicleRecord;
   statusLabel: string;
   onEdit: () => void;
-  onListForSale: () => void;
+  onListForSale: () => void | Promise<void>;
   onSell: () => void;
-  onDelete: () => void;
+  onDelete: () => void | Promise<void>;
+  updating?: boolean;
+  deleting?: boolean;
 }) {
   const { t } = useLocale();
   const days = daysInStock(vehicle.dateAdded);
@@ -515,9 +555,23 @@ function VehicleCard({
         {vehicle.status !== "sold" && (
           <div className="mt-4 flex flex-wrap gap-2">
             <button onClick={onEdit} className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700 hover:bg-teal-100">{t("common.edit")}</button>
-            {vehicle.status !== "for_sale" && <button onClick={onListForSale} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-200">{t("veh.list_sale")}</button>}
+            {vehicle.status !== "for_sale" && (
+              <button
+                onClick={() => void onListForSale()}
+                disabled={updating}
+                className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+              >
+                {updating ? t("common.saving") : t("veh.list_sale")}
+              </button>
+            )}
             {vehicle.status === "for_sale" && <button onClick={onSell} className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700 hover:bg-emerald-100">{t("veh.sell")}</button>}
-            <button onClick={onDelete} className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100">{t("common.delete")}</button>
+            <button
+              onClick={() => void onDelete()}
+              disabled={deleting}
+              className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+            >
+              {deleting ? t("common.saving") : t("common.delete")}
+            </button>
           </div>
         )}
       </div>

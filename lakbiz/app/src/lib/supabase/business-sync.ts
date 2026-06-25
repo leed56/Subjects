@@ -1684,6 +1684,86 @@ export async function syncChequeStatusSnapshot(
   return upsertOrgRows("cheques", [chequeRowFromCheque(organizationId, cheque)]);
 }
 
+function vehicleRow(
+  organizationId: string,
+  vehicle: AppData["vehicles"][number],
+): Record<string, unknown> {
+  return {
+    id: vehicle.id,
+    organization_id: organizationId,
+    stock_id: vehicle.stockId,
+    date_added: vehicle.dateAdded,
+    make: vehicle.make,
+    model: vehicle.model,
+    year: vehicle.year,
+    chassis_no: vehicle.chassisNo,
+    engine_no: vehicle.engineNo ?? null,
+    reg_no: vehicle.regNo ?? null,
+    color: vehicle.color ?? null,
+    fuel: vehicle.fuel,
+    transmission: vehicle.transmission,
+    mileage_km: vehicle.mileageKm,
+    condition: vehicle.condition,
+    purchase_price: vehicle.purchasePrice,
+    recondition_cost: vehicle.reconditionCost,
+    ask_price: vehicle.askPrice,
+    min_price: vehicle.minPrice ?? null,
+    status: vehicle.status,
+    customer_id: vehicle.customerId ?? null,
+    customer_name: vehicle.customerName ?? null,
+    sold_price: vehicle.soldPrice ?? null,
+    sold_date: vehicle.soldDate ?? null,
+    finance_partner: vehicle.financePartner ?? null,
+    payment_method: vehicle.paymentMethod ?? null,
+    notes: vehicle.notes ?? null,
+  };
+}
+
+/** Upsert a vehicle row directly to Supabase. */
+export async function syncVehicleSnapshot(
+  organizationId: string,
+  data: AppData,
+  vehicleId: string,
+): Promise<string | null> {
+  const vehicle = data.vehicles.find((row) => row.id === vehicleId);
+  if (!vehicle) return "Vehicle not found locally";
+
+  return upsertOrgRows("vehicles", [vehicleRow(organizationId, vehicle)]);
+}
+
+/** Remove a vehicle from Supabase. */
+export async function deleteVehicleFromCloud(
+  organizationId: string,
+  vehicleId: string,
+): Promise<string | null> {
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const { error } = await supabase
+    .from("vehicles")
+    .delete()
+    .eq("id", vehicleId)
+    .eq("organization_id", organizationId);
+  return error?.message ?? null;
+}
+
+/** Upsert a sold vehicle and any customer credit balance change to Supabase. */
+export async function syncVehicleSaleSnapshot(
+  organizationId: string,
+  data: AppData,
+  vehicleId: string,
+): Promise<string | null> {
+  const vehicle = data.vehicles.find((row) => row.id === vehicleId);
+  if (!vehicle) return "Vehicle not found locally";
+
+  if (vehicle.paymentMethod === "credit" && vehicle.customerId) {
+    const custErr = await syncCustomersSnapshot(organizationId, data.customers);
+    if (custErr) return custErr;
+  }
+
+  return syncVehicleSnapshot(organizationId, data, vehicleId);
+}
+
 export async function pushBusinessData(
   organizationId: string,
   data: AppData,

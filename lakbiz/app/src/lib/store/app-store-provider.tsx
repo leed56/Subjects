@@ -45,6 +45,9 @@ import {
   syncBankTransferSnapshot,
   syncChequeSnapshot,
   syncChequeStatusSnapshot,
+  syncVehicleSnapshot,
+  deleteVehicleFromCloud,
+  syncVehicleSaleSnapshot,
   pullBusinessData,
   pullRemoteIfNewer,
   syncBusinessData,
@@ -310,6 +313,20 @@ export type AppStoreValue = {
   updateVehicle: (id: string, input: Partial<VehicleInput>) => boolean;
   sellVehicle: (input: VehicleSaleInput) => boolean;
   deleteVehicle: (id: string) => void;
+  saveVehicleToCloud: (
+    input: VehicleInput,
+    existingId?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  updateVehicleToCloud: (
+    id: string,
+    input: Partial<VehicleInput>,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  sellVehicleToCloud: (
+    input: VehicleSaleInput,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  deleteVehicleToCloud: (
+    id: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   resetAll: () => void;
 };
 
@@ -2214,6 +2231,254 @@ function useAppStoreState(): AppStoreValue {
     ],
   );
 
+  const saveVehicleToCloud = useCallback(
+    async (
+      input: VehicleInput,
+      existingId?: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLen = data.vehicles.length;
+      const next = existingId
+        ? updateVehicle(data, existingId, input)
+        : addVehicle(data, input);
+      const vehicleId = existingId ?? next.vehicles[0]?.id;
+
+      if (existingId) {
+        const before = data.vehicles.find((vehicle) => vehicle.id === existingId);
+        const after = next.vehicles.find((vehicle) => vehicle.id === existingId);
+        if (!before || !after || JSON.stringify(before) === JSON.stringify(after)) {
+          return { ok: false, error: "Could not save vehicle" };
+        }
+      } else if (!vehicleId || next.vehicles.length === prevLen) {
+        return { ok: false, error: "Duplicate chassis number" };
+      }
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncVehicleSnapshot(org.id, next, vehicleId);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const updateVehicleToCloud = useCallback(
+    async (
+      id: string,
+      input: Partial<VehicleInput>,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const before = data.vehicles.find((vehicle) => vehicle.id === id);
+      const next = updateVehicle(data, id, input);
+      const after = next.vehicles.find((vehicle) => vehicle.id === id);
+      if (!before || !after || JSON.stringify(before) === JSON.stringify(after)) {
+        return { ok: false, error: "Could not update vehicle" };
+      }
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncVehicleSnapshot(org.id, next, id);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const sellVehicleToCloud = useCallback(
+    async (
+      input: VehicleSaleInput,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const vehicle = data.vehicles.find((row) => row.id === input.vehicleId);
+      if (!vehicle || vehicle.status === "sold") {
+        return { ok: false, error: "Could not sell vehicle" };
+      }
+
+      const next = sellVehicle(data, input);
+      const sold = next.vehicles.find((row) => row.id === input.vehicleId);
+      if (!sold || sold.status !== "sold") {
+        return { ok: false, error: "Could not sell vehicle" };
+      }
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncVehicleSaleSnapshot(org.id, next, input.vehicleId);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const deleteVehicleToCloud = useCallback(
+    async (id: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const vehicle = data.vehicles.find((row) => row.id === id);
+      if (!vehicle || vehicle.status === "sold") {
+        return { ok: false, error: "Could not delete vehicle" };
+      }
+
+      const next = deleteVehicle(data, id);
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await deleteVehicleFromCloud(org.id, id);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
   const persist = useCallback(
     (next: AppData): boolean => {
       if (syncConflict) return false;
@@ -2537,6 +2802,10 @@ function useAppStoreState(): AppStoreValue {
         if (!data || isReadOnly) return;
         persist(deleteVehicle(data, id));
       },
+      saveVehicleToCloud,
+      updateVehicleToCloud,
+      sellVehicleToCloud,
+      deleteVehicleToCloud,
       resetAll: () => {
         clearAppData(org.id);
         const fresh = loadAppData(org.id);
@@ -2585,6 +2854,10 @@ function useAppStoreState(): AppStoreValue {
     addBankTransferToCloud,
     addChequeToCloud,
     updateChequeStatusToCloud,
+    saveVehicleToCloud,
+    updateVehicleToCloud,
+    sellVehicleToCloud,
+    deleteVehicleToCloud,
     scheduleCloudPush,
     org.sector,
     org.id,
