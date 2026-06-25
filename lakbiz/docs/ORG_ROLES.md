@@ -30,12 +30,19 @@ Full capability matrix: `app/src/lib/org-role/permissions.ts`.
 
 ## Database
 
-Migration: `supabase/migrations/20250622000001_data_entry_role.sql`
+Financial isolation is enforced at **three layers**: UI (`stripFinancialData`), store write guards (`preserveBuyPrices`), and Postgres masked views + triggers.
 
-- Adds `data_entry` to `org_role` enum.
-- Adds `is_org_owner()` helper and RLS policy for owners inserting `org_members`.
+| Migration | Purpose |
+|-----------|---------|
+| `20250622000001_data_entry_role.sql` | `data_entry` enum; `is_org_owner()`; owner team invites |
+| `20250623000001_financial_data_rls.sql` | `can_see_org_financials()`; masked `products`, `sales`, purchase lines; buy-price / profit preserve triggers |
+| `20250623000003_fix_financial_view_security.sql` | Revoke direct base-table SELECT; writes via view triggers |
+| `20250624000001_sync_generation_and_rls_hardening.sql` | Sync generation + subscription write enforcement |
+| `20250625000002_restore_base_table_write_grants.sql` | Re-grant masked-view write path for cloud sync |
+| `20250625000003_masked_view_triggers_security_definer.sql` | Security-definer upsert triggers on masked views |
+| `20250626000001_ac_workforce_financial_masking.sql` | Mask `ac_jobs.subcontract_cost`, contractor rates/payables, vehicle costs; `contractor_payments` owner/manager SELECT only |
 
-**RLS follow-up (not in this PR):** column-level restrictions on `products.buy_price`, purchase costs, and `sales.profit` for `data_entry` at the database layer.
+**Masked at DB for `data_entry` / non-financial roles:** `products.buy_price`, `sales.profit`, purchase line costs, `ac_jobs.subcontract_cost`, `contractors.rate_amount` / `payable_balance`, vehicle purchase/recondition/min prices. **`contractor_payments`:** no rows visible to staff without financial access.
 
 ## Team invites (MVP)
 
@@ -47,27 +54,38 @@ Owner → **Settings → Team** (`/settings/team`):
 
 ## Test checklist
 
-Implementation is **code-complete** in the app (see `app/src/lib/org-role/`). Run the checks below manually in staging with real owner and `data_entry` logins.
+Implementation is **code-complete** in the app (see `app/src/lib/org-role/`). Run automated DB checks first, then manual UI checks on production.
 
-### Owner login
+### Automated (DB + API)
+
+From `app/`:
+
+```bash
+node scripts/qa-production-roles.mjs
+```
+
+Verifies: required migrations applied, masked views exist, owner vs `data_entry` sign-in, `products.buy_price` / `sales.profit` / `ac_jobs.subcontract_cost` masking, `contractor_payments` hidden for staff.
+
+### Owner login (manual UI)
 
 - [ ] Nav shows all modules allowed by plan/sector.
 - [ ] Dashboard shows today's profit, bank balance, credit/supplier stats.
-- [ ] Stock table shows buy price column and cost value stat.
+- [ ] Dashboard shows **company income tax estimate** card (when financials visible).
+- [ ] Stock table shows buy price column and cost value stat; **stock out** works.
 - [ ] Sales recent table shows profit column.
 - [ ] Bills list shows profit and credit totals.
 - [ ] Settings → Team visible; can invite `data_entry` user.
-- [ ] `/settings/plans`, `/settings/notifications`, `/settings/shop` accessible.
+- [ ] `/settings/plans`, `/settings/notifications`, `/settings/shop` accessible (income tax rate in shop settings).
 
-### `data_entry` login (after invite)
+### `data_entry` login (manual UI)
 
 - [ ] Nav limited to Dashboard, Sales, Stock, Customers, Bills, Jobs (when AC plan enabled).
-- [ ] Direct URL to `/suppliers`, `/banking`, `/settings/shop` redirects to dashboard.
+- [ ] Direct URL to `/suppliers`, `/banking`, `/vat`, `/settings/shop` redirects to dashboard.
 - [ ] `/jobs` accessible when plan includes `ac_jobs`; **+ New job** visible; quote/deposit on cards; no margin/subcontract.
-- [ ] Jobs: create all types, edit, assign tech, WhatsApp, mark service done, advance status; **cannot delete** jobs or see margin/profit.
+- [ ] Jobs: create all types, edit, assign tech, WhatsApp, **mark service done** (waits for cloud save); advance status; **cannot delete** jobs or see margin/profit.
 - [ ] AC alerts bell shows overdue/due today/upcoming when enabled on Jobs page.
-- [ ] Dashboard hides profit, bank, credit, supplier, VAT cards.
-- [ ] Stock: no buy price field in form, no buy price column, no cost value stat.
+- [ ] Dashboard hides profit, bank, credit, supplier, VAT, and income tax cards.
+- [ ] Stock: no buy price field in form, no buy price column, no cost value stat; stock out allowed.
 - [ ] Sales: complete sale works; profit column hidden.
 - [ ] Bills: profit stat hidden on list and bill detail.
 - [ ] Settings links hidden in header; `/settings/team` shows owner-only message.
