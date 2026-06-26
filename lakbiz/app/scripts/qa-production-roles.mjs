@@ -167,6 +167,17 @@ async function sessionChecks(label, creds) {
     .not("subcontract_cost", "is", null)
     .limit(3);
 
+  const { error: jobsSelectErr } = await supabase
+    .from("ac_jobs")
+    .select("id")
+    .eq("organization_id", orgId)
+    .limit(1);
+  if (jobsSelectErr) {
+    fail(`${label} ac_jobs SELECT`, jobsSelectErr.message);
+  } else {
+    pass(`${label} ac_jobs SELECT`);
+  }
+
   const maskedJobs =
     !jobs?.length || jobs.every((j) => j.subcontract_cost === null || Number(j.subcontract_cost) === 0);
 
