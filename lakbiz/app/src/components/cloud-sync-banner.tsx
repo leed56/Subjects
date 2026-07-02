@@ -24,7 +24,7 @@ export function CloudSyncBanner() {
   if (cloudSyncError) {
     return (
       <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-center text-sm text-rose-900">
-        {t("common.cloud_sync_error")}: {cloudSyncError}
+        {t("common.cloud_sync_error")}
       </div>
     );
   }

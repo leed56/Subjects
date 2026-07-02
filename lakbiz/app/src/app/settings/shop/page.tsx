@@ -236,7 +236,7 @@ export default function ShopSettingsPage() {
       showMsg(
         {
           ok: false,
-          text: result.error ?? `${t("vat.saved_success")} — ${t("vat.cloud_sync_note")}`,
+          text: result.error ?? t("vat.cloud_save_failed"),
         },
         "idle",
       );
@@ -247,7 +247,7 @@ export default function ShopSettingsPage() {
       {
         ok: true,
         text: isSupabaseConfigured() && userRef.current
-          ? `${t("vat.saved_success")} — ${t("vat.settings_saved_cloud")}`
+          ? t("vat.saved_success")
           : `${t("vat.saved_success")} — ${payload.name}`,
       },
       "saved",
@@ -275,7 +275,7 @@ export default function ShopSettingsPage() {
         />
 
         <section className="grid gap-6 lg:grid-cols-[0.75fr_1.25fr]">
-          <ProCard title="Invoice profile" eyebrow="Preview" action={<ProBadge tone={cloudReady ? "emerald" : "amber"}>{cloudReady ? "Cloud sync" : "Browser"}</ProBadge>}>
+          <ProCard title="Invoice profile" eyebrow="Preview" action={<ProBadge tone={cloudReady ? "emerald" : "amber"}>{cloudReady ? t("common.saved") : t("common.saved_browser")}</ProBadge>}>
             <div className="flex items-center gap-4">
               <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-3xl border border-dashed border-slate-300 bg-slate-50">
                 {logoDataUrl ? (
@@ -291,7 +291,7 @@ export default function ShopSettingsPage() {
               </div>
             </div>
             <div className="mt-5 rounded-2xl border border-teal-100 bg-teal-50 p-4 text-sm font-semibold leading-6 text-teal-900">
-              {cloudReady ? t("vat.settings_saved_cloud") : t("vat.cloud_sync_note")}
+              {cloudReady ? t("vat.save_hint_cloud") : t("vat.save_hint_local")}
             </div>
           </ProCard>
 

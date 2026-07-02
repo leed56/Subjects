@@ -176,7 +176,7 @@ export default function NotificationsSettingsPage() {
         )}
         {cloudError && (
           <div className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Cloud sync: {cloudError}
+            {t("vat.cloud_save_failed")}
           </div>
         )}
 

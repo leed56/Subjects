@@ -177,7 +177,7 @@ export default function StockPage() {
         <ProPageHeader
           eyebrow={t("stock.inventory_eyebrow")}
           title={t("stock.title")}
-          description={`${products.length} ${t("common.items")} · ${t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}`}
+          description={`${products.length} ${t("common.items")}`}
           actions={
             <>
               {canExport && (

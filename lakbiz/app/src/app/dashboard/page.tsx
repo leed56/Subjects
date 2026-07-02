@@ -71,7 +71,7 @@ export default function DashboardPage() {
       <SiteHeader />
       <ProMain>
         <ProPageHeader
-          eyebrow={org.isAuthenticated ? t("common.saved_cloud") : t("common.saved_browser")}
+          eyebrow={t("dash.live")}
           title={`${t("dash.title")} · ${shopName}`}
           description={
             <span>
@@ -476,8 +476,10 @@ export default function DashboardPage() {
           </section>
         )}
 
+        {(resetMessage || !org.isAuthenticated) && (
         <div className="mt-8 flex flex-col items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 text-center text-xs font-semibold text-slate-500 shadow-sm sm:flex-row sm:text-left">
-          <span>{resetMessage || t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}</span>
+          <span>{resetMessage || t("common.saved_browser")}</span>
+          {!org.isAuthenticated && (
           <button
             onClick={async () => {
               if (resetting || isReadOnly) return;
@@ -495,7 +497,9 @@ export default function DashboardPage() {
           >
             {resetting ? t("common.saving") : t("common.reset_data")}
           </button>
+          )}
         </div>
+        )}
 
         <AcServiceDoneDialog
           job={serviceDoneJob}
