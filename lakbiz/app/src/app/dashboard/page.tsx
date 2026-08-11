@@ -50,15 +50,19 @@ function MeterCard({ eyebrow, title, href, linkLabel, dark, children }: { eyebro
   const bg = dark === "indigo" ? "bg-indigo-950 ring-indigo-900" : "bg-slate-950 ring-slate-800";
   return (
     <div className={`rounded-xl p-5 text-white ring-1 ${bg}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{eyebrow}</p>
-          <p className="mt-1 text-2xl font-bold tracking-tight">{title}</p>
-        </div>
-        <Link href={href} className="shrink-0 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10">
-          {linkLabel}
-        </Link>
-      </div>
+      {/* Link on its own row below the eyebrow/title, not beside them —
+       * side-by-side with justify-between + shrink-0 squeezed the eyebrow
+       * text into a vertical sliver whenever linkLabel was long (e.g. the
+       * income-tax meter's "Company income tax estimate"), since a
+       * shrink-0 element never yields width back to its min-w-0 sibling. */}
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{eyebrow}</p>
+      <p className="mt-1 text-2xl font-bold tracking-tight">{title}</p>
+      <Link
+        href={href}
+        className="mt-3 inline-flex rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10"
+      >
+        {linkLabel}
+      </Link>
       {children}
     </div>
   );
