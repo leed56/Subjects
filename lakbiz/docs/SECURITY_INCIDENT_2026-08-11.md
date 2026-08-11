@@ -44,38 +44,68 @@ alone, the finding was verified empirically against production:
 This confirmed the leak was real and currently exploitable, not a
 false-positive linter warning.
 
-## The fix
+## The fix — first attempt, and a regression it introduced
 
-Two parts, applied together (see
-`supabase/migrations/20250628000002_fix_masked_view_cross_tenant_leak.sql`):
+The first fix (`supabase/migrations/20250628000002_fix_masked_view_cross_tenant_leak.sql`)
+had two parts:
 
 1. `grant select on <table>_base to authenticated;` for all six base
    tables — previously only the definer-mode view could read them at all,
-   so simply flipping `security_invoker` without this would have broken
-   every affected page (Sales, Stock, AC Jobs, Contractors, Vehicles) for
-   everyone.
-2. `alter view <view> set (security_invoker = true);` for all six views —
-   makes the view execute with the querying user's privileges, so the
-   existing, correctly-written RLS policies on the base tables (`organization_id
-   in (select organization_id from org_members where user_id = auth.uid())`)
-   now actually apply.
+   so flipping `security_invoker` without this would have broken every
+   affected page for everyone.
+2. `alter view <view> set (security_invoker = true);` — makes the view
+   execute with the querying user's privileges, so the RLS policies on the
+   base tables apply to the querying user.
+
+This closed the cross-tenant row leak (verified empirically — see below),
+but **review on PR #27 caught a regression it introduced**: granting
+`SELECT` on the `*_base` tables to `authenticated` meant any authenticated
+client could bypass the views' column masking entirely by querying
+`products_base` (etc.) directly instead of `products` — the RLS on the base
+tables only checks organization membership, not the owner/manager
+financial-visibility check the view's `CASE` expressions enforce. That
+would have exposed `buy_price`, `profit`, `subcontract_cost`, contractor
+rates, and vehicle costs to cashier/technician/data_entry roles — a
+different, narrower leak than the one just closed, of the exact kind
+`20250623000003_fix_financial_view_security.sql` had deliberately prevented
+by revoking that same access.
+
+## The corrected fix
+
+`supabase/migrations/20250628000003_fix_masked_view_grant_regression.sql`:
+
+1. **Revoke** the base-table `SELECT` grants again (restores the
+   pre-existing, intentional lockdown).
+2. Revert all six views to `security_invoker = false`.
+3. Add the missing tenant filter **directly inside each view's own WHERE
+   clause** — `organization_id in (select organization_id from org_members
+   where user_id = auth.uid())`, the same check the RLS policies use. Since
+   the view runs as its owner and never grants the querying role direct
+   base-table access, it has to do its own row filtering — this is that
+   filtering.
+
+This closes the cross-tenant leak without ever exposing the base tables to
+authenticated clients directly.
 
 ## Verification
 
-Re-ran the same empirical test after the fix:
+Re-ran the same empirical test after the **corrected** fix:
 
-- Org "IMT Eng" user querying `public.ac_jobs` → **0 rows** (was 8 rows
-  belonging to a different org before the fix).
-- Same test repeated against `products`, `sales`, `sale_lines`,
-  `contractors`, `vehicles` → **0 rows each**, confirming the leak is closed
-  across all six views, not just the one initially tested.
-- The legitimate owner of org "IMT" querying their own `ac_jobs` →
-  still correctly returns their 8 rows.
-- Supabase security advisor re-run: the 6 `security_definer_view` ERROR
-  findings are gone (critical-level findings dropped from 7 to 1 — the
-  remaining one, `schema_migrations` having RLS disabled, is unrelated,
-  lower severity, and separately flagged for the repo owner's decision, not
-  auto-fixed).
+- Org "IMT Eng" user querying `public.ac_jobs`, `products`, `sales`,
+  `sale_lines`, `contractors`, `vehicles` → **0 rows on all six** (was 8
+  leaked rows on `ac_jobs` before either fix).
+- Same user querying `public.products_base` directly → **`permission
+  denied`** again, confirming the column-masking-bypass hole from the first
+  attempt is closed.
+- The legitimate owner of org "IMT" querying their own `ac_jobs` → still
+  correctly returns their 8 rows.
+- Supabase security advisor: the 6 `security_definer_view` findings
+  **reappear** at ERROR level after the corrected fix — expected, not a
+  leftover bug. That check is a blanket `security_invoker=false` heuristic;
+  it has no way to know the view implements its own correct row filter.
+  The empirical tests above, not the linter, are the real verification
+  here. Critical findings: 1 (`schema_migrations` RLS, unrelated,
+  separately flagged).
 
 ## Remaining related item (not part of this fix)
 
