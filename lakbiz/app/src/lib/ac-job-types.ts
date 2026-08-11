@@ -1,6 +1,17 @@
 import type { ACJobStatus } from "@/lib/ac-jobs";
 
-export type ACJobType = "installation" | "service" | "repair";
+/**
+ * Job types (Phase 5). "service" already covers the spec's "Maintenance"
+ * concept (recurring AC servicing/cleaning) and is deliberately not
+ * renamed or duplicated — service-due tracking, reminder cron, and
+ * messaging templates all key off the literal string "service" in ways
+ * that would need auditing to safely rename; adding a separate
+ * "maintenance" type alongside it would just fragment that logic. The
+ * three genuinely new types below (inspection/warranty/other) are
+ * additive — existing jobs and every switch/condition on ACJobType keep
+ * working unchanged.
+ */
+export type ACJobType = "installation" | "service" | "repair" | "inspection" | "warranty" | "other";
 
 export const AC_JOB_TYPES: {
   value: ACJobType;
@@ -14,13 +25,28 @@ export const AC_JOB_TYPES: {
   },
   {
     value: "service",
-    labelEn: "Service / cleaning",
-    labelSi: "සේවාව / පිරිසිදු කිරීම",
+    labelEn: "Service / maintenance",
+    labelSi: "සේවාව / නඩත්තුව",
   },
   {
     value: "repair",
     labelEn: "Repair / breakdown",
     labelSi: "අළුත්වැඩියා / දෝෂ",
+  },
+  {
+    value: "inspection",
+    labelEn: "Inspection",
+    labelSi: "පරීක්ෂණය",
+  },
+  {
+    value: "warranty",
+    labelEn: "Warranty claim",
+    labelSi: "වගකීම් හිමිකම",
+  },
+  {
+    value: "other",
+    labelEn: "Other",
+    labelSi: "වෙනත්",
   },
 ];
 
