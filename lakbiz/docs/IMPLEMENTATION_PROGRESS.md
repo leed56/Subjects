@@ -569,7 +569,7 @@ been visually verified.
 ### Phase 7 — Scheduling (calendar/dispatch board)
 Branch: `claude/lakbiz-phase7-schedule`, stacked on `claude/lakbiz-phase6-crews`
 (PR #31, not yet merged — same stacking convention Phases 1–5 used pre-merge).
-Status: implemented, build verified, not yet pushed/PR'd.
+Status: implemented, build verified, pushed — draft PR #32, awaiting review.
 
 **Scope call, same reason as Phase 6:** no spec text available for this
 phase either. Asked the repo owner directly; confirmed: a visual
