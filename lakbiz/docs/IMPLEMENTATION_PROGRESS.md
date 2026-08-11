@@ -641,7 +641,7 @@ verified.
 ### Phase 8 — Job costing report
 Branch: `claude/lakbiz-phase8-job-costing`, stacked on `claude/lakbiz-phase7-schedule`
 (PR #32, not yet merged — same stacking convention as Phases 6/7). Status:
-implemented, build verified, not yet pushed/PR'd.
+implemented, build verified, pushed — draft PR #33, awaiting review.
 
 **Scope call, same reason as Phases 6/7:** no spec text for this phase
 either. Asked the repo owner directly; confirmed: a job profitability
