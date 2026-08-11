@@ -1,11 +1,22 @@
-/* LakBiz app-shell service worker — cache static assets + offline page fallback. */
-const CACHE_VERSION = "lakbiz-v3";
+/* LakBiz app-shell service worker — cache static assets + a public-page offline
+ * fallback only. Authenticated/tenant HTML is NEVER cached: this device may be
+ * shared, and a cached dashboard/sales/customers page would let a different
+ * user (or the same user in a different org) see stale tenant data while
+ * offline. See docs/ARCHITECTURE_AUDIT.md, "Service worker" section.
+ */
+const CACHE_VERSION = "lakbiz-v4";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 
 const PRECACHE_URLS = ["/manifest.webmanifest", "/icon", "/apple-icon"];
 
-const OFFLINE_FALLBACKS = ["/dashboard", "/sales", "/login"];
+/**
+ * Only these documents may ever be cached and replayed offline. Every entry
+ * here MUST be rendered identically for every visitor (no auth cookies, no
+ * per-org/per-user data). Do not add a shop/admin/settings route to this
+ * list — those render tenant-specific content server-side.
+ */
+const PUBLIC_DOCUMENT_ALLOWLIST = ["/", "/login"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -61,7 +72,14 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isDocumentRequest(request)) {
-    event.respondWith(networkFirstPage(request));
+    if (isPublicDocumentPath(url.pathname)) {
+      event.respondWith(networkFirstPublicPage(request));
+    } else {
+      // Authenticated/tenant document: network-only, never read or write
+      // any cache. On failure, return a generic offline response instead
+      // of any previously-cached page content.
+      event.respondWith(networkOnlyDocument(request));
+    }
     return;
   }
 
@@ -85,6 +103,10 @@ function isDocumentRequest(request) {
   return accept.includes("text/html");
 }
 
+function isPublicDocumentPath(pathname) {
+  return PUBLIC_DOCUMENT_ALLOWLIST.includes(pathname);
+}
+
 async function cacheFirst(request, cacheName) {
   const cache = await caches.open(cacheName);
   const cached = await cachesMatch(cache, request);
@@ -96,7 +118,7 @@ async function cacheFirst(request, cacheName) {
       await cache.put(request, response.clone());
     }
     return response;
-  } catch (error) {
+  } catch {
     return cached || Response.error();
   }
 }
@@ -124,7 +146,8 @@ async function staleWhileRevalidate(request, cacheName) {
   return Response.error();
 }
 
-async function networkFirstPage(request) {
+/** Public marketing/login pages only — safe to cache, identical for everyone. */
+async function networkFirstPublicPage(request) {
   const cache = await caches.open(PAGE_CACHE);
 
   try {
@@ -136,17 +159,27 @@ async function networkFirstPage(request) {
   } catch {
     const cached = await cachesMatch(cache, request);
     if (cached) return cached;
+    return offlineResponse();
+  }
+}
 
-    for (const path of OFFLINE_FALLBACKS) {
-      const fallback = await cache.match(path);
-      if (fallback) return fallback;
-    }
+/** Authenticated/tenant pages: always hit the network, never cache the result. */
+async function networkOnlyDocument(request) {
+  try {
+    return await fetch(request);
+  } catch {
+    return offlineResponse();
+  }
+}
 
-    return new Response("Offline — open LakBiz from your home screen.", {
+function offlineResponse() {
+  return new Response(
+    "Offline — open LakBiz from your home screen once you're back online.",
+    {
       status: 503,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
-    });
-  }
+    },
+  );
 }
 
 async function cachesMatch(cache, request) {
