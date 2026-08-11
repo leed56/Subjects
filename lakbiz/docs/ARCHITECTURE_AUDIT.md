@@ -240,9 +240,12 @@ Tailwind PostCSS plugin). `npm audit` now reports zero vulnerabilities.
    set, and shouldn't be reported as verified until it actually runs.
 2. **`org_members_user_id_key` migration not applied** (§5) — needs the
    duplicate-check run against production first.
-3. **CSP ships without a live render-test** (§7) — recommend a preview-deploy
-   smoke test (load every major route, confirm no console CSP violations)
-   before this reaches production traffic.
+3. **CSP verified against the PR's Vercel preview** — `/` and `/login` both
+   return HTTP 200 with all headers present and same-origin-only
+   `<script src="/_next/static/...">` tags (no CSP-blocked hydration).
+   Still recommend a fuller manual pass over every route once real Supabase
+   env vars are attached to a preview (this check confirms headers +
+   non-blank render, not every feature).
 4. Everything in Phases 1–18 of the product spec is, by definition, not yet
    started. This document and this PR are Phase 0 only.
 

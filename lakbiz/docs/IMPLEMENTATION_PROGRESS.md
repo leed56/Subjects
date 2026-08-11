@@ -37,18 +37,26 @@ Behavior changed:
 
 Tests performed:
 - `npx tsc --noEmit`: clean before and after all changes.
-- `npm run build`: see status below.
+- `npm run build`: succeeds, all 41 routes.
 - `npm audit`: 0 vulnerabilities (was 4 high in Next.js alone before the bump).
 - RLS tenant-isolation script written but **not executed** — no test
   credentials / DB access in this session. Must be run before relying on it.
+- **CSP verified live** against the PR's Vercel preview deployment
+  (`subjects-git-claude-lakbiz-phase0-audit-security-nexuserp.vercel.app`):
+  `/` and `/login` both return HTTP 200 with all five security headers
+  present, and the rendered HTML's `<script>` tags are all same-origin
+  `/_next/static/...` (allowed by `script-src 'self'`), so the CSP does not
+  block hydration. This closes remaining-risk item 3 below.
 
 Remaining risks (see ARCHITECTURE_AUDIT.md §11 for full detail):
 1. RLS cross-tenant isolation not live-verified this session.
 2. Single-membership migration not applied — needs a duplicate check against
    production first.
-3. CSP not render-tested against a live deploy — verify on a preview
-   deployment (check browser console for CSP violations on every major
-   route) before it reaches production traffic.
+3. ~~CSP not render-tested against a live deploy~~ — verified against the PR
+   preview deployment (see Tests performed above). Still worth a full manual
+   pass over every route once real Supabase env vars are attached to that
+   preview, since this check only confirms headers + no blank page, not
+   every feature.
 
 ## Not started
 
