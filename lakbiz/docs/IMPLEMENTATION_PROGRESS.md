@@ -399,21 +399,95 @@ Remaining risks: same "no browser" caveat as Phases 2–3 for the frontend.
 The DB/RLS layer is unusually well-verified this time; the UI rendering
 correctly with live data is not.
 
+### Phase 5 — Service jobs rebuild
+Branch: `claude/lakbiz-phase5-service-jobs`, stacked on Phase 4
+(`claude/lakbiz-phase4-ac-assets` — PR #29, stacked on #28, #26, #25, #24).
+Status: implemented, build verified, write path empirically verified,
+not yet pushed/PR'd.
+
+**Scope call, made explicit up front:** the spec's full field-service
+status model (New/Scheduled/Assigned/On the way/In progress/Awaiting parts/
+Completed/Invoiced/Paid/Cancelled) is **not** implemented this phase. What
+was already there — `quote → deposit_received → scheduled → installed →
+service_due → completed → cancelled` — is a real, working, actively-used
+lifecycle: it drives service-due reminders, the cron job, and messaging
+templates throughout `ac-service.ts`/`messaging/*`. Replacing it wholesale
+would ripple through the local-first sync engine, the dashboard stats,
+and the notification/cron system in ways I can't safely verify without a
+browser — exactly the risk class every phase this session has been
+declining to take on blind. This phase is the **interaction-model
+modernization + safe additive improvements**, not the full status-model
+rebuild the spec describes; that's flagged as follow-up work, not silently
+dropped.
+
+Files changed:
+- `src/app/jobs/page.tsx` — full interaction-model rewrite, same pattern as
+  Phases 2/3: create/edit form (previously an inline `ProCard` toggled by
+  `showForm`) → `Drawer`; the job-sheet "work order" view (previously a
+  fixed-overlay dialog with financials, parts/labour, and status history —
+  already a solid work-order view before this phase) → `Drawer`; delete →
+  `ConfirmDialog`; feedback → toast. `JobCard`'s dense, already-good
+  work-order-style layout is functionally untouched, only its inline
+  styling was brought in line with the new design language (less rounded,
+  less heavy shadow). All existing business logic — job items, status
+  history, service-due tracking, reminder timeline, messaging dispatch,
+  financial masking — preserved exactly.
+- `src/lib/ac-job-types.ts` — added `inspection`, `warranty`, `other` job
+  types, additively. **Not** added: a separate "maintenance" type — the
+  existing `service` type already covers that (relabeled "Service /
+  maintenance"); service-due tracking and cron/messaging key off the
+  literal string `"service"` in enough places that renaming or duplicating
+  it would need an audit this session can't safely do blind. Confirmed via
+  grep that nothing does an exhaustive switch over `ACJobType`, so the
+  additive values are safe.
+- `src/lib/supabase/ac-assets-client.ts` — three new functions
+  (`fetchAsset`, `fetchJobAssetId`, `linkJobAsset`) closing the Phase 4 gap:
+  a job can now reference an AC asset. Deliberately a **direct, narrow
+  patch on the `ac_jobs` view's `asset_id` column** rather than extending
+  the local-first `ACJob` type/`business-sync.ts` — same reasoning as
+  Phase 4's cloud-only decision, scoped even tighter here (one column, not
+  a whole entity).
+- **Verified empirically before trusting it in the UI** (same technique as
+  Phase 4/the security incident): updated `asset_id` on a real job as its
+  owning org → succeeded; attempted the same update as a different
+  organization's user → 0 rows affected, correctly blocked by the existing
+  RLS on `ac_jobs_base`.
+- Job-sheet drawer now has an **Equipment section**: shows the linked
+  asset if any (via `fetchJobAssetId` + `fetchAsset`), or lets an
+  operator pick from the job's customer's assets (via
+  `fetchCustomerAssets`, already built in Phase 4) and link one.
+
+Tests performed:
+- DB write path (asset linking): empirically verified against production,
+  same rigor as Phase 4.
+- `tsc --noEmit`: clean.
+- `eslint`: 0 errors — cleaned up one real dead-prop warning surfaced while
+  merging the job-sheet's two item-entry forms into one (the merge is
+  behaviorally identical: price field only shown when `canSeeFinancials`,
+  gated by `canOperateJobs`, reproducing the original's
+  owner/manager-sees-price vs. data-entry-no-price split exactly).
+- `next build`: succeeds, 42 routes, `/jobs` statically prerenders.
+
+Remaining risks: same "no browser" caveat as every UI phase since 1. The
+job-sheet's item-entry form merge is a real logic change (two forms → one)
+that deserves a closer look on the preview, not just "the build passed."
+
 ## Not started
 
-Phases 5–18 (service jobs rebuild, field teams, scheduling, job costing,
-invoicing, dashboard rebuild, expenses, workforce/roles, messaging
-integration, reporting, mobile field UX, performance/a11y, final security
-audit, final QA). Plus deferred items: customer notes field, Receive Stock
-/ Stock Adjustment as real features, `schema_migrations` RLS, asset
-selection on the Jobs page, offline support for AC Assets.
+Phases 6–18 (field teams, scheduling, job costing, invoicing, dashboard
+rebuild, expenses, workforce/roles, messaging integration, reporting,
+mobile field UX, performance/a11y, final security audit, final QA). Plus
+deferred items: customer notes field, Receive Stock / Stock Adjustment as
+real features, `schema_migrations` RLS, offline support for AC Assets, the
+full field-service status/dispatch model (New/Assigned/On the way/Awaiting
+parts/Invoiced/Paid), before/after photos, customer signature.
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase4-ac-assets`, open a draft PR based on
-   `claude/lakbiz-phase3-inventory-ux` (stacked — merge #24–#26, #28
+1. Push `claude/lakbiz-phase5-service-jobs`, open a draft PR based on
+   `claude/lakbiz-phase4-ac-assets` (stacked — merge #24–#26, #28, #29
    first; #27 is independent).
-2. Visual/click-through pass on the Phase 4 preview.
-3. Begin Phase 5 (Service Jobs Rebuild) as its own branch/PR once Phase 4
-   is reviewed — this is where extending the local-first `ACJob` type to
-   include `assetId` naturally belongs, closing the gap noted above.
+2. Visual/click-through pass on the Phase 5 preview — particularly the
+   merged job-item-entry form and the new Equipment section.
+3. Begin Phase 6 (Installation & Maintenance Teams) as its own branch/PR
+   once Phase 5 is reviewed.

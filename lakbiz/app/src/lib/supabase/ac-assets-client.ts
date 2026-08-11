@@ -230,3 +230,35 @@ export async function fetchAssetJobs(assetId: string): Promise<{ data: AssetJob[
     error: null,
   };
 }
+
+export async function fetchAsset(id: string): Promise<{ data: AcAsset | null; error: string | null }> {
+  const supabase = createBrowserClient();
+  if (!supabase) return { data: null, error: "Supabase not configured" };
+
+  const { data, error } = await supabase.from("ac_assets").select("*").eq("id", id).maybeSingle();
+  if (error) return { data: null, error: error.message };
+  if (!data) return { data: null, error: null };
+  return { data: fromRow(data as AcAssetRow), error: null };
+}
+
+/** Read/write the asset a job references — a direct, narrow patch on the
+ * ac_jobs view (`authenticated` already has UPDATE on it; RLS on the base
+ * table still applies). Deliberately bypasses the local-first ACJob type
+ * and business-sync.ts, which don't know about asset_id yet — see
+ * docs/IMPLEMENTATION_PROGRESS.md, Phase 5. */
+export async function fetchJobAssetId(jobId: string): Promise<{ data: string | null; error: string | null }> {
+  const supabase = createBrowserClient();
+  if (!supabase) return { data: null, error: "Supabase not configured" };
+
+  const { data, error } = await supabase.from("ac_jobs").select("asset_id").eq("id", jobId).maybeSingle();
+  if (error) return { data: null, error: error.message };
+  return { data: (data?.asset_id as string | null) ?? null, error: null };
+}
+
+export async function linkJobAsset(jobId: string, assetId: string | null): Promise<{ error: string | null }> {
+  const supabase = createBrowserClient();
+  if (!supabase) return { error: "Supabase not configured" };
+
+  const { error } = await supabase.from("ac_jobs").update({ asset_id: assetId }).eq("id", jobId);
+  return { error: error?.message ?? null };
+}
