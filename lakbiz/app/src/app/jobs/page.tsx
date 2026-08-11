@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import Link from "next/link";
 import { AcJobReminderTimeline } from "@/components/ac-job-reminder-timeline";
 import { AcRemindersBanner } from "@/components/ac-reminders-banner";
 import { AcInAppAlertSettings } from "@/components/ac-in-app-alert-settings";
@@ -690,6 +691,15 @@ function JobSheetDrawer({ job, locale, items, history, canSeeFinancials, canOper
       description={`${job.jobNo} · ${jobTypeLabel(job.jobType ?? "installation", locale)} · ${job.address}`}
       widthClassName="max-w-2xl"
     >
+      <div className="mb-4">
+        <Link
+          href={`/jobs/${job.id}/invoice`}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          {t("jinv.view_invoice")}
+        </Link>
+      </div>
+
       {canSeeFinancials && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Metric label={t("jobs.quote_label")} value={formatLkr(job.quotedAmount)} />
