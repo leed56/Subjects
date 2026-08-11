@@ -16,6 +16,7 @@ const SHOP_PREFIXES = [
   "/bills",
   "/customers",
   "/banking",
+  "/assets",
 ];
 
 function isShopPath(pathname: string): boolean {

@@ -317,20 +317,103 @@ compiles, not that it behaves correctly at runtime). Check on the preview
 before merging: create → save → toast → list-updates, stock in/out dialogs,
 edit, delete-confirm.
 
+### Phase 4 — HVAC asset lifecycle management
+Branch: `claude/lakbiz-phase4-ac-assets`, stacked on Phase 3
+(`claude/lakbiz-phase3-inventory-ux` — PR #28, stacked on #26, #25, #24).
+Status: implemented, DB layer empirically verified against production, build
+verified, not yet pushed/PR'd.
+
+**Architectural decision, made deliberately and stated up front:** this
+module is **cloud-only** — it reads/writes straight to Supabase via a new
+`src/lib/supabase/ac-assets-client.ts`, the same simple direct-client
+pattern already used by `org-settings.ts` and `notification-log-client.ts`,
+rather than the local-first sync engine (`business-sync.ts` at 2,622 lines,
+`app-store-provider.tsx` at 3,482 lines) every other entity goes through.
+Wiring a new entity into that engine correctly — with no browser available
+to verify the offline/sync round-trip — was judged higher risk than
+shipping a real, RLS-verified module now that requires being online. See
+the migration file for the full reasoning. Revisit adding offline support
+once it can be tested properly.
+
+Migrations created (both applied directly to production and empirically
+verified — not just written):
+- `20250629000001_ac_asset_lifecycle.sql` — new `ac_assets` table (brand,
+  model, serials, BTU, AC type, refrigerant, install date, warranty expiry,
+  location, status, next service date, notes; optional `customer_id` FK),
+  RLS following the exact `organization_id in (select ... from org_members
+  where user_id = auth.uid())` pattern from `rls_hardening.sql`. Also adds
+  a nullable `asset_id` FK on `ac_jobs_base` (and the `ac_jobs` view) so a
+  job *can* reference the asset it's servicing.
+- **Verified empirically before writing any frontend code** (same
+  technique as the security incident): inserted a real asset as the IMT
+  owner: succeeded. Queried/inserted as a different organization's user:
+  0 rows on SELECT, RLS-violation error on INSERT. Confirmed the `ac_jobs`
+  view still returns correctly with the new `asset_id` column (null, as
+  expected — no job references an asset yet). Test row cleaned up after.
+
+Files changed (frontend):
+- `src/lib/supabase/ac-assets-client.ts` (new) — CRUD functions
+  (`fetchOrgAssets`, `fetchCustomerAssets`, `createAsset`, `updateAsset`,
+  `deleteAsset`, `fetchAssetJobs`) plus the `AcAsset`/`AcAssetInput` types.
+- `src/app/assets/page.tsx` (new) — list page on the Phase 1/2/3
+  primitives (`PageHeader`/`MetricCard`/`FilterBar`/`DataTable`), a
+  create/edit `Drawer`, and an asset profile `Drawer` with Overview + Jobs
+  tabs (Jobs tab is a real query against `ac_jobs` filtered by `asset_id`,
+  not mocked — currently empty for every asset since no job-creation UI
+  can set `asset_id` yet, see below).
+- `src/app/customers/page.tsx` — the "Equipment" tab left as a stub in
+  Phase 2 is now real: fetches and lists the customer's assets via
+  `fetchCustomerAssets`.
+- **Route wiring** (`/assets` added everywhere `/vehicles` etc. already
+  were, so it's properly guarded, not an accidental hole):
+  `src/lib/supabase/middleware.ts` (server-side guard),
+  `src/components/shop-route-guard.tsx` (client-side), `src/lib/org-role/permissions.ts`
+  (data_entry + technician can access, matching `/jobs`), `src/lib/subscription/can.ts`
+  (gated behind the `ac_jobs` plan feature, same as Jobs/Workforce),
+  `src/lib/nav-sections.ts` + `src/components/shell/nav-icons.tsx` (Service
+  nav group).
+
+**Deliberately out of scope, flagged not dropped:** the existing `/jobs`
+page can't yet let someone pick an asset when creating/viewing a job — that
+page runs through the local-first sync engine, whose `ACJob` type doesn't
+know about `asset_id`. Extending it is the same class of decision as the
+cloud-only choice above, just not made yet; the DB and the read path
+(Jobs tab on an asset) are ready for it. Until then, `asset_id` can only be
+set by a direct DB write.
+
+Tests performed:
+- DB layer: verified empirically against production, see above — the
+  strongest verification of any phase so far, since I now have direct DB
+  access.
+- `tsc --noEmit`: clean (after fixing one real error — a `||`/`??`
+  precedence issue caught by the compiler).
+- `eslint`: 0 errors (after fixing two real `react-hooks/purity` errors —
+  the new React Compiler lint correctly caught `Date.now()` being called
+  inline in the component body during render; moved those computations
+  into plain module-level helper functions instead). Same 3 pre-existing
+  warnings, none new.
+- `next build`: succeeds, 42 routes now (was 41), `/assets` statically
+  prerenders.
+
+Remaining risks: same "no browser" caveat as Phases 2–3 for the frontend.
+The DB/RLS layer is unusually well-verified this time; the UI rendering
+correctly with live data is not.
+
 ## Not started
 
-Phases 4–18 (HVAC asset management, service jobs, field teams, scheduling,
-job costing, invoicing, dashboard rebuild, expenses, workforce/roles,
-messaging integration, reporting, mobile field UX, performance/a11y, final
-security audit, final QA). Plus the deferred items noted per-phase above
-(customer notes field, Receive Stock / Stock Adjustment as real features,
-`schema_migrations` RLS).
+Phases 5–18 (service jobs rebuild, field teams, scheduling, job costing,
+invoicing, dashboard rebuild, expenses, workforce/roles, messaging
+integration, reporting, mobile field UX, performance/a11y, final security
+audit, final QA). Plus deferred items: customer notes field, Receive Stock
+/ Stock Adjustment as real features, `schema_migrations` RLS, asset
+selection on the Jobs page, offline support for AC Assets.
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase3-inventory-ux`, open a draft PR based on
-   `claude/lakbiz-phase2-customer-crm` (stacked — merge #24, #25, #26
-   first; #27 is independent and can merge any time).
-2. Visual/click-through pass on the Phase 3 preview, same as Phase 2.
-3. Begin Phase 4 (HVAC Asset Management — new module, new tables, new RLS)
-   as its own branch/PR once Phase 3 is reviewed.
+1. Push `claude/lakbiz-phase4-ac-assets`, open a draft PR based on
+   `claude/lakbiz-phase3-inventory-ux` (stacked — merge #24–#26, #28
+   first; #27 is independent).
+2. Visual/click-through pass on the Phase 4 preview.
+3. Begin Phase 5 (Service Jobs Rebuild) as its own branch/PR once Phase 4
+   is reviewed — this is where extending the local-first `ACJob` type to
+   include `assetId` naturally belongs, closing the gap noted above.
