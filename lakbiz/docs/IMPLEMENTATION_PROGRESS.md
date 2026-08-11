@@ -244,20 +244,93 @@ Remaining risks:
 2. Notes field deferred (see above) — revisit as its own phase if wanted.
 3. Equipment/Service profile tabs arrive with Phase 4.
 
+### Out-of-band — critical security fix (between Phase 2 and Phase 3)
+Branch: `security/fix-masked-view-cross-tenant-leak`, based on `main`
+directly (not stacked on the phase branches — needed to ship immediately).
+**PR #27, not draft.**
+
+While preparing to run the Phase 0 RLS-verification checks against the now-
+connected production database, found and fixed a **critical, live,
+currently-exploitable cross-tenant data leak**: the masked financial views
+(`sales`, `sale_lines`, `products`, `ac_jobs`, `contractors`, `vehicles`)
+were `security_invoker=false` with no row filter of their own, so any
+authenticated user in any shop could read every other shop's customer
+names, phones, addresses, job details, and sales through these views.
+Confirmed empirically (not just from the linter), fixed directly on
+production given severity, then a review comment on the PR caught a real
+regression in the first fix attempt (the fix's own grant let clients bypass
+column-level cost/profit masking) — corrected and re-verified before
+merge. Full writeup: `docs/SECURITY_INCIDENT_2026-08-11.md`. See that PR's
+two migrations for the complete, corrected fix.
+
+### Phase 3 — Inventory / Add Stock UX
+Branch: `claude/lakbiz-phase3-inventory-ux`, stacked on Phase 2
+(`claude/lakbiz-phase2-customer-crm` — PR #26, stacked on #25, #24).
+Status: implemented, build verified, not yet pushed/PR'd.
+
+Files changed:
+- `src/app/stock/page.tsx` — same interaction-model rewrite pattern as
+  Phase 2's customers page. `showForm` used to default to `true` (the
+  product create form was rendered unconditionally on page load, mid-page
+  after the stat cards) — now a `Drawer`, closed by default, opened only by
+  the `+ Add item` button. `ProductForm` itself (the actual field set —
+  SKU, name, category, sector-specific fields, cost/sell price, reorder
+  level) is untouched, just reused inside the drawer instead of an
+  always-rendered `ProCard`.
+- Stock In / Stock Out: were hand-rolled `fixed inset-0` overlay divs →
+  now the `Dialog` primitive.
+- Delete: `window.confirm()` → `ConfirmDialog`.
+- Feedback: inline `message` state banner → global toast system.
+- Header/metrics/search/filter/table: `PageHeader` + `MetricCard` +
+  `FilterBar`/`SearchInput` + `DataTable` (desktop table ↔ mobile cards in
+  one component, replacing the separate hand-written `ProductMobileCard`).
+  Row actions consolidated: Stock In/Stock Out stay always-visible
+  (most-used), Edit/Delete moved into an `ActionMenu`.
+
+**Deliberately out of scope for this pass** (flagged, not silently
+dropped): the spec's fuller "Receive Stock" (multi-line supplier GRN entry
+— supplier, reference/PO number, date, multiple products, quantities, unit
+costs, payment status in one transaction) and "Stock Adjustment" (reason
+code + authorized-user audit trail) are **new features**, not a UX fix to
+an existing one — `stockInToCloud`/`stockOutToCloud` only support one
+product at a time today, with no supplier/reference/payment-status
+concept. The DB schema already has unused `purchases`/`purchase_lines`
+tables (visible in the base migrations) that look like they were meant for
+exactly this, but nothing in the frontend reads or writes them yet.
+Building a real multi-line GRN flow on top of them is a properly-scoped
+feature (data model decisions, local-first sync plumbing, a new page) —
+building it inside a UX-fix phase on unverified assumptions about how
+those tables are meant to be used would be exactly the kind of "mocked
+production functionality" the spec says not to do. Recommend it as its own
+phase once the repo owner confirms whether `purchases`/`purchase_lines`
+are meant to be revived for this.
+
+Tests performed:
+- `tsc --noEmit`: clean.
+- `next build`: succeeds, all 41 routes, `/stock` still statically
+  prerenders.
+- `eslint`: 0 errors, same 3 pre-existing warnings, none new.
+
+Remaining risks: same category as Phase 2 — no real browser/visual pass on
+the actual table + drawer content with live data (build success proves it
+compiles, not that it behaves correctly at runtime). Check on the preview
+before merging: create → save → toast → list-updates, stock in/out dialogs,
+edit, delete-confirm.
+
 ## Not started
 
-Phases 3–18 (inventory UX, HVAC asset management, service jobs, field
-teams, scheduling, job costing, invoicing, dashboard rebuild, expenses,
-workforce/roles, messaging integration, reporting, mobile field UX,
-performance/a11y, final security audit, final QA).
+Phases 4–18 (HVAC asset management, service jobs, field teams, scheduling,
+job costing, invoicing, dashboard rebuild, expenses, workforce/roles,
+messaging integration, reporting, mobile field UX, performance/a11y, final
+security audit, final QA). Plus the deferred items noted per-phase above
+(customer notes field, Receive Stock / Stock Adjustment as real features,
+`schema_migrations` RLS).
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase2-customer-crm`, open a draft PR based on
-   `claude/lakbiz-phase1-design-shell` (stacked — merge #24 and #25 first).
-2. **Get a real visual/click-through pass on the Phase 2 preview** — this is
-   the first phase where "does it compile" and "does it work" have
-   meaningfully diverged; see remaining risk #1 above.
-3. Begin Phase 3 (Inventory / Add Stock UX — the same
-   below-the-fold-form problem, on the Stock page) as its own branch/PR once
-   Phase 2 is reviewed.
+1. Push `claude/lakbiz-phase3-inventory-ux`, open a draft PR based on
+   `claude/lakbiz-phase2-customer-crm` (stacked — merge #24, #25, #26
+   first; #27 is independent and can merge any time).
+2. Visual/click-through pass on the Phase 3 preview, same as Phase 2.
+3. Begin Phase 4 (HVAC Asset Management — new module, new tables, new RLS)
+   as its own branch/PR once Phase 3 is reviewed.
