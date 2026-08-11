@@ -145,19 +145,119 @@ Remaining risks / deliberately deferred:
    exist yet). Update `src/lib/nav-sections.ts` as each of those phases adds
    its page, not before.
 
+### Phase 2 — Customer CRM redesign
+Branch: `claude/lakbiz-phase2-customer-crm`, stacked on Phase 1
+(`claude/lakbiz-phase1-design-shell` — PR #25, stacked on #24). Status:
+implemented, build verified, not yet pushed/PR'd.
+
+Files changed:
+- `src/app/customers/page.tsx` — full interaction-model rewrite. Preserves
+  every existing business behavior 1:1 (payment recording, B2B wholesale
+  pricing, bulk WhatsApp, CSV export, per-customer WhatsApp send, ledger
+  calculation via the existing `buildLedger()`) — only *how you reach* each
+  of those changed, not what they do or how they call `useAppStore()`.
+- `src/lib/i18n/translations.ts` — added `cust.tab_overview`,
+  `cust.tab_messages`, `cust.total_sales`, `cust.last_activity`,
+  `cust.no_invoices`, `cust.no_payments`, `cust.no_messages` (si + en).
+
+What changed, mapped to the spec's acceptance criteria:
+- **"Pressing + New Customer always makes the form immediately visible"** —
+  the create/edit form used to be a permanently-rendered `<ProCard>` sitting
+  in a 2-column grid next to the search card (not literally below the fold,
+  but always visually present and mixed into browsing UI even when nobody
+  wants to create anything). It's now a `Drawer` that only exists in the DOM
+  while open, triggered by a `+ Add customer` button in the page header —
+  opens instantly over the current view, every time, regardless of list
+  length or scroll position.
+- **Header + metrics** — `PageHeader` with the customer count/outstanding
+  total in the description, and a `MetricCard` row (total customers,
+  outstanding, over credit limit, recent payments) — same four numbers the
+  spec asked for, same data source (`data.customers`/`data.customerPayments`
+  reduces that already existed), just placed in the new primitive layout
+  instead of `ProStatCard`.
+- **Search + type filter** → `FilterBar` + `SearchInput` + the existing
+  individual/company toggle, same filtering logic as before.
+- **Customer profile** — new `CustomerProfileDrawer`, opened by clicking a
+  customer's name in the table. Tabs: Overview, Invoices, Payments, Ledger,
+  Messages — all real data, not mocked:
+  - Invoices: `data.sales` filtered by `customerId`, linking to the existing
+    `/bills/[id]` page.
+  - Payments: `data.customerPayments` filtered by `customerId`.
+  - Ledger: the same `buildLedger()` call the old standalone ledger modal
+    used, now inside the profile drawer instead of a separate dialog.
+  - Messages: `useNotificationLogs(org.id)` filtered by
+    `contextId === customer.id` — this works today because
+    `MessageSendButton` already tags every sent message with the
+    customer's id as `contextId`.
+  - **Equipment / Service tabs from the spec are intentionally omitted** —
+    there is no AC-asset-to-customer data model yet (that's Phase 4). Adding
+    those tabs now would mean fabricating empty placeholder UI for data that
+    doesn't exist; they get added for real once Phase 4 lands.
+- **Delete confirmation** — was a `window.confirm()`; now the `ConfirmDialog`
+  primitive.
+- **Toast feedback** — the old approach was a `message` string in local
+  state rendered as an inline banner at the top of the page (invisible if
+  you'd scrolled past it). Save/delete/payment/wholesale-price actions now
+  call `useToast()` instead — visible regardless of scroll position, and
+  consistent with the global toast system Phase 1 introduced.
+- **Row actions** — consolidated into an `ActionMenu` dropdown (Ledger,
+  Wholesale prices, Edit, Delete) plus two always-visible primary actions
+  (Message, Record payment) — matches "very clear primary actions, avoid
+  visual noise" rather than a wall of six equal-weight buttons per row.
+- **Website field** — the spec says to stop showing/requesting it if it
+  exists in the data model. Checked: it doesn't exist anywhere in
+  `Customer`/the `customers` table/the create form. Nothing to remove; N/A.
+- **Notes field** — the spec suggests one for individual customers.
+  **Deliberately deferred**, not silently dropped: this is local-first data
+  synced to Supabase (`useAppStore` → `saveCustomerToCloud` →
+  `business-sync.ts`), so adding a field means a coordinated change across
+  the additive migration, `Customer` type, cloud sync mapping, *and* local
+  storage — a schema+sync change I can't verify round-trips correctly
+  without a live database connection or a browser to test offline/online
+  sync. Safer as its own tightly-scoped follow-up than bundled into a
+  UI-focused phase on unverified faith.
+
+Tests performed:
+- `tsc --noEmit`: clean.
+- `next build`: succeeds, all 41 routes, `/customers` still statically
+  prerenders.
+- `eslint`: 0 errors, same 3 pre-existing warnings, none new.
+- Inspected `.next/server/app/customers.html`: confirms the `AppShell`
+  chrome renders (sidebar present, mobile nav drawer markup present) and the
+  old permanently-rendered create-form card is gone from the markup.
+  **Caveat, stated precisely this time:** this page's real content (the
+  `PageHeader`, `MetricCard`s, `DataTable`, both drawers) only exists after
+  client-side data loads from local-first storage — Next's static prerender
+  only ever captures the `ProLoadingState` branch for *any* page on this
+  pattern (this was already true for every Phase 1 page too, not a Phase 2
+  regression; I just checked more precisely this time). Build success proves
+  the code compiles, type-checks, and bundles without error — it does not
+  prove the table/drawer render correctly with real data. That needs either
+  a live database connection or a browser, neither available this session.
+
+Remaining risks:
+1. No visual/runtime QA on the actual table + drawer content — see caveat
+   above. This is the single most important thing to check on the preview
+   before merging: open `/customers` signed in, confirm the metrics/table/
+   both drawers render and the create → save → toast → list-updates flow
+   actually works end to end.
+2. Notes field deferred (see above) — revisit as its own phase if wanted.
+3. Equipment/Service profile tabs arrive with Phase 4.
+
 ## Not started
 
-Phases 2–18 (customer CRM redesign, inventory UX, HVAC asset management,
-service jobs, field teams, scheduling, job costing, invoicing, dashboard
-rebuild, expenses, workforce/roles, messaging integration, reporting, mobile
-field UX, performance/a11y, final security audit, final QA).
+Phases 3–18 (inventory UX, HVAC asset management, service jobs, field
+teams, scheduling, job costing, invoicing, dashboard rebuild, expenses,
+workforce/roles, messaging integration, reporting, mobile field UX,
+performance/a11y, final security audit, final QA).
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase1-design-shell`, open a draft PR based on
-   `claude/lakbiz-phase0-audit-security` (stacked — merge Phase 0 first).
-2. Get a visual pass on the Phase 1 preview (see "Remaining risks" above)
-   before merging.
-3. Begin Phase 2 (Customer CRM redesign — the drawer-based create/edit flow
-   fixing the "form below the fold" bug) as its own branch/PR once Phase 1
-   is reviewed.
+1. Push `claude/lakbiz-phase2-customer-crm`, open a draft PR based on
+   `claude/lakbiz-phase1-design-shell` (stacked — merge #24 and #25 first).
+2. **Get a real visual/click-through pass on the Phase 2 preview** — this is
+   the first phase where "does it compile" and "does it work" have
+   meaningfully diverged; see remaining risk #1 above.
+3. Begin Phase 3 (Inventory / Add Stock UX — the same
+   below-the-fold-form problem, on the Stock page) as its own branch/PR once
+   Phase 2 is reviewed.

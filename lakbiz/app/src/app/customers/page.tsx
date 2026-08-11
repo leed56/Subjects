@@ -8,16 +8,13 @@ import { ExportActions } from "@/components/export/export-actions";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { ContactTypeBadge } from "@/components/contact-type-badge";
 import { AppShell } from "@/components/shell/app-shell";
-import {
-  ProBadge,
-  ProButton,
-  ProCard,
-  ProEmptyState,
-  ProLoadingState,
-  ProMain,
-  ProPageHeader,
-  ProStatCard,
-} from "@/components/ui/pro-shell";
+import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
+import { PageHeader, MetricCard, EmptyState, StatusBadge, SearchInput, FilterBar, Tabs, ActionMenu } from "@/components/ui/primitives";
+import { Drawer, ConfirmDialog, Dialog } from "@/components/ui/overlay";
+import { FormField, TextInput, MoneyInput, SelectInput } from "@/components/ui/form";
+import { DataTable, type DataTableColumn } from "@/components/ui/table";
+import { useToast } from "@/components/ui/toast";
+import { CustomersIcon, PlusIcon } from "@/components/ui/icons";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
@@ -26,6 +23,7 @@ import { wholesalePriceCount } from "@/lib/company-pricing";
 import { contactTypeI18nKey } from "@/lib/contact-type";
 import { exportCustomersCsv } from "@/lib/export";
 import { recipientsWithPhone } from "@/lib/messaging/bulk-whatsapp";
+import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { Customer } from "@/lib/store/types";
 import type { ContactType, PaymentMethod, Product } from "@/lib/types";
@@ -34,6 +32,7 @@ import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 type ContactFilter = "all" | ContactType;
+type ProfileTab = "overview" | "invoices" | "payments" | "ledger" | "messages";
 
 export default function CustomersPage() {
   const {
@@ -47,30 +46,44 @@ export default function CustomersPage() {
   } = useAppStore();
   const { t } = useLocale();
   const { canWrite, disabledHint } = useWriteAccess();
-  const { can } = useSubscription();
+  const { can, org } = useSubscription();
+  const { toast } = useToast();
+  const notificationLogs = useNotificationLogs(org.id);
 
+  // Create/edit drawer
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Customer | null>(null);
   const [name, setName] = useState("");
   const [contactType, setContactType] = useState<ContactType>("individual");
   const [contactPerson, setContactPerson] = useState("");
   const [vatNumber, setVatNumber] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
-  const [creditLimit, setCreditLimit] = useState<number | "">("");
-  const [typeFilter, setTypeFilter] = useState<ContactFilter>("all");
-  const [editing, setEditing] = useState<Customer | null>(null);
+  const [creditLimit, setCreditLimit] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Profile drawer
+  const [profileCustomer, setProfileCustomer] = useState<Customer | null>(null);
+  const [profileTab, setProfileTab] = useState<ProfileTab>("overview");
+
+  // Delete confirm
+  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Record payment dialog
   const [payCustomerId, setPayCustomerId] = useState<string | null>(null);
-  const [payAmount, setPayAmount] = useState(0);
+  const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
-  const [ledgerCustomer, setLedgerCustomer] = useState<Customer | null>(null);
+  const [savingPayment, setSavingPayment] = useState(false);
+
+  // Wholesale pricing (company B2B — unchanged from prior implementation)
   const [pricingCustomer, setPricingCustomer] = useState<Customer | null>(null);
   const [priceSearch, setPriceSearch] = useState("");
-  const [message, setMessage] = useState("");
+  const [savingPriceProductId, setSavingPriceProductId] = useState<string | null>(null);
+
+  const [typeFilter, setTypeFilter] = useState<ContactFilter>("all");
   const [search, setSearch] = useState("");
   const [bulkWaOpen, setBulkWaOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [savingPayment, setSavingPayment] = useState(false);
-  const [savingPriceProductId, setSavingPriceProductId] = useState<string | null>(null);
 
   if (!ready || !data) {
     return (
@@ -93,6 +106,11 @@ export default function CustomersPage() {
     setEditing(null);
   };
 
+  const openCreate = () => {
+    resetForm();
+    setFormOpen(true);
+  };
+
   const startEdit = (customer: Customer) => {
     setEditing(customer);
     setName(customer.name);
@@ -101,50 +119,44 @@ export default function CustomersPage() {
     setVatNumber(customer.vatNumber ?? "");
     setPhone(customer.phone ?? "");
     setAddress(customer.address ?? "");
-    setCreditLimit(customer.creditLimit ?? "");
+    setCreditLimit(customer.creditLimit != null ? String(customer.creditLimit) : "");
+    setFormOpen(true);
   };
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim() || saving) return;
     const limit = creditLimit === "" ? undefined : Number(creditLimit);
-    const payload = {
-      name,
-      contactType,
-      contactPerson,
-      vatNumber,
-      phone,
-      address,
-      creditLimit: limit,
-    };
+    const payload = { name, contactType, contactPerson, vatNumber, phone, address, creditLimit: limit };
     setSaving(true);
-    setMessage("");
     const result = await saveCustomerToCloud(payload, editing?.id);
     setSaving(false);
     if (!result.ok) {
-      setMessage(result.error ?? t("common.save_failed"));
-      setTimeout(() => setMessage(""), 4000);
+      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
       return;
     }
+    toast({ tone: "success", title: editing ? t("cust.updated") : t("cust.added"), description: name });
+    setFormOpen(false);
     resetForm();
-    setMessage(editing ? t("cust.updated") : t("cust.added"));
-    setTimeout(() => setMessage(""), 2500);
   };
 
-  const handleDelete = async (customer: Customer) => {
-    if (deletingId) return;
-    if (!confirm(`${t("cust.delete_confirm")} ${customer.name}?`)) return;
-    setDeletingId(customer.id);
-    const result = await deleteCustomerToCloud(customer.id);
+  const confirmDelete = async () => {
+    if (!deleteTarget || deletingId) return;
+    setDeletingId(deleteTarget.id);
+    const result = await deleteCustomerToCloud(deleteTarget.id);
     setDeletingId(null);
     if (!result.ok) {
-      setMessage(result.error ?? t("common.save_failed"));
-      setTimeout(() => setMessage(""), 4000);
+      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
       return;
     }
-    if (editing?.id === customer.id) resetForm();
-    setMessage(t("cust.deleted"));
-    setTimeout(() => setMessage(""), 2500);
+    if (profileCustomer?.id === deleteTarget.id) setProfileCustomer(null);
+    toast({ tone: "success", title: t("cust.deleted"), description: deleteTarget.name });
+    setDeleteTarget(null);
+  };
+
+  const openProfile = (customer: Customer, tab: ProfileTab = "overview") => {
+    setProfileCustomer(customer);
+    setProfileTab(tab);
   };
 
   const totalCredit = data.customers.reduce((s, c) => s + c.creditBalance, 0);
@@ -153,18 +165,13 @@ export default function CustomersPage() {
     (c) => c.creditLimit != null && c.creditBalance > c.creditLimit,
   ).length;
   const payingCustomers = data.customers.filter((c) => c.creditBalance > 0).length;
-  const recentPaymentsTotal = data.customerPayments
-    .slice(0, 8)
-    .reduce((sum, p) => sum + p.amount, 0);
-
+  const recentPaymentsTotal = data.customerPayments.slice(0, 8).reduce((sum, p) => sum + p.amount, 0);
   const individualCount = data.customers.filter((c) => c.contactType === "individual").length;
   const companyCount = data.customers.filter((c) => c.contactType === "company").length;
 
   const query = search.trim().toLowerCase();
   const typeFiltered =
-    typeFilter === "all"
-      ? data.customers
-      : data.customers.filter((c) => c.contactType === typeFilter);
+    typeFilter === "all" ? data.customers : data.customers.filter((c) => c.contactType === typeFilter);
   const customers = query
     ? typeFiltered.filter(
         (c) =>
@@ -189,36 +196,113 @@ export default function CustomersPage() {
     creditLimit: t("cust.credit_limit"),
   };
 
-  const payCustomer = payCustomerId
-    ? data.customers.find((c) => c.id === payCustomerId)
-    : null;
+  const payCustomer = payCustomerId ? data.customers.find((c) => c.id === payCustomerId) : null;
+  const payAmountNumber = Number(payAmount) || 0;
 
-  const ledgerEntries = ledgerCustomer
-    ? buildLedger(
-        data.sales
-          .filter((s) => s.customerId === ledgerCustomer.id && s.creditAmount > 0)
-          .map((s) => ({
-            date: s.date,
-            label: `${t("sales.bill")} ${s.billNo ?? s.id.slice(0, 8)}`,
-            amount: s.creditAmount,
-          })),
-        data.customerPayments
-          .filter((p) => p.customerId === ledgerCustomer.id)
-          .map((p) => ({
-            date: p.date,
-            label: `${t("cust.record_payment")} (${paymentLabel(t, p.method)})`,
-            amount: -p.amount,
-          })),
-      )
-    : [];
+  const columns: DataTableColumn<Customer>[] = [
+    {
+      key: "name",
+      header: t("common.name"),
+      render: (c) => (
+        <div>
+          <button
+            type="button"
+            onClick={() => openProfile(c)}
+            className="flex flex-wrap items-center gap-2 text-left font-semibold text-slate-900 hover:text-teal-700 hover:underline"
+          >
+            {c.name}
+            <ContactTypeBadge type={c.contactType} />
+          </button>
+          {c.contactType === "company" && c.contactPerson && (
+            <p className="mt-0.5 text-xs text-slate-500">{c.contactPerson}</p>
+          )}
+        </div>
+      ),
+    },
+    { key: "phone", header: t("common.phone"), render: (c) => c.phone || "—", hideOnMobile: true },
+    { key: "type", header: t("cust.contact_type"), render: (c) => <ContactTypeBadge type={c.contactType} />, hideOnMobile: true },
+    {
+      key: "outstanding",
+      header: t("cust.credit_owed"),
+      align: "right",
+      render: (c) => {
+        const overLimit = c.creditLimit != null && c.creditBalance > c.creditLimit;
+        return (
+          <div>
+            <p className={`font-mono font-semibold ${c.creditBalance > 0 ? "text-amber-700" : "text-slate-500"}`}>
+              {formatLkr(c.creditBalance)}
+            </p>
+            {overLimit && <StatusBadge tone="danger">{t("cust.over_limit")}</StatusBadge>}
+          </div>
+        );
+      },
+    },
+    {
+      key: "limit",
+      header: t("cust.credit_limit"),
+      align: "right",
+      hideOnMobile: true,
+      render: (c) => (c.creditLimit != null ? formatLkr(c.creditLimit) : "—"),
+    },
+    {
+      key: "actions",
+      header: t("common.actions"),
+      align: "right",
+      render: (c) => (
+        <div className="flex items-center justify-end gap-1.5">
+          {c.phone && (
+            <MessageSendButton
+              phone={c.phone}
+              recipientName={c.name}
+              context={{ type: "customer", customerName: c.name, creditBalance: c.creditBalance, business: data.business }}
+              contextId={c.id}
+            />
+          )}
+          {c.creditBalance > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setPayCustomerId(c.id);
+                setPayAmount(String(c.creditBalance));
+              }}
+              className="rounded-lg bg-teal-50 px-2.5 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-100"
+            >
+              {t("cust.record_payment")}
+            </button>
+          )}
+          <ActionMenu
+            items={[
+              { label: t("cust.ledger"), onSelect: () => openProfile(c, "ledger") },
+              ...(c.contactType === "company"
+                ? [
+                    {
+                      label: `${t("cust.wholesale_prices")}${
+                        wholesalePriceCount(data.customerProductPrices, c.id) > 0
+                          ? ` (${wholesalePriceCount(data.customerProductPrices, c.id)})`
+                          : ""
+                      }`,
+                      onSelect: () => {
+                        setPricingCustomer(c);
+                        setPriceSearch("");
+                      },
+                    },
+                  ]
+                : []),
+              { label: t("common.edit"), onSelect: () => startEdit(c) },
+              { label: t("common.delete"), tone: "danger" as const, onSelect: () => setDeleteTarget(c) },
+            ]}
+          />
+        </div>
+      ),
+    },
+  ];
 
   return (
     <AppShell>
       <ProMain>
-        <ProPageHeader
-          eyebrow={t("cust.crm_eyebrow")}
+        <PageHeader
           title={t("cust.title")}
-          description={`${t("cust.subtitle")} · ${t("cust.total_owed")} ${formatLkr(totalCredit)}`}
+          description={`${data.customers.length} ${t("cust.customers_count")} · ${t("cust.total_owed")} ${formatLkr(totalCredit)}`}
           actions={
             <>
               {canExport && (
@@ -237,374 +321,239 @@ export default function CustomersPage() {
                 <button
                   type="button"
                   onClick={() => setBulkWaOpen(true)}
-                  className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-black text-sky-800 shadow-sm transition hover:bg-sky-100 active:scale-[0.98]"
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
                   {t("msg.bulk_messages")}
                 </button>
               ) : (
                 <Link
                   href="/settings/plans"
-                  className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-500"
                   title={t("msg.bulk_plan_hint")}
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3.5 text-sm font-medium text-slate-400"
                 >
                   {t("msg.bulk_messages")}
                 </Link>
               )}
-              <ProButton href="/sales">{t("nav.sales")}</ProButton>
-              <ProButton href="/bills" variant="secondary">{t("nav.bills")}</ProButton>
+              <button
+                type="button"
+                onClick={openCreate}
+                disabled={!canWrite}
+                title={!canWrite ? disabledHint ?? undefined : undefined}
+                className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <PlusIcon className="h-4 w-4" />
+                {t("cust.add")}
+              </button>
             </>
+          }
+          metrics={
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard label={t("nav.customers")} value={String(data.customers.length)} hint={t("cust.saved_profiles")} icon={<CustomersIcon className="h-4 w-4" />} />
+              <MetricCard label={t("cust.credit_owed")} value={formatLkr(totalCredit)} hint={`${payingCustomers} customers with credit`} tone="warning" />
+              <MetricCard label={t("cust.over_limit")} value={String(overLimitCount)} hint={overLimitCount ? t("cust.needs_attention") : t("cust.within_limits")} tone={overLimitCount ? "danger" : "default"} />
+              <MetricCard label={t("cust.recent_payments")} value={formatLkr(recentPaymentsTotal)} hint={t("cust.latest_records")} tone="positive" />
+            </div>
           }
         />
 
-        <WriteDisabledHint className="mb-5" />
+        <WriteDisabledHint className="mb-4" />
 
-        {message && (
-          <div className="mb-5 rounded-[1.25rem] border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900 shadow-sm">
-            {message}
+        <FilterBar>
+          <SearchInput value={search} onChange={setSearch} placeholder={t("cust.search_placeholder")} className="min-w-[220px] flex-1" />
+          <div className="flex gap-1.5">
+            {(
+              [
+                { id: "all" as const, label: t("cust.filter_all"), count: data.customers.length },
+                { id: "individual" as const, label: t("cust.type_individual"), count: individualCount },
+                { id: "company" as const, label: t("cust.type_company"), count: companyCount },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setTypeFilter(tab.id)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                  typeFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
+                }`}
+              >
+                {tab.label} <span className="opacity-70">({tab.count})</span>
+              </button>
+            ))}
           </div>
+        </FilterBar>
+
+        {data.customers.length === 0 ? (
+          <EmptyState
+            icon={<CustomersIcon className="h-6 w-6" />}
+            title={t("cust.no_customers")}
+            description={t("cust.credit_hint")}
+            action={
+              <button type="button" onClick={openCreate} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+                {t("cust.add")}
+              </button>
+            }
+          />
+        ) : (
+          <DataTable
+            columns={columns}
+            rows={customers}
+            emptyState={<EmptyState title={t("sales.no_match")} description={t("cust.search_no_match_desc")} />}
+          />
         )}
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("nav.customers")} value={String(data.customers.length)} hint={t("cust.saved_profiles")} icon="👥" tone="teal" />
-          <ProStatCard label={t("cust.credit_owed")} value={formatLkr(totalCredit)} hint={`${payingCustomers} customers with credit`} icon="🤝" tone="amber" />
-          <ProStatCard label={t("cust.over_limit")} value={String(overLimitCount)} hint={overLimitCount ? t("cust.needs_attention") : t("cust.within_limits")} icon="⚠️" tone={overLimitCount ? "rose" : "slate"} />
-          <ProStatCard label={t("cust.recent_payments")} value={formatLkr(recentPaymentsTotal)} hint={t("cust.latest_records")} icon="💸" tone="emerald" />
-        </section>
+        <BulkWhatsAppComposer open={bulkWaOpen} onClose={() => setBulkWaOpen(false)} recipients={bulkRecipients} business={data.business} />
 
-        <div className="mt-6 flex flex-wrap gap-2">
-          {(
-            [
-              { id: "all" as const, label: t("cust.filter_all"), count: data.customers.length },
-              { id: "individual" as const, label: t("cust.type_individual"), count: individualCount },
-              { id: "company" as const, label: t("cust.type_company"), count: companyCount },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setTypeFilter(tab.id)}
-              className={`rounded-2xl px-4 py-2 text-sm font-black transition ${
-                typeFilter === tab.id
-                  ? "bg-teal-600 text-white shadow-lg shadow-teal-700/20"
-                  : "border border-slate-200 bg-white text-slate-700 hover:border-teal-200"
-              }`}
-            >
-              {tab.label}
-              <span className="ml-2 opacity-80">({tab.count})</span>
-            </button>
-          ))}
-        </div>
-
-        <section className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <ProCard eyebrow={editing ? t("cust.edit_create_eyebrow_edit") : t("cust.edit_create_eyebrow_create")} title={editing ? t("cust.edit") : t("cust.add")}>
-            <form onSubmit={handleSave}>
-              <div className="mb-3 flex flex-wrap gap-2">
-                {(["individual", "company"] as const).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setContactType(type)}
-                    className={`rounded-2xl px-4 py-2 text-sm font-black transition ${
-                      contactType === type
-                        ? "bg-teal-600 text-white shadow-lg shadow-teal-700/20"
-                        : "border border-slate-200 bg-white text-slate-700 hover:border-teal-200"
-                    }`}
-                  >
-                    {t(type === "company" ? "cust.type_company" : "cust.type_individual")}
-                  </button>
-                ))}
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <input
-                  required
-                  placeholder={
-                    contactType === "company"
-                      ? `${t("cust.company_name")} *`
-                      : `${t("common.name")} *`
-                  }
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 sm:col-span-2"
-                />
-                {contactType === "company" && (
-                  <>
-                    <input
-                      placeholder={t("cust.contact_person")}
-                      value={contactPerson}
-                      onChange={(e) => setContactPerson(e.target.value)}
-                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
-                    />
-                    <input
-                      placeholder={t("cust.vat_number")}
-                      value={vatNumber}
-                      onChange={(e) => setVatNumber(e.target.value)}
-                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
-                    />
-                  </>
-                )}
-                <input
-                  placeholder={t("common.phone")}
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
-                />
-                <input
-                  placeholder={t("common.address")}
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 sm:col-span-2"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  step="any"
-                  placeholder={t("cust.credit_limit")}
-                  value={creditLimit}
-                  onChange={(e) => setCreditLimit(e.target.value === "" ? "" : Number(e.target.value))}
-                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 sm:col-span-2"
-                />
-              </div>
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <button type="submit" disabled={!canWrite || saving} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
-                  {saving ? t("common.saving") : editing ? t("common.update") : t("cust.add")}
-                </button>
-                {editing && (
-                  <button type="button" onClick={resetForm} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
-                    {t("common.cancel")}
-                  </button>
-                )}
-              </div>
-            </form>
-          </ProCard>
-
-          <ProCard title={t("cust.find_customers")} eyebrow={t("cust.search_crm_eyebrow")} action={<ProBadge tone={customers.length === typeFiltered.length ? "slate" : "teal"}>{customers.length} {t("cust.shown")}</ProBadge>}>
-            <div className="relative">
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t("cust.search_placeholder")}
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pl-11 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
-              />
-              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
+        {/* Create / edit drawer — always opens immediately, no scrolling to find it. */}
+        <Drawer
+          open={formOpen}
+          onClose={() => setFormOpen(false)}
+          title={editing ? t("cust.edit") : t("cust.add")}
+          description={editing ? undefined : t("cust.crm_eyebrow")}
+          footer={
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setFormOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                {t("common.cancel")}
+              </button>
+              <button
+                type="submit"
+                form="customer-form"
+                disabled={!canWrite || saving}
+                className="flex-1 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? t("common.saving") : editing ? t("common.update") : t("cust.add")}
+              </button>
             </div>
-            <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50/70 p-4 text-sm font-semibold text-amber-900">
-              {t("cust.credit_hint")}
-            </div>
-          </ProCard>
-        </section>
-
-        <section className="mt-6">
-          {data.customers.length === 0 ? (
-            <ProCard>
-              <ProEmptyState title={t("cust.no_customers")} description={t("cust.credit_hint")} />
-            </ProCard>
-          ) : customers.length === 0 ? (
-            <ProCard>
-              <ProEmptyState title={t("sales.no_match")} description={t("cust.search_no_match_desc")} />
-            </ProCard>
-          ) : (
-            <ProCard title={t("cust.customer_list")} action={<ProBadge tone="teal">{customers.length} {t("cust.customers_count")}</ProBadge>}>
-              <div className="hidden overflow-hidden rounded-2xl border border-slate-200 lg:block">
-                <table className="w-full text-left text-sm">
-                  <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3">{t("common.name")}</th>
-                      <th className="px-4 py-3">{t("common.phone")}</th>
-                      <th className="px-4 py-3">{t("cust.credit_owed")}</th>
-                      <th className="px-4 py-3">{t("common.actions")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {customers.map((c) => (
-                      <CustomerRow
-                        key={c.id}
-                        customer={c}
-                        business={data.business}
-                        onPay={() => {
-                          setPayCustomerId(c.id);
-                          setPayAmount(c.creditBalance);
-                        }}
-                        onLedger={() => setLedgerCustomer(c)}
-                        onWholesale={() => {
-                          setPricingCustomer(c);
-                          setPriceSearch("");
-                        }}
-                        wholesaleCount={wholesalePriceCount(data.customerProductPrices, c.id)}
-                        onEdit={() => startEdit(c)}
-                        onDelete={() => void handleDelete(c)}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="grid gap-3 lg:hidden">
-                {customers.map((c) => (
-                  <CustomerCard
-                    key={c.id}
-                    customer={c}
-                    business={data.business}
-                    onPay={() => {
-                      setPayCustomerId(c.id);
-                      setPayAmount(c.creditBalance);
-                    }}
-                    onLedger={() => setLedgerCustomer(c)}
-                    onWholesale={() => {
-                      setPricingCustomer(c);
-                      setPriceSearch("");
-                    }}
-                    wholesaleCount={wholesalePriceCount(data.customerProductPrices, c.id)}
-                    onEdit={() => startEdit(c)}
-                    onDelete={() => void handleDelete(c)}
-                  />
-                ))}
-              </div>
-            </ProCard>
-          )}
-        </section>
-
-        {data.customerPayments.length > 0 && (
-          <section className="mt-6">
-            <ProCard title={t("cust.recent_payments")} action={<ProBadge tone="slate">Latest 8</ProBadge>}>
-              <div className="grid gap-3 md:grid-cols-2">
-                {data.customerPayments.slice(0, 8).map((p) => (
-                  <div key={p.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-black text-slate-950">{p.customerName}</p>
-                        <p className="mt-1 text-xs font-semibold text-slate-500">{paymentLabel(t, p.method)}</p>
-                      </div>
-                      <p className="font-mono text-sm font-black text-teal-700">{formatLkr(p.amount)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </ProCard>
-          </section>
-        )}
-
-        {payCustomerId && payCustomer && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">{t("cust.record_payment")}</p>
-                  <h3 className="mt-2 text-xl font-black text-slate-950">{payCustomer.name}</h3>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">{t("cust.credit_owed")}: {formatLkr(payCustomer.creditBalance)}</p>
-                </div>
-                <button onClick={() => setPayCustomerId(null)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
-              </div>
-
-              <label className="mt-5 block text-sm font-black text-slate-700">
-                {t("bills.amount")}
-                <input
-                  type="number"
-                  min={1}
-                  value={payAmount || ""}
-                  onChange={(e) => setPayAmount(Number(e.target.value))}
-                  className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
-                />
-              </label>
-              <label className="mt-4 block text-sm font-black text-slate-700">
-                {t("common.payment")}
-                <select
-                  value={payMethod}
-                  onChange={(e) => setPayMethod(e.target.value as PaymentMethod)}
-                  className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
-                >
-                  {PAYMENT_OPTIONS.filter((m) => m !== "credit").map((m) => (
-                    <option key={m} value={m}>{paymentLabel(t, m)}</option>
-                  ))}
-                </select>
-              </label>
-              <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+          }
+        >
+          <form id="customer-form" onSubmit={handleSave} className="space-y-4">
+            <div className="flex gap-2">
+              {(["individual", "company"] as const).map((type) => (
                 <button
-                  onClick={() => void (async () => {
-                    if (savingPayment || payAmount <= 0) return;
+                  key={type}
+                  type="button"
+                  onClick={() => setContactType(type)}
+                  className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                    contactType === type ? "bg-teal-600 text-white" : "border border-slate-300 bg-white text-slate-600 hover:border-teal-300"
+                  }`}
+                >
+                  {t(type === "company" ? "cust.type_company" : "cust.type_individual")}
+                </button>
+              ))}
+            </div>
+
+            <FormField label={contactType === "company" ? t("cust.company_name") : t("common.name")} required>
+              <TextInput required value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+            </FormField>
+
+            {contactType === "company" && (
+              <>
+                <FormField label={t("cust.contact_person")}>
+                  <TextInput value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} />
+                </FormField>
+                <FormField label={t("cust.vat_number")}>
+                  <TextInput value={vatNumber} onChange={(e) => setVatNumber(e.target.value)} />
+                </FormField>
+              </>
+            )}
+
+            <FormField label={t("common.phone")}>
+              <TextInput type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </FormField>
+            <FormField label={t("common.address")}>
+              <TextInput value={address} onChange={(e) => setAddress(e.target.value)} />
+            </FormField>
+            <FormField label={t("cust.credit_limit")} hint={t("cust.credit_hint")}>
+              <MoneyInput value={creditLimit} onChange={setCreditLimit} />
+            </FormField>
+          </form>
+        </Drawer>
+
+        {/* Customer profile drawer */}
+        {profileCustomer && (
+          <CustomerProfileDrawer
+            customer={data.customers.find((c) => c.id === profileCustomer.id) ?? profileCustomer}
+            sales={data.sales.filter((s) => s.customerId === profileCustomer.id)}
+            payments={data.customerPayments.filter((p) => p.customerId === profileCustomer.id)}
+            messages={notificationLogs.filter((l) => l.contextId === profileCustomer.id)}
+            tab={profileTab}
+            onTabChange={setProfileTab}
+            onClose={() => setProfileCustomer(null)}
+            onEdit={() => {
+              startEdit(profileCustomer);
+            }}
+            onRecordPayment={() => {
+              setPayCustomerId(profileCustomer.id);
+              setPayAmount(String(profileCustomer.creditBalance));
+            }}
+          />
+        )}
+
+        {/* Record payment */}
+        <Dialog
+          open={!!payCustomerId && !!payCustomer}
+          onClose={() => setPayCustomerId(null)}
+          title={t("cust.record_payment")}
+          description={payCustomer ? `${payCustomer.name} · ${t("cust.credit_owed")} ${formatLkr(payCustomer.creditBalance)}` : undefined}
+          footer={
+            <>
+              <button type="button" onClick={() => setPayCustomerId(null)} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                {t("common.cancel")}
+              </button>
+              <button
+                type="button"
+                disabled={savingPayment || payAmountNumber <= 0}
+                onClick={() =>
+                  void (async () => {
+                    if (!payCustomerId || savingPayment || payAmountNumber <= 0) return;
                     setSavingPayment(true);
-                    setMessage("");
-                    const result = await recordCustomerPaymentToCloud(
-                      payCustomerId,
-                      payAmount,
-                      payMethod,
-                    );
+                    const result = await recordCustomerPaymentToCloud(payCustomerId, payAmountNumber, payMethod);
                     setSavingPayment(false);
                     if (!result.ok) {
-                      setMessage(result.error ?? t("common.save_failed"));
-                      setTimeout(() => setMessage(""), 4000);
+                      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
                       return;
                     }
                     setPayCustomerId(null);
-                    setMessage(t("cust.payment_saved"));
-                    setTimeout(() => setMessage(""), 2500);
-                  })()}
-                  disabled={savingPayment || payAmount <= 0}
-                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {savingPayment ? t("common.saving") : t("common.save")}
-                </button>
-                <button onClick={() => setPayCustomerId(null)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
-                  {t("common.cancel")}
-                </button>
-              </div>
-            </div>
+                    toast({ tone: "success", title: t("cust.payment_saved") });
+                  })()
+                }
+                className="rounded-lg bg-teal-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+              >
+                {savingPayment ? t("common.saving") : t("common.save")}
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <FormField label={t("bills.amount")} required>
+              <MoneyInput value={payAmount} onChange={setPayAmount} />
+            </FormField>
+            <FormField label={t("common.payment")}>
+              <SelectInput
+                value={payMethod}
+                onChange={(v) => setPayMethod(v as PaymentMethod)}
+                options={PAYMENT_OPTIONS.filter((m) => m !== "credit").map((m) => ({ value: m, label: paymentLabel(t, m) }))}
+              />
+            </FormField>
           </div>
-        )}
+        </Dialog>
 
-        {ledgerCustomer && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">{t("cust.ledger")}</p>
-                  <h3 className="mt-2 text-xl font-black text-slate-950">{ledgerCustomer.name}</h3>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">{t("cust.credit_owed")}: {formatLkr(ledgerCustomer.creditBalance)}</p>
-                </div>
-                <button onClick={() => setLedgerCustomer(null)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
-              </div>
+        <ConfirmDialog
+          open={!!deleteTarget}
+          title={t("cust.delete_confirm")}
+          description={deleteTarget?.name}
+          tone="danger"
+          confirmLabel={t("common.delete")}
+          cancelLabel={t("common.cancel")}
+          loading={!!deletingId}
+          onConfirm={() => void confirmDelete()}
+          onClose={() => setDeleteTarget(null)}
+        />
 
-              <div className="mt-5 flex-1 overflow-y-auto rounded-2xl border border-slate-200">
-                {ledgerEntries.length === 0 ? (
-                  <div className="p-6">
-                    <ProEmptyState title={t("cust.ledger_empty")} />
-                  </div>
-                ) : (
-                  <table className="w-full text-left text-sm">
-                    <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3">{t("common.date")}</th>
-                        <th className="px-4 py-3">{t("common.details")}</th>
-                        <th className="px-4 py-3 text-right">{t("bills.amount")}</th>
-                        <th className="px-4 py-3 text-right">{t("cust.balance")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ledgerEntries.map((e, i) => (
-                        <tr key={i} className="border-b last:border-0">
-                          <td className="px-4 py-3 font-semibold text-slate-500">{new Date(e.date).toLocaleDateString("en-LK")}</td>
-                          <td className="px-4 py-3 font-semibold text-slate-700">{e.label}</td>
-                          <td className={`px-4 py-3 text-right font-mono font-black ${e.amount < 0 ? "text-emerald-700" : "text-slate-800"}`}>
-                            {e.amount < 0 ? "−" : "+"}{formatLkr(Math.abs(e.amount))}
-                          </td>
-                          <td className="px-4 py-3 text-right font-mono font-black text-slate-950">{formatLkr(e.balance)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {pricingCustomer && data && (
+        {pricingCustomer && (
           <WholesalePricingModal
             customer={pricingCustomer}
             products={data.products}
-            prices={data.customerProductPrices.filter(
-              (p) => p.customerId === pricingCustomer.id,
-            )}
+            prices={data.customerProductPrices.filter((p) => p.customerId === pricingCustomer.id)}
             search={priceSearch}
             onSearchChange={setPriceSearch}
             canWrite={canWrite}
@@ -612,44 +561,221 @@ export default function CustomersPage() {
             savingProductId={savingPriceProductId}
             onSave={async (productId, price) => {
               setSavingPriceProductId(productId);
-              setMessage("");
-              const result = await setCustomerProductPriceToCloud(
-                pricingCustomer.id,
-                productId,
-                price,
-              );
+              const result = await setCustomerProductPriceToCloud(pricingCustomer.id, productId, price);
               setSavingPriceProductId(null);
               if (!result.ok) {
-                setMessage(result.error ?? t("common.save_failed"));
-                setTimeout(() => setMessage(""), 4000);
+                toast({ tone: "error", title: t("common.save_failed"), description: result.error });
                 return;
               }
-              setMessage(t("cust.wholesale_saved"));
-              setTimeout(() => setMessage(""), 2500);
+              toast({ tone: "success", title: t("cust.wholesale_saved") });
             }}
             onClear={async (productId) => {
               setSavingPriceProductId(productId);
-              setMessage("");
-              const result = await removeCustomerProductPriceToCloud(
-                pricingCustomer.id,
-                productId,
-              );
+              const result = await removeCustomerProductPriceToCloud(pricingCustomer.id, productId);
               setSavingPriceProductId(null);
               if (!result.ok) {
-                setMessage(result.error ?? t("common.save_failed"));
-                setTimeout(() => setMessage(""), 4000);
+                toast({ tone: "error", title: t("common.save_failed"), description: result.error });
               }
             }}
           />
         )}
-        <BulkWhatsAppComposer
-          open={bulkWaOpen}
-          onClose={() => setBulkWaOpen(false)}
-          recipients={bulkRecipients}
-          business={data.business}
-        />
       </ProMain>
     </AppShell>
+  );
+}
+
+
+function CustomerProfileDrawer({
+  customer,
+  sales,
+  payments,
+  messages,
+  tab,
+  onTabChange,
+  onClose,
+  onEdit,
+  onRecordPayment,
+}: {
+  customer: Customer;
+  sales: NonNullable<ReturnType<typeof useAppStore>["data"]>["sales"];
+  payments: NonNullable<ReturnType<typeof useAppStore>["data"]>["customerPayments"];
+  messages: ReturnType<typeof useNotificationLogs>;
+  tab: ProfileTab;
+  onTabChange: (tab: ProfileTab) => void;
+  onClose: () => void;
+  onEdit: () => void;
+  onRecordPayment: () => void;
+}) {
+  const { t } = useLocale();
+  const overLimit = customer.creditLimit != null && customer.creditBalance > customer.creditLimit;
+
+  const ledgerEntries = buildLedger(
+    sales
+      .filter((s) => s.creditAmount > 0)
+      .map((s) => ({ date: s.date, label: `${t("sales.bill")} ${s.billNo ?? s.id.slice(0, 8)}`, amount: s.creditAmount })),
+    payments.map((p) => ({ date: p.date, label: `${t("cust.record_payment")} (${paymentLabel(t, p.method)})`, amount: -p.amount })),
+  );
+
+  return (
+    <Drawer open onClose={onClose} title={customer.name} description={customer.contactType === "company" ? customer.contactPerson : customer.phone} widthClassName="max-w-lg">
+      <div className="mb-4 flex items-center gap-2">
+        <ContactTypeBadge type={customer.contactType} />
+        {customer.creditBalance > 0 && (
+          <StatusBadge tone={overLimit ? "danger" : "warning"}>
+            {formatLkr(customer.creditBalance)} {t("cust.credit_owed")}
+          </StatusBadge>
+        )}
+      </div>
+
+      <div className="mb-4 flex gap-2">
+        <button type="button" onClick={onEdit} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          {t("common.edit")}
+        </button>
+        {customer.creditBalance > 0 && (
+          <button type="button" onClick={onRecordPayment} className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700">
+            {t("cust.record_payment")}
+          </button>
+        )}
+      </div>
+
+      <Tabs
+        value={tab}
+        onChange={(v) => onTabChange(v as ProfileTab)}
+        tabs={[
+          { value: "overview", label: t("cust.tab_overview") },
+          { value: "invoices", label: `${t("nav.bills")} (${sales.length})` },
+          { value: "payments", label: `${t("cust.recent_payments")} (${payments.length})` },
+          { value: "ledger", label: t("cust.ledger") },
+          { value: "messages", label: `${t("cust.tab_messages")} (${messages.length})` },
+        ]}
+      />
+
+      <div className="mt-4">
+        {tab === "overview" && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-slate-200 p-3">
+                <p className="text-xs font-medium uppercase text-slate-500">{t("cust.credit_owed")}</p>
+                <p className="mt-1 font-mono text-lg font-bold text-slate-900">{formatLkr(customer.creditBalance)}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-3">
+                <p className="text-xs font-medium uppercase text-slate-500">{t("cust.limit")}</p>
+                <p className="mt-1 font-mono text-lg font-bold text-slate-900">{customer.creditLimit != null ? formatLkr(customer.creditLimit) : "—"}</p>
+              </div>
+            </div>
+            <dl className="space-y-2 text-sm">
+              {customer.phone && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">{t("common.phone")}</dt>
+                  <dd className="text-slate-900">{customer.phone}</dd>
+                </div>
+              )}
+              {customer.address && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">{t("common.address")}</dt>
+                  <dd className="text-right text-slate-900">{customer.address}</dd>
+                </div>
+              )}
+              {customer.vatNumber && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">{t("cust.vat_number")}</dt>
+                  <dd className="text-slate-900">{customer.vatNumber}</dd>
+                </div>
+              )}
+              <div className="flex justify-between gap-4">
+                <dt className="text-slate-500">{t("cust.total_sales")}</dt>
+                <dd className="text-slate-900">{sales.length}</dd>
+              </div>
+              {sales.length > 0 && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">{t("cust.last_activity")}</dt>
+                  <dd className="text-slate-900">{new Date(sales[0].date).toLocaleDateString("en-LK")}</dd>
+                </div>
+              )}
+            </dl>
+          </div>
+        )}
+
+        {tab === "invoices" &&
+          (sales.length === 0 ? (
+            <EmptyState title={t("cust.no_invoices")} />
+          ) : (
+            <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+              {sales.map((s) => (
+                <li key={s.id}>
+                  <Link href={`/bills/${s.id}`} className="flex items-center justify-between gap-3 px-3.5 py-2.5 hover:bg-slate-50">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{s.billNo ?? s.id.slice(0, 8)}</p>
+                      <p className="text-xs text-slate-500">{new Date(s.date).toLocaleDateString("en-LK")} · {paymentLabel(t, s.paymentMethod)}</p>
+                    </div>
+                    <p className="font-mono text-sm font-semibold text-slate-900">{formatLkr(s.total)}</p>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ))}
+
+        {tab === "payments" &&
+          (payments.length === 0 ? (
+            <EmptyState title={t("cust.no_payments")} />
+          ) : (
+            <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+              {payments.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{paymentLabel(t, p.method)}</p>
+                    <p className="text-xs text-slate-500">{new Date(p.date).toLocaleDateString("en-LK")}</p>
+                  </div>
+                  <p className="font-mono text-sm font-semibold text-emerald-700">{formatLkr(p.amount)}</p>
+                </li>
+              ))}
+            </ul>
+          ))}
+
+        {tab === "ledger" &&
+          (ledgerEntries.length === 0 ? (
+            <EmptyState title={t("cust.ledger_empty")} />
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-slate-200">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2">{t("common.date")}</th>
+                    <th className="px-3 py-2">{t("common.details")}</th>
+                    <th className="px-3 py-2 text-right">{t("cust.balance")}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {ledgerEntries.map((entry, i) => (
+                    <tr key={i}>
+                      <td className="px-3 py-2 text-slate-500">{new Date(entry.date).toLocaleDateString("en-LK")}</td>
+                      <td className="px-3 py-2 text-slate-700">{entry.label}</td>
+                      <td className="px-3 py-2 text-right font-mono font-semibold text-slate-900">{formatLkr(entry.balance)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+
+        {tab === "messages" &&
+          (messages.length === 0 ? (
+            <EmptyState title={t("cust.no_messages")} />
+          ) : (
+            <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+              {messages.map((m) => (
+                <li key={m.id} className="px-3.5 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium uppercase text-slate-500">{m.templateId}</p>
+                    <p className="text-xs text-slate-400">{new Date(m.sentAt).toLocaleString("en-LK")}</p>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-sm text-slate-700">{m.messageBody}</p>
+                </li>
+              ))}
+            </ul>
+          ))}
+      </div>
+    </Drawer>
   );
 }
 
@@ -680,76 +806,44 @@ function WholesalePricingModal({
   const query = search.trim().toLowerCase();
   const filtered = query
     ? products.filter(
-        (p) =>
-          p.name.toLowerCase().includes(query) ||
-          (p.sku ?? "").toLowerCase().includes(query) ||
-          p.category.toLowerCase().includes(query),
+        (p) => p.name.toLowerCase().includes(query) || (p.sku ?? "").toLowerCase().includes(query) || p.category.toLowerCase().includes(query),
       )
     : products;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-600">
-              {t("cust.wholesale_prices")}
-            </p>
-            <h3 className="mt-2 text-xl font-black text-slate-950">{customer.name}</h3>
-            <p className="mt-1 text-sm font-semibold text-slate-500">{t("cust.wholesale_hint")}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
-          >
-            ✕
-          </button>
-        </div>
-
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder={t("stock.search_placeholder")}
-          className="mt-5 h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
-        />
-
-        <div className="mt-4 flex-1 overflow-y-auto rounded-2xl border border-slate-200">
-          {filtered.length === 0 ? (
-            <div className="p-6">
-              <ProEmptyState title={t("sales.no_match")} />
-            </div>
-          ) : (
-            <table className="w-full text-left text-sm">
-              <thead className="sticky top-0 border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">{t("common.name")}</th>
-                  <th className="px-4 py-3 text-right">{t("sales.retail_price")}</th>
-                  <th className="px-4 py-3 text-right">{t("cust.wholesale_price")}</th>
-                  <th className="px-4 py-3 text-right">{t("common.actions")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((product) => {
-                  const saved = prices.find((p) => p.productId === product.id);
-                  return (
-                    <WholesalePriceRow
-                      key={`${product.id}-${saved?.price ?? "retail"}`}
-                      product={product}
-                      savedPrice={saved?.price}
-                      canWrite={canWrite}
-                      saving={savingProductId === product.id}
-                      onSave={onSave}
-                      onClear={onClear}
-                    />
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-    </div>
+    <Drawer open onClose={onClose} title={t("cust.wholesale_prices")} description={`${customer.name} · ${t("cust.wholesale_hint")}`} widthClassName="max-w-xl">
+      <SearchInput value={search} onChange={onSearchChange} placeholder={t("stock.search_placeholder")} className="mb-4" />
+      {filtered.length === 0 ? (
+        <EmptyState title={t("sales.no_match")} />
+      ) : (
+        <table className="w-full text-left text-sm">
+          <thead className="sticky top-0 border-b border-slate-200 bg-white text-xs font-semibold uppercase text-slate-500">
+            <tr>
+              <th className="py-2">{t("common.name")}</th>
+              <th className="py-2 text-right">{t("sales.retail_price")}</th>
+              <th className="py-2 text-right">{t("cust.wholesale_price")}</th>
+              <th className="py-2 text-right">{t("common.actions")}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {filtered.map((product) => {
+              const saved = prices.find((p) => p.productId === product.id);
+              return (
+                <WholesalePriceRow
+                  key={`${product.id}-${saved?.price ?? "retail"}`}
+                  product={product}
+                  savedPrice={saved?.price}
+                  canWrite={canWrite}
+                  saving={savingProductId === product.id}
+                  onSave={onSave}
+                  onClear={onClear}
+                />
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </Drawer>
   );
 }
 
@@ -772,15 +866,13 @@ function WholesalePriceRow({
   const [draft, setDraft] = useState(savedPrice ?? product.sellPrice);
 
   return (
-    <tr className="border-b last:border-0">
-      <td className="px-4 py-3">
-        <p className="font-black text-slate-950">{product.name}</p>
-        <p className="text-xs font-semibold text-slate-400">{product.category}</p>
+    <tr>
+      <td className="py-2.5">
+        <p className="font-medium text-slate-900">{product.name}</p>
+        <p className="text-xs text-slate-400">{product.category}</p>
       </td>
-      <td className="px-4 py-3 text-right font-mono font-semibold text-slate-500">
-        {formatLkr(product.sellPrice)}
-      </td>
-      <td className="px-4 py-3 text-right">
+      <td className="py-2.5 text-right font-mono text-slate-500">{formatLkr(product.sellPrice)}</td>
+      <td className="py-2.5 text-right">
         <input
           type="number"
           min={0}
@@ -788,16 +880,16 @@ function WholesalePriceRow({
           disabled={!canWrite}
           value={draft}
           onChange={(e) => setDraft(Number(e.target.value))}
-          className="w-28 rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-right text-xs font-black text-slate-900 outline-none focus:border-teal-300 disabled:opacity-50"
+          className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-right text-xs font-semibold text-slate-900 outline-none focus:border-teal-500 disabled:opacity-50"
         />
       </td>
-      <td className="px-4 py-3 text-right">
-        <div className="flex justify-end gap-2">
+      <td className="py-2.5 text-right">
+        <div className="flex justify-end gap-1.5">
           <button
             type="button"
             disabled={!canWrite || saving}
             onClick={() => void onSave(product.id, draft)}
-            className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700 hover:bg-teal-100 disabled:opacity-50"
+            className="rounded-md bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700 hover:bg-teal-100 disabled:opacity-50"
           >
             {saving ? t("common.saving") : t("common.save")}
           </button>
@@ -805,10 +897,8 @@ function WholesalePriceRow({
             <button
               type="button"
               disabled={!canWrite || saving}
-              onClick={() => {
-                void onClear(product.id).then(() => setDraft(product.sellPrice));
-              }}
-              className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+              onClick={() => void onClear(product.id).then(() => setDraft(product.sellPrice))}
+              className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-200 disabled:opacity-50"
             >
               {t("cust.wholesale_clear")}
             </button>
@@ -816,205 +906,5 @@ function WholesalePriceRow({
         </div>
       </td>
     </tr>
-  );
-}
-
-function CustomerRow({
-  customer,
-  business,
-  onPay,
-  onLedger,
-  onWholesale,
-  wholesaleCount,
-  onEdit,
-  onDelete,
-}: {
-  customer: Customer;
-  business: NonNullable<ReturnType<typeof useAppStore>["data"]>["business"];
-  onPay: () => void;
-  onLedger: () => void;
-  onWholesale: () => void;
-  wholesaleCount: number;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const { t } = useLocale();
-  const overLimit = customer.creditLimit != null && customer.creditBalance > customer.creditLimit;
-
-  return (
-    <tr className="border-b last:border-0">
-      <td className="px-4 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="font-black text-slate-950">{customer.name}</p>
-          <ContactTypeBadge type={customer.contactType} />
-        </div>
-        {customer.contactType === "company" && customer.contactPerson && (
-          <p className="text-xs font-semibold text-slate-500">{customer.contactPerson}</p>
-        )}
-        {customer.vatNumber && (
-          <p className="text-xs font-semibold text-slate-400">{t("cust.vat_number")}: {customer.vatNumber}</p>
-        )}
-        {customer.address && <p className="text-xs font-semibold text-slate-400">{customer.address}</p>}
-      </td>
-      <td className="px-4 py-3 font-semibold text-slate-600">{customer.phone || "—"}</td>
-      <td className="px-4 py-3">
-        <p className={customer.creditBalance > 0 ? "font-mono font-black text-amber-700" : "font-mono font-black text-slate-500"}>{formatLkr(customer.creditBalance)}</p>
-        {customer.creditLimit != null && (
-          <p className={overLimit ? "mt-1 text-xs font-black text-rose-600" : "mt-1 text-xs font-semibold text-slate-400"}>
-            {t("cust.limit")}: {formatLkr(customer.creditLimit)}{overLimit && ` · ${t("cust.over_limit")}`}
-          </p>
-        )}
-      </td>
-      <td className="px-4 py-3">
-        <CustomerActions
-          customer={customer}
-          business={business}
-          wholesaleCount={wholesaleCount}
-          onPay={onPay}
-          onLedger={onLedger}
-          onWholesale={onWholesale}
-          onEdit={onEdit}
-          onDelete={onDelete}
-        />
-      </td>
-    </tr>
-  );
-}
-
-function CustomerCard({
-  customer,
-  business,
-  onPay,
-  onLedger,
-  onWholesale,
-  wholesaleCount,
-  onEdit,
-  onDelete,
-}: {
-  customer: Customer;
-  business: NonNullable<ReturnType<typeof useAppStore>["data"]>["business"];
-  onPay: () => void;
-  onLedger: () => void;
-  onWholesale: () => void;
-  wholesaleCount: number;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const { t } = useLocale();
-  const overLimit = customer.creditLimit != null && customer.creditBalance > customer.creditLimit;
-
-  return (
-    <article className={`rounded-[1.5rem] border bg-slate-50 p-4 ring-1 ${overLimit ? "border-rose-200 ring-rose-100" : "border-slate-200 ring-slate-100"}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="truncate text-base font-black text-slate-950">{customer.name}</h2>
-            <ContactTypeBadge type={customer.contactType} />
-          </div>
-          {customer.contactType === "company" && customer.contactPerson && (
-            <p className="mt-1 text-xs font-semibold text-slate-500">{customer.contactPerson}</p>
-          )}
-          <p className="mt-1 text-xs font-semibold text-slate-500">{customer.phone || t("common.phone")}</p>
-          {customer.vatNumber && (
-            <p className="mt-1 text-xs font-semibold text-slate-400">{t("cust.vat_number")}: {customer.vatNumber}</p>
-          )}
-          {customer.address && <p className="mt-1 text-xs font-semibold text-slate-400">{customer.address}</p>}
-        </div>
-        {overLimit ? <ProBadge tone="rose">{t("cust.over_limit")}</ProBadge> : customer.creditBalance > 0 ? <ProBadge tone="amber">Credit</ProBadge> : <ProBadge tone="emerald">Clear</ProBadge>}
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-white p-3">
-        <div>
-          <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t("cust.credit_owed")}</p>
-          <p className="mt-1 font-mono text-sm font-black text-amber-700">{formatLkr(customer.creditBalance)}</p>
-        </div>
-        <div>
-          <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t("cust.limit")}</p>
-          <p className="mt-1 font-mono text-sm font-black text-slate-900">{customer.creditLimit != null ? formatLkr(customer.creditLimit) : "—"}</p>
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <CustomerActions
-          customer={customer}
-          business={business}
-          wholesaleCount={wholesaleCount}
-          onPay={onPay}
-          onLedger={onLedger}
-          onWholesale={onWholesale}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          mobile
-        />
-      </div>
-    </article>
-  );
-}
-
-function CustomerActions({
-  customer,
-  business,
-  wholesaleCount,
-  onPay,
-  onLedger,
-  onWholesale,
-  onEdit,
-  onDelete,
-  mobile = false,
-}: {
-  customer: Customer;
-  business: NonNullable<ReturnType<typeof useAppStore>["data"]>["business"];
-  wholesaleCount: number;
-  onPay: () => void;
-  onLedger: () => void;
-  onWholesale: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  mobile?: boolean;
-}) {
-  const { t } = useLocale();
-  const buttonClass = mobile
-    ? "rounded-2xl px-3 py-3 text-xs font-black"
-    : "rounded-full px-3 py-1.5 text-xs font-black";
-
-  return (
-    <div className={mobile ? "grid grid-cols-2 gap-2" : "flex flex-wrap gap-2"}>
-      {customer.phone && (
-        <MessageSendButton
-          phone={customer.phone}
-          recipientName={customer.name}
-          context={{
-            type: "customer",
-            customerName: customer.name,
-            creditBalance: customer.creditBalance,
-            business,
-          }}
-          contextId={customer.id}
-        />
-      )}
-      {customer.contactType === "company" && (
-        <button
-          onClick={onWholesale}
-          className={`${buttonClass} bg-indigo-50 text-indigo-700 hover:bg-indigo-100`}
-        >
-          {t("cust.wholesale_prices")}
-          {wholesaleCount > 0 ? ` (${wholesaleCount})` : ""}
-        </button>
-      )}
-      {customer.creditBalance > 0 && (
-        <button onClick={onPay} className={`${buttonClass} bg-teal-50 text-teal-700 hover:bg-teal-100`}>
-          {t("cust.record_payment")}
-        </button>
-      )}
-      <button onClick={onLedger} className={`${buttonClass} bg-slate-100 text-slate-700 hover:bg-slate-200`}>
-        {t("cust.ledger")}
-      </button>
-      <button onClick={onEdit} className={`${buttonClass} bg-sky-50 text-sky-700 hover:bg-sky-100`}>
-        {t("common.edit")}
-      </button>
-      <button onClick={onDelete} className={`${buttonClass} bg-rose-50 text-rose-700 hover:bg-rose-100`}>
-        {t("common.delete")}
-      </button>
-    </div>
   );
 }
