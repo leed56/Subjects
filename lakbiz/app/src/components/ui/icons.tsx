@@ -229,3 +229,12 @@ export const CalendarIcon = (p: IconProps) =>
 export const FilterIcon = (p: IconProps) =>
   base(<path d="M4 5h16M7 12h10M10.5 19h3" />, p);
 export const PlusIcon = (p: IconProps) => base(<path d="M12 5v14M5 12h14" />, p);
+export const AssetIcon = (p: IconProps) =>
+  base(
+    <>
+      <rect x="3" y="5" width="18" height="9" rx="2" />
+      <path d="M7 14v3M17 14v3M5 20h14" />
+      <path d="M7.5 9.5h2M12 9.5h2" />
+    </>,
+    p,
+  );

@@ -19,6 +19,7 @@ const GUARDED_SHOP_PREFIXES = [
   "/bills",
   "/customers",
   "/banking",
+  "/assets",
 ];
 
 function isGuardedShopPath(pathname: string): boolean {

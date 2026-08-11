@@ -97,5 +97,6 @@ export const ROUTE_FEATURES: Record<string, FeatureKey> = {
   "/banking": "banking",
   "/jobs": "ac_jobs",
   "/workforce": "ac_jobs",
+  "/assets": "ac_jobs",
   "/vehicles": "vehicles",
 };

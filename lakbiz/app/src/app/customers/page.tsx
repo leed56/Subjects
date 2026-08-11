@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BulkWhatsAppComposer } from "@/components/messaging/bulk-whatsapp-composer";
 import { ExportActions } from "@/components/export/export-actions";
@@ -15,6 +15,7 @@ import { FormField, TextInput, MoneyInput, SelectInput } from "@/components/ui/f
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { CustomersIcon, PlusIcon } from "@/components/ui/icons";
+import { fetchCustomerAssets, type AcAsset } from "@/lib/supabase/ac-assets-client";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
@@ -32,7 +33,7 @@ import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 type ContactFilter = "all" | ContactType;
-type ProfileTab = "overview" | "invoices" | "payments" | "ledger" | "messages";
+type ProfileTab = "overview" | "invoices" | "payments" | "ledger" | "equipment" | "messages";
 
 export default function CustomersPage() {
   const {
@@ -609,6 +610,18 @@ function CustomerProfileDrawer({
   const { t } = useLocale();
   const overLimit = customer.creditLimit != null && customer.creditBalance > customer.creditLimit;
 
+  const [equipment, setEquipment] = useState<AcAsset[] | null>(null);
+  useEffect(() => {
+    if (tab !== "equipment") return;
+    let cancelled = false;
+    void fetchCustomerAssets(customer.id).then((result) => {
+      if (!cancelled) setEquipment(result.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [customer.id, tab]);
+
   const ledgerEntries = buildLedger(
     sales
       .filter((s) => s.creditAmount > 0)
@@ -646,6 +659,7 @@ function CustomerProfileDrawer({
           { value: "invoices", label: `${t("nav.bills")} (${sales.length})` },
           { value: "payments", label: `${t("cust.recent_payments")} (${payments.length})` },
           { value: "ledger", label: t("cust.ledger") },
+          { value: "equipment", label: t("assets.title") },
           { value: "messages", label: `${t("cust.tab_messages")} (${messages.length})` },
         ]}
       />
@@ -756,6 +770,28 @@ function CustomerProfileDrawer({
                 </tbody>
               </table>
             </div>
+          ))}
+
+        {tab === "equipment" &&
+          (equipment === null ? (
+            <ProLoadingState label={t("common.loading")} />
+          ) : equipment.length === 0 ? (
+            <EmptyState title={t("assets.no_assets")} description={t("assets.no_assets_hint")} />
+          ) : (
+            <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+              {equipment.map((a) => (
+                <li key={a.id} className="px-3.5 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-900">{[a.brand, a.model].filter(Boolean).join(" ") || t("assets.untitled")}</p>
+                    <StatusBadge tone={a.status === "active" ? "positive" : "neutral"}>{t(`assets.status_${a.status}`)}</StatusBadge>
+                  </div>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {a.serialNo ?? "—"}
+                    {a.nextServiceDate ? ` · ${t("assets.next_service")}: ${new Date(a.nextServiceDate).toLocaleDateString("en-LK")}` : ""}
+                  </p>
+                </li>
+              ))}
+            </ul>
           ))}
 
         {tab === "messages" &&
