@@ -475,8 +475,8 @@ that deserves a closer look on the preview, not just "the build passed."
 ### Phase 6 — Installation & maintenance crews
 Branch: `claude/lakbiz-phase6-crews`, stacked on `main` (Phases 0–5 and the
 security fix are all merged as of this phase). Status: implemented, DB
-layer empirically verified against production, build verified, not yet
-pushed/PR'd.
+layer empirically verified against production, build verified, pushed —
+draft PR #31, awaiting review.
 
 **Scope call, made explicitly because the original spec text for this
 phase was no longer available this session** (it was only ever pasted into
