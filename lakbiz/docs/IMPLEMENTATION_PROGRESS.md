@@ -697,7 +697,7 @@ been checked against real job data with real items attached.
 ### Phase 9 — AC job invoicing
 Branch: `claude/lakbiz-phase9-job-invoicing`, stacked on `claude/lakbiz-phase8-job-costing`
 (PR #33, not yet merged — same stacking convention as Phases 6–8). Status:
-implemented, build verified, not yet pushed/PR'd.
+implemented, build verified, pushed — draft PR #34, awaiting review.
 
 **Scope call, same reason as Phases 6–8:** no spec text for this phase
 either. Asked the repo owner directly, with context: Sales already has a
