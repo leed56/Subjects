@@ -638,12 +638,68 @@ week-grid layout (horizontal scroll on narrow viewports, via
 `overflow-x-auto`) and the reschedule drawer have not been visually
 verified.
 
+### Phase 8 — Job costing report
+Branch: `claude/lakbiz-phase8-job-costing`, stacked on `claude/lakbiz-phase7-schedule`
+(PR #32, not yet merged — same stacking convention as Phases 6/7). Status:
+implemented, build verified, not yet pushed/PR'd.
+
+**Scope call, same reason as Phases 6/7:** no spec text for this phase
+either. Asked the repo owner directly; confirmed: a job profitability
+report (quoted vs actual cost vs margin across jobs), not just a per-job
+breakdown bolted onto the existing Job Sheet.
+
+**No new data needed — this is a pure aggregation.** Every number the
+report shows already exists in the local-first store: `job.quotedAmount`
+(what the customer was quoted), `data.jobItems` filtered by `jobId` and
+summed by `lineTotal` (materials/labour/subcontracted-service line items
+already entered on the Job Sheet in Phase 5 — and already hidden from
+`data_entry` there via `canSeeFinancials`, i.e. this report surfaces
+numbers that were always cost data, just never aggregated), and
+`job.subcontractCost` for contractor-assigned jobs. `margin = quotedAmount
+− (itemsCost + subcontractCost)`. No migration, no new table, same
+"just read the local-first store" pattern Phase 7 used.
+
+Files changed:
+- `src/app/job-costing/page.tsx` (new) — metrics row (total quoted, total
+  cost, total margin, average margin %), search + status/type/sort
+  filters, a table of jobs with quoted/cost/margin per row (margin in red
+  when negative). **Access gated to owner/manager only**, both server-side
+  (route guard, same mechanism as every other gated page — deliberately
+  *not* added to `data_entry`'s or `technician`'s route lists, so the
+  existing owner/manager bypass in `canAccessShopRoute` is the only path
+  in, no special-casing needed) and client-side (an explicit
+  `EmptyState` fallback if the role check somehow fails, so cost/margin
+  numbers never flash on screen for a non-financial role even briefly).
+- **New `CostingIcon`** (bar chart, rising trend) in `src/components/ui/icons.tsx`
+  — distinct from `VatIcon`'s document shape.
+- **Route wiring**: `src/lib/supabase/middleware.ts`,
+  `src/components/shop-route-guard.tsx`, `src/lib/org-role/permissions.ts`
+  (documented as owner/manager-only in the role matrix at the top of the
+  file), `src/lib/subscription/can.ts` (`ac_jobs` feature gate),
+  `src/lib/nav-sections.ts` — placed in the **Finance** section (after
+  VAT), not Service, since it's a financial report like Banking/VAT, not
+  a job-operations surface like Jobs/Schedule/Assets/Teams.
+
+Tests performed:
+- `tsc --noEmit`: clean (one real error caught and fixed — `ACJobType` is
+  exported from `ac-job-types.ts`, not re-exported from `store/types.ts`
+  the way `ACJob` is; fixed the import path).
+- `eslint`: 0 errors, same 3 pre-existing warnings, none new.
+- `next build`: succeeds, 45 routes (was 44), `/job-costing` statically
+  prerenders.
+
+Remaining risks: same "no browser" caveat as every UI phase since 1 — the
+margin math itself was reasoned through carefully (traced exactly where
+`unitPrice`/`lineTotal` come from in the existing Job Sheet code to confirm
+they represent internal cost, not a customer-facing price) but has not
+been checked against real job data with real items attached.
+
 ## Not started
 
-Phases 8–18 (job costing, invoicing, dashboard rebuild, expenses,
-workforce/roles, messaging integration, reporting, mobile field UX,
-performance/a11y, final security audit, final QA). Plus deferred items:
-customer notes field, Receive Stock / Stock Adjustment as real features,
+Phases 9–18 (invoicing, dashboard rebuild, expenses, workforce/roles,
+messaging integration, reporting, mobile field UX, performance/a11y,
+final security audit, final QA). Plus deferred items: customer notes
+field, Receive Stock / Stock Adjustment as real features,
 `schema_migrations` RLS (single-membership migration `20250628000001`
 also still unapplied — needs a duplicate-membership check against
 production first), offline support for AC Assets and Crews, the full
@@ -651,16 +707,20 @@ field-service status/dispatch model (New/Assigned/On the way/Awaiting
 parts/Invoiced/Paid), before/after photos, customer signature, wiring
 `asset_id`/`crew_id` into the `/jobs` create/edit form (this is also what
 blocks true crew-column grouping on the Schedule board — see Phase 7),
-drag-and-drop rescheduling, and time-of-day scheduling (the data model is
-date-only right now).
+drag-and-drop rescheduling, time-of-day scheduling (the data model is
+date-only right now), and per-job-type costing benchmarks/targets (the
+Phase 8 report shows actuals only, no "expected margin for this job type"
+comparison).
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase7-schedule`, open a draft PR stacked on
-   `claude/lakbiz-phase6-crews` (PR #31 — merge that one first, or review
-   this one with that in mind).
-2. Visual/click-through pass on the Phase 7 preview — particularly the
-   week-grid responsive behavior and the reschedule drawer.
-3. Begin Phase 8 (Job costing) as its own branch/PR once Phase 7 is
+1. Push `claude/lakbiz-phase8-job-costing`, open a draft PR stacked on
+   `claude/lakbiz-phase7-schedule` (PR #32 — merge #31 then #32 first, or
+   review this one with that in mind).
+2. Visual/click-through pass on the Phase 8 preview, signed in as an
+   owner/manager — verify the margin figures against a few real jobs with
+   items attached, and confirm a data_entry/technician login is correctly
+   blocked from the page.
+3. Begin Phase 9 (Invoicing) as its own branch/PR once Phase 8 is
    reviewed — get the actual spec text for it from the repo owner first if
-   it's not already available, same as Phases 6 and 7 had to.
+   it's not already available, same as Phases 6, 7, and 8 had to.

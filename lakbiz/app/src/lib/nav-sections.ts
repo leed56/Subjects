@@ -59,6 +59,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/banking", labelKey: "nav.banking", feature: "banking" },
       { href: "/vat", labelKey: "nav.vat" },
+      { href: "/job-costing", labelKey: "costing.title", feature: "ac_jobs" },
     ],
   },
 ];

@@ -253,3 +253,14 @@ export const CrewIcon = (p: IconProps) =>
     </>,
     p,
   );
+
+/** Bar chart with a rising trend line — quoted-vs-cost-vs-margin reads as
+ * "a financial comparison report", distinct from VatIcon's document shape. */
+export const CostingIcon = (p: IconProps) =>
+  base(
+    <>
+      <path d="M4 20.5V10M10 20.5V5M16 20.5v-7M20 20.5V3" />
+      <path d="M2.5 20.5h19" />
+    </>,
+    p,
+  );
