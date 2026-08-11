@@ -238,3 +238,18 @@ export const AssetIcon = (p: IconProps) =>
     </>,
     p,
   );
+
+/** Distinct from WorkforceIcon (two individuals side by side): three
+ * heads clustered together, reads as "a grouped unit" for the Crews page. */
+export const CrewIcon = (p: IconProps) =>
+  base(
+    <>
+      <circle cx="12" cy="7" r="2.5" />
+      <circle cx="5.5" cy="9.5" r="2" />
+      <circle cx="18.5" cy="9.5" r="2" />
+      <path d="M7.5 20a4.5 4.5 0 0 1 9 0" />
+      <path d="M2.5 18.5a3.5 3.5 0 0 1 4.3-3.4" />
+      <path d="M21.5 18.5a3.5 3.5 0 0 0-4.3-3.4" />
+    </>,
+    p,
+  );

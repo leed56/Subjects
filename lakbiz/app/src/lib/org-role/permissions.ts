@@ -14,9 +14,11 @@
  * | Team invites            |  Y    |    N    |     N      |    N    |     N      |
  * | AC jobs / workforce     |  Y    |    Y    |     Y*     |    N    |     Y*     |
  * | AC assets               |  Y    |    Y    |     Y      |    N    |     Y      |
+ * | Installation/maint. crews|  Y   |    Y    |     N      |    N    |     Y      |
  *
  * * data_entry: /jobs front desk — create/edit jobs, quotes, alerts; no margin/subcontract/buy cost.
- *   technician: /jobs + /workforce + /assets (read/update equipment records, no financial fields on them).
+ *   technician: /jobs + /workforce + /assets + /teams (read/update equipment + crew records, no financial fields).
+ *   Crews follow /workforce's access level, not /jobs's — data_entry is front-desk job intake, not staffing.
  *
  * RLS: products/sales buy_price & profit masked via views; ac_jobs subcontract_cost;
  * contractors rate/payable; vehicles cost fields; financial tables owner/manager SELECT.
@@ -37,7 +39,8 @@ export type ShopNavHref =
   | "/bills"
   | "/customers"
   | "/banking"
-  | "/assets";
+  | "/assets"
+  | "/teams";
 
 const FINANCIAL_ROLES: OrgRole[] = ["owner", "manager"];
 
@@ -52,7 +55,7 @@ const SHOP_STAFF_ROUTES: ShopNavHref[] = [
 /** data_entry: shop floor + AC jobs front desk (create/edit — no company profit/cost fields). */
 const DATA_ENTRY_ROUTES: ShopNavHref[] = [...SHOP_STAFF_ROUTES, "/jobs", "/assets"];
 
-const TECHNICIAN_ROUTES: ShopNavHref[] = ["/jobs", "/workforce", "/assets"];
+const TECHNICIAN_ROUTES: ShopNavHref[] = ["/jobs", "/workforce", "/assets", "/teams"];
 
 const MANAGER_PLUS_SETTINGS = ["/settings/shop", "/settings/plans", "/settings/notifications"];
 
