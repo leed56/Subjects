@@ -4,14 +4,13 @@ import Link from "next/link";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useAuth } from "@/components/auth-provider";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
   ProButton,
   ProCard,
   ProMain,
   ProPageHeader,
-  ProPageShell,
 } from "@/components/ui/pro-shell";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
@@ -259,8 +258,7 @@ export default function ShopSettingsPage() {
   const cloudReady = isSupabaseConfigured();
 
   return (
-    <ProPageShell>
-      <SiteHeader sticky={false} />
+    <AppShell>
       <ProMain>
         <ProPageHeader
           eyebrow="Business identity"
@@ -399,6 +397,6 @@ export default function ShopSettingsPage() {
           <Link href="/dashboard" className="text-teal-700 underline">{t("nav.dashboard")}</Link>
         </p>
       </ProMain>
-    </ProPageShell>
+    </AppShell>
   );
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ExportActions } from "@/components/export/export-actions";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
   ProButton,
@@ -13,7 +13,6 @@ import {
   ProLoadingState,
   ProMain,
   ProPageHeader,
-  ProPageShell,
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
@@ -49,12 +48,11 @@ export default function BillsPage() {
 
   if (!ready || !data) {
     return (
-      <ProPageShell>
-        <SiteHeader />
+      <AppShell>
         <ProMain>
           <ProLoadingState label={t("common.loading")} />
         </ProMain>
-      </ProPageShell>
+      </AppShell>
     );
   }
 
@@ -97,8 +95,7 @@ export default function BillsPage() {
   };
 
   return (
-    <ProPageShell>
-      <SiteHeader />
+    <AppShell>
       <ProMain>
         <ProPageHeader
           eyebrow={t("bills.archive_eyebrow")}
@@ -338,6 +335,6 @@ export default function BillsPage() {
           )}
         </section>
       </ProMain>
-    </ProPageShell>
+    </AppShell>
   );
 }

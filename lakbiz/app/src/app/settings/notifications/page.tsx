@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import {
   defaultNotificationSettings,
@@ -148,8 +148,7 @@ export default function NotificationsSettingsPage() {
   };
 
   return (
-    <div className="min-h-full bg-slate-50">
-      <SiteHeader />
+    <AppShell>
       <main className="mx-auto max-w-3xl px-4 py-10">
         <div className="mb-6">
           <Link
@@ -546,6 +545,6 @@ export default function NotificationsSettingsPage() {
           )}
         </section>
       </main>
-    </div>
+    </AppShell>
   );
 }

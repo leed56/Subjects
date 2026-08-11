@@ -1,0 +1,37 @@
+import {
+  DashboardIcon,
+  SalesIcon,
+  BillsIcon,
+  CustomersIcon,
+  StockIcon,
+  SuppliersIcon,
+  VehiclesIcon,
+  JobsIcon,
+  WorkforceIcon,
+  BankingIcon,
+  VatIcon,
+  TeamIcon,
+  PlansIcon,
+  BellIcon,
+  ShopIcon,
+  type IconProps,
+} from "@/components/ui/icons";
+
+/** href -> icon, shared by Sidebar and MobileNav so the two stay in sync. */
+export const NAV_ICON_BY_HREF: Record<string, (props: IconProps) => React.ReactElement> = {
+  "/dashboard": DashboardIcon,
+  "/sales": SalesIcon,
+  "/bills": BillsIcon,
+  "/customers": CustomersIcon,
+  "/stock": StockIcon,
+  "/suppliers": SuppliersIcon,
+  "/vehicles": VehiclesIcon,
+  "/jobs": JobsIcon,
+  "/workforce": WorkforceIcon,
+  "/banking": BankingIcon,
+  "/vat": VatIcon,
+  "/settings/team": TeamIcon,
+  "/settings/plans": PlansIcon,
+  "/settings/notifications": BellIcon,
+  "/settings/shop": ShopIcon,
+};

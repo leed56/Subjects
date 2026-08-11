@@ -5,7 +5,7 @@ import { useState } from "react";
 import { AcServiceDoneDialog } from "@/components/ac-service-done-dialog";
 import { AcServiceDuePanel } from "@/components/ac-service-due-panel";
 import { OfflineSyncNotice } from "@/components/offline-sync-notice";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
   ProButton,
@@ -14,7 +14,6 @@ import {
   ProLoadingState,
   ProMain,
   ProPageHeader,
-  ProPageShell,
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
@@ -44,12 +43,11 @@ export default function DashboardPage() {
 
   if (!ready || !data) {
     return (
-      <ProPageShell>
-        <SiteHeader />
+      <AppShell>
         <ProMain>
           <ProLoadingState label={t("common.loading")} />
         </ProMain>
-      </ProPageShell>
+      </AppShell>
     );
   }
 
@@ -67,8 +65,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <ProPageShell>
-      <SiteHeader />
+    <AppShell>
       <ProMain>
         <ProPageHeader
           eyebrow={org.isAuthenticated ? t("common.saved_cloud") : t("common.saved_browser")}
@@ -508,6 +505,6 @@ export default function DashboardPage() {
           }}
         />
       </ProMain>
-    </ProPageShell>
+    </AppShell>
   );
 }

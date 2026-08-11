@@ -2,7 +2,7 @@
 
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
   ProButton,
@@ -11,7 +11,6 @@ import {
   ProLoadingState,
   ProMain,
   ProPageHeader,
-  ProPageShell,
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { LK_BANKS } from "@/lib/banks";
@@ -80,12 +79,11 @@ export default function SuppliersPage() {
 
   if (!ready || !data) {
     return (
-      <ProPageShell>
-        <SiteHeader />
+      <AppShell>
         <ProMain>
           <ProLoadingState label={t("common.loading")} />
         </ProMain>
-      </ProPageShell>
+      </AppShell>
     );
   }
 
@@ -242,8 +240,7 @@ export default function SuppliersPage() {
   };
 
   return (
-    <ProPageShell>
-      <SiteHeader />
+    <AppShell>
       <ProMain>
         <ProPageHeader
           eyebrow="Supplier operations"
@@ -582,7 +579,7 @@ export default function SuppliersPage() {
           </div>
         )}
       </ProMain>
-    </ProPageShell>
+    </AppShell>
   );
 }
 

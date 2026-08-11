@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
   ProCard,
@@ -9,7 +9,6 @@ import {
   ProLoadingState,
   ProMain,
   ProPageHeader,
-  ProPageShell,
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { LK_BANKS } from "@/lib/banks";
@@ -107,12 +106,11 @@ export default function BankingPage() {
 
   if (!ready || !data) {
     return (
-      <ProPageShell>
-        <SiteHeader />
+      <AppShell>
         <ProMain>
           <ProLoadingState label={t("common.loading")} />
         </ProMain>
-      </ProPageShell>
+      </AppShell>
     );
   }
 
@@ -242,8 +240,7 @@ export default function BankingPage() {
     "h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100";
 
   return (
-    <ProPageShell>
-      <SiteHeader />
+    <AppShell>
       <ProMain>
         <ProPageHeader
           eyebrow="Banking control"
@@ -815,7 +812,7 @@ export default function BankingPage() {
           </div>
         )}
       </ProMain>
-    </ProPageShell>
+    </AppShell>
   );
 }
 

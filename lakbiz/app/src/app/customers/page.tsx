@@ -7,7 +7,7 @@ import { BulkWhatsAppComposer } from "@/components/messaging/bulk-whatsapp-compo
 import { ExportActions } from "@/components/export/export-actions";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { ContactTypeBadge } from "@/components/contact-type-badge";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
   ProButton,
@@ -16,7 +16,6 @@ import {
   ProLoadingState,
   ProMain,
   ProPageHeader,
-  ProPageShell,
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
@@ -75,12 +74,11 @@ export default function CustomersPage() {
 
   if (!ready || !data) {
     return (
-      <ProPageShell>
-        <SiteHeader />
+      <AppShell>
         <ProMain>
           <ProLoadingState label={t("common.loading")} />
         </ProMain>
-      </ProPageShell>
+      </AppShell>
     );
   }
 
@@ -215,8 +213,7 @@ export default function CustomersPage() {
     : [];
 
   return (
-    <ProPageShell>
-      <SiteHeader />
+    <AppShell>
       <ProMain>
         <ProPageHeader
           eyebrow={t("cust.crm_eyebrow")}
@@ -652,7 +649,7 @@ export default function CustomersPage() {
           business={data.business}
         />
       </ProMain>
-    </ProPageShell>
+    </AppShell>
   );
 }
 
