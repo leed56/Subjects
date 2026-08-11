@@ -771,7 +771,7 @@ not been visually checked against a real job.
 ### Phase 10 — Dashboard rebuild
 Branch: `claude/lakbiz-phase10-dashboard`, stacked on `claude/lakbiz-phase9-job-invoicing`
 (PR #34, not yet merged — same stacking convention as Phases 6–9). Status:
-implemented, build verified, not yet pushed/PR'd.
+implemented, build verified, pushed — draft PR #35, awaiting review.
 
 **Scope call, same reason as Phases 6–9:** no spec text for this phase
 either. Asked the repo owner directly; confirmed: UI modernization only —
