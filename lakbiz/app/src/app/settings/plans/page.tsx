@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
   ProButton,
   ProCard,
   ProMain,
   ProPageHeader,
-  ProPageShell,
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -35,8 +34,7 @@ export default function PlansPage() {
   const currentPrice = planPrice(currentPlan, subscription.billingCycle);
 
   return (
-    <ProPageShell>
-      <SiteHeader />
+    <AppShell>
       <ProMain>
         <ProPageHeader
           eyebrow={t("sub.plans_eyebrow")}
@@ -224,6 +222,6 @@ export default function PlansPage() {
           </Link>
         </p>
       </ProMain>
-    </ProPageShell>
+    </AppShell>
   );
 }

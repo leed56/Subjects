@@ -6,6 +6,7 @@ import { PlatformAdminRedirect } from "@/components/platform-admin-redirect";
 import { ShopRouteGuard } from "@/components/shop-route-guard";
 import { AppStoreProvider } from "@/lib/store/app-store-provider";
 import { SubscriptionProvider } from "@/lib/subscription/subscription-provider";
+import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -53,9 +54,11 @@ export default function RootLayout({
         <LocaleProvider>
           <AuthProvider>
             <SubscriptionProvider>
-              <PlatformAdminRedirect />
-              <ShopRouteGuard />
-              <AppStoreProvider>{children}</AppStoreProvider>
+              <ToastProvider>
+                <PlatformAdminRedirect />
+                <ShopRouteGuard />
+                <AppStoreProvider>{children}</AppStoreProvider>
+              </ToastProvider>
             </SubscriptionProvider>
           </AuthProvider>
         </LocaleProvider>

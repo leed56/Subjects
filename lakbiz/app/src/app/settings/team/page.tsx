@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/shell/app-shell";
 import {
   ProButton,
   ProCard,
   ProLoadingState,
   ProMain,
   ProPageHeader,
-  ProPageShell,
 } from "@/components/ui/pro-shell";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
@@ -71,18 +70,16 @@ export default function TeamSettingsPage() {
 
   if (!canManageTeam) {
     return (
-      <ProPageShell>
-        <SiteHeader />
+      <AppShell>
         <ProMain>
           <p className="text-sm font-semibold text-slate-600">{t("team.owner_only")}</p>
         </ProMain>
-      </ProPageShell>
+      </AppShell>
     );
   }
 
   return (
-    <ProPageShell>
-      <SiteHeader />
+    <AppShell>
       <ProMain>
         <ProPageHeader
           eyebrow={t("team.eyebrow")}
@@ -173,6 +170,6 @@ export default function TeamSettingsPage() {
           </Link>
         </p>
       </ProMain>
-    </ProPageShell>
+    </AppShell>
   );
 }

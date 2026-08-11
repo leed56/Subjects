@@ -7,7 +7,7 @@ import { AcInAppAlertSettings } from "@/components/ac-in-app-alert-settings";
 import { AcServiceDoneDialog } from "@/components/ac-service-done-dialog";
 import { useAcInAppAlerts } from "@/hooks/use-ac-in-app-alerts";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
   ProButton,
@@ -16,7 +16,6 @@ import {
   ProLoadingState,
   ProMain,
   ProPageHeader,
-  ProPageShell,
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import {
@@ -107,10 +106,9 @@ export default function JobsPage() {
 
   if (!ready || !data) {
     return (
-      <ProPageShell>
-        <SiteHeader />
+      <AppShell>
         <ProMain><ProLoadingState label={t("common.loading")} /></ProMain>
-      </ProPageShell>
+      </AppShell>
     );
   }
 
@@ -254,8 +252,7 @@ export default function JobsPage() {
   const quoteTotal = data.acJobs.reduce((sum, j) => sum + j.quotedAmount, 0);
 
   return (
-    <ProPageShell>
-      <SiteHeader />
+    <AppShell>
       <ProMain>
         <ProPageHeader
           eyebrow={t("jobs.eyebrow_ops")}
@@ -430,7 +427,7 @@ export default function JobsPage() {
           onClose={() => setSheetJob(null)}
         />
       )}
-    </ProPageShell>
+    </AppShell>
   );
 }
 

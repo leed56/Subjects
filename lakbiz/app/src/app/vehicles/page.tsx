@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
   ProButton,
@@ -10,7 +10,6 @@ import {
   ProLoadingState,
   ProMain,
   ProPageHeader,
-  ProPageShell,
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
@@ -78,12 +77,11 @@ export default function VehiclesPage() {
 
   if (!ready || !data) {
     return (
-      <ProPageShell>
-        <SiteHeader />
+      <AppShell>
         <ProMain>
           <ProLoadingState label={t("common.loading")} />
         </ProMain>
-      </ProPageShell>
+      </AppShell>
     );
   }
 
@@ -156,8 +154,7 @@ export default function VehiclesPage() {
   const currentCost = vehicleTotalCost(purchasePrice, reconditionCost);
 
   return (
-    <ProPageShell>
-      <SiteHeader />
+    <AppShell>
       <ProMain>
         <ProPageHeader
           eyebrow="Vehicle showroom"
@@ -473,7 +470,7 @@ export default function VehiclesPage() {
           </div>
         )}
       </ProMain>
-    </ProPageShell>
+    </AppShell>
   );
 }
 

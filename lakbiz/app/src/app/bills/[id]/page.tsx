@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { InvoiceView } from "@/components/invoice-view";
 import {
   ProButton,
@@ -10,7 +10,6 @@ import {
   ProLoadingState,
   ProMain,
   ProPageHeader,
-  ProPageShell,
 } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -27,20 +26,18 @@ export default function BillDetailPage() {
 
   if (!ready || !data) {
     return (
-      <ProPageShell>
-        <SiteHeader />
+      <AppShell>
         <ProMain>
           <ProLoadingState label={t("common.loading")} />
         </ProMain>
-      </ProPageShell>
+      </AppShell>
     );
   }
 
   const sale = data.sales.find((s) => s.id === id);
   if (!sale) {
     return (
-      <ProPageShell>
-        <SiteHeader />
+      <AppShell>
         <ProMain>
           <ProCard>
             <ProEmptyState
@@ -50,7 +47,7 @@ export default function BillDetailPage() {
             />
           </ProCard>
         </ProMain>
-      </ProPageShell>
+      </AppShell>
     );
   }
 
@@ -59,8 +56,7 @@ export default function BillDetailPage() {
     : undefined;
 
   return (
-    <ProPageShell>
-      <SiteHeader />
+    <AppShell>
       <ProMain>
         <div className="no-print">
           <ProPageHeader
@@ -109,6 +105,6 @@ export default function BillDetailPage() {
           />
         </div>
       </ProMain>
-    </ProPageShell>
+    </AppShell>
   );
 }

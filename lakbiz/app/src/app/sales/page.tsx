@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/shell/app-shell";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import {
   ProBadge,
@@ -12,7 +12,6 @@ import {
   ProLoadingState,
   ProMain,
   ProPageHeader,
-  ProPageShell,
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { LK_BANKS } from "@/lib/banks";
@@ -84,12 +83,11 @@ export default function SalesPage() {
 
   if (!ready || !data) {
     return (
-      <ProPageShell>
-        <SiteHeader />
+      <AppShell>
         <ProMain>
           <ProLoadingState label={t("common.loading")} />
         </ProMain>
-      </ProPageShell>
+      </AppShell>
     );
   }
 
@@ -262,8 +260,7 @@ export default function SalesPage() {
       : searched.filter((p) => p.condition === conditionFilter);
 
   return (
-    <ProPageShell>
-      <SiteHeader />
+    <AppShell>
       <ProMain>
         <ProPageHeader
           eyebrow={t("sales.pos_eyebrow")}
@@ -792,6 +789,6 @@ export default function SalesPage() {
           </div>
         </div>
       )}
-    </ProPageShell>
+    </AppShell>
   );
 }

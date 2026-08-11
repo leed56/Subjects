@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { SiteHeader } from "@/components/site-header";
+import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
   ProCard,
@@ -9,7 +9,6 @@ import {
   ProLoadingState,
   ProMain,
   ProPageHeader,
-  ProPageShell,
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
@@ -116,12 +115,11 @@ export default function WorkforcePage() {
 
   if (!ready || !data) {
     return (
-      <ProPageShell>
-        <SiteHeader />
+      <AppShell>
         <ProMain>
           <ProLoadingState label={t("common.loading")} />
         </ProMain>
-      </ProPageShell>
+      </AppShell>
     );
   }
 
@@ -176,8 +174,7 @@ export default function WorkforcePage() {
   };
 
   return (
-    <ProPageShell>
-      <SiteHeader />
+    <AppShell>
       <ProMain>
         <ProPageHeader
           eyebrow="AC workforce"
@@ -569,7 +566,7 @@ export default function WorkforcePage() {
           </div>
         </div>
       )}
-    </ProPageShell>
+    </AppShell>
   );
 
   function methodLabel(m: PaymentMethod): string {
