@@ -10,9 +10,14 @@ import {
   ProMain,
   ProPageHeader,
 } from "@/components/ui/pro-shell";
+import { ConfirmDialog } from "@/components/ui/overlay";
+import { useToast } from "@/components/ui/toast";
+import { useAuth } from "@/components/auth-provider";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { OrgRole } from "@/lib/subscription/types";
+
+const EDITABLE_ROLES: OrgRole[] = ["data_entry", "cashier", "technician", "manager"];
 
 type MemberRow = {
   userId: string;
@@ -24,6 +29,8 @@ type MemberRow = {
 export default function TeamSettingsPage() {
   const { t } = useLocale();
   const { canManageTeam } = useSubscription();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -31,6 +38,9 @@ export default function TeamSettingsPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<OrgRole>("data_entry");
   const [submitting, setSubmitting] = useState(false);
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<MemberRow | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -66,6 +76,43 @@ export default function TeamSettingsPage() {
     setEmail("");
     setPassword("");
     load();
+  };
+
+  const handleRoleChange = async (memberUserId: string, nextRole: OrgRole) => {
+    if (updatingUserId) return;
+    setUpdatingUserId(memberUserId);
+    const res = await fetch("/api/settings/team", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "update_role", userId: memberUserId, role: nextRole }),
+    });
+    const json = (await res.json()) as { ok?: boolean; error?: string };
+    setUpdatingUserId(null);
+    if (!json.ok) {
+      toast({ tone: "error", title: t("common.save_failed"), description: json.error });
+      return;
+    }
+    setMembers((prev) => prev.map((m) => (m.userId === memberUserId ? { ...m, role: nextRole } : m)));
+    toast({ tone: "success", title: t("common.update") });
+  };
+
+  const confirmRemove = async () => {
+    if (!removeTarget || removing) return;
+    setRemoving(true);
+    const res = await fetch("/api/settings/team", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "remove_member", userId: removeTarget.userId }),
+    });
+    const json = (await res.json()) as { ok?: boolean; error?: string };
+    setRemoving(false);
+    if (!json.ok) {
+      toast({ tone: "error", title: t("common.save_failed"), description: json.error });
+      return;
+    }
+    setMembers((prev) => prev.filter((m) => m.userId !== removeTarget.userId));
+    toast({ tone: "success", title: t("common.delete"), description: removeTarget.email ?? undefined });
+    setRemoveTarget(null);
   };
 
   if (!canManageTeam) {
@@ -151,18 +198,59 @@ export default function TeamSettingsPage() {
               <ProLoadingState label={t("common.loading")} />
             ) : (
               <ul className="divide-y divide-slate-100">
-                {members.map((m) => (
-                  <li key={m.userId} className="flex items-center justify-between py-3 text-sm">
-                    <div>
-                      <p className="font-black text-slate-900">{m.email ?? m.userId.slice(0, 8)}</p>
-                      <p className="text-xs font-semibold text-slate-500">{m.role.replace("_", " ")}</p>
-                    </div>
-                  </li>
-                ))}
+                {members.map((m) => {
+                  const isSelf = m.userId === user?.id;
+                  const isOwner = m.role === "owner";
+                  return (
+                    <li key={m.userId} className="flex items-center justify-between gap-3 py-3 text-sm">
+                      <div className="min-w-0">
+                        <p className="truncate font-black text-slate-900">{m.email ?? m.userId.slice(0, 8)}</p>
+                        {(isSelf || isOwner) && (
+                          <p className="text-xs font-semibold text-slate-500">{m.role.replace("_", " ")}</p>
+                        )}
+                      </div>
+                      {!isSelf && !isOwner && (
+                        <div className="flex shrink-0 items-center gap-2">
+                          <select
+                            value={m.role}
+                            disabled={updatingUserId === m.userId}
+                            onChange={(e) => void handleRoleChange(m.userId, e.target.value as OrgRole)}
+                            className="h-9 rounded-lg border border-slate-200 px-2 text-xs font-semibold disabled:opacity-50"
+                          >
+                            {EDITABLE_ROLES.map((r) => (
+                              <option key={r} value={r}>
+                                {t(`team.role_${r}`)}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setRemoveTarget(m)}
+                            className="text-xs font-semibold text-rose-600 hover:underline"
+                          >
+                            {t("team.remove")}
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </ProCard>
         </div>
+
+        <ConfirmDialog
+          open={!!removeTarget}
+          title={t("team.remove_confirm_title")}
+          description={removeTarget?.email ?? undefined}
+          tone="danger"
+          confirmLabel={t("team.remove")}
+          cancelLabel={t("common.cancel")}
+          loading={removing}
+          onConfirm={() => void confirmRemove()}
+          onClose={() => setRemoveTarget(null)}
+        />
 
         <p className="mt-6 text-center text-sm text-slate-500">
           <Link href="/dashboard" className="text-teal-700 underline">
