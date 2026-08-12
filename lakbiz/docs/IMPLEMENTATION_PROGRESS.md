@@ -1521,6 +1521,88 @@ in `/tmp/.../scratchpad` this session, not committed — trivial to
 recreate from this doc) from an environment where the browser has real
 outbound network access.
 
+## HVAC operational platform (new spec, separate from the 26-phase dashboard-only work above)
+
+A second, much larger spec: rebuild the underlying economic/operational
+data model so the Owner Dashboard can eventually answer real
+operational questions, instead of another cosmetic dashboard pass — see
+PR #45 (`claude/lakbiz-hvac-phase2-parts-catalog`) for the full Phase 1
+architecture-audit findings and Phase 2 (HVAC parts/materials catalog).
+This PR is Phase 3, branched independently from `main` (not stacked on
+#45) since it touches a different, mostly non-overlapping set of files;
+expect a trivial merge-conflict in this doc file whichever of the two
+merges second, since both insert a section at the same point.
+
+### Phase 3 — Stock movements
+
+The audit (see #45) found stock mutation already centralized — every
+`stockQty` change goes through exactly one of `addProduct`, `adjustStock`,
+`createSale`, `createPurchase` in `actions.ts`, each writing a matching
+`StockLog` row — but `StockLog.type` only supported `"in" | "out" |
+"sale"`, with no way to distinguish a purchase receipt from a manual
+correction, no job/supplier linkage, and no record of who performed a
+movement.
+
+- All four mutating functions now funnel through one new internal
+  `applyStockMovement()` — `adjustStock`/`writeOffStock`/
+  `returnStockToSupplier` all call it; `createPurchase` was updated to
+  call it via the same log-shape. "One place writes stockQty + a
+  matching log" stays true as movement kinds grow, per the audit's own
+  finding about this module.
+- `StockMovementType` widened to `"in" | "out" | "sale" | "purchase" |
+  "job_usage" | "job_return" | "supplier_return" | "write_off"`.
+  `createPurchase`'s stock-in logs now tag `"purchase"` (previously
+  `"in"` — old rows are left as-is, nothing reads `type` yet, confirmed
+  by grep before making this change) and set the new
+  `relatedSupplierId`. `job_usage`/`job_return` are defined here but not
+  yet emitted by anything — Phase 4 (job → parts used) is what will
+  create them.
+- **Not modeled**: "transfer between locations" from the spec's movement
+  list. The product model has no location/warehouse concept at all
+  (confirmed in the Phase 1 audit) — a transfer type with nothing to
+  transfer between would be fabricated, not real.
+- Two new standalone movement kinds got real UI, since they don't
+  depend on Phase 4: **Write off** (damaged/lost stock, decrements,
+  `type: "write_off"`) and **Return to supplier** (decrements, tied to a
+  `supplierId`, `type: "supplier_return"` — deliberately does not touch
+  `suppliers.payableBalance`; reconciling a return against what's owed
+  is an owner accounting decision, not something to infer silently).
+  Both added to `/stock`'s row overflow menu, disabled when stock is
+  already zero; "Return to supplier" only appears once at least one
+  supplier exists.
+- `userId` (the acting org member) is threaded through
+  `adjustStock`/`writeOffStock`/`returnStockToSupplier`/`createPurchase`
+  from `app-store-provider.tsx`, which has the authenticated Supabase
+  user via `useAuth()` — `actions.ts` itself is a pure data-in/data-out
+  module with no auth context, so this couldn't originate there.
+  Deliberately **not** threaded onto `createSale`'s stock-out logging
+  this phase — sales already have independent attribution via the Sale
+  record itself, "user" wasn't in the spec's list of things a *sale*
+  movement needs, and doing so would mean touching every one of
+  `createSale`'s several call sites for a capture the spec didn't ask
+  for here.
+- Migration `20250704000001_stock_movement_types.sql`: drops and
+  replaces `stock_logs`'s `log_type` CHECK constraint (previously
+  limited to `in`/`out`/`sale` — every new movement kind would have been
+  rejected outright without this), adds `related_job_id` (no FK — jobs
+  are local-first text ids, same as `job_items.job_id`),
+  `related_supplier_id`, and `user_id` columns.
+- `business-sync.ts`: both the pull-mapper and both push-mapper call
+  sites (there are two independent inline mappers for stock log rows,
+  not one shared helper — updated both) carry the three new fields.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds with the same 47
+routes. No browser verification performed — same standing sandbox
+limitation as every prior phase.
+
+Remaining limitations (disclosed): no movement-history UI exists
+anywhere yet (grepped — `stockLogs` is written everywhere but read/
+displayed nowhere in the app today; this phase didn't add one, since
+the closest natural home is a per-product view that doesn't exist until
+Phase 9's Job Detail redesign or a future reports addition). Multi-
+location transfer remains unmodeled, as above.
+
 ## Not started
 
 Deferred items: customer notes field,

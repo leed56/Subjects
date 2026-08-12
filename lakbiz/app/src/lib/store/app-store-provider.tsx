@@ -107,6 +107,8 @@ import {
   addTechnician,
   addVehicle,
   adjustStock,
+  writeOffStock,
+  returnStockToSupplier,
   createPurchase,
   createSale,
   deleteACJob,
@@ -191,6 +193,17 @@ export type AppStoreValue = {
   stockOutToCloud: (
     productId: string,
     qty: number,
+    note?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  writeOffStockToCloud: (
+    productId: string,
+    qty: number,
+    note?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  returnStockToSupplierToCloud: (
+    productId: string,
+    qty: number,
+    supplierId: string,
     note?: string,
   ) => Promise<{ ok: boolean; error?: string }>;
   saveCustomerToCloud: (
@@ -1240,7 +1253,7 @@ function useAppStoreState(): AppStoreValue {
 
       const prevChequeIds = new Set(data.cheques.map((cheque) => cheque.id));
       const prevPurchasesLen = data.purchases.length;
-      const next = createPurchase(data, input);
+      const next = createPurchase(data, input, user?.id);
       if (next.purchases.length === prevPurchasesLen) {
         return { ok: false, error: "Could not record purchase" };
       }
@@ -3017,7 +3030,7 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
 
       const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
-      const next = adjustStock(data, productId, qty, "in", note);
+      const next = adjustStock(data, productId, qty, "in", note, user?.id);
       if (next === data) return { ok: false, error: "Could not adjust stock" };
 
       const newStockLogIds = next.stockLogs
@@ -3083,7 +3096,143 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
 
       const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
-      const next = adjustStock(data, productId, qty, "out", note);
+      const next = adjustStock(data, productId, qty, "out", note, user?.id);
+      if (next === data) return { ok: false, error: "Could not adjust stock" };
+
+      const newStockLogIds = next.stockLogs
+        .filter((log) => !prevLogIds.has(log.id))
+        .map((log) => log.id);
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncProductSnapshot(org.id, next, [productId], {
+        preserveBuyPrices: !canSeeFinancials,
+        stockLogIds: newStockLogIds,
+      });
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      canSeeFinancials,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  // Mirrors stockOutToCloud exactly — same decrement/sync shape, just a
+  // distinct StockLog movement type (HVAC platform Phase 3) so a write-off
+  // never gets mistaken for a sale or a manual correction later.
+  const writeOffStockToCloud = useCallback(
+    async (
+      productId: string,
+      qty: number,
+      note?: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
+      const next = writeOffStock(data, productId, qty, note, user?.id);
+      if (next === data) return { ok: false, error: "Could not adjust stock" };
+
+      const newStockLogIds = next.stockLogs
+        .filter((log) => !prevLogIds.has(log.id))
+        .map((log) => log.id);
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncProductSnapshot(org.id, next, [productId], {
+        preserveBuyPrices: !canSeeFinancials,
+        stockLogIds: newStockLogIds,
+      });
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      canSeeFinancials,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const returnStockToSupplierToCloud = useCallback(
+    async (
+      productId: string,
+      qty: number,
+      supplierId: string,
+      note?: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
+      const next = returnStockToSupplier(data, productId, qty, supplierId, note, user?.id);
       if (next === data) return { ok: false, error: "Could not adjust stock" };
 
       const newStockLogIds = next.stockLogs
@@ -3336,6 +3485,8 @@ function useAppStoreState(): AppStoreValue {
       deleteProductToCloud,
       stockInToCloud,
       stockOutToCloud,
+      writeOffStockToCloud,
+      returnStockToSupplierToCloud,
       saveCustomerToCloud,
       deleteCustomerToCloud,
       setCustomerProductPriceToCloud,
@@ -3392,6 +3543,8 @@ function useAppStoreState(): AppStoreValue {
     deleteProductToCloud,
     stockInToCloud,
     stockOutToCloud,
+    writeOffStockToCloud,
+    returnStockToSupplierToCloud,
     updateBusinessToCloud,
     deleteACJobToCloud,
     createSaleToCloud,

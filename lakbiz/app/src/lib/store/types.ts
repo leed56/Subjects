@@ -204,14 +204,43 @@ export interface Sale {
   chequeId?: string;
 }
 
+/** "in"/"out" = manual adjustment (Stock In / Stock Out); "sale" and
+ * "purchase" are existing/renamed-going-forward automatic movements;
+ * the rest are new (HVAC platform Phase 3). Old rows saved with "in" for
+ * a purchase receipt (pre-Phase-3 data) are left as-is — this only
+ * changes what new records get tagged, so nothing that reads `type`
+ * needs a migration. */
+export type StockMovementType =
+  | "in"
+  | "out"
+  | "sale"
+  | "purchase"
+  | "job_usage"
+  | "job_return"
+  | "supplier_return"
+  | "write_off";
+
 export interface StockLog {
   id: string;
   productId: string;
   productName: string;
-  type: "in" | "out" | "sale";
+  type: StockMovementType;
   qty: number;
   note?: string;
   date: string;
+  /** job_usage/job_return only */
+  relatedJobId?: string;
+  /** purchase/supplier_return only — the Purchase record already implies
+   * this for "purchase", but logging it directly keeps StockLog
+   * self-describing without a join back to `purchases`. */
+  relatedSupplierId?: string;
+  /** Org member who performed this movement, when known. Cloud-authenticated
+   * actions only — actions.ts itself has no auth context (it's a pure
+   * data-in/data-out module), so this is populated by the caller
+   * (app-store-provider.tsx, which does have the Supabase user) and stays
+   * unset for anything before this field existed or done fully offline
+   * without a resolved session. */
+  userId?: string;
 }
 
 export interface Customer {
