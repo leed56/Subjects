@@ -940,7 +940,7 @@ phase, not an oversight.
 ### Phase 12 — Editable team roles + member removal
 Branch: `claude/lakbiz-phase12-team-roles`, stacked on `claude/lakbiz-phase11-expenses`
 (PR #36, not yet merged — same stacking convention as Phases 6–11). Status:
-implemented, build verified, not yet pushed/PR'd.
+implemented, build verified, pushed — draft PR #37, awaiting review.
 
 **Scope call, same reason as Phases 6–11:** no spec text for this phase
 either. Checked `/settings/team` first, since "Workforce/roles" is vague
