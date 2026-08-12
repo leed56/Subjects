@@ -72,6 +72,9 @@ export type IncomeTaxYearSummary = {
   salesProfit: number;
   vehicleProfit: number;
   subcontractExpense: number;
+  /** Business expenses (Phase 11) already scoped to the fiscal year by
+   * the caller — see the otherExpenses param below. */
+  otherExpenses: number;
   /** Rough profit from LakBiz data — not a full IRD taxable profit. */
   estimatedTaxableProfit: number;
   estimatedTax: number;
@@ -81,11 +84,22 @@ export type IncomeTaxYearSummary = {
 
 /**
  * Estimate company income tax from LakBiz profit fields (owner/manager only in UI).
- * Excludes rent, payroll, depreciation, and other costs not tracked in the app.
+ * Excludes rent, payroll, depreciation, and other costs not tracked in the app,
+ * unless the caller supplies otherExpenses explicitly.
+ *
+ * otherExpenses (Phase 11): expenses now live in a cloud-only table (see
+ * expenses-client.ts), not the local-first AppData this function otherwise
+ * reads, so it can't be computed in here the way subcontractExpense is —
+ * the caller fetches its own fiscal-year total and passes it in. Optional
+ * and defaults to 0 so every existing caller (Dashboard, /vat) is
+ * unaffected unless it opts in. See docs/IMPLEMENTATION_PROGRESS.md,
+ * Phase 11, for why wiring that fetch into Dashboard/VAT wasn't done this
+ * phase — /expenses itself is the one place that passes a real value in.
  */
 export function getIncomeTaxYearSummary(
   data: AppData,
   refDate = new Date(),
+  otherExpenses = 0,
 ): IncomeTaxYearSummary {
   const fiscalStart = data.business.quarterStartMonth ?? 4;
   const bounds = getFiscalYearBounds(refDate, fiscalStart);
@@ -125,7 +139,7 @@ export function getIncomeTaxYearSummary(
 
   const estimatedTaxableProfit = Math.max(
     0,
-    salesProfit + vehicleProfit - subcontractExpense,
+    salesProfit + vehicleProfit - subcontractExpense - otherExpenses,
   );
   const estimatedTax = Math.round(estimatedTaxableProfit * rate);
 
@@ -133,6 +147,7 @@ export function getIncomeTaxYearSummary(
     bounds,
     revenue,
     salesProfit,
+    otherExpenses,
     vehicleProfit,
     subcontractExpense,
     estimatedTaxableProfit,

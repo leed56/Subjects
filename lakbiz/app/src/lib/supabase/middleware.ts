@@ -23,6 +23,7 @@ const GUARDED_SHOP_PREFIXES = [
   "/assets",
   "/teams",
   "/job-costing",
+  "/expenses",
 ];
 
 function isGuardedShopPath(pathname: string): boolean {

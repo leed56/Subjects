@@ -826,33 +826,146 @@ confirms markup presence, not that every conditional section
 (`canSeeFinancials`, `showVehicles`, `showAcJobs`, empty-state branches)
 renders correctly with real data across roles.
 
+**Post-ship fix:** a real layout bug was caught from a screenshot of the
+live preview after this phase shipped — the income-tax meter card's
+eyebrow text ("Estimated income tax · 30%") was rendering as a vertical
+sliver of single words instead of a normal line. Root cause: `MeterCard`
+laid the eyebrow/title block and the action `Link` out side-by-side with
+`flex` + `justify-between`, text column `min-w-0` and the button
+`shrink-0` — a `shrink-0` element never yields width back to its
+`min-w-0` sibling, so the button's long label ("Company income tax
+estimate", much longer than the VAT card's "VAT return") squeezed the
+text column down to almost nothing. Fixed by moving the button to its
+own row below the eyebrow/title instead of beside it, so it can never
+compete for horizontal space regardless of container width or label
+length. This is exactly the class of bug the "no browser" caveat above
+keeps flagging — worth noting that it was a real, user-visible bug, not
+a hypothetical one.
+
+### Phase 11 — Business expense tracking
+Branch: `claude/lakbiz-phase11-expenses`, stacked on `claude/lakbiz-phase10-dashboard`
+(PR #35, not yet merged — same stacking convention as Phases 6–10). Status:
+implemented, DB layer empirically verified against production, build
+verified, pushed — draft PR #36, awaiting review.
+
+**Scope call, same reason as Phases 6–10:** no spec text for this phase
+either. Checked the codebase first — there was no general expense-tracking
+feature at all, only `subcontractExpense`, a single derived number folded
+into the income-tax estimate. Asked the repo owner directly; confirmed:
+a full tracking module (category/amount/date/payment method, list +
+filter + totals), not just a single manually-entered "other expenses"
+figure.
+
+**Architectural decision:** cloud-only, same call as Phases 4/6 — reads/
+writes go straight to Supabase via `src/lib/supabase/expenses-client.ts`,
+not the local-first sync engine. See the migration file for the full
+reasoning (unchanged from those phases').
+
+**Access level:** owner/manager only, same mechanism as Phase 8's job
+costing report (absent from every non-financial role's route list, so
+the existing owner/manager bypass in `canAccessShopRoute` is the only
+path in) — expense amounts are exactly the kind of cost data already kept
+from `data_entry` everywhere else in the app.
+
+**The income-tax integration, and why it's scoped narrower than first
+proposed:** `getIncomeTaxYearSummary` (used by both the Dashboard and
+`/vat`) is a pure function over the local-first `AppData` snapshot;
+expenses live in a separate cloud table, so they can't be computed inside
+it the way `subcontractExpense` is. Added an optional `otherExpenses`
+parameter (defaults to 0, so both existing callers are unaffected unless
+they opt in) rather than touching the sync engine. Deliberately did
+**not** wire a cloud fetch into the Dashboard or `/vat` pages this
+phase — both are currently synchronous renders straight off already-loaded
+local-first data, and adding async cloud state to two already-shipped,
+working, financially-sensitive pages (introducing a real loading-state
+window where the estimate could visibly jump once expenses arrive) was
+judged higher-risk than shipping a working, self-contained module now,
+same reasoning Phase 4 gave for not wiring `asset_id` into the `/jobs`
+form. Instead, `/expenses` itself is the one place that calls
+`getIncomeTaxYearSummary` twice (with and without the fiscal-year expense
+total) and shows the delta as a "Tax impact" metric — real use of the new
+parameter, proving it works, without touching either existing caller.
+
+Migrations created (applied directly to production and empirically
+verified, same technique as every phase since the security incident):
+- `20250701000001_expenses.sql` — new `expenses` table (category — a
+  fixed set: rent/utilities/salaries/fuel/transport/supplies/maintenance/
+  insurance/marketing/other — amount, date, payment method, vendor,
+  notes). RLS follows the exact `organization_id in (select ... from
+  org_members where user_id = auth.uid())` pattern from every prior
+  migration.
+- **Verified empirically before writing any frontend code:** inserted a
+  real expense as an IMT-org user: succeeded. Queried and attempted to
+  insert as a different organization's user: 0 rows on SELECT,
+  RLS-violation error on INSERT. Test row cleaned up after.
+
+Files changed:
+- `src/lib/supabase/expenses-client.ts` (new) — CRUD (`fetchOrgExpenses`,
+  `createExpense`, `updateExpense`, `deleteExpense`).
+- `src/app/expenses/page.tsx` (new) — list on the Phase 1–10 primitives
+  (`PageHeader`/`MetricCard`/`FilterBar`/`DataTable`), a create/edit
+  `Drawer`, metrics for this month / this fiscal year / estimated tax
+  impact.
+- `src/lib/income-tax.ts` — added the optional `otherExpenses` parameter
+  described above; `IncomeTaxYearSummary` gained an `otherExpenses` field
+  for transparency. No changes to either existing caller
+  (`dashboard/page.tsx`, `vat/page.tsx`).
+- **New `ExpenseIcon`** (banknote with a value emblem) in
+  `src/components/ui/icons.tsx` — distinct from `BillsIcon`'s receipt
+  (money in) and `BankingIcon`'s bank front.
+- **Route wiring**, same treatment as Phase 8's `/job-costing`:
+  `src/lib/supabase/middleware.ts`, `src/components/shop-route-guard.tsx`,
+  `src/lib/org-role/permissions.ts` (documented owner/manager-only in the
+  role matrix), `src/lib/nav-sections.ts` — placed in the **Finance**
+  section between VAT and Job Costing (record money out, next to record
+  money in, before the profitability report), deliberately **ungated by
+  plan feature** (no `feature` key), matching `/vat`'s own precedent —
+  both are core accounting surfaces, not an AC-jobs-specific or
+  addon-gated module.
+
+Tests performed:
+- DB layer: verified empirically against production, see above.
+- `tsc --noEmit`: clean.
+- `eslint`: 0 errors, same 3 pre-existing warnings, none new.
+- `next build`: succeeds, 46 routes (was 45), `/expenses` statically
+  prerenders.
+
+Remaining risks: same "no browser" caveat as every UI phase since 1 —
+the create/edit drawer and the tax-impact calculation have not been
+visually verified. The Dashboard/VAT pages still show the income-tax
+estimate *without* the expenses deduction — see the architectural
+decision above; this is a stated, deliberate scope boundary for this
+phase, not an oversight.
+
 ## Not started
 
-Phases 11–18 (expenses, workforce/roles, messaging integration,
-reporting, mobile field UX, performance/a11y, final security audit, final
-QA). Plus deferred items: customer notes field, Receive Stock / Stock
-Adjustment as real features, `schema_migrations` RLS (single-membership
-migration `20250628000001` also still unapplied — needs a
-duplicate-membership check against production first), offline support for
-AC Assets and Crews, the full field-service status/dispatch model
-(New/Assigned/On the way/Awaiting parts/Invoiced/Paid), before/after
-photos, customer signature, wiring `asset_id`/`crew_id` into the `/jobs`
-create/edit form (this is also what blocks true crew-column grouping on
-the Schedule board — see Phase 7), drag-and-drop rescheduling,
-time-of-day scheduling (the data model is date-only right now),
-per-job-type costing benchmarks/targets (Phase 8's report shows actuals
-only), and a distinct job-invoice numbering scheme (Phase 9 reuses
-`jobNo` as the invoice reference).
+Phases 12–18 (workforce/roles, messaging integration, reporting, mobile
+field UX, performance/a11y, final security audit, final QA). Plus
+deferred items: customer notes field, Receive Stock / Stock Adjustment as
+real features, `schema_migrations` RLS (single-membership migration
+`20250628000001` also still unapplied — needs a duplicate-membership
+check against production first), offline support for AC Assets and
+Crews, the full field-service status/dispatch model (New/Assigned/On the
+way/Awaiting parts/Invoiced/Paid), before/after photos, customer
+signature, wiring `asset_id`/`crew_id` into the `/jobs` create/edit form
+(this is also what blocks true crew-column grouping on the Schedule
+board — see Phase 7), drag-and-drop rescheduling, time-of-day scheduling
+(the data model is date-only right now), per-job-type costing
+benchmarks/targets (Phase 8's report shows actuals only), a distinct
+job-invoice numbering scheme (Phase 9 reuses `jobNo` as the invoice
+reference), and wiring the Phase 11 expenses deduction into the
+Dashboard/VAT income-tax display (currently only `/expenses` itself
+shows the tax impact).
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase10-dashboard`, open a draft PR stacked on
-   `claude/lakbiz-phase9-job-invoicing` (PR #34 — merge #31→#32→#33→#34
+1. Push `claude/lakbiz-phase11-expenses`, open a draft PR stacked on
+   `claude/lakbiz-phase10-dashboard` (PR #35 — merge #31→#32→#33→#34→#35
    first, or review this one with that in mind).
-2. Visual/click-through pass on the Phase 10 preview, across roles —
-   this page has the most role-conditional branches of any migrated page
-   so far, so it's worth checking as owner, then as a role without
-   `canSeeFinancials` (data_entry/cashier/technician).
-3. Begin Phase 11 (Expenses) as its own branch/PR once Phase 10 is
+2. Visual/click-through pass on the Phase 11 preview, signed in as an
+   owner/manager — add a real expense, check the this-month/this-fiscal-
+   year totals, and confirm the tax-impact figure matches
+   `expense-total × income-tax rate`.
+3. Begin Phase 12 (Workforce/roles) as its own branch/PR once Phase 11 is
    reviewed — get the actual spec text for it from the repo owner first
-   if it's not already available, same as Phases 6–10 had to.
+   if it's not already available, same as Phases 6–11 had to.
