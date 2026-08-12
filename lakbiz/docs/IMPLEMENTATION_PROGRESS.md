@@ -1277,8 +1277,8 @@ testing are all still open — flagged below).
 Branch: `claude/lakbiz-phase17-security-audit`, stacked on
 `claude/lakbiz-phase16-perf-a11y` (PR #41, not yet merged — same
 stacking convention as Phases 6–16). Status: implemented, verified
-live against the production Supabase project, pushed — draft PR #42,
-awaiting review.
+live against the production Supabase project, pushed — draft PR #42
+(https://github.com/leed56/Subjects/pull/42), awaiting review.
 
 **Scope, unusually well-grounded this time:** `docs/ARCHITECTURE_AUDIT.md`
 (Phase 0) explicitly deferred two items to "Phase 17 (Final Security
