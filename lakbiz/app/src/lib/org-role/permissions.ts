@@ -16,11 +16,17 @@
  * | AC assets               |  Y    |    Y    |     Y      |    N    |     Y      |
  * | Installation/maint. crews|  Y   |    Y    |     N      |    N    |     Y      |
  * | Schedule / dispatch     |  Y    |    Y    |     Y      |    N    |     Y      |
+ * | Job costing report      |  Y    |    Y    |     N      |    N    |     N      |
  *
  * * data_entry: /jobs front desk — create/edit jobs, quotes, alerts; no margin/subcontract/buy cost.
  *   technician: /jobs + /workforce + /assets + /teams + /schedule (read/update equipment + crew records, no financial fields).
  *   Crews follow /workforce's access level, not /jobs's — data_entry is front-desk job intake, not staffing.
  *   Schedule follows /jobs's access level (it's a view/reschedule surface over the same jobs).
+ *   Job costing is owner/manager only — it's the same margin/cost data data_entry
+ *   is already denied on the job sheet itself, just aggregated into a report;
+ *   deliberately absent from every non-financial role's route list below (no
+ *   special-case needed — canAccessShopRoute's owner/manager bypass already
+ *   covers it, everyone else falls through to their route list and 403s).
  *
  * RLS: products/sales buy_price & profit masked via views; ac_jobs subcontract_cost;
  * contractors rate/payable; vehicles cost fields; financial tables owner/manager SELECT.
@@ -43,7 +49,8 @@ export type ShopNavHref =
   | "/customers"
   | "/banking"
   | "/assets"
-  | "/teams";
+  | "/teams"
+  | "/job-costing";
 
 const FINANCIAL_ROLES: OrgRole[] = ["owner", "manager"];
 
