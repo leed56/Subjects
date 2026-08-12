@@ -1603,6 +1603,92 @@ the closest natural home is a per-product view that doesn't exist until
 Phase 9's Job Detail redesign or a future reports addition). Multi-
 location transfer remains unmodeled, as above.
 
+### Phase 4/5 — Job → Parts Used, and the historical-cost snapshot
+
+Combined into one PR/phase because they're inseparable in practice: you
+cannot correctly wire job materials to real stock without simultaneously
+solving how an old job's cost stays fixed after today's stock price
+changes — the spec's own Phase 5 gate says as much. Branched from Phase
+3 (`claude/lakbiz-hvac-phase3-stock-movements`), not `main` — this phase
+needs the `job_usage`/`job_return` `StockMovementType` values Phase 3
+defined but left unused, so a real dependency, unlike Phase 2 vs 3.
+
+**Key realization that simplified the design**: `job_items` rows are
+already immutable once created — the app has an Add and a Delete for
+job items, no Edit. So a `JobItem.unitPrice` set once at creation
+*already behaves as a historical snapshot* by construction, as long as
+(a) it's populated from the product's cost at that moment and (b)
+nothing ever goes back and rewrites it later (already true — grepped,
+nothing does). No separate `costSnapshot` field was needed; `unitPrice`
+itself just had to become authoritative instead of free-typed for
+stock-sourced items.
+
+- **Three material sources**, `JobItem.source` (only meaningful for
+  `itemType: "part"`):
+  - **`stock`** — the UI's product picker only offers real in-stock
+    products; on save, `addJobItem` looks the product up itself and
+    **overwrites `unitPrice` with the product's current `buyPrice`
+    regardless of whatever the client sent** — this is the actual
+    historical-cost guarantee, not client trust. Decrements
+    `stockQty` once and writes a `job_usage` `StockLog` linked to the
+    job (Phase 3's movement layer, finally used). Deleting the item
+    reverses this with a `job_return` movement — the audit trail shows
+    the material genuinely came back, not a silent `stockQty` edit.
+  - **`purchased`** — a one-off buy for this specific job. Free-typed
+    name/cost, optional supplier/reference/date. Deliberately **does
+    not touch `products`/`stockQty` at all** ("do not pretend this item
+    came from warehouse stock if it did not").
+  - **`customer_supplied`** — free-typed name/qty, cost defaults to 0
+    ("do not create fake costs"), overridable for the rare case the
+    shop genuinely incurred a handling cost. No stock movement.
+  - Labour/service items are completely unaffected — same free-text
+    flow as before Phase 4, since "material source" is a parts-only
+    concept.
+- **`customerPrice`** (optional, per-line): what the customer is
+  charged for that specific item, when the owner wants to track it.
+  Deliberately **does not change the job invoice**, which still totals
+  from `quotedAmount` as one flat figure — itemizing the customer
+  invoice is a Job Detail redesign concern (Phase 9), not this one.
+- **Duplicate-submit protection**: reused the existing `savingItem`
+  guard already on the add-item form (pre-dates this phase) rather than
+  inventing a second mechanism.
+- **Job-costing math needed zero changes.** `/job-costing` already sums
+  `Σ job_items.lineTotal` as cost regardless of where a line came from —
+  the three sources just make that sum honest instead of free-typed.
+- Migration `20250705000001_job_item_material_source.sql`: adds
+  `source`, `product_id` (FK to `products_base`, nullable, set on
+  delete), `supplier_id`, `purchase_ref`, `purchase_date`,
+  `customer_price` to the existing `job_items` table.
+- `business-sync.ts`: pull-mapper and both push call sites (the direct
+  `jobItemRow()` helper and the second inline mapper used by the
+  full-snapshot push path) carry the six new fields. `addJobItemToCloud`/
+  `deleteJobItemToCloud` in `app-store-provider.tsx` now also push the
+  affected product + new `StockLog` row via the existing
+  `syncProductSnapshot()` whenever the item's source is `"stock"` —
+  `syncJobItemSnapshot()` alone only pushes the `job_items` row itself,
+  so without this the stock decrement/return would have stayed local-only.
+
+## Deliberately not built this phase
+
+- **`product.active` is not checked** when picking a stock source —
+  that field lives in the still-unmerged Phase 2 PR (#45), not in this
+  branch's lineage. One-line follow-up once #45 merges: also reject
+  consuming a deactivated product in `addJobItem`.
+- **"Purchased for this job" doesn't create an Expense/Purchase
+  record.** It correctly feeds this job's own cost/profitability, but
+  won't appear in shop-wide expense totals or VAT input-tax figures
+  yet — a real, disclosed gap, not a silent one. Bridging it needs a
+  deliberate design call (auto-create an Expense once Phase 7 adds
+  `job_id` there? extend `Purchase` to allow a non-catalogued line?)
+  that's bigger than "smallest necessary addition" for this phase.
+- **Not itemizing the customer invoice** — `customerPrice` is captured
+  per-line but the invoice still shows one flat `quotedAmount`, as
+  discussed above.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds with the same 47
+routes. No browser verification — standing sandbox limitation.
+
 ## Not started
 
 Deferred items: customer notes field,

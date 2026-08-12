@@ -47,7 +47,8 @@ import type { BusinessInfo } from "@/lib/invoice";
 import { defaultTemplateForJob, loadNotificationSettings } from "@/lib/messaging";
 import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useAppStore } from "@/lib/store/use-app-store";
-import type { ACJob, ACJobInput, JobAssigneeType, JobItem, JobItemType, JobItemInput, JobStatusEntry } from "@/lib/store/types";
+import type { ACJob, ACJobInput, JobAssigneeType, JobItem, JobItemType, JobItemSource, JobItemInput, JobStatusEntry, Supplier } from "@/lib/store/types";
+import type { Product } from "@/lib/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { canManageAcJobs, canOperateAcJobs } from "@/lib/org-role/permissions";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
@@ -507,6 +508,8 @@ export default function JobsPage() {
           locale={locale}
           items={data.jobItems.filter((i) => i.jobId === sheetJob.id)}
           history={data.jobStatusHistory.filter((h) => h.jobId === sheetJob.id)}
+          products={data.products}
+          suppliers={data.suppliers}
           canSeeFinancials={canSeeFinancials}
           canOperateJobs={canOperateJobs}
           canWrite={canWrite}
@@ -629,15 +632,35 @@ const JOB_ITEM_TYPES: JobItemType[] = ["part", "labour", "service"];
  * now a Drawer instead of a fixed-overlay dialog. Equipment section (Phase 5) is new:
  * a direct-cloud read/write against ac_jobs.asset_id, bypassing the local-first ACJob
  * type which doesn't carry that column yet — see ac-assets-client.ts. */
-function JobSheetDrawer({ job, locale, items, history, canSeeFinancials, canOperateJobs, canWrite, onAddItem, onDeleteItem, onClose }: { job: ACJob; locale: Locale; items: JobItem[]; history: JobStatusEntry[]; canSeeFinancials: boolean; canOperateJobs: boolean; canWrite: boolean; onAddItem: (input: JobItemInput) => Promise<{ ok: boolean; error?: string }>; onDeleteItem: (id: string) => Promise<{ ok: boolean; error?: string }>; onClose: () => void }) {
+function JobSheetDrawer({ job, locale, items, history, products, suppliers, canSeeFinancials, canOperateJobs, canWrite, onAddItem, onDeleteItem, onClose }: { job: ACJob; locale: Locale; items: JobItem[]; history: JobStatusEntry[]; products: Product[]; suppliers: Supplier[]; canSeeFinancials: boolean; canOperateJobs: boolean; canWrite: boolean; onAddItem: (input: JobItemInput) => Promise<{ ok: boolean; error?: string }>; onDeleteItem: (id: string) => Promise<{ ok: boolean; error?: string }>; onClose: () => void }) {
   const { t } = useLocale();
   const { toast } = useToast();
   const [itemType, setItemType] = useState<JobItemType>("part");
+  // Material source (HVAC platform Phase 4) — only meaningful when
+  // itemType === "part"; labour/service keep the original free-text flow.
+  const [source, setSource] = useState<JobItemSource>("stock");
   const [name, setName] = useState("");
   const [qty, setQty] = useState(1);
   const [unitPrice, setUnitPrice] = useState("");
+  const [productId, setProductId] = useState("");
+  const [supplierId, setSupplierId] = useState("");
+  const [purchaseRef, setPurchaseRef] = useState("");
+  const [customerPrice, setCustomerPrice] = useState("");
   const [savingItem, setSavingItem] = useState(false);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+
+  const inStockProducts = products.filter((p) => p.stockQty > 0);
+  const selectedProduct = productId ? products.find((p) => p.id === productId) : undefined;
+
+  const resetItemForm = () => {
+    setName("");
+    setQty(1);
+    setUnitPrice("");
+    setProductId("");
+    setSupplierId("");
+    setPurchaseRef("");
+    setCustomerPrice("");
+  };
 
   const [asset, setAsset] = useState<AcAsset | null | undefined>(undefined);
   const [customerAssets, setCustomerAssets] = useState<AcAsset[] | null>(null);
@@ -681,6 +704,12 @@ function JobSheetDrawer({ job, locale, items, history, canSeeFinancials, canOper
     part: t("jobs.item.part"),
     labour: t("jobs.item.labour"),
     service: t("jobs.item.service"),
+  };
+
+  const sourceLabels: Record<JobItemSource, string> = {
+    stock: t("jobs.source.stock"),
+    purchased: t("jobs.source.purchased"),
+    customer_supplied: t("jobs.source.customer_supplied"),
   };
 
   const itemsTotal = items.reduce((s, i) => s + i.lineTotal, 0);
@@ -786,7 +815,10 @@ function JobSheetDrawer({ job, locale, items, history, canSeeFinancials, canOper
                 <tr><td colSpan={6} className="px-3 py-4 text-center text-sm text-slate-400">{t("jobs.no_items")}</td></tr>
               ) : items.map((i) => (
                 <tr key={i.id}>
-                  <td className="px-3 py-2 font-medium text-slate-900">{i.name}</td>
+                  <td className="px-3 py-2 font-medium text-slate-900">
+                    {i.name}
+                    {i.source && <p className="mt-0.5 text-xs font-normal text-slate-400">{sourceLabels[i.source]}</p>}
+                  </td>
                   <td className="px-3 py-2 text-slate-600">{itemTypeLabels[i.itemType]}</td>
                   <td className="px-3 py-2 text-right font-mono">{i.qty}</td>
                   <td className="px-3 py-2 text-right font-mono">{formatLkr(i.unitPrice)}</td>
@@ -840,29 +872,132 @@ function JobSheetDrawer({ job, locale, items, history, canSeeFinancials, canOper
 
       {canOperateJobs && (
         <form
-          className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-[1fr_auto_auto_auto_auto]"
+          className="mt-3 space-y-2"
           onSubmit={async (e) => {
             e.preventDefault();
-            if (!name.trim() || !canWrite || savingItem) return;
+            if (!canWrite || savingItem) return;
+
+            const isPart = itemType === "part";
+            const isStock = isPart && source === "stock";
+            const isPurchased = isPart && source === "purchased";
+
+            const itemName = isStock ? selectedProduct?.name ?? "" : name.trim();
+            if (!itemName) return;
+            if (isStock && !selectedProduct) return;
+
             setSavingItem(true);
-            const result = await onAddItem({ jobId: job.id, itemType, name, qty, unitPrice: canSeeFinancials ? Number(unitPrice) || 0 : 0 });
+            const result = await onAddItem({
+              jobId: job.id,
+              itemType,
+              name: itemName,
+              qty,
+              // Stock items: server (addJobItem) overwrites this with the
+              // product's current buyPrice regardless — this value is only
+              // a display placeholder before that snapshot is taken.
+              unitPrice: canSeeFinancials ? Number(unitPrice) || 0 : 0,
+              source: isPart ? source : undefined,
+              productId: isStock ? productId : undefined,
+              supplierId: isPurchased ? supplierId || undefined : undefined,
+              purchaseRef: isPurchased ? purchaseRef || undefined : undefined,
+              purchaseDate: isPurchased ? new Date().toISOString().slice(0, 10) : undefined,
+              customerPrice: isPart && customerPrice !== "" ? Number(customerPrice) || 0 : undefined,
+            });
             setSavingItem(false);
             if (!result.ok) {
               toast({ tone: "error", title: t("common.save_failed"), description: result.error });
               return;
             }
-            setName("");
-            setQty(1);
-            setUnitPrice("");
+            resetItemForm();
           }}
         >
-          <TextInput placeholder={t("jobs.item_name")} value={name} onChange={(e) => setName(e.target.value)} className="col-span-2 sm:col-span-1" />
-          <SelectInput value={itemType} onChange={(v) => setItemType(v as JobItemType)} options={JOB_ITEM_TYPES.map((ty) => ({ value: ty, label: itemTypeLabels[ty] }))} />
-          <TextInput type="number" min={1} value={String(qty)} onChange={(e) => setQty(Number(e.target.value))} className="w-20" />
-          {canSeeFinancials && <MoneyInput value={unitPrice} onChange={setUnitPrice} className="w-28" />}
-          <button type="submit" disabled={!canWrite || savingItem} className="rounded-lg bg-teal-600 px-3 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
-            {savingItem ? t("common.saving") : t("jobs.add_item")}
-          </button>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <SelectInput
+              value={itemType}
+              onChange={(v) => {
+                setItemType(v as JobItemType);
+                resetItemForm();
+              }}
+              options={JOB_ITEM_TYPES.map((ty) => ({ value: ty, label: itemTypeLabels[ty] }))}
+            />
+            {itemType === "part" && (
+              <SelectInput
+                value={source}
+                onChange={(v) => {
+                  setSource(v as JobItemSource);
+                  resetItemForm();
+                }}
+                options={[
+                  { value: "stock", label: t("jobs.source.stock") },
+                  { value: "purchased", label: t("jobs.source.purchased") },
+                  { value: "customer_supplied", label: t("jobs.source.customer_supplied") },
+                ]}
+                className="col-span-2 sm:col-span-1"
+              />
+            )}
+          </div>
+
+          {itemType === "part" && source === "stock" ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_auto_auto]">
+              <SelectInput
+                value={productId}
+                onChange={(v) => {
+                  setProductId(v);
+                  const p = products.find((row) => row.id === v);
+                  setUnitPrice(p ? String(p.buyPrice) : "");
+                }}
+                options={[
+                  { value: "", label: t("jobs.pick_product") },
+                  ...inStockProducts.map((p) => ({ value: p.id, label: `${p.name} (${p.stockQty})` })),
+                ]}
+                className="col-span-2 sm:col-span-1"
+              />
+              <TextInput
+                type="number"
+                min={1}
+                max={selectedProduct?.stockQty}
+                value={String(qty)}
+                onChange={(e) => setQty(Number(e.target.value))}
+                className="w-20"
+              />
+              <button type="submit" disabled={!canWrite || savingItem || !productId} className="rounded-lg bg-teal-600 px-3 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
+                {savingItem ? t("common.saving") : t("jobs.add_item")}
+              </button>
+              {canSeeFinancials && selectedProduct && (
+                <p className="col-span-2 text-xs text-slate-500 sm:col-span-3">{t("jobs.stock_cost_hint")} {formatLkr(selectedProduct.buyPrice)}</p>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+                <TextInput placeholder={t("jobs.item_name")} value={name} onChange={(e) => setName(e.target.value)} className="col-span-2 sm:col-span-1" />
+                <TextInput type="number" min={1} value={String(qty)} onChange={(e) => setQty(Number(e.target.value))} className="w-20" />
+                {canSeeFinancials && (
+                  <MoneyInput
+                    value={unitPrice}
+                    onChange={setUnitPrice}
+                    className="w-28"
+                    placeholder={itemType === "part" && source === "customer_supplied" ? "0" : undefined}
+                  />
+                )}
+                <button type="submit" disabled={!canWrite || savingItem} className="rounded-lg bg-teal-600 px-3 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  {savingItem ? t("common.saving") : t("jobs.add_item")}
+                </button>
+              </div>
+              {itemType === "part" && source === "purchased" && (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  <SelectInput
+                    value={supplierId}
+                    onChange={setSupplierId}
+                    options={[{ value: "", label: t("jobs.no_supplier") }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]}
+                  />
+                  <TextInput placeholder={t("jobs.purchase_ref")} value={purchaseRef} onChange={(e) => setPurchaseRef(e.target.value)} />
+                  {canSeeFinancials && (
+                    <MoneyInput value={customerPrice} onChange={setCustomerPrice} placeholder={t("jobs.customer_price_ph")} />
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </form>
       )}
 

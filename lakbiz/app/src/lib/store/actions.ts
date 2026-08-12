@@ -801,11 +801,76 @@ export function deleteACJob(data: AppData, id: string): AppData {
   });
 }
 
-export function addJobItem(data: AppData, input: JobItemInput): AppData {
+/** HVAC platform Phase 4/5: three material sources for a "part" item, each
+ * with different rules — everything else (labour/service items, and
+ * pre-Phase-4 parts with no `source`) behaves exactly as before.
+ *
+ * - "stock": must reference a real, active, in-stock `productId`. Stock is
+ *   decremented once via the Phase 3 movement layer (type "job_usage",
+ *   linked to the job) and `unitPrice` is overwritten with the product's
+ *   *current* `buyPrice` regardless of what the caller passed — this is
+ *   the historical-cost snapshot the spec requires: once written here, an
+ *   old job's material cost never moves again even if the product's price
+ *   changes later, because nothing in this codebase ever rewrites an
+ *   existing JobItem. The UI pre-fills the same value for display, but
+ *   this line is the actual source of truth, not trust in the client.
+ * - "purchased": a one-off buy for this specific job — does not touch
+ *   `products`/`stockQty` at all ("do not pretend this item came from
+ *   warehouse stock if it did not"). `unitPrice` is trusted as entered
+ *   (there's no other authoritative cost basis for an off-books
+ *   purchase). Known gap, disclosed in the progress doc: this does not
+ *   yet create a matching Expense/Purchase record, so it won't appear in
+ *   shop-wide expense/VAT-input totals yet — only in this job's own cost.
+ * - "customer_supplied": defaults `unitPrice` to 0 ("do not create fake
+ *   costs") but allows a caller-supplied value for the rare case the shop
+ *   genuinely incurred a cost handling a customer-supplied part. Does not
+ *   touch stock.
+ */
+export function addJobItem(data: AppData, input: JobItemInput, userId?: string): AppData {
   const name = input.name.trim();
   if (!name || !data.acJobs.some((j) => j.id === input.jobId)) return data;
   const qty = input.qty > 0 ? input.qty : 1;
-  const unitPrice = Math.max(0, input.unitPrice);
+
+  let unitPrice = Math.max(0, input.unitPrice);
+  let products = data.products;
+  let stockLogs = data.stockLogs;
+  let productId = input.productId;
+  let source = input.source;
+
+  if (input.itemType === "part" && input.source === "stock") {
+    const product = productId ? data.products.find((p) => p.id === productId) : undefined;
+    // Not checking product.active here: that field lands in a separate,
+    // not-yet-merged PR (#45). Follow-up once it lands: also reject
+    // consuming a deactivated/discontinued product.
+    if (!product || qty > product.stockQty) return data;
+    unitPrice = product.buyPrice;
+    const nextQty = Math.max(0, product.stockQty - qty);
+    products = data.products.map((p) => (p.id === product.id ? { ...p, stockQty: nextQty } : p));
+    stockLogs = [
+      {
+        id: newId(),
+        productId: product.id,
+        productName: product.name,
+        type: "job_usage",
+        qty,
+        note: `Used on job`,
+        date: new Date().toISOString(),
+        relatedJobId: input.jobId,
+        userId,
+      },
+      ...data.stockLogs,
+    ];
+  } else if (input.itemType !== "part") {
+    // Labour/service items never carry material-source fields.
+    productId = undefined;
+    source = undefined;
+  } else {
+    // "purchased" / "customer_supplied" — never decrement real stock, and
+    // never carry a productId even if one was stray-passed in, since
+    // nothing here actually links to that product's inventory.
+    productId = undefined;
+  }
+
   const item: JobItem = {
     id: newId(),
     jobId: input.jobId,
@@ -814,12 +879,52 @@ export function addJobItem(data: AppData, input: JobItemInput): AppData {
     qty,
     unitPrice,
     lineTotal: Math.round(qty * unitPrice * 100) / 100,
+    source,
+    productId,
+    supplierId: input.itemType === "part" && input.source === "purchased" ? input.supplierId : undefined,
+    purchaseRef: input.itemType === "part" && input.source === "purchased" ? input.purchaseRef?.trim() || undefined : undefined,
+    purchaseDate: input.itemType === "part" && input.source === "purchased" ? input.purchaseDate : undefined,
+    customerPrice: input.itemType === "part" ? input.customerPrice : undefined,
   };
-  return { ...data, jobItems: [item, ...data.jobItems] };
+
+  return { ...data, products, stockLogs, jobItems: [item, ...data.jobItems] };
 }
 
-export function deleteJobItem(data: AppData, id: string): AppData {
-  return { ...data, jobItems: data.jobItems.filter((i) => i.id !== id) };
+/** Deleting a "stock"-sourced item reverses the decrement it caused —
+ * a "job_return" movement (Phase 3), not a silent products.stockQty edit,
+ * so the audit trail shows the material actually came back. Every other
+ * item type/source is unaffected by this (nothing to reverse). */
+export function deleteJobItem(data: AppData, id: string, userId?: string): AppData {
+  const item = data.jobItems.find((i) => i.id === id);
+  if (!item) return data;
+
+  let products = data.products;
+  let stockLogs = data.stockLogs;
+
+  if (item.source === "stock" && item.productId) {
+    const product = data.products.find((p) => p.id === item.productId);
+    if (product) {
+      products = data.products.map((p) =>
+        p.id === product.id ? { ...p, stockQty: p.stockQty + item.qty } : p,
+      );
+      stockLogs = [
+        {
+          id: newId(),
+          productId: product.id,
+          productName: product.name,
+          type: "job_return",
+          qty: item.qty,
+          note: `Removed from job`,
+          date: new Date().toISOString(),
+          relatedJobId: item.jobId,
+          userId,
+        },
+        ...data.stockLogs,
+      ];
+    }
+  }
+
+  return { ...data, products, stockLogs, jobItems: data.jobItems.filter((i) => i.id !== id) };
 }
 
 /** Mark service visit complete and schedule next due date (days-based) */
