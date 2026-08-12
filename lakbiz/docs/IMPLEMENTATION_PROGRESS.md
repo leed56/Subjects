@@ -1662,7 +1662,9 @@ same class of bug this pass's own first draft had — `Sale.date` is a
 full ISO timestamp (`new Date().toISOString()`), and `Reports.tsx`'s
 `byDay.get(iso)` looks it up with a plain `YYYY-MM-DD` key, which never
 matches; that chart has likely been silently empty since Phase 14
-shipped. Flagged for a follow-up fix, not bundled into this PR.
+shipped. Originally flagged for a follow-up fix, not bundled into this
+PR — **now fixed, see follow-up commit below**, once the same root
+cause got flagged again independently via a live screenshot review.
 
 Tests performed:
 - `tsc --noEmit`: clean.
@@ -1679,14 +1681,33 @@ Tests performed:
   caught. Static HTML output checked for the old "Quick Actions" markup
   being gone.
 
+**Follow-up commit, after a user-provided screenshot** of the deployed
+preview (zero-activity org — no sales/jobs yet) — the first real pixel
+confirmation any UI in this project has had:
+- Layout hierarchy, empty states, the sidebar label fix, and the
+  grid-collapse behavior (bottom low-stock/receivables/payables row
+  correctly absent entirely, not an empty grid) all confirmed rendering
+  as intended.
+- One real nit found: "Today's Profit"'s hint showed "0% margin" with
+  zero sales — mathematically defined (division-by-zero guard already
+  defaulted it to 0) but implies a measured zero rather than "no data
+  yet." Fixed to show an em dash instead when `todaySales === 0`,
+  matching the brief's "show zeros elegantly" requirement.
+- Fixed the Reports page date-matching bug flagged above in the same
+  commit, since it's the identical root cause and fix already proven
+  in this branch's own dashboard chart moments earlier.
+- `tsc`/`eslint`/`build` re-verified clean after both fixes.
+
 Remaining risks: same "no browser" caveat as every UI phase in this
-project — the trend chart, KPI strip, and Today's Operations table have
-not been visually verified pixel-by-pixel. Two real logic bugs (bank
-balance shown to non-financial roles; cashier seeing job data/buttons
-it can't use) were caught and fixed during self-review before this was
-reported done, which is some evidence the review was genuine rather
-than pro forma, but it doesn't substitute for an actual look. Add this
-page to `docs/QA_CHECKLIST.md`'s next revision.
+project — only the zero-activity state has been visually confirmed so
+far; the populated state (real jobs in Today's Operations, real
+alerts, a chart with actual bars) has not been screenshotted yet.
+Three real logic bugs total were caught and fixed across the two
+commits (bank balance shown to non-financial roles; cashier seeing job
+data/buttons it can't use; the Reports date-matching bug) — encouraging
+that the review process is catching real things, but not a substitute
+for someone looking at the populated dashboard too. Add both pages to
+`docs/QA_CHECKLIST.md`'s next revision once that happens.
 
 ## Not started
 
