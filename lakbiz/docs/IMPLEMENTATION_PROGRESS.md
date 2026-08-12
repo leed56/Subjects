@@ -994,7 +994,7 @@ end (invite a real second user, change their role, remove them).
 ### Phase 13 — Messaging integration (Crews + Schedule)
 Branch: `claude/lakbiz-phase13-messaging`, stacked on `claude/lakbiz-phase12-team-roles`
 (PR #37, not yet merged — same stacking convention as Phases 6–12). Status:
-implemented, build verified, not yet pushed/PR'd.
+implemented, build verified, pushed — draft PR #38, awaiting review.
 
 **Scope call, same reason as Phases 6–12:** no spec text for this phase
 either. Checked first: there's already a mature messaging system
