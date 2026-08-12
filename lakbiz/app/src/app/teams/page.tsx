@@ -9,6 +9,7 @@ import { FormField, TextInput, SelectInput } from "@/components/ui/form";
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { PlusIcon } from "@/components/ui/icons";
+import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -126,6 +127,10 @@ export default function TeamsPage() {
   const technicianName = (id: string) => localData.technicians.find((tech) => tech.id === id)?.name ?? id;
   const contractorName = (id: string) => localData.contractors.find((c) => c.id === id)?.name ?? id;
   const memberName = (m: CrewMember) => (m.memberType === "technician" ? technicianName(m.memberId) : contractorName(m.memberId));
+  const memberPhone = (m: CrewMember) =>
+    m.memberType === "technician"
+      ? localData.technicians.find((tech) => tech.id === m.memberId)?.phone
+      : localData.contractors.find((c) => c.id === m.memberId)?.phone;
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -430,12 +435,21 @@ export default function TeamsPage() {
                                 {m.memberType === "technician" ? t("crews.member_type_technician") : t("crews.member_type_contractor")}
                               </p>
                             </div>
-                            <ActionMenu
-                              items={[
-                                { label: m.isLead ? t("crews.unset_lead") : t("crews.set_lead"), onSelect: () => void handleToggleLead(m) },
-                                { label: t("crews.remove_member"), tone: "danger" as const, onSelect: () => void handleRemoveMember(m.id) },
-                              ]}
-                            />
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              <MessageSendButton
+                                phone={memberPhone(m)}
+                                recipientName={memberName(m)}
+                                context={{ type: "custom", business: localData.business, customerName: memberName(m) }}
+                                defaultTemplate="custom"
+                                variant="icon"
+                              />
+                              <ActionMenu
+                                items={[
+                                  { label: m.isLead ? t("crews.unset_lead") : t("crews.set_lead"), onSelect: () => void handleToggleLead(m) },
+                                  { label: t("crews.remove_member"), tone: "danger" as const, onSelect: () => void handleRemoveMember(m.id) },
+                                ]}
+                              />
+                            </div>
                           </li>
                         ))}
                       </ul>
