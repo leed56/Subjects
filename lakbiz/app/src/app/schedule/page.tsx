@@ -146,13 +146,13 @@ export default function SchedulePage() {
           description={`${dayLabel(days[0])} – ${dayLabel(days[6])}`}
           actions={
             <div className="flex items-center gap-1.5">
-              <button type="button" onClick={() => setWeekStart(addDays(weekStart, -7))} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => setWeekStart(addDays(weekStart, -7))} aria-label={t("schedule.prev_week")} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 <ChevronRightIcon className="h-4 w-4 rotate-180" />
               </button>
               <button type="button" onClick={() => setWeekStart(startOfWeek(new Date()))} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 {t("schedule.this_week")}
               </button>
-              <button type="button" onClick={() => setWeekStart(addDays(weekStart, 7))} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => setWeekStart(addDays(weekStart, 7))} aria-label={t("schedule.next_week")} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 <ChevronRightIcon className="h-4 w-4" />
               </button>
             </div>

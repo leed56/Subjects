@@ -1,9 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { MessageContext, MessageTemplateId } from "@/lib/messaging";
-import { MessageComposer } from "./message-composer";
+
+/**
+ * Lazy-loaded (Phase 16, performance) — MessageSendButton appears on Jobs,
+ * Schedule, and Teams, but the composer itself (templates, WhatsApp/SMS
+ * dispatch logic) is only needed once a user actually clicks to open it.
+ * Loading it on demand keeps that weight out of every page's initial JS.
+ */
+const MessageComposer = dynamic(() => import("./message-composer").then((m) => m.MessageComposer), { ssr: false });
 
 type MessageSendButtonProps = {
   phone?: string;
@@ -28,6 +36,7 @@ export function MessageSendButton({
 }: MessageSendButtonProps) {
   const { t } = useLocale();
   const [open, setOpen] = useState(false);
+  const [everOpened, setEverOpened] = useState(false);
 
   const baseClass =
     variant === "primary"
@@ -41,21 +50,31 @@ export function MessageSendButton({
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setEverOpened(true);
+          setOpen(true);
+        }}
         className={`${baseClass} disabled:opacity-40`}
         title={label ?? t("msg.send_message")}
+        aria-label={variant === "icon" ? (label ?? t("msg.send_message")) : undefined}
       >
         {variant === "icon" ? "💬" : (label ?? t("msg.send_message"))}
       </button>
-      <MessageComposer
-        open={open}
-        onClose={() => setOpen(false)}
-        phone={phone}
-        recipientName={recipientName}
-        context={context}
-        defaultTemplate={defaultTemplate}
-        contextId={contextId}
-      />
+      {/* Mounted only after the first open, not just hidden by `open`, so the
+          dynamic import above is deferred until a user actually clicks —
+          rendering it unconditionally would fetch the chunk on page load
+          regardless of this prop. */}
+      {everOpened && (
+        <MessageComposer
+          open={open}
+          onClose={() => setOpen(false)}
+          phone={phone}
+          recipientName={recipientName}
+          context={context}
+          defaultTemplate={defaultTemplate}
+          contextId={contextId}
+        />
+      )}
     </>
   );
 }

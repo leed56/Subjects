@@ -1204,10 +1204,77 @@ over the *existing* shared action buttons (not just the two new link
 components) is deferred, flagged above, to avoid an unverified layout
 change across every already-shipped phase's UI.
 
+### Phase 16 — Performance/a11y (message composer lazy-load + icon-only labels)
+
+Branch: `claude/lakbiz-phase16-perf-a11y`, stacked on
+`claude/lakbiz-phase15-field-ux` (PR #40, not yet merged — same
+stacking convention as Phases 6–15). Status: implemented, build
+verified, pushed — draft PR #41, awaiting review.
+
+**Scope call, same reason as Phases 6–15:** no spec text for this
+phase either. Checked first: Phase 1's design system already handles
+most accessibility basics well — Drawer/Dialog trap Escape and set
+`aria-modal`, `ActionMenu` has `aria-haspopup`/`aria-expanded`, form
+inputs are label-wrapped. Two concrete, scoped gaps found instead of
+a vague audit: an eagerly-bundled modal component, and icon-only
+buttons with no accessible name. Asked the repo owner directly;
+confirmed scope: fix both, not a broader unscoped sweep.
+
+- **Performance:** `MessageSendButton` (used on Jobs, Schedule, and
+  Teams) always rendered `MessageComposer` — templates, WhatsApp/SMS
+  dispatch logic — in its JSX tree regardless of whether the user
+  ever opened it, which pulls that weight into every page that
+  renders a message button. Now lazy-loaded via `next/dynamic`
+  (`ssr: false`) **and** only mounted into the tree after the first
+  click (an `everOpened` flag) — rendering the dynamic-imported
+  component unconditionally would still fetch its chunk on page load
+  regardless of the `open` prop, since Next defers on first *render*,
+  not on prop value.
+- **Accessibility:** icon-only controls with no accessible name,
+  found via a targeted sweep (not a full audit) of every `<button>`
+  rendering only an icon with no sibling text:
+  - `MessageSendButton`'s `icon` variant rendered a bare 💬 emoji with
+    only a `title` attribute — added `aria-label`.
+  - Schedule's week-navigation prev/next buttons (`ChevronRightIcon`,
+    one mirrored) had no label at all — added `aria-label` from two
+    new `schedule.prev_week`/`schedule.next_week` i18n keys.
+  - Every other icon-only control checked (`ActionMenu`, Drawer/Dialog
+    close buttons, mobile nav hamburger, toast dismiss, the Phase 15
+    `CallLink`/`NavigateLink` icon variant) already had one — no
+    change needed there.
+
+Files changed:
+- `src/components/messaging/message-send-button.tsx` — `next/dynamic`
+  import of `MessageComposer`, `everOpened` gate, `aria-label` on the
+  icon variant.
+- `src/app/schedule/page.tsx` — `aria-label` on the two week-nav
+  buttons.
+- `src/lib/i18n/translations.ts` — `schedule.prev_week`/
+  `schedule.next_week` keys, both locales.
+
+Tests performed:
+- `tsc --noEmit`: clean.
+- `eslint`: 0 errors, same 3 pre-existing warnings, none new.
+- `next build`: succeeds, still 47 routes (unchanged — no new routes,
+  only a code-split boundary added inside an existing component).
+
+Remaining risks: same "no browser" caveat as every UI phase since 1 —
+did not independently measure the exact per-page bundle-size delta
+from the lazy-load (Turbopack's build output doesn't print a
+per-route First Load JS breakdown the way classic webpack builds
+did); the change follows the standard, well-established
+`next/dynamic({ssr:false})` + conditional-mount pattern and both
+`tsc`/`build` confirm it type-checks and compiles, but the actual
+network-tab effect hasn't been watched in a real browser. The
+icon-only sweep was targeted at controls rendering only an icon with
+no sibling text, not an exhaustive accessibility audit (color-contrast
+-only states, full keyboard-nav walkthrough, and screen-reader
+testing are all still open — flagged below).
+
 ## Not started
 
-Phases 16–18 (performance/a11y, final security audit, final QA). Plus
-deferred items: customer notes field,
+Phases 17–18 (final security audit, final QA). Plus deferred items:
+customer notes field,
 Receive Stock / Stock Adjustment as real features, `schema_migrations`
 RLS (single-membership migration `20250628000001` also still unapplied —
 needs a duplicate-membership check against production first), offline
@@ -1236,20 +1303,27 @@ phase), the offline field-mode indicator + local sync queue for
 job/schedule updates made while offline, and a broader touch-target
 sizing pass over the existing shared action-button components (this
 phase only sized the two new link components, to avoid an unverified
-layout change across every already-shipped phase's UI).
+layout change across every already-shipped phase's UI). (Phase 16) a
+full accessibility audit — color-contrast-only status states, a
+complete keyboard-nav walkthrough, and real screen-reader testing (the
+icon-only sweep this phase was targeted, not exhaustive) — and an
+independently-measured per-route bundle-size delta from the
+lazy-loaded message composer (Turbopack's build output doesn't print
+the classic per-route First Load JS table, so this wasn't verified
+beyond `tsc`/`build` passing).
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase15-field-ux`, open a draft PR stacked on
-   `claude/lakbiz-phase14-reports` (PR #39 —
-   merge #31→#32→#33→#34→#35→#36→#37→#38→#39 first, or review this one
-   with that in mind).
-2. Visual/click-through pass on the Phase 15 preview, ideally on an
-   actual phone — confirm the call chip opens the dialer with the
-   right number and the navigate chip opens maps with the right
-   address, on both the Jobs card/job-sheet drawer and the Schedule
-   reschedule drawer.
-3. Begin Phase 16 (performance/a11y) as its own branch/PR once Phase
-   15 is reviewed — get the actual spec text for it from the repo
-   owner first if it's not already available, same as Phases 6–15 had
-   to.
+1. Push `claude/lakbiz-phase16-perf-a11y`, open a draft PR stacked on
+   `claude/lakbiz-phase15-field-ux` (PR #40 —
+   merge #31→#32→#33→#34→#35→#36→#37→#38→#39→#40 first, or review this
+   one with that in mind).
+2. Visual/click-through pass on the Phase 16 preview — open a message
+   composer from a fresh page load (confirm it still opens correctly
+   now that it's lazy-loaded) and tab through the Schedule week-nav
+   buttons with a keyboard to confirm the new labels read correctly in
+   a screen reader.
+3. Begin Phase 17 (final security audit) as its own branch/PR once
+   Phase 16 is reviewed — get the actual spec text for it from the
+   repo owner first if it's not already available, same as Phases
+   6–16 had to.
