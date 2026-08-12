@@ -19,6 +19,7 @@ import {
   CalendarIcon,
   CostingIcon,
   ExpenseIcon,
+  ReportsIcon,
   type IconProps,
 } from "@/components/ui/icons";
 
@@ -40,6 +41,7 @@ export const NAV_ICON_BY_HREF: Record<string, (props: IconProps) => React.ReactE
   "/vat": VatIcon,
   "/expenses": ExpenseIcon,
   "/job-costing": CostingIcon,
+  "/reports": ReportsIcon,
   "/settings/team": TeamIcon,
   "/settings/plans": PlansIcon,
   "/settings/notifications": BellIcon,

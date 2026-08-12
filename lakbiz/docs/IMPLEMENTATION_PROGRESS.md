@@ -1053,10 +1053,89 @@ service/repair job rather than an installation — flagged as a
 copy-polish item, not a functional bug (the underlying date/customer
 data is always correct).
 
+### Phase 14 — Business reports page
+
+Branch: `claude/lakbiz-phase14-reports`, stacked on
+`claude/lakbiz-phase13-messaging` (PR #38, not yet merged — same
+stacking convention as Phases 6–13). Status: implemented, build
+verified, pushed — draft PR #39 (https://github.com/leed56/Subjects/pull/39),
+awaiting review.
+
+**Scope call, same reason as Phases 6–13:** no spec text for this
+phase either. Checked first: the app already has export infrastructure
+(`src/lib/export/{csv,reports,print-report}.ts` —
+`exportSalesCsv`/`exportVatCsv`/`printSalesReport`/etc.) but no in-app
+page for actually *viewing* an analytical report — everything is
+CSV/print-out only. Asked the repo owner directly; confirmed scope:
+build a `/reports` page — sales-over-time trend, top products, top
+customers, viewable in-app — aggregating existing local-first data,
+owner/manager only, no new database table or migration.
+
+**No new dependency, same philosophy as Phases 1/7:** confirmed via
+`grep` that no charting library is in `package.json`; the trend chart
+is a hand-rolled CSS bar chart (flex row of divs with `height` driven
+by each day's total ÷ the 14-day max), not a new dependency.
+
+- **Period filter:** 7 days / 30 days / this month / all time, applied
+  to the metric cards, top-products table, and top-customers table.
+  The 14-day daily trend chart always shows the most recent 14 days of
+  activity regardless of the selected period (a multi-year bar chart
+  under "all time" would be unreadable and isn't the point of that
+  view — the metric cards above already cover totals for the full
+  selected period).
+- **Metrics:** total revenue, total profit, sales count, average sale
+  — computed by reducing over `useAppStore()`'s local-first `sales`
+  array, no server round-trip.
+- **Top products / top customers:** aggregated client-side from
+  `sale.lines` / `sale.customerId`, sorted descending, top 10 shown.
+- **Access control:** same pattern as Job Costing and Expenses —
+  `/reports` is added to the `ShopNavHref` union and the permission
+  matrix comment, but deliberately **not** added to
+  `SHOP_STAFF_ROUTES`/`DATA_ENTRY_ROUTES`/`TECHNICIAN_ROUTES` — the
+  existing owner/manager unconditional bypass in `canAccessShopRoute`
+  is the only path in. The page also has its own client-side
+  `orgRole === "owner" || orgRole === "manager"` check with an
+  `EmptyState` fallback so financial numbers never flash for other
+  roles before the route guard redirects.
+- **Nav placement:** Finance section, after Job Costing, ungated by
+  plan `feature` (matches `/vat` and `/expenses` precedent — Reports
+  aggregates general sales/customer data, not AC-jobs-specific data).
+- New `ReportsIcon` (zig-zag trend line + plotted points inside an
+  axis frame) — distinct from `CostingIcon`'s static rising bars.
+
+Files changed:
+- `src/app/reports/page.tsx` — new page.
+- `src/lib/i18n/translations.ts` — added `reports.*` keys to both the
+  Sinhala and English blocks.
+- `src/components/ui/icons.tsx` — added `ReportsIcon`.
+- `src/lib/nav-sections.ts` — added `/reports` to the Finance section.
+- `src/components/shell/nav-icons.tsx` — wired `ReportsIcon` to
+  `/reports`.
+- `src/lib/org-role/permissions.ts` — added `/reports` to
+  `ShopNavHref` and the permission matrix comment (owner/manager only,
+  same mechanism as Job Costing/Expenses — no new route-list entries
+  needed).
+- `src/lib/supabase/middleware.ts` — added `/reports` to
+  `GUARDED_SHOP_PREFIXES`.
+- `src/components/shop-route-guard.tsx` — added `/reports` to
+  `SHOP_PREFIXES`.
+
+Tests performed:
+- `tsc --noEmit`: clean.
+- `eslint`: 0 errors, same 3 pre-existing warnings, none new.
+- `next build`: succeeds, 47 routes (`/reports` added as a new static
+  route, same as Job Costing/Expenses).
+
+Remaining risks: same "no browser" caveat as every UI phase since 1 —
+the trend chart, metric cards, and top-products/top-customers tables
+have not been visually verified. No new DB objects, so no RLS testing
+was needed this phase (the page reads only from the already-RLS'd
+local-first `sales` data already loaded by every other page).
+
 ## Not started
 
-Phases 14–18 (reporting, mobile field UX, performance/a11y, final
-security audit, final QA). Plus deferred items: customer notes field,
+Phases 15–18 (mobile field UX, performance/a11y, final security audit,
+final QA). Plus deferred items: customer notes field,
 Receive Stock / Stock Adjustment as real features, `schema_migrations`
 RLS (single-membership migration `20250628000001` also still unapplied —
 needs a duplicate-membership check against production first), offline
@@ -1073,18 +1152,24 @@ the Dashboard/VAT income-tax display (currently only `/expenses` itself
 shows the tax impact), unifying Workforce (technicians/contractors) with
 login-capable Team accounts (Phase 12 deliberately kept these separate),
 a purpose-built crew-assignment message template (Phase 13 reuses the
-generic `"custom"` context instead), and a UI modernization pass on
-`/settings/notifications` (still on bespoke pre-Phase-1 styling).
+generic `"custom"` context instead), a UI modernization pass on
+`/settings/notifications` (still on bespoke pre-Phase-1 styling), and
+(Phase 14) exporting the in-app report view as CSV/print directly from
+`/reports` (the existing `src/lib/export/*` CSV/print helpers are
+per-domain — sales, VAT, customers — and were not wired into this new
+aggregate view), plus a longer trend window / month-over-month
+comparison on the reports chart.
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase13-messaging`, open a draft PR stacked on
-   `claude/lakbiz-phase12-team-roles` (PR #37 —
-   merge #31→#32→#33→#34→#35→#36→#37 first, or review this one with that
-   in mind).
-2. Visual/click-through pass on the Phase 13 preview — reschedule a job
-   and confirm the notify view/message composer opens correctly; open a
-   crew and confirm the message icon next to a member works.
-3. Begin Phase 14 (Reporting) as its own branch/PR once Phase 13 is
-   reviewed — get the actual spec text for it from the repo owner first
-   if it's not already available, same as Phases 6–13 had to.
+1. Push `claude/lakbiz-phase14-reports`, open a draft PR stacked on
+   `claude/lakbiz-phase13-messaging` (PR #38 —
+   merge #31→#32→#33→#34→#35→#36→#37→#38 first, or review this one
+   with that in mind).
+2. Visual/click-through pass on the Phase 14 preview — switch the
+   period filter, confirm the trend chart/top-products/top-customers
+   render correctly, and confirm a non-owner/manager role sees the
+   access-denied empty state instead of financial numbers.
+3. Begin Phase 15 (mobile field UX) as its own branch/PR once Phase 14
+   is reviewed — get the actual spec text for it from the repo owner
+   first if it's not already available, same as Phases 6–14 had to.
