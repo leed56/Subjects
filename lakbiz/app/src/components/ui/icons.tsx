@@ -264,3 +264,16 @@ export const CostingIcon = (p: IconProps) =>
     </>,
     p,
   );
+
+/** A banknote (rounded rect + value emblem + corner marks) — money going
+ * out, distinct from BillsIcon's receipt (money coming in) and
+ * BankingIcon's columned bank front. */
+export const ExpenseIcon = (p: IconProps) =>
+  base(
+    <>
+      <rect x="2.5" y="6" width="19" height="12" rx="2" />
+      <circle cx="12" cy="12" r="2.25" />
+      <path d="M6 9v.01M18 15v.01" />
+    </>,
+    p,
+  );
