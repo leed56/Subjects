@@ -1413,9 +1413,117 @@ toggle. This phase did not attempt a dependency/supply-chain audit
 beyond confirming `npm audit` still reports 0 vulnerabilities (checked,
 clean) — no deeper SBOM/provenance review was in scope.
 
+### Phase 18 — Final QA
+
+Branch: `claude/lakbiz-phase18-final-qa`, stacked on
+`claude/lakbiz-phase17-security-audit` (PR #42, not yet merged — same
+stacking convention as Phases 6–17). Status: implemented, verified,
+pushed — draft PR #43 (https://github.com/leed56/Subjects/pull/43),
+awaiting review. **Last phase of the 19-phase spec** (Phase 0 was the
+baseline audit; Phases 1–18 are the numbered feature/QA phases).
+
+**Attempted, and this is the one phase where the attempt itself is the
+finding:** every UI phase since Phase 1 has carried a "no browser, not
+visually verified" caveat. This session's environment finally has a
+real browser (Chromium pre-installed, Playwright available), so Phase
+18's plan was a full automated click-through of every flow added in
+Phases 1–17 against a local dev server backed by the real production
+Supabase project, using a throwaway signup so no real org's data was
+touched.
+
+**What actually happened:** the browser itself cannot reach any
+external host from this sandbox. Diagnosed, not just observed — a
+Playwright-driven Chromium POST to Supabase's signup endpoint hung
+indefinitely (no response, no error event); a control test against
+plain `https://example.com` failed identically
+(`net::ERR_CONNECTION_RESET`), ruling out anything Supabase-specific;
+the session's own proxy status endpoint
+(`http://127.0.0.1:35673/__agentproxy/status`) showed
+`recentRelayFailures` for Chromium's background requests being
+rejected as "non-CONNECT" — this environment's egress proxy expects
+CONNECT-tunneled HTTPS the way `curl`/Node's fetch send it, and
+Chromium's request pattern through it doesn't match, most likely
+compounded by the proxy's TLS re-termination (documented in
+`/root/.ccr/README.md`) not being trusted by a freshly-launched
+Chromium profile the way it's set up for "the" pre-configured browser.
+No workaround was applied that would compromise TLS verification (that
+door was deliberately not opened) — this is an environment constraint
+to report, not a code bug to fix.
+
+**Pivoted to what was actually achievable — and it's substantial:**
+rather than stop at "couldn't test it," replicated the exact
+signup → auto-confirm → `bootstrap_user_organization` → CRUD sequence
+the browser would perform, using direct HTTPS calls (`curl`, which
+*can* reach Supabase through this same proxy without issue) against
+the live production project. This validates the real business logic —
+Auth, RPC, RLS, REST — end to end, just without pixels:
+- Signed up a throwaway account (`qa-e2e-phase18-*@example.com`) —
+  confirmed Supabase Auth's `mailer_autoconfirm: true` means no email
+  round-trip is needed, session token returned immediately.
+- Called `bootstrap_user_organization` with the AC/HVAC sector — new
+  org created, caller correctly seated as `owner`, `subscriptions` row
+  created with `status: trialing` (matches the "14-day free trial"
+  banner in the UI).
+- Exercised the exact REST endpoints the app's pages call as this
+  authenticated user: `GET`/`POST /rest/v1/crews` (Phase 6) and
+  `GET`/`POST /rest/v1/expenses` (Phase 11) both succeeded (200/201)
+  with rows scoped to the new org — confirms those two phases' data
+  layer works through the real network path, not just via direct SQL.
+  `GET /rest/v1/products`/`/rest/v1/sales` (the masked views) also
+  returned 200 for the authenticated owner.
+- **Directly re-verified the Phase 17 fix at the live REST layer**
+  (stronger evidence than the SQL-level advisor re-scan alone): called
+  `rpc/can_see_org_financials` as the authenticated owner → `true`;
+  called the same RPC with **no bearer token** (anon) → `401`,
+  `"permission denied for function can_see_org_financials"`. The
+  anon-EXECUTE revoke from Phase 17 is confirmed enforced against the
+  real, deployed API surface, not just inferred from the migration
+  succeeding.
+- Cleaned up afterward — deleted the test crew, expense, subscription,
+  org_members row, organization, and auth user; verified 0 rows remain
+  matching the test pattern. Production data is untouched.
+
+**Final consolidated regression check** across the complete stacked
+tree (everything from Phases 1–17 combined, since this branch is the
+tip of the stack): `rm -rf .next node_modules/.cache && tsc --noEmit`
+clean; `eslint` 0 errors, same 3 pre-existing warnings; `next build`
+succeeds, 47 routes, no new routes this phase.
+
+**Delivered `docs/QA_CHECKLIST.md`** — a manual QA checklist covering
+exactly what Phase 18 couldn't verify itself: the specific unverified
+visual items flagged across Phases 10/14/15/16 (dashboard MeterCard,
+reports chart/period-filter/access-gate, mobile call/navigate links on
+real hardware, the reschedule drawer's new address block, the
+lazy-loaded message composer, keyboard/screen-reader checks on the new
+week-nav labels), plus cross-cutting checks (full signup-to-first-sale
+flow watched in a real browser, narrow-viewport layout, OS dark-mode).
+Explicitly scopes out what does *not* need re-testing — RLS isolation
+and API authorization, since Phase 17/18 already verified those live
+against the real backend two different ways (SQL impersonation and
+now direct REST calls).
+
+Files changed:
+- `docs/QA_CHECKLIST.md` (new)
+- No application source changes.
+
+Tests performed: everything described above — live signup/RPC/REST
+flow against production Supabase (created and fully cleaned up), plus
+`tsc`/`eslint`/`build` across the full stacked tree.
+
+Remaining risks: this is the risk this phase exists to document — no
+phase in this project, including this one, has had a human or working
+browser actually look at the rendered UI for anything built since
+Phase 0's `/` and `/login` check. Recommend the repo owner run
+`docs/QA_CHECKLIST.md` in a normal (non-sandboxed) browser before
+treating Phases 6–18 as production-ready, or run this same
+Playwright-based signup+click-through script (the working parts of it,
+in `/tmp/.../scratchpad` this session, not committed — trivial to
+recreate from this doc) from an environment where the browser has real
+outbound network access.
+
 ## Not started
 
-Phase 18 (final QA). Plus deferred items: customer notes field,
+Deferred items: customer notes field,
 Receive Stock / Stock Adjustment as real features, offline
 support for AC Assets and Crews, the full field-service status/dispatch
 model (New/Assigned/On the way/Awaiting parts/Invoiced/Paid), before/after
@@ -1453,14 +1561,21 @@ beyond `tsc`/`build` passing).
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase17-security-audit`, open a draft PR stacked
-   on `claude/lakbiz-phase16-perf-a11y` (PR #41 —
-   merge #31→#32→#33→#34→#35→#36→#37→#38→#39→#40→#41 first, or review
-   this one with that in mind).
-2. Manually enable "leaked password protection" in the Supabase
-   dashboard (Authentication → Providers → Email → Password) — the one
-   Phase 17 finding that needs a human with dashboard access, not a
-   migration.
-3. Begin Phase 18 (final QA) as its own branch/PR once Phase 17 is
-   reviewed — get the actual spec text for it from the repo owner
-   first if it's not already available, same as Phases 6–17 had to.
+All 19 phases (0–18) of the product spec are now implemented and
+pushed as 13 stacked draft PRs (#31–#43). Nothing left to build from
+the spec — what's left is review and merge:
+
+1. Manually enable "leaked password protection" in the Supabase
+   dashboard (Authentication → Providers → Email → Password) — the
+   one Phase 17 finding that needs a human with dashboard access, not
+   a migration.
+2. Run `docs/QA_CHECKLIST.md` in a real (non-sandboxed) browser — every
+   item on it is something no phase in this project has had a human or
+   working browser look at yet.
+3. Review and merge the PR stack in order: #31→#32→#33→#34→#35→#36→
+   #37→#38→#39→#40→#41→#42→#43. Each is stacked on the previous, so
+   review/merge order matters — merging out of order will show
+   unrelated diffs in later PRs until the base catches up.
+4. After merging, re-run `npm audit` and the Phase 17 security-advisor
+   scan once more against whatever becomes the new `main` — no changes
+   are expected, but it's a cheap final confirmation after 13 PRs land.
