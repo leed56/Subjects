@@ -566,24 +566,101 @@ Remaining risks: same "no browser" caveat as every UI phase since 1 — the
 member-picker UI (add/remove technician or contractor, set lead) has not
 been visually verified.
 
+### Phase 7 — Scheduling (calendar/dispatch board)
+Branch: `claude/lakbiz-phase7-schedule`, stacked on `claude/lakbiz-phase6-crews`
+(PR #31, not yet merged — same stacking convention Phases 1–5 used pre-merge).
+Status: implemented, build verified, pushed — draft PR #32, awaiting review.
+
+**Scope call, same reason as Phase 6:** no spec text available for this
+phase either. Asked the repo owner directly; confirmed: a visual
+day/week calendar of AC Jobs, not just a filtered list view.
+
+**Architectural decision — the interesting one this phase:** unlike
+Phases 4 and 6, this is **not** a cloud-only module. It's built entirely
+on the existing local-first `data.acJobs` store (`useAppStore()`), reading
+the `scheduledDate`/`status`/`assigneeType`/`assigneeId` fields every job
+already has, and rescheduling by calling the *existing*
+`updateACJobToCloud(jobId, { scheduledDate })` — the exact same write path
+`/jobs` itself already uses for every other field. No new table, no new
+migration, no bypass client. The reason Phase 4/6 went cloud-only was
+specifically that `asset_id`/`crew_id` are fields the local-first
+`ACJobInput` type doesn't know about; scheduling only touches fields that
+were already there, so there's no such constraint here — the safer,
+simpler choice was to just use the store like every other page does.
+
+Files changed:
+- `src/app/schedule/page.tsx` (new) — week view (Mon–Sun, prev/next/this-week
+  navigation), one column per day, each showing that day's jobs
+  (customer, job type, assignee, status badge, reusing `jobStatusClass`/
+  `jobStatusLabel`/`jobTypeLabel` from the existing `ac-jobs.ts`/
+  `ac-job-types.ts` helpers rather than reinventing status styling). A
+  separate "Unscheduled" strip surfaces quote/deposit_received jobs with
+  no date yet. An assignee filter (technician or contractor) narrows the
+  whole board. Clicking a job card opens a small reschedule `Drawer` (not
+  drag-and-drop — no new dependency for a feature this size, and the data
+  model has no time-of-day field to make a hover-drag grid meaningful
+  yet, only a date).
+- **Route wiring**, same treatment as every prior Service-section page:
+  `src/lib/supabase/middleware.ts`, `src/components/shop-route-guard.tsx`,
+  `src/lib/org-role/permissions.ts` (access follows `/jobs`'s level —
+  owner/manager/data_entry/technician, not cashier; the reschedule
+  *action* itself is further restricted to owner/manager/data_entry inside
+  the page, technicians get read-only view of the board),
+  `src/lib/subscription/can.ts` (`ac_jobs` feature gate, same as
+  Jobs/Workforce/Assets/Teams), `src/lib/nav-sections.ts` (placed right
+  after Jobs — it's a view over the same data) +
+  `src/components/shell/nav-icons.tsx` (reused the existing `CalendarIcon`,
+  no new icon needed).
+
+**Deliberately out of scope, flagged not dropped:** crew-column grouping
+(the "optionally by crew" half of the original scope question). `crew_id`
+lives only in the cloud `ac_jobs` view (Phase 6), not in the local-first
+`ACJob` type the rest of this page reads — mixing a local-first list with
+a per-row cloud lookup for one column was judged more complexity than this
+phase's value justified. Grouping by *assignee* (technician/contractor)
+ships now since that data is already on the local-first `ACJob` type
+(`assigneeType`/`assigneeId`); true crew-column grouping is a natural
+follow-up once/if `crew_id` gets wired into `ACJobInput` (see the
+`asset_id`/`crew_id` deferred item below — this is the same underlying
+gap, not a new one).
+
+Tests performed:
+- `tsc --noEmit`: clean.
+- `eslint`: 0 errors, same 3 pre-existing warnings, none new (three real
+  dead-variable warnings surfaced and fixed during development — an
+  unused status-set constant and two unused date strings left over from
+  an earlier draft of the header).
+- `next build`: succeeds, 44 routes (was 43), `/schedule` statically
+  prerenders.
+
+Remaining risks: same "no browser" caveat as every UI phase since 1 — the
+week-grid layout (horizontal scroll on narrow viewports, via
+`overflow-x-auto`) and the reschedule drawer have not been visually
+verified.
+
 ## Not started
 
-Phases 7–18 (scheduling, job costing, invoicing, dashboard rebuild,
-expenses, workforce/roles, messaging integration, reporting, mobile field
-UX, performance/a11y, final security audit, final QA). Plus deferred
-items: customer notes field, Receive Stock / Stock Adjustment as real
-features, `schema_migrations` RLS (single-membership migration
-`20250628000001` also still unapplied — needs a duplicate-membership check
-against production first), offline support for AC Assets and Crews, the
-full field-service status/dispatch model (New/Assigned/On the way/Awaiting
+Phases 8–18 (job costing, invoicing, dashboard rebuild, expenses,
+workforce/roles, messaging integration, reporting, mobile field UX,
+performance/a11y, final security audit, final QA). Plus deferred items:
+customer notes field, Receive Stock / Stock Adjustment as real features,
+`schema_migrations` RLS (single-membership migration `20250628000001`
+also still unapplied — needs a duplicate-membership check against
+production first), offline support for AC Assets and Crews, the full
+field-service status/dispatch model (New/Assigned/On the way/Awaiting
 parts/Invoiced/Paid), before/after photos, customer signature, wiring
-`asset_id`/`crew_id` into the `/jobs` create/edit form.
+`asset_id`/`crew_id` into the `/jobs` create/edit form (this is also what
+blocks true crew-column grouping on the Schedule board — see Phase 7),
+drag-and-drop rescheduling, and time-of-day scheduling (the data model is
+date-only right now).
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase6-crews`, open a draft PR based on `main`.
-2. Visual/click-through pass on the Phase 6 preview — particularly the
-   member-picker (add/remove/set-lead) in the crew profile drawer.
-3. Begin Phase 7 (Scheduling) as its own branch/PR once Phase 6 is
+1. Push `claude/lakbiz-phase7-schedule`, open a draft PR stacked on
+   `claude/lakbiz-phase6-crews` (PR #31 — merge that one first, or review
+   this one with that in mind).
+2. Visual/click-through pass on the Phase 7 preview — particularly the
+   week-grid responsive behavior and the reschedule drawer.
+3. Begin Phase 8 (Job costing) as its own branch/PR once Phase 7 is
    reviewed — get the actual spec text for it from the repo owner first if
-   it's not already available, same as this phase had to.
+   it's not already available, same as Phases 6 and 7 had to.

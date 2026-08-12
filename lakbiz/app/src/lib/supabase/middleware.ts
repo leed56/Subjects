@@ -14,6 +14,7 @@ const GUARDED_SHOP_PREFIXES = [
   "/stock",
   "/suppliers",
   "/jobs",
+  "/schedule",
   "/workforce",
   "/vehicles",
   "/bills",
