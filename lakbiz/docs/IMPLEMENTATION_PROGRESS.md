@@ -1209,7 +1209,8 @@ change across every already-shipped phase's UI.
 Branch: `claude/lakbiz-phase16-perf-a11y`, stacked on
 `claude/lakbiz-phase15-field-ux` (PR #40, not yet merged — same
 stacking convention as Phases 6–15). Status: implemented, build
-verified, pushed — draft PR #41, awaiting review.
+verified, pushed — draft PR #41 (https://github.com/leed56/Subjects/pull/41),
+awaiting review.
 
 **Scope call, same reason as Phases 6–15:** no spec text for this
 phase either. Checked first: Phase 1's design system already handles
