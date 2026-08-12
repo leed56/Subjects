@@ -1418,9 +1418,9 @@ clean) — no deeper SBOM/provenance review was in scope.
 Branch: `claude/lakbiz-phase18-final-qa`, stacked on
 `claude/lakbiz-phase17-security-audit` (PR #42, not yet merged — same
 stacking convention as Phases 6–17). Status: implemented, verified,
-pushed — draft PR #43, awaiting review. **Last phase of the 19-phase
-spec** (Phase 0 was the baseline audit; Phases 1–18 are the numbered
-feature/QA phases).
+pushed — draft PR #43 (https://github.com/leed56/Subjects/pull/43),
+awaiting review. **Last phase of the 19-phase spec** (Phase 0 was the
+baseline audit; Phases 1–18 are the numbered feature/QA phases).
 
 **Attempted, and this is the one phase where the attempt itself is the
 finding:** every UI phase since Phase 1 has carried a "no browser, not
