@@ -9,6 +9,7 @@ import { FormField, DateInput, SelectInput } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
 import { ChevronRightIcon, CheckIcon } from "@/components/ui/icons";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
+import { CallLink, NavigateLink } from "@/components/ui/field-links";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -286,6 +287,13 @@ export default function SchedulePage() {
                 <div className="flex items-center gap-2">
                   <StatusBadge>{jobStatusLabel(rescheduleTarget.status, locale)}</StatusBadge>
                   <span className="text-sm text-slate-600">{jobTypeLabel(rescheduleTarget.jobType, locale)}</span>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-sm text-slate-700">{rescheduleTarget.address}</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {rescheduleTarget.phone && <CallLink phone={rescheduleTarget.phone} label={t("common.call")} />}
+                    <NavigateLink address={rescheduleTarget.address} label={t("common.navigate")} />
+                  </div>
                 </div>
                 <FormField label={t("schedule.new_date")}>
                   <DateInput value={rescheduleDate} onChange={setRescheduleDate} />

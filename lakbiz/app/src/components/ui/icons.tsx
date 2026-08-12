@@ -293,3 +293,21 @@ export const ReportsIcon = (p: IconProps) =>
     </>,
     p,
   );
+
+/** Classic handset silhouette — Phase 15, tap-to-call links on Jobs/Schedule. */
+export const PhoneIcon = (p: IconProps) =>
+  base(
+    <path d="M4.5 4.5c0-.55.45-1 1-1h2.15c.47 0 .87.32.98.78l.8 3.35a1 1 0 0 1-.29 1L7.9 9.9a13 13 0 0 0 6.2 6.2l1.27-1.24a1 1 0 0 1 1-.29l3.35.8c.46.11.78.51.78.98v2.15c0 .55-.45 1-1 1h-1.5C9.15 19.5 4.5 14.85 4.5 9V4.5Z" />,
+    p,
+  );
+
+/** A location pin with a directional arrow through it — reads as
+ * "navigate here", distinct from a plain map-pin marker. */
+export const NavigateIcon = (p: IconProps) =>
+  base(
+    <>
+      <path d="M12 21s7-6.4 7-11.5A7 7 0 0 0 5 9.5C5 14.6 12 21 12 21Z" />
+      <path d="m9.5 11.5 5-3-1.8 5.3-1.2-1.5-2-.8Z" />
+    </>,
+    p,
+  );
