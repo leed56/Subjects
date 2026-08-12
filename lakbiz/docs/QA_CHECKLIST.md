@@ -16,14 +16,54 @@ has ever had eyes on.
 Sign in as an **owner** account with the **AC/HVAC sector** selected at
 signup, so every `ac_jobs`-gated nav item is visible.
 
-## Phase 10 — Dashboard
-- [ ] Load `/dashboard`. Confirm the "ESTIMATED INCOME TAX · 30%" meter
-      card renders its eyebrow/title on one line, with the action button
-      on its own row below (this was the one item already visually
-      confirmed via a user-provided screenshot mid-project — re-check it
-      hasn't regressed since).
-- [ ] Confirm all other MeterCards (dark variants) render without text
-      being squeezed vertically.
+## Dashboard command center (`/dashboard`, post-Phase-18 refinement)
+Supersedes the old Phase 10 dashboard entirely — the black VAT card and
+indigo income-tax card mentioned in the original Phase 10 QA note are
+gone, replaced by the Financial Snapshot section below, so that specific
+item no longer applies. None of the following has been visually checked.
+- [ ] Load `/dashboard` as an owner with real sales/jobs data. Confirm
+      the 4 KPI cards (today's sales, gross profit, payments received,
+      jobs today) render at the top with clear visual priority over
+      everything below.
+- [ ] Confirm Today's Operations shows today's scheduled jobs as a table
+      on desktop and stacked cards on mobile; click a row and confirm it
+      navigates to `/jobs` (this is a known, disclosed limitation — it
+      does not deep-link into that specific job's drawer, since `/jobs`
+      has no URL-driven way to open one).
+- [ ] Confirm Needs Attention shows only real, currently-true alerts
+      (create an unassigned job, an over-limit customer, or a low-stock
+      product to verify each one appears; delete/resolve it and confirm
+      the alert disappears without a page reload issue).
+- [ ] With zero alerts, confirm the single "operations are clear" line
+      shows instead of nothing / instead of empty alert cards.
+- [ ] Confirm the Financial Snapshot + Revenue & Gross Profit chart sit
+      side-by-side on desktop (≥1024px) and stack on mobile; toggle the
+      "Estimated income tax" collapsed panel open/closed.
+- [ ] Switch the chart's period selector (30 days / 3 / 6 / 12 months) —
+      confirm both revenue and profit bars redraw and the totals below
+      update. The 30-day view specifically exercises a date-matching fix
+      made in this pass (`Sale.date` is a full ISO timestamp, not a
+      plain date) — worth checking this one isn't silently empty.
+- [ ] Confirm Teams Today groups jobs by assigned technician/contractor
+      correctly, and an "Unassigned" group appears in amber if any job
+      today has no assignee.
+- [ ] Sign in as **data_entry** and **cashier** — confirm neither sees
+      any profit/bank/receivables/payables/VAT figure anywhere on the
+      page. Confirm **cashier** additionally sees no AC-jobs section at
+      all (Today's Operations, Teams Today, "+ New job" button) — this
+      was a bug caught and fixed during this pass, worth double-checking
+      it actually holds in a real browser.
+- [ ] Sign in as **technician** — confirm `/dashboard` now loads (was
+      previously an infinite-redirect bug) and shows the simplified
+      "Today's Jobs" list with call/navigate icons, no financial figures
+      anywhere.
+- [ ] Sign in to a brand-new org with zero customers/products/sales/jobs
+      — confirm the 3-step "Start using LakBiz" onboarding state shows
+      instead of the full dashboard; add one customer and confirm it
+      switches to the real dashboard automatically on next load.
+- [ ] Tab through the header's `More ▾` menu and each Needs Attention
+      row's action button with a keyboard only — confirm focus is
+      visible throughout.
 
 ## Phase 14 — Reports (`/reports`)
 - [ ] Switch between all four period filters (7d/30d/month/all) — confirm

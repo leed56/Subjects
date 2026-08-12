@@ -51,7 +51,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/schedule", labelKey: "schedule.title", feature: "ac_jobs" },
       { href: "/assets", labelKey: "assets.title", feature: "ac_jobs" },
       { href: "/workforce", labelKey: "nav.workforce", feature: "ac_jobs" },
-      { href: "/teams", labelKey: "crews.title", feature: "ac_jobs" },
+      { href: "/teams", labelKey: "nav.field_teams", feature: "ac_jobs" },
     ],
   },
   {
