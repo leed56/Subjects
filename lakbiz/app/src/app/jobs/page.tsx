@@ -47,7 +47,7 @@ import type { BusinessInfo } from "@/lib/invoice";
 import { defaultTemplateForJob, loadNotificationSettings } from "@/lib/messaging";
 import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useAppStore } from "@/lib/store/use-app-store";
-import type { ACJob, ACJobInput, JobAssigneeType, JobItem, JobItemType, JobItemSource, JobItemInput, JobStatusEntry, Supplier } from "@/lib/store/types";
+import type { ACJob, ACJobInput, JobAssigneeType, JobItem, JobItemType, JobItemSource, JobItemInput, JobStatusEntry, Supplier, Technician } from "@/lib/store/types";
 import type { Product } from "@/lib/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { canManageAcJobs, canOperateAcJobs } from "@/lib/org-role/permissions";
@@ -510,6 +510,7 @@ export default function JobsPage() {
           history={data.jobStatusHistory.filter((h) => h.jobId === sheetJob.id)}
           products={data.products}
           suppliers={data.suppliers}
+          technicians={data.technicians}
           canSeeFinancials={canSeeFinancials}
           canOperateJobs={canOperateJobs}
           canWrite={canWrite}
@@ -632,7 +633,7 @@ const JOB_ITEM_TYPES: JobItemType[] = ["part", "labour", "service"];
  * now a Drawer instead of a fixed-overlay dialog. Equipment section (Phase 5) is new:
  * a direct-cloud read/write against ac_jobs.asset_id, bypassing the local-first ACJob
  * type which doesn't carry that column yet — see ac-assets-client.ts. */
-function JobSheetDrawer({ job, locale, items, history, products, suppliers, canSeeFinancials, canOperateJobs, canWrite, onAddItem, onDeleteItem, onClose }: { job: ACJob; locale: Locale; items: JobItem[]; history: JobStatusEntry[]; products: Product[]; suppliers: Supplier[]; canSeeFinancials: boolean; canOperateJobs: boolean; canWrite: boolean; onAddItem: (input: JobItemInput) => Promise<{ ok: boolean; error?: string }>; onDeleteItem: (id: string) => Promise<{ ok: boolean; error?: string }>; onClose: () => void }) {
+function JobSheetDrawer({ job, locale, items, history, products, suppliers, technicians, canSeeFinancials, canOperateJobs, canWrite, onAddItem, onDeleteItem, onClose }: { job: ACJob; locale: Locale; items: JobItem[]; history: JobStatusEntry[]; products: Product[]; suppliers: Supplier[]; technicians: Technician[]; canSeeFinancials: boolean; canOperateJobs: boolean; canWrite: boolean; onAddItem: (input: JobItemInput) => Promise<{ ok: boolean; error?: string }>; onDeleteItem: (id: string) => Promise<{ ok: boolean; error?: string }>; onClose: () => void }) {
   const { t } = useLocale();
   const { toast } = useToast();
   const [itemType, setItemType] = useState<JobItemType>("part");
@@ -646,11 +647,14 @@ function JobSheetDrawer({ job, locale, items, history, products, suppliers, canS
   const [supplierId, setSupplierId] = useState("");
   const [purchaseRef, setPurchaseRef] = useState("");
   const [customerPrice, setCustomerPrice] = useState("");
+  // itemType === "labour" only (HVAC platform Phase 6).
+  const [technicianId, setTechnicianId] = useState("");
   const [savingItem, setSavingItem] = useState(false);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
   const inStockProducts = products.filter((p) => p.stockQty > 0);
   const selectedProduct = productId ? products.find((p) => p.id === productId) : undefined;
+  const activeTechnicians = technicians.filter((tc) => tc.active);
 
   const resetItemForm = () => {
     setName("");
@@ -659,6 +663,7 @@ function JobSheetDrawer({ job, locale, items, history, products, suppliers, canS
     setProductId("");
     setSupplierId("");
     setPurchaseRef("");
+    setTechnicianId("");
     setCustomerPrice("");
   };
 
@@ -818,6 +823,11 @@ function JobSheetDrawer({ job, locale, items, history, products, suppliers, canS
                   <td className="px-3 py-2 font-medium text-slate-900">
                     {i.name}
                     {i.source && <p className="mt-0.5 text-xs font-normal text-slate-400">{sourceLabels[i.source]}</p>}
+                    {i.technicianId && (
+                      <p className="mt-0.5 text-xs font-normal text-slate-400">
+                        {technicians.find((tc) => tc.id === i.technicianId)?.name ?? t("jobs.no_technician")}
+                      </p>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-slate-600">{itemTypeLabels[i.itemType]}</td>
                   <td className="px-3 py-2 text-right font-mono">{i.qty}</td>
@@ -878,6 +888,7 @@ function JobSheetDrawer({ job, locale, items, history, products, suppliers, canS
             if (!canWrite || savingItem) return;
 
             const isPart = itemType === "part";
+            const isLabour = itemType === "labour";
             const isStock = isPart && source === "stock";
             const isPurchased = isPart && source === "purchased";
 
@@ -900,7 +911,8 @@ function JobSheetDrawer({ job, locale, items, history, products, suppliers, canS
               supplierId: isPurchased ? supplierId || undefined : undefined,
               purchaseRef: isPurchased ? purchaseRef || undefined : undefined,
               purchaseDate: isPurchased ? new Date().toISOString().slice(0, 10) : undefined,
-              customerPrice: isPart && customerPrice !== "" ? Number(customerPrice) || 0 : undefined,
+              customerPrice: (isPart || isLabour) && customerPrice !== "" ? Number(customerPrice) || 0 : undefined,
+              technicianId: isLabour ? technicianId || undefined : undefined,
             });
             setSavingItem(false);
             if (!result.ok) {
@@ -991,6 +1003,25 @@ function JobSheetDrawer({ job, locale, items, history, products, suppliers, canS
                     options={[{ value: "", label: t("jobs.no_supplier") }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]}
                   />
                   <TextInput placeholder={t("jobs.purchase_ref")} value={purchaseRef} onChange={(e) => setPurchaseRef(e.target.value)} />
+                  {canSeeFinancials && (
+                    <MoneyInput value={customerPrice} onChange={setCustomerPrice} placeholder={t("jobs.customer_price_ph")} />
+                  )}
+                </div>
+              )}
+              {itemType === "labour" && (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-2">
+                  <SelectInput
+                    value={technicianId}
+                    onChange={(v) => {
+                      setTechnicianId(v);
+                      const tc = activeTechnicians.find((row) => row.id === v);
+                      if (tc?.hourlyRate) setUnitPrice(String(tc.hourlyRate));
+                    }}
+                    options={[
+                      { value: "", label: t("jobs.no_technician") },
+                      ...activeTechnicians.map((tc) => ({ value: tc.id, label: tc.name })),
+                    ]}
+                  />
                   {canSeeFinancials && (
                     <MoneyInput value={customerPrice} onChange={setCustomerPrice} placeholder={t("jobs.customer_price_ph")} />
                   )}

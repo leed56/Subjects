@@ -499,6 +499,7 @@ export async function pullBusinessData(
       purchaseRef: row.purchase_ref ?? undefined,
       purchaseDate: row.purchase_date ?? undefined,
       customerPrice: row.customer_price != null ? num(row.customer_price) : undefined,
+      technicianId: row.technician_id ?? undefined,
     })),
     jobStatusHistory: jobStatusHistory.map((row) => ({
       id: row.id,
@@ -517,6 +518,7 @@ export async function pullBusinessData(
         : [],
       active: row.active ?? true,
       notes: row.notes ?? undefined,
+      hourlyRate: row.hourly_rate != null ? num(row.hourly_rate) : undefined,
     })),
     contractors: contractors.map((row) => ({
       id: row.id,
@@ -1455,6 +1457,7 @@ function jobItemRow(
     purchase_ref: item.purchaseRef ?? null,
     purchase_date: item.purchaseDate ?? null,
     customer_price: item.customerPrice ?? null,
+    technician_id: item.technicianId ?? null,
   };
 }
 
@@ -1909,6 +1912,7 @@ function technicianRow(
     specialties: technician.specialties,
     active: technician.active,
     notes: technician.notes ?? null,
+    hourly_rate: technician.hourlyRate ?? null,
   };
 }
 
@@ -2224,6 +2228,7 @@ export async function pushBusinessData(
     purchase_ref: i.purchaseRef ?? null,
     purchase_date: i.purchaseDate ?? null,
     customer_price: i.customerPrice ?? null,
+    technician_id: i.technicianId ?? null,
   }));
 
   const jobStatusHistoryRows = data.jobStatusHistory.map((h) => ({
@@ -2244,6 +2249,7 @@ export async function pushBusinessData(
     specialties: tch.specialties,
     active: tch.active,
     notes: tch.notes ?? null,
+    hourly_rate: tch.hourlyRate ?? null,
   }));
 
   const contractorRows = data.contractors.map((c) => ({

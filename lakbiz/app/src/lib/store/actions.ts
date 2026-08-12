@@ -884,7 +884,13 @@ export function addJobItem(data: AppData, input: JobItemInput, userId?: string):
     supplierId: input.itemType === "part" && input.source === "purchased" ? input.supplierId : undefined,
     purchaseRef: input.itemType === "part" && input.source === "purchased" ? input.purchaseRef?.trim() || undefined : undefined,
     purchaseDate: input.itemType === "part" && input.source === "purchased" ? input.purchaseDate : undefined,
-    customerPrice: input.itemType === "part" ? input.customerPrice : undefined,
+    // Part and labour lines both support a customer-charge figure
+    // distinct from internal cost — labour's is the Phase 6 addition.
+    customerPrice: input.itemType === "part" || input.itemType === "labour" ? input.customerPrice : undefined,
+    technicianId:
+      input.itemType === "labour" && input.technicianId && data.technicians.some((tc) => tc.id === input.technicianId)
+        ? input.technicianId
+        : undefined,
   };
 
   return { ...data, products, stockLogs, jobItems: [item, ...data.jobItems] };
@@ -973,6 +979,7 @@ export function addTechnician(data: AppData, input: TechnicianInput): AppData {
     specialties: cleanSpecialties(input.specialties),
     active: input.active ?? true,
     notes: input.notes?.trim() || undefined,
+    hourlyRate: input.hourlyRate != null && input.hourlyRate > 0 ? input.hourlyRate : undefined,
   };
   return { ...data, technicians: [technician, ...data.technicians] };
 }
@@ -997,6 +1004,12 @@ export function updateTechnician(
             active: input.active ?? t.active,
             notes:
               input.notes !== undefined ? input.notes.trim() || undefined : t.notes,
+            hourlyRate:
+              input.hourlyRate !== undefined
+                ? input.hourlyRate > 0
+                  ? input.hourlyRate
+                  : undefined
+                : t.hourlyRate,
           }
         : t,
     ),
