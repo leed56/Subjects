@@ -196,3 +196,94 @@ export async function createTeamMember(input: {
 
   return { userId, email, role };
 }
+
+/**
+ * Change an existing member's role (Phase 12). Same TEAM_MEMBER_ROLES
+ * allow-list as invite-time — this can't grant "owner" through this path,
+ * and can't touch the org's own owner row, so there's no route to
+ * accidentally demoting or duplicating ownership here. Uses the
+ * service-role admin client, same as createTeamMember, since this is
+ * already gated by requireOrgOwner() server-side before it's called.
+ */
+export async function updateTeamMemberRole(input: {
+  admin: SupabaseClient;
+  organizationId: string;
+  requestingUserId: string;
+  targetUserId: string;
+  role: OrgRole;
+}): Promise<{ userId: string; role: OrgRole } | { error: string }> {
+  const { admin, organizationId, requestingUserId, targetUserId, role } = input;
+
+  if (!TEAM_MEMBER_ROLES.includes(role)) {
+    return { error: "Invalid role" };
+  }
+  if (targetUserId === requestingUserId) {
+    return { error: "Can't change your own role here" };
+  }
+
+  const { data: membership, error: lookupError } = await admin
+    .from("org_members")
+    .select("organization_id, role")
+    .eq("user_id", targetUserId)
+    .maybeSingle();
+
+  if (lookupError) return { error: lookupError.message };
+  if (!membership || membership.organization_id !== organizationId) {
+    return { error: "This user is not on your team" };
+  }
+  if (membership.role === "owner") {
+    return { error: "Can't change the owner's role" };
+  }
+
+  const { error: updateError } = await admin
+    .from("org_members")
+    .update({ role })
+    .eq("user_id", targetUserId)
+    .eq("organization_id", organizationId);
+
+  if (updateError) return { error: updateError.message };
+  return { userId: targetUserId, role };
+}
+
+/**
+ * Remove a member from the org (Phase 12). Revokes their access to this
+ * shop by deleting the org_members row — deliberately does NOT delete
+ * their Supabase auth account, matching how "remove team member" works
+ * in most SaaS products (revoke access, don't destroy the underlying
+ * account, which may be reused elsewhere or restored by re-inviting).
+ */
+export async function removeTeamMember(input: {
+  admin: SupabaseClient;
+  organizationId: string;
+  requestingUserId: string;
+  targetUserId: string;
+}): Promise<{ userId: string } | { error: string }> {
+  const { admin, organizationId, requestingUserId, targetUserId } = input;
+
+  if (targetUserId === requestingUserId) {
+    return { error: "Can't remove yourself" };
+  }
+
+  const { data: membership, error: lookupError } = await admin
+    .from("org_members")
+    .select("organization_id, role")
+    .eq("user_id", targetUserId)
+    .maybeSingle();
+
+  if (lookupError) return { error: lookupError.message };
+  if (!membership || membership.organization_id !== organizationId) {
+    return { error: "This user is not on your team" };
+  }
+  if (membership.role === "owner") {
+    return { error: "Can't remove the owner" };
+  }
+
+  const { error: deleteError } = await admin
+    .from("org_members")
+    .delete()
+    .eq("user_id", targetUserId)
+    .eq("organization_id", organizationId);
+
+  if (deleteError) return { error: deleteError.message };
+  return { userId: targetUserId };
+}

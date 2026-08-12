@@ -937,35 +937,90 @@ estimate *without* the expenses deduction — see the architectural
 decision above; this is a stated, deliberate scope boundary for this
 phase, not an oversight.
 
+### Phase 12 — Editable team roles + member removal
+Branch: `claude/lakbiz-phase12-team-roles`, stacked on `claude/lakbiz-phase11-expenses`
+(PR #36, not yet merged — same stacking convention as Phases 6–11). Status:
+implemented, build verified, pushed — draft PR #37, awaiting review.
+
+**Scope call, same reason as Phases 6–11:** no spec text for this phase
+either. Checked `/settings/team` first, since "Workforce/roles" is vague
+on its own: invites already had a role picker
+(data_entry/cashier/technician/manager), but the member list below it was
+read-only — no way to change someone's role after inviting them, or
+remove a member. Asked the repo owner directly; confirmed: fix exactly
+that gap, on the existing page, not a bigger unification of Workforce
+(technicians/contractors) with login-capable Team accounts.
+
+**No new data model, no migration** — `org_members.role` already existed
+and was already writable (invite-time only, until now); this phase adds
+two more write paths to the same column plus a delete, all through the
+same server-side, service-role-gated pattern `createTeamMember` already
+established.
+
+Files changed:
+- `src/lib/org-role/create-team-member.ts` — added `updateTeamMemberRole`
+  and `removeTeamMember`, mirroring `createTeamMember`'s shape and
+  safety checks: both reject acting on the requesting owner's own
+  `userId` (can't self-demote or self-remove through this UI) and reject
+  acting on a target whose role is `"owner"` (can't touch the org's
+  owner row at all) — checked server-side in the helper itself, not just
+  hidden in the UI, so this holds even if the request didn't come from
+  the page. `removeTeamMember` deletes the `org_members` row only, not
+  the underlying Supabase auth account — revokes shop access without
+  destroying an account that might be reused or restored by re-inviting,
+  matching how "remove team member" works in most SaaS products.
+- `src/app/api/settings/team/route.ts` — extended the existing
+  action-based `POST` handler (already `"create"`/`"reset_password"`)
+  with `"update_role"` and `"remove_member"`, same convention rather than
+  introducing PATCH/DELETE verbs the rest of this route doesn't use.
+  Still gated by the existing `requireOrgOwner()` check up front — no new
+  permission surface.
+- `src/app/settings/team/page.tsx` — each member row (except the current
+  user's own and the owner's) now has an inline role `<select>` and a
+  "Remove" action; removal goes through the existing `ConfirmDialog`
+  primitive rather than a native `confirm()` popup, consistent with the
+  modernization already applied to every other delete flow since Phase 2.
+
+Tests performed:
+- `tsc --noEmit`: clean.
+- `eslint`: 0 errors, same 3 pre-existing warnings, none new.
+- `next build`: succeeds, still 46 routes (unchanged — this phase
+  extended an existing page and API route, added no new ones).
+
+Remaining risks: same "no browser" caveat as every UI phase since 1 —
+the role-change and remove flows have not been visually verified end to
+end (invite a real second user, change their role, remove them).
+
 ## Not started
 
-Phases 12–18 (workforce/roles, messaging integration, reporting, mobile
-field UX, performance/a11y, final security audit, final QA). Plus
-deferred items: customer notes field, Receive Stock / Stock Adjustment as
-real features, `schema_migrations` RLS (single-membership migration
-`20250628000001` also still unapplied — needs a duplicate-membership
-check against production first), offline support for AC Assets and
-Crews, the full field-service status/dispatch model (New/Assigned/On the
-way/Awaiting parts/Invoiced/Paid), before/after photos, customer
-signature, wiring `asset_id`/`crew_id` into the `/jobs` create/edit form
-(this is also what blocks true crew-column grouping on the Schedule
-board — see Phase 7), drag-and-drop rescheduling, time-of-day scheduling
-(the data model is date-only right now), per-job-type costing
-benchmarks/targets (Phase 8's report shows actuals only), a distinct
-job-invoice numbering scheme (Phase 9 reuses `jobNo` as the invoice
-reference), and wiring the Phase 11 expenses deduction into the
-Dashboard/VAT income-tax display (currently only `/expenses` itself
-shows the tax impact).
+Phases 13–18 (messaging integration, reporting, mobile field UX,
+performance/a11y, final security audit, final QA). Plus deferred items:
+customer notes field, Receive Stock / Stock Adjustment as real features,
+`schema_migrations` RLS (single-membership migration `20250628000001`
+also still unapplied — needs a duplicate-membership check against
+production first), offline support for AC Assets and Crews, the full
+field-service status/dispatch model (New/Assigned/On the way/Awaiting
+parts/Invoiced/Paid), before/after photos, customer signature, wiring
+`asset_id`/`crew_id` into the `/jobs` create/edit form (this is also what
+blocks true crew-column grouping on the Schedule board — see Phase 7),
+drag-and-drop rescheduling, time-of-day scheduling (the data model is
+date-only right now), per-job-type costing benchmarks/targets (Phase 8's
+report shows actuals only), a distinct job-invoice numbering scheme
+(Phase 9 reuses `jobNo` as the invoice reference), wiring the Phase 11
+expenses deduction into the Dashboard/VAT income-tax display (currently
+only `/expenses` itself shows the tax impact), and unifying Workforce
+(technicians/contractors) with login-capable Team accounts (Phase 12
+deliberately kept these separate — see its scope note).
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase11-expenses`, open a draft PR stacked on
-   `claude/lakbiz-phase10-dashboard` (PR #35 — merge #31→#32→#33→#34→#35
+1. Push `claude/lakbiz-phase12-team-roles`, open a draft PR stacked on
+   `claude/lakbiz-phase11-expenses` (PR #36 — merge #31→#32→#33→#34→#35→#36
    first, or review this one with that in mind).
-2. Visual/click-through pass on the Phase 11 preview, signed in as an
-   owner/manager — add a real expense, check the this-month/this-fiscal-
-   year totals, and confirm the tax-impact figure matches
-   `expense-total × income-tax rate`.
-3. Begin Phase 12 (Workforce/roles) as its own branch/PR once Phase 11 is
+2. Visual/click-through pass on the Phase 12 preview, signed in as
+   owner — invite a second user, change their role via the new dropdown,
+   then remove them, and confirm the owner's own row and the "you" row
+   never show the controls.
+3. Begin Phase 13 (Messaging integration) as its own branch/PR once Phase 12 is
    reviewed — get the actual spec text for it from the repo owner first
-   if it's not already available, same as Phases 6–11 had to.
+   if it's not already available, same as Phases 6–12 had to.

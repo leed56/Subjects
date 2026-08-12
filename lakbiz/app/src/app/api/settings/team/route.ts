@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import {
   createTeamMember,
+  removeTeamMember,
   resetTeamMemberPassword,
   TEAM_MEMBER_ROLES,
+  updateTeamMemberRole,
 } from "@/lib/org-role/create-team-member";
 import { requireOrgOwner } from "@/lib/org-role/require-org-role";
 import { parseOrgRole } from "@/lib/org-role/permissions";
@@ -64,10 +66,11 @@ export async function POST(request: Request) {
   }
 
   let body: {
-    action?: "create" | "reset_password";
+    action?: "create" | "reset_password" | "update_role" | "remove_member";
     email?: string;
     password?: string;
     role?: OrgRole;
+    userId?: string;
   };
   try {
     body = await request.json();
@@ -76,6 +79,40 @@ export async function POST(request: Request) {
   }
 
   const action = body.action ?? "create";
+
+  if (action === "update_role" || action === "remove_member") {
+    const targetUserId = body.userId?.trim() ?? "";
+    if (!targetUserId) {
+      return NextResponse.json({ ok: false, error: "userId required" }, { status: 400 });
+    }
+
+    if (action === "update_role") {
+      const role = parseOrgRole(body.role ?? "data_entry");
+      const result = await updateTeamMemberRole({
+        admin,
+        organizationId: owner.organizationId,
+        requestingUserId: owner.userId,
+        targetUserId,
+        role,
+      });
+      if ("error" in result) {
+        return NextResponse.json({ ok: false, error: result.error }, { status: 400 });
+      }
+      return NextResponse.json({ ok: true, member: result });
+    }
+
+    const result = await removeTeamMember({
+      admin,
+      organizationId: owner.organizationId,
+      requestingUserId: owner.userId,
+      targetUserId,
+    });
+    if ("error" in result) {
+      return NextResponse.json({ ok: false, error: result.error }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, member: result });
+  }
+
   const email = body.email?.trim().toLowerCase() ?? "";
   const password = body.password?.trim() ?? "";
   const role = parseOrgRole(body.role ?? "data_entry");
