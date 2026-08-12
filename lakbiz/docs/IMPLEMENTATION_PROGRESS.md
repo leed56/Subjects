@@ -694,33 +694,107 @@ margin math itself was reasoned through carefully (traced exactly where
 they represent internal cost, not a customer-facing price) but has not
 been checked against real job data with real items attached.
 
+### Phase 9 — AC job invoicing
+Branch: `claude/lakbiz-phase9-job-invoicing`, stacked on `claude/lakbiz-phase8-job-costing`
+(PR #33, not yet merged — same stacking convention as Phases 6–8). Status:
+implemented, build verified, pushed — draft PR #34, awaiting review.
+
+**Scope call, same reason as Phases 6–8:** no spec text for this phase
+either. Asked the repo owner directly, with context: Sales already has a
+full printable/WhatsApp-shareable invoice system (`InvoiceView` +
+`invoice.ts`), but it's typed directly against `Sale`'s `lines`/`billNo`/
+`discount` shape — AC Jobs have no equivalent, just a single
+`quotedAmount` number and a rich set of WhatsApp *text* templates (quote,
+deposit, scheduled, installed, completed) but no formal printable
+*document*. Confirmed scope: build that missing document, same
+look/UX as the Sales invoice, not a smaller "balance due" summary bolted
+onto the Job Sheet.
+
+**Important architectural decision, checked carefully before writing any
+UI:** the invoice does **not** itemize from `data.jobItems` (the
+materials/labour/subcontract lines entered on the Job Sheet in Phase 5).
+Traced exactly where those numbers come from in `jobs/page.tsx` first —
+`unitPrice` on a job item is hidden from `data_entry` behind
+`canSeeFinancials` when adding one, and the running total feeds the Job
+Sheet's internal profit metric (`quotedAmount − itemsTotal −
+subcontractCost`, see Phase 8). That's the shop's cost basis, not a
+customer-facing price breakdown. Printing it on a document handed to the
+customer would leak margin. The invoice instead has one line item — job
+type + description — at the single `quotedAmount` the customer actually
+agreed to, with deposit paid and balance due shown underneath. This is
+the same number every job WhatsApp template already treats as "what the
+customer owes" (`variablesFromContext`'s `balance = quotedAmount −
+depositAmount` in `messaging/compose.ts`), just formatted as a proper
+printable/shareable document instead of only a chat message.
+
+Reuses `job.jobNo` as the invoice reference rather than adding a separate
+invoice-number column/sequence — no new migration this phase either,
+continuing Phase 7/8's "just build on what's already there" pattern.
+
+Files changed:
+- `src/lib/job-invoice.ts` (new) — `taxInvoiceAmountsForJob` and
+  `buildJobInvoiceText`, mirroring `invoice.ts`'s `Sale` functions but
+  built fresh for `ACJob` rather than sharing code (the existing functions
+  are typed too tightly against `Sale`'s shape to share safely).
+- `src/components/job-invoice-view.tsx` (new) — `JobInvoiceView`, visually
+  mirrors `InvoiceView` line-for-line (tax-invoice legal box, seller/buyer
+  blocks, print + WhatsApp actions, amount-in-words) so a job invoice and
+  a sales bill look like the same document family.
+- `src/app/jobs/[id]/invoice/page.tsx` (new) — mirrors `/bills/[id]`'s
+  structure exactly. Reached only via a "View invoice" link added to the
+  Job Sheet drawer in `jobs/page.tsx` (`import Link from "next/link"`
+  added there) — not a new nav entry, same as `/bills/[id]` isn't one
+  either.
+- **No route-wiring changes needed anywhere** — `/jobs/[id]/invoice`
+  already falls under the existing `"/jobs"` prefix match in
+  `middleware.ts`/`shop-route-guard.tsx`/`permissions.ts` (all three use
+  `pathname.startsWith(prefix + "/")`), so it inherits `/jobs`'s exact
+  existing access level (owner/manager/data_entry/technician, not
+  cashier) automatically. Deliberately no financial-role restriction on
+  the invoice itself, since it only ever shows the customer-facing total/
+  deposit/balance, never cost or margin.
+
+Tests performed:
+- `tsc --noEmit`: clean.
+- `eslint`: 0 errors, same 3 pre-existing warnings, none new (one real
+  unused import caught and fixed — `buildJobInvoiceText` imported but
+  only used indirectly via `jobInvoiceWhatsappUrl`).
+- `next build`: succeeds. `/jobs/[id]/invoice` is dynamic (ƒ), same as
+  `/bills/[id]` — the static-page count stayed at 45 (unchanged from
+  Phase 8) since dynamic routes aren't part of that count, not because
+  nothing was added.
+
+Remaining risks: same "no browser" caveat as every UI phase since 1 — the
+print layout, the tax-invoice legal box, and the WhatsApp share text have
+not been visually checked against a real job.
+
 ## Not started
 
-Phases 9–18 (invoicing, dashboard rebuild, expenses, workforce/roles,
-messaging integration, reporting, mobile field UX, performance/a11y,
-final security audit, final QA). Plus deferred items: customer notes
-field, Receive Stock / Stock Adjustment as real features,
-`schema_migrations` RLS (single-membership migration `20250628000001`
-also still unapplied — needs a duplicate-membership check against
-production first), offline support for AC Assets and Crews, the full
-field-service status/dispatch model (New/Assigned/On the way/Awaiting
-parts/Invoiced/Paid), before/after photos, customer signature, wiring
-`asset_id`/`crew_id` into the `/jobs` create/edit form (this is also what
-blocks true crew-column grouping on the Schedule board — see Phase 7),
-drag-and-drop rescheduling, time-of-day scheduling (the data model is
-date-only right now), and per-job-type costing benchmarks/targets (the
-Phase 8 report shows actuals only, no "expected margin for this job type"
-comparison).
+Phases 10–18 (dashboard rebuild, expenses, workforce/roles, messaging
+integration, reporting, mobile field UX, performance/a11y, final security
+audit, final QA). Plus deferred items: customer notes field, Receive
+Stock / Stock Adjustment as real features, `schema_migrations` RLS
+(single-membership migration `20250628000001` also still unapplied —
+needs a duplicate-membership check against production first), offline
+support for AC Assets and Crews, the full field-service status/dispatch
+model (New/Assigned/On the way/Awaiting parts/Invoiced/Paid), before/after
+photos, customer signature, wiring `asset_id`/`crew_id` into the `/jobs`
+create/edit form (this is also what blocks true crew-column grouping on
+the Schedule board — see Phase 7), drag-and-drop rescheduling,
+time-of-day scheduling (the data model is date-only right now),
+per-job-type costing benchmarks/targets (Phase 8's report shows actuals
+only), and a distinct job-invoice numbering scheme (Phase 9 reuses
+`jobNo` as the invoice reference).
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase8-job-costing`, open a draft PR stacked on
-   `claude/lakbiz-phase7-schedule` (PR #32 — merge #31 then #32 first, or
-   review this one with that in mind).
-2. Visual/click-through pass on the Phase 8 preview, signed in as an
-   owner/manager — verify the margin figures against a few real jobs with
-   items attached, and confirm a data_entry/technician login is correctly
-   blocked from the page.
-3. Begin Phase 9 (Invoicing) as its own branch/PR once Phase 8 is
+1. Push `claude/lakbiz-phase9-job-invoicing`, open a draft PR stacked on
+   `claude/lakbiz-phase8-job-costing` (PR #33 — merge #31→#32→#33 first,
+   or review this one with that in mind).
+2. Visual/click-through pass on the Phase 9 preview — open a job's
+   invoice, check the print layout and the WhatsApp share button, and
+   confirm a VAT-registered test org renders the tax-invoice legal box
+   correctly.
+3. Begin Phase 10 (Dashboard rebuild) as its own branch/PR once Phase 9 is
    reviewed — get the actual spec text for it from the repo owner first if
-   it's not already available, same as Phases 6, 7, and 8 had to.
+   it's not already available, same as Phases 6–9 had to.
