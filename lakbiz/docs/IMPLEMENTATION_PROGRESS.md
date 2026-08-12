@@ -846,7 +846,7 @@ a hypothetical one.
 Branch: `claude/lakbiz-phase11-expenses`, stacked on `claude/lakbiz-phase10-dashboard`
 (PR #35, not yet merged — same stacking convention as Phases 6–10). Status:
 implemented, DB layer empirically verified against production, build
-verified, not yet pushed/PR'd.
+verified, pushed — draft PR #36, awaiting review.
 
 **Scope call, same reason as Phases 6–10:** no spec text for this phase
 either. Checked the codebase first — there was no general expense-tracking
