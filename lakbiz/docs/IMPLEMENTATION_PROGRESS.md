@@ -991,36 +991,100 @@ Remaining risks: same "no browser" caveat as every UI phase since 1 —
 the role-change and remove flows have not been visually verified end to
 end (invite a real second user, change their role, remove them).
 
+### Phase 13 — Messaging integration (Crews + Schedule)
+Branch: `claude/lakbiz-phase13-messaging`, stacked on `claude/lakbiz-phase12-team-roles`
+(PR #37, not yet merged — same stacking convention as Phases 6–12). Status:
+implemented, build verified, not yet pushed/PR'd.
+
+**Scope call, same reason as Phases 6–12:** no spec text for this phase
+either. Checked first: there's already a mature messaging system
+(WhatsApp share, SMS via textlk, bulk composer, templates, notification
+logs) wired throughout Jobs/Sales/Customers — but zero messaging
+touchpoints in the four newer modules (Crews, Schedule, Job Costing,
+Expenses). Asked the repo owner directly; confirmed scope: wire the two
+operationally-relevant gaps — notify a customer when their job is
+rescheduled, notify a technician/contractor when added to a crew — not a
+UI modernization of `/settings/notifications`, and not a bigger rework.
+Job Costing and Expenses are internal reports, not customer/team-facing,
+so no natural messaging need there.
+
+**No new backend, no new channel, no new template infrastructure** —
+this reuses the existing `MessageSendButton` → `MessageComposer` flow
+exactly as every other page already does.
+
+- **Schedule:** reschedule a job → drawer switches to a confirmation view
+  ("Rescheduled to {date}") with a `MessageSendButton` defaulting to the
+  existing `job_scheduled` template (already used elsewhere for the same
+  "install scheduled" concept — reused, not duplicated), instead of
+  closing immediately. This was a deliberate UX choice over auto-sending:
+  staff decide per-job whether the customer needs telling, and the
+  composer still lets them edit the message before it goes out.
+- **Crews:** each member row gets a `MessageSendButton` (icon variant)
+  alongside the existing lead/remove `ActionMenu`. Uses the **existing**
+  `"custom"` message context (`{type: "custom", business, customerName}`)
+  rather than adding a new `"crew"` context type to the shared
+  `MessageContext` union — extending that union would touch
+  `variablesFromContext`/`defaultTemplateForContext`/`templatesForContext`
+  in `messaging/compose.ts` and `templates.ts`, core to every other
+  messaging surface in the app; reusing `"custom"` (already a supported,
+  general-purpose context) gets a real "message this crew member" button
+  today with zero risk to the shared messaging engine. A purpose-built
+  "you've been added to a crew" template is a clean, isolated follow-up
+  if wanted — flagged, not silently dropped.
+
+Files changed:
+- `src/app/schedule/page.tsx` — reschedule drawer gained a
+  `justRescheduled` state that swaps the form for a confirmation +
+  notify view on save; imports `MessageSendButton`.
+- `src/app/teams/page.tsx` — added a `memberPhone` helper alongside the
+  existing `memberName`; member rows gained a `MessageSendButton`.
+
+Tests performed:
+- `tsc --noEmit`: clean.
+- `eslint`: 0 errors, same 3 pre-existing warnings, none new.
+- `next build`: succeeds, still 46 routes (unchanged — extended two
+  existing pages, added no new routes).
+
+Remaining risks: same "no browser" caveat as every UI phase since 1 —
+the reschedule confirmation view and the crew member message button have
+not been visually verified, and the `job_scheduled` template's wording
+("install scheduled") reads slightly oddly for a *re*schedule of a
+service/repair job rather than an installation — flagged as a
+copy-polish item, not a functional bug (the underlying date/customer
+data is always correct).
+
 ## Not started
 
-Phases 13–18 (messaging integration, reporting, mobile field UX,
-performance/a11y, final security audit, final QA). Plus deferred items:
-customer notes field, Receive Stock / Stock Adjustment as real features,
-`schema_migrations` RLS (single-membership migration `20250628000001`
-also still unapplied — needs a duplicate-membership check against
-production first), offline support for AC Assets and Crews, the full
-field-service status/dispatch model (New/Assigned/On the way/Awaiting
-parts/Invoiced/Paid), before/after photos, customer signature, wiring
-`asset_id`/`crew_id` into the `/jobs` create/edit form (this is also what
-blocks true crew-column grouping on the Schedule board — see Phase 7),
-drag-and-drop rescheduling, time-of-day scheduling (the data model is
-date-only right now), per-job-type costing benchmarks/targets (Phase 8's
-report shows actuals only), a distinct job-invoice numbering scheme
-(Phase 9 reuses `jobNo` as the invoice reference), wiring the Phase 11
-expenses deduction into the Dashboard/VAT income-tax display (currently
-only `/expenses` itself shows the tax impact), and unifying Workforce
-(technicians/contractors) with login-capable Team accounts (Phase 12
-deliberately kept these separate — see its scope note).
+Phases 14–18 (reporting, mobile field UX, performance/a11y, final
+security audit, final QA). Plus deferred items: customer notes field,
+Receive Stock / Stock Adjustment as real features, `schema_migrations`
+RLS (single-membership migration `20250628000001` also still unapplied —
+needs a duplicate-membership check against production first), offline
+support for AC Assets and Crews, the full field-service status/dispatch
+model (New/Assigned/On the way/Awaiting parts/Invoiced/Paid), before/after
+photos, customer signature, wiring `asset_id`/`crew_id` into the `/jobs`
+create/edit form (this is also what blocks true crew-column grouping on
+the Schedule board — see Phase 7), drag-and-drop rescheduling,
+time-of-day scheduling (the data model is date-only right now),
+per-job-type costing benchmarks/targets (Phase 8's report shows actuals
+only), a distinct job-invoice numbering scheme (Phase 9 reuses `jobNo`
+as the invoice reference), wiring the Phase 11 expenses deduction into
+the Dashboard/VAT income-tax display (currently only `/expenses` itself
+shows the tax impact), unifying Workforce (technicians/contractors) with
+login-capable Team accounts (Phase 12 deliberately kept these separate),
+a purpose-built crew-assignment message template (Phase 13 reuses the
+generic `"custom"` context instead), and a UI modernization pass on
+`/settings/notifications` (still on bespoke pre-Phase-1 styling).
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase12-team-roles`, open a draft PR stacked on
-   `claude/lakbiz-phase11-expenses` (PR #36 — merge #31→#32→#33→#34→#35→#36
-   first, or review this one with that in mind).
-2. Visual/click-through pass on the Phase 12 preview, signed in as
-   owner — invite a second user, change their role via the new dropdown,
-   then remove them, and confirm the owner's own row and the "you" row
-   never show the controls.
-3. Begin Phase 13 (Messaging integration) as its own branch/PR once Phase 12 is
+1. Push `claude/lakbiz-phase13-messaging`, open a draft PR stacked on
+   `claude/lakbiz-phase12-team-roles` (PR #37 —
+   merge #31→#32→#33→#34→#35→#36→#37 first, or review this one with that
+   in mind).
+2. Visual/click-through pass on the Phase 13 preview — reschedule a job
+   and confirm the notify view/message composer opens correctly; open a
+   crew and confirm the message icon next to a member works.
+3. Begin Phase 14 (Reporting) as its own branch/PR once Phase 13 is
    reviewed — get the actual spec text for it from the repo owner first
-   if it's not already available, same as Phases 6–12 had to.
+   if it's not already available, same as Phases 6–13 had to.

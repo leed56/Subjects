@@ -7,7 +7,8 @@ import { PageHeader, MetricCard, EmptyState, StatusBadge } from "@/components/ui
 import { Drawer } from "@/components/ui/overlay";
 import { FormField, DateInput, SelectInput } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
-import { ChevronRightIcon } from "@/components/ui/icons";
+import { ChevronRightIcon, CheckIcon } from "@/components/ui/icons";
+import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -50,6 +51,11 @@ export default function SchedulePage() {
   const [rescheduleTarget, setRescheduleTarget] = useState<ACJob | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState("");
   const [saving, setSaving] = useState(false);
+  /** Set once a reschedule save succeeds — the drawer switches to a
+   * confirmation view offering to notify the customer, instead of
+   * closing immediately, so "was it saved?" and "should I tell them?"
+   * aren't two separate trips into the drawer. */
+  const [justRescheduled, setJustRescheduled] = useState<ACJob | null>(null);
 
   const todayIso = useMemo(() => toIsoDate(new Date()), []);
 
@@ -106,6 +112,12 @@ export default function SchedulePage() {
   const openReschedule = (job: ACJob) => {
     setRescheduleTarget(job);
     setRescheduleDate(job.scheduledDate ?? todayIso);
+    setJustRescheduled(null);
+  };
+
+  const closeRescheduleDrawer = () => {
+    setRescheduleTarget(null);
+    setJustRescheduled(null);
   };
 
   const handleReschedule = async () => {
@@ -118,7 +130,7 @@ export default function SchedulePage() {
       return;
     }
     toast({ tone: "success", title: t("schedule.rescheduled") });
-    setRescheduleTarget(null);
+    setJustRescheduled({ ...rescheduleTarget, scheduledDate: rescheduleDate || undefined });
   };
 
   const dayLabel = (d: Date) => d.toLocaleDateString(locale === "si" ? "si-LK" : "en-LK", { weekday: "short", day: "numeric", month: "short" });
@@ -217,35 +229,69 @@ export default function SchedulePage() {
 
         <Drawer
           open={!!rescheduleTarget}
-          onClose={() => setRescheduleTarget(null)}
+          onClose={closeRescheduleDrawer}
           title={t("schedule.reschedule")}
           description={rescheduleTarget?.customerName}
           footer={
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setRescheduleTarget(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                {t("common.cancel")}
-              </button>
+            justRescheduled ? (
               <button
                 type="button"
-                onClick={() => void handleReschedule()}
-                disabled={saving}
-                className="flex-1 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                onClick={closeRescheduleDrawer}
+                className="w-full rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
               >
-                {saving ? t("common.saving") : t("schedule.set_date")}
+                {t("common.close")}
               </button>
-            </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={closeRescheduleDrawer} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                  {t("common.cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleReschedule()}
+                  disabled={saving}
+                  className="flex-1 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                >
+                  {saving ? t("common.saving") : t("schedule.set_date")}
+                </button>
+              </div>
+            )
           }
         >
-          {rescheduleTarget && (
+          {justRescheduled ? (
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <StatusBadge>{jobStatusLabel(rescheduleTarget.status, locale)}</StatusBadge>
-                <span className="text-sm text-slate-600">{jobTypeLabel(rescheduleTarget.jobType, locale)}</span>
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+                <CheckIcon className="h-4 w-4 shrink-0" />
+                <span>
+                  {t("schedule.rescheduled_to")}{" "}
+                  <strong>{justRescheduled.scheduledDate ? new Date(justRescheduled.scheduledDate).toLocaleDateString("en-LK") : t("schedule.no_date")}</strong>
+                </span>
               </div>
-              <FormField label={t("schedule.new_date")}>
-                <DateInput value={rescheduleDate} onChange={setRescheduleDate} />
-              </FormField>
+              <div>
+                <p className="mb-2 text-sm font-medium text-slate-600">{t("schedule.notify_customer_hint")}</p>
+                <MessageSendButton
+                  phone={justRescheduled.phone}
+                  recipientName={justRescheduled.customerName}
+                  context={{ type: "ac_job", job: justRescheduled, business: localData.business }}
+                  defaultTemplate="job_scheduled"
+                  contextId={justRescheduled.id}
+                  variant="primary"
+                  label={t("schedule.notify_customer")}
+                />
+              </div>
             </div>
+          ) : (
+            rescheduleTarget && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <StatusBadge>{jobStatusLabel(rescheduleTarget.status, locale)}</StatusBadge>
+                  <span className="text-sm text-slate-600">{jobTypeLabel(rescheduleTarget.jobType, locale)}</span>
+                </div>
+                <FormField label={t("schedule.new_date")}>
+                  <DateInput value={rescheduleDate} onChange={setRescheduleDate} />
+                </FormField>
+              </div>
+            )
           )}
         </Drawer>
       </ProMain>
