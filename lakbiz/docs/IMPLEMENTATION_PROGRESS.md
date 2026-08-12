@@ -472,22 +472,118 @@ Remaining risks: same "no browser" caveat as every UI phase since 1. The
 job-sheet's item-entry form merge is a real logic change (two forms → one)
 that deserves a closer look on the preview, not just "the build passed."
 
+### Phase 6 — Installation & maintenance crews
+Branch: `claude/lakbiz-phase6-crews`, stacked on `main` (Phases 0–5 and the
+security fix are all merged as of this phase). Status: implemented, DB
+layer empirically verified against production, build verified, pushed —
+draft PR #31, awaiting review.
+
+**Scope call, made explicitly because the original spec text for this
+phase was no longer available this session** (it was only ever pasted into
+chat, never saved to a file, and had scrolled out of context by the time
+this phase started — see the doc's own note in earlier phases about this
+risk). Asked the repo owner directly rather than guess at a feature this
+size; they confirmed: build a real net-new "crew" grouping concept, not a
+reskin of the existing Workforce page.
+
+**Naming, stated up front:** deliberately called "crew," not "team" — the
+app already overloads "team" to mean "in-house technician" as opposed to
+"contractor" (`JobAssigneeType = "team" | "contractor"` on `ac_jobs`, and
+the Workforce page's own copy, e.g. `work.team` = "My team"). A crew is a
+genuinely different thing: a *named group* of technicians and/or
+contractors who work installation or maintenance jobs together. Reusing
+"team" for both would have been actively confusing in the UI.
+
+**Architectural decision:** cloud-only, same call as Phase 4's `ac_assets`
+— reads/writes go straight to Supabase via `src/lib/supabase/crews-client.ts`,
+not the local-first sync engine. See the migration file for the full
+reasoning (unchanged from Phase 4's).
+
+Migrations created (applied directly to production and empirically
+verified, same technique as every phase since the security incident):
+- `20250630000001_crews.sql` — new `crews` table (name, crew_type:
+  installation/maintenance/mixed, active, notes) and `crew_members` (a
+  polymorphic join — a member is either a `technicians` row or a
+  `contractors_base` row, two separate tables, so `member_type` +
+  `member_id` rather than a single FK; `organization_id` denormalized onto
+  `crew_members` too, so its RLS policy never has to join back to `crews`
+  to decide visibility). RLS follows the exact
+  `organization_id in (select ... from org_members where user_id =
+  auth.uid())` pattern from every prior migration. Also adds a nullable
+  `crew_id` FK on `ac_jobs_base` (and the `ac_jobs` view), mirroring
+  Phase 4's `asset_id` — a job *can* reference the crew assigned to it.
+- **Verified empirically before writing any frontend code:** inserted a
+  real crew and a crew member as an IMT-org user: succeeded. Queried and
+  attempted to insert as a different organization's user: 0 rows on
+  SELECT, RLS-violation error on INSERT, for both `crews` and
+  `crew_members`. Confirmed the `ac_jobs` view still returns correctly
+  with the new `crew_id` column. Test rows cleaned up after.
+
+Files changed (frontend):
+- `src/lib/supabase/crews-client.ts` (new) — CRUD for crews and crew
+  membership (`fetchOrgCrews`, `createCrew`, `updateCrew`, `deleteCrew`,
+  `fetchCrewMembers`, `fetchOrgCrewMembers`, `addCrewMember`,
+  `setCrewMemberLead`, `removeCrewMember`, `fetchCrewJobs`).
+- `src/app/teams/page.tsx` (new) — list page on the Phase 1–5 primitives
+  (`PageHeader`/`MetricCard`/`FilterBar`/`DataTable`), a create/edit
+  `Drawer`, and a crew profile `Drawer` with Members (add/remove
+  technicians or contractors, mark a lead) and Jobs (real query against
+  `ac_jobs` filtered by `crew_id`, not mocked — currently empty for every
+  crew since no job-creation UI can set `crew_id` yet, same caveat as
+  Phase 4's asset-jobs tab) tabs.
+- **Route wiring**, same treatment `/assets` got in Phase 4:
+  `src/lib/supabase/middleware.ts`, `src/components/shop-route-guard.tsx`,
+  `src/lib/org-role/permissions.ts` (crews follow `/workforce`'s access
+  level — owner/manager/technician, *not* data_entry — since this is
+  staffing/scheduling configuration, not front-desk job intake, a
+  deliberate distinction from how `/assets` was gated),
+  `src/lib/subscription/can.ts` (gated behind the `ac_jobs` plan feature,
+  same as Jobs/Workforce/Assets), `src/lib/nav-sections.ts` +
+  `src/components/shell/nav-icons.tsx` (Service nav group, after
+  Workforce) + `src/components/ui/icons.tsx` (new `CrewIcon` — three
+  clustered heads, distinct from `WorkforceIcon`'s two side-by-side
+  individuals and from `TeamIcon`, which `/settings/team` already uses).
+
+**Deliberately out of scope, flagged not dropped:** same as Phase 4's
+asset_id — the `/jobs` create/edit form can't yet let someone pick a crew,
+because that page runs through the local-first sync engine, whose
+`ACJobInput` type doesn't know about `crew_id`. The DB and the read path
+(a crew's assigned-jobs list) are ready for it; wiring the write side into
+the job form is follow-up work, same class of decision as Phase 4's.
+
+Tests performed:
+- DB layer: verified empirically against production, see above.
+- `tsc --noEmit`: clean.
+- `eslint`: 0 errors, same 3 pre-existing warnings, none new (one dead
+  function parameter and one `exhaustive-deps` warning surfaced and fixed
+  during development — the latter by depending on the full `profileCrew`
+  object rather than just its `.id`, matching the pattern Phase 4's
+  `AssetsPage` already established for its own profile-drawer effect).
+- `next build`: succeeds, 43 routes (was 42), `/teams` statically
+  prerenders.
+
+Remaining risks: same "no browser" caveat as every UI phase since 1 — the
+member-picker UI (add/remove technician or contractor, set lead) has not
+been visually verified.
+
 ## Not started
 
-Phases 6–18 (field teams, scheduling, job costing, invoicing, dashboard
-rebuild, expenses, workforce/roles, messaging integration, reporting,
-mobile field UX, performance/a11y, final security audit, final QA). Plus
-deferred items: customer notes field, Receive Stock / Stock Adjustment as
-real features, `schema_migrations` RLS, offline support for AC Assets, the
+Phases 7–18 (scheduling, job costing, invoicing, dashboard rebuild,
+expenses, workforce/roles, messaging integration, reporting, mobile field
+UX, performance/a11y, final security audit, final QA). Plus deferred
+items: customer notes field, Receive Stock / Stock Adjustment as real
+features, `schema_migrations` RLS (single-membership migration
+`20250628000001` also still unapplied — needs a duplicate-membership check
+against production first), offline support for AC Assets and Crews, the
 full field-service status/dispatch model (New/Assigned/On the way/Awaiting
-parts/Invoiced/Paid), before/after photos, customer signature.
+parts/Invoiced/Paid), before/after photos, customer signature, wiring
+`asset_id`/`crew_id` into the `/jobs` create/edit form.
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase5-service-jobs`, open a draft PR based on
-   `claude/lakbiz-phase4-ac-assets` (stacked — merge #24–#26, #28, #29
-   first; #27 is independent).
-2. Visual/click-through pass on the Phase 5 preview — particularly the
-   merged job-item-entry form and the new Equipment section.
-3. Begin Phase 6 (Installation & Maintenance Teams) as its own branch/PR
-   once Phase 5 is reviewed.
+1. Push `claude/lakbiz-phase6-crews`, open a draft PR based on `main`.
+2. Visual/click-through pass on the Phase 6 preview — particularly the
+   member-picker (add/remove/set-lead) in the crew profile drawer.
+3. Begin Phase 7 (Scheduling) as its own branch/PR once Phase 6 is
+   reviewed — get the actual spec text for it from the repo owner first if
+   it's not already available, same as this phase had to.
