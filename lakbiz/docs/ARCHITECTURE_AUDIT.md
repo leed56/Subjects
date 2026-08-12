@@ -227,27 +227,49 @@ Tailwind PostCSS plugin). `npm audit` now reports zero vulnerabilities.
 
 ## 11. Major risks carried forward (not fixed in this PR)
 
-1. **No live RLS verification performed.** `scripts/qa-tenant-isolation.mjs`
-   (added this PR) codifies the exact checks Phase 0 item 6 asks for —
-   Org A cannot SELECT/INSERT/UPDATE/DELETE Org B's customers, sales,
-   ac_jobs, products, suppliers, bank_accounts, contractor_payments, cheques
-   — but it has **not been run**. It needs two real test-org credentials
-   (`ORG_A_EMAIL`/`ORG_A_PASSWORD`/`ORG_B_EMAIL`/`ORG_B_PASSWORD`) that this
-   session doesn't have and shouldn't fabricate. Run it against a disposable
-   Supabase branch or two throwaway trial signups before trusting this as a
-   pass — the loop-generated policies in `rls_hardening.sql` look correct by
-   inspection, but "looks correct by inspection" is not the bar the spec
-   set, and shouldn't be reported as verified until it actually runs.
-2. **`org_members_user_id_key` migration not applied** (§5) — needs the
-   duplicate-check run against production first.
+1. ~~**No live RLS verification performed.**~~ **Resolved in Phase 17.**
+   Rather than `scripts/qa-tenant-isolation.mjs` (which needs real
+   ORG_A/ORG_B login credentials this session never had), Phase 17 used
+   the SQL role-impersonation technique already proven out per-table in
+   Phases 6/11 (`set local role authenticated; set local
+   request.jwt.claims = '{"sub":"<uuid>","role":"authenticated"}'`) —
+   run live, once, across all 14 tenant tables (customers, sales,
+   products, suppliers, ac_jobs, bank_accounts, contractor_payments,
+   cheques, crews, expenses, ac_assets, contractors, vehicles,
+   org_members): a cross-tenant user's SELECT returns 0 rows for every
+   one against a known-non-empty org (verified non-empty via the same
+   query as the *owning* user, e.g. `ac_jobs: 8`, confirming the 0 isn't
+   just an empty table); a cross-tenant INSERT is hard-rejected with a
+   `42501 row-level security policy` error; cross-tenant UPDATE/DELETE
+   both silently affect 0 rows (RLS-filtered, not erroring, but
+   confirmed via `returning` + `count(*)` that nothing was touched).
+   See `docs/IMPLEMENTATION_PROGRESS.md` Phase 17 for the exact queries.
+2. ~~**`org_members_user_id_key` migration not applied**~~ **Resolved in
+   Phase 17.** Ran the duplicate-check query live against production
+   first — zero rows — then applied the migration.
 3. **CSP verified against the PR's Vercel preview** — `/` and `/login` both
    return HTTP 200 with all headers present and same-origin-only
    `<script src="/_next/static/...">` tags (no CSP-blocked hydration).
    Still recommend a fuller manual pass over every route once real Supabase
    env vars are attached to a preview (this check confirms headers +
-   non-blank render, not every feature).
+   non-blank render, not every feature). Not revisited in Phase 17.
 4. Everything in Phases 1–18 of the product spec is, by definition, not yet
    started. This document and this PR are Phase 0 only.
+5. **New in Phase 17 — three DB hardening items found via a live Supabase
+   security-advisor scan** (not anticipated by this Phase 0 document, since
+   it predates the advisor scan): `public.schema_migrations` had RLS
+   disabled entirely; ~30 internal RPC/masked-view-trigger functions had
+   `EXECUTE` grantable by the unauthenticated `anon` role (via both a
+   direct `anon` grant on 5 of them and an inherited `PUBLIC` grant on the
+   other 25 — Postgres's default for new functions unless explicitly
+   revoked, the same grant-hygiene class of bug as §6.2/§6.3's masked-view
+   fixes). All three fixed; see Phase 17 in the progress doc. One item
+   flagged but **not fixed** — Supabase Auth's "leaked password
+   protection" (HaveIBeenPwned check) is disabled; this is a project-level
+   Auth dashboard toggle, not a SQL/migration change, and no MCP tool in
+   this session's toolset can flip it. Recommend the repo owner enable it
+   manually: Authentication → Providers → Email → Password → "Leaked
+   password protection".
 
 ## 12. Recommended target architecture (unchanged from current, mostly)
 

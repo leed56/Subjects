@@ -1272,13 +1272,151 @@ no sibling text, not an exhaustive accessibility audit (color-contrast
 -only states, full keyboard-nav walkthrough, and screen-reader
 testing are all still open — flagged below).
 
+### Phase 17 — Final security audit
+
+Branch: `claude/lakbiz-phase17-security-audit`, stacked on
+`claude/lakbiz-phase16-perf-a11y` (PR #41, not yet merged — same
+stacking convention as Phases 6–16). Status: implemented, verified
+live against the production Supabase project, pushed — draft PR #42
+(https://github.com/leed56/Subjects/pull/42), awaiting review.
+
+**Scope, unusually well-grounded this time:** `docs/ARCHITECTURE_AUDIT.md`
+(Phase 0) explicitly deferred two items to "Phase 17 (Final Security
+Audit)" by name: a full API route-by-route authorization pass (§8) and
+running live RLS cross-tenant verification, which had never actually
+been run — "looks correct by inspection is not the bar the spec set"
+(§11.1). Did both, then went further: ran a live Supabase
+security-advisor scan against the production project
+(`zestppstpwjxriwcuykc`) and fixed what it found. Confirmed scope with
+the repo owner before applying any of the three DB changes below,
+since they're schema/grant changes against a live production database.
+
+**1. API route-by-route audit (all 11 `src/app/api/*/route.ts`):**
+- `admin/*` (me, messaging, shops, shops/[id], templates): all gated
+  by `requirePlatformAdmin()`.
+- `settings/team`: gated by `requireOrgOwner()`; `organizationId` is
+  always server-derived from the caller's own session, never trusted
+  from the request body. Traced `updateTeamMemberRole`/
+  `removeTeamMember` in `create-team-member.ts` — both re-verify the
+  target user's actual membership row matches the caller's
+  `organizationId` before mutating (no IDOR: a malicious owner can't
+  pass another org's `userId` and touch it).
+- `settings/notifications`, `messages/send`: session + org membership
+  + `owner`/`manager` role checked before any write.
+- `messages/status`: session-only gate, but exposes only a boolean
+  config flag (no secrets, no tenant data) — correct proportional
+  gating.
+- `cron/*`: already covered in Phase 0 (§8) — `Authorization: Bearer
+  $CRON_SECRET`, fail-closed if unset. Not re-audited, no changes
+  since Phase 0.
+- No findings. No code changes from this pass.
+
+**2. Live cross-tenant RLS verification (never previously run — see
+`ARCHITECTURE_AUDIT.md` §11.1):** used the SQL role-impersonation
+technique proven out per-table in Phases 6/11
+(`set local role authenticated; set local request.jwt.claims =
+'{"sub":"<uuid>","role":"authenticated"}'`), run once across all 14
+tenant tables (customers, sales, products, suppliers, ac_jobs,
+bank_accounts, contractor_payments, cheques, crews, expenses,
+ac_assets, contractors, vehicles, org_members) instead of
+`scripts/qa-tenant-isolation.mjs` (which needs real ORG_A/ORG_B login
+credentials this session doesn't have). Cross-tenant user
+`fa02136e-4a07-4c39-8765-6b19dd0daf1e` (org
+`38cdf377-beba-45f6-b785-bf0cdb91f3d4`) against owning org
+`399fb19d-e562-4631-abbc-c5325015bebe`'s data:
+- **SELECT**: 0 rows on all 14 tables — confirmed this isn't a false
+  negative from empty tables by re-running as the *owning* user
+  (`fbd6ebc8-55eb-4ac9-94a6-299a3335e671`), which correctly saw
+  `ac_jobs: 8`, `org_members: 1`.
+- **INSERT**: hard-rejected — `42501: new row violates row-level
+  security policy for table "customers"`.
+- **UPDATE**/**DELETE**: silently affect 0 rows (RLS-filtered rather
+  than erroring) — confirmed via `... returning id` wrapped in
+  `count(*)`, not just an unchecked "no error" assumption.
+
+**3. Live Supabase security-advisor scan — 3 real findings, all fixed:**
+- `public.schema_migrations` (internal deploy-tracking table — grepped
+  `src/` first, confirmed no application code touches it at runtime)
+  had RLS disabled entirely (`rls_disabled_in_public`, ERROR). Enabled
+  RLS with zero policies — service_role/this session's migration
+  connection is unaffected (bypasses RLS by default); anon/authenticated
+  now hard-denied, which is correct since neither has any legitimate
+  reason to read or write it.
+- ~30 internal RPC/masked-view-trigger functions (the `*_view_insert`/
+  `*_view_update`/`*_view_delete` INSTEAD OF trigger functions backing
+  the updatable masked views, plus `is_org_member`/`can_see_org_
+  financials`/`org_can_write`/etc.) were `EXECUTE`-able by the
+  unauthenticated `anon` role. Verified each is safe *today* — every one
+  reads `auth.uid()` (null for anon) and scopes to rows matching the
+  caller, so an anon call returns false/empty rather than leaking data —
+  but revoked anyway as defense-in-depth per the linter's own
+  recommendation, since none has a legitimate logged-out caller.
+  First pass (`revoke ... from anon`) only closed 5 of 30 — re-scanned
+  and found the other 25 had `EXECUTE` granted to `PUBLIC` (Postgres's
+  default for new functions, inherited by anon regardless of a
+  role-specific revoke) — the exact same grant-hygiene bug class as
+  `20250628000002_fix_masked_view_cross_tenant_leak.sql`/
+  `20250628000003_fix_masked_view_grant_regression.sql` earlier in this
+  repo's history. Follow-up migration revoked from `PUBLIC` too and
+  explicitly re-granted `authenticated`. Re-scanned again: anon-executable
+  warning count went 30 → 0.
+- The single-membership migration (`20250628000001_org_members_single_
+  membership.sql`, written in Phase 0, never applied — carried forward
+  as a known risk through every phase since) — ran its guard query live
+  first (`select user_id, count(*) ... having count(*) > 1`), got zero
+  rows, then applied it.
+- **Verified all 6 `security_definer_view` advisor ERRORs (sale_lines,
+  products, sales, contractors, vehicles, ac_jobs) by reading their live
+  definitions, not fixed:** every one re-applies its own
+  `organization_id in (select ... from org_members where user_id =
+  auth.uid())` scoping inside the view despite `SECURITY DEFINER`
+  bypassing the base table's RLS — this is the deliberate column-masking
+  pattern from Phases 0/6-11, correctly implemented, and the linter can't
+  know that from the property alone. Left as-is; documented as
+  reviewed-safe in `ARCHITECTURE_AUDIT.md` rather than "fixed" or ignored.
+- **Flagged, not fixed:** "leaked password protection" (HaveIBeenPwned
+  check) is disabled in Supabase Auth — a dashboard-only project setting,
+  not a SQL/migration change, and no tool in this session's toolset can
+  flip it. Needs the repo owner: Authentication → Providers → Email →
+  Password → enable it manually.
+
+Files changed:
+- `supabase/migrations/20250702000001_schema_migrations_rls.sql` (new)
+- `supabase/migrations/20250702000002_revoke_anon_execute_internal_functions.sql` (new)
+- `supabase/migrations/20250702000003_revoke_public_execute_internal_functions.sql` (new)
+- `supabase/migrations/20250628000001_org_members_single_membership.sql`
+  (pre-existing, from Phase 0 — applied this phase, not modified)
+- `docs/ARCHITECTURE_AUDIT.md` — §11 updated to mark items 1-2 resolved,
+  new item 5 documenting the advisor-scan findings.
+- No application source changes — every fix this phase is a database
+  migration; nothing in `src/` needed to change (verified: no app code
+  calls the revoked functions as the anon role — Supabase's browser
+  client upgrades to the `authenticated` Postgres role automatically
+  once signed in, and no logged-out page calls any of them).
+
+Tests performed:
+- `tsc --noEmit`: clean (no source changes, run as a sanity check).
+- Live SQL against production (`zestppstpwjxriwcuykc`), documented
+  above: duplicate-membership guard query, cross-tenant SELECT/INSERT/
+  UPDATE/DELETE sweep across 14 tables, `pg_views`/`pg_proc` definition
+  reads to verify the masking views and helper functions before
+  concluding they're safe, security-advisor scan run 3 times (before,
+  after the anon-only revoke, after the PUBLIC revoke) to confirm the
+  fix actually took effect rather than assuming it from the migration
+  succeeding.
+
+Remaining risks: the CSP manual full-route pass flagged in
+`ARCHITECTURE_AUDIT.md` §11.3 was not revisited this phase (out of
+scope — that's a UI/rendering check, not a DB/auth one). Leaked
+password protection remains disabled pending the repo owner's manual
+toggle. This phase did not attempt a dependency/supply-chain audit
+beyond confirming `npm audit` still reports 0 vulnerabilities (checked,
+clean) — no deeper SBOM/provenance review was in scope.
+
 ## Not started
 
-Phases 17–18 (final security audit, final QA). Plus deferred items:
-customer notes field,
-Receive Stock / Stock Adjustment as real features, `schema_migrations`
-RLS (single-membership migration `20250628000001` also still unapplied —
-needs a duplicate-membership check against production first), offline
+Phase 18 (final QA). Plus deferred items: customer notes field,
+Receive Stock / Stock Adjustment as real features, offline
 support for AC Assets and Crews, the full field-service status/dispatch
 model (New/Assigned/On the way/Awaiting parts/Invoiced/Paid), before/after
 photos, customer signature, wiring `asset_id`/`crew_id` into the `/jobs`
@@ -1315,16 +1453,14 @@ beyond `tsc`/`build` passing).
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase16-perf-a11y`, open a draft PR stacked on
-   `claude/lakbiz-phase15-field-ux` (PR #40 —
-   merge #31→#32→#33→#34→#35→#36→#37→#38→#39→#40 first, or review this
-   one with that in mind).
-2. Visual/click-through pass on the Phase 16 preview — open a message
-   composer from a fresh page load (confirm it still opens correctly
-   now that it's lazy-loaded) and tab through the Schedule week-nav
-   buttons with a keyboard to confirm the new labels read correctly in
-   a screen reader.
-3. Begin Phase 17 (final security audit) as its own branch/PR once
-   Phase 16 is reviewed — get the actual spec text for it from the
-   repo owner first if it's not already available, same as Phases
-   6–16 had to.
+1. Push `claude/lakbiz-phase17-security-audit`, open a draft PR stacked
+   on `claude/lakbiz-phase16-perf-a11y` (PR #41 —
+   merge #31→#32→#33→#34→#35→#36→#37→#38→#39→#40→#41 first, or review
+   this one with that in mind).
+2. Manually enable "leaked password protection" in the Supabase
+   dashboard (Authentication → Providers → Email → Password) — the one
+   Phase 17 finding that needs a human with dashboard access, not a
+   migration.
+3. Begin Phase 18 (final QA) as its own branch/PR once Phase 17 is
+   reviewed — get the actual spec text for it from the repo owner
+   first if it's not already available, same as Phases 6–17 had to.
