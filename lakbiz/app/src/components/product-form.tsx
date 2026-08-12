@@ -29,6 +29,8 @@ const emptyForm = (sectorId: SectorId = "grocery"): FormState => ({
   stockQty: 0,
   reorderLevel: 5,
   unit: "pcs",
+  active: true,
+  notes: "",
   sectorCustom: Object.fromEntries(
     Object.entries(emptyCustomFieldsForSector(sectorId)).map(([k, v]) => [
       k,
@@ -74,6 +76,8 @@ export function ProductForm({
         stockQty: initial.stockQty,
         reorderLevel: initial.reorderLevel ?? 5,
         unit: String(initial.customFields.unit ?? "pcs"),
+        active: initial.active,
+        notes: initial.notes ?? "",
         sectorCustom: customFieldsFromProduct({
           ...initial,
           sectorId,
@@ -261,6 +265,26 @@ export function ProductForm({
             className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
           />
         </label>
+        {initial && (
+          <label className="flex items-center gap-2 self-end pb-2">
+            <input
+              type="checkbox"
+              checked={form.active ?? true}
+              onChange={(e) => set("active", e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300"
+            />
+            <span className="text-sm text-slate-600">{t("stock.active_item")}</span>
+          </label>
+        )}
+        <label className="block sm:col-span-2">
+          <span className="text-sm text-slate-600">{t("stock.notes")}</span>
+          <textarea
+            value={form.notes ?? ""}
+            onChange={(e) => set("notes", e.target.value)}
+            rows={2}
+            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          />
+        </label>
       </div>
 
       {sectorFields.length > 0 && (
@@ -269,21 +293,35 @@ export function ProductForm({
             {t("stock.sector_fields")}
           </h3>
           <div className="grid gap-4 sm:grid-cols-2">
-            {sectorFields.map((field) => (
-              <label key={field.key} className="block">
-                <span className="text-sm text-slate-600">
-                  {locale === "si" ? field.labelSi : field.labelEn}
-                </span>
-                <input
-                  type={field.type === "number" ? "number" : field.type}
-                  min={field.type === "number" ? 0 : undefined}
-                  value={form.sectorCustom[field.key] ?? ""}
-                  placeholder={field.placeholder}
-                  onChange={(e) => setSectorField(field.key, e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                />
-              </label>
-            ))}
+            {sectorFields.map((field) =>
+              field.type === "boolean" ? (
+                <label key={field.key} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={form.sectorCustom[field.key] === "true"}
+                    onChange={(e) => setSectorField(field.key, e.target.checked ? "true" : "false")}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  <span className="text-sm text-slate-600">
+                    {locale === "si" ? field.labelSi : field.labelEn}
+                  </span>
+                </label>
+              ) : (
+                <label key={field.key} className="block">
+                  <span className="text-sm text-slate-600">
+                    {locale === "si" ? field.labelSi : field.labelEn}
+                  </span>
+                  <input
+                    type={field.type === "number" ? "number" : field.type}
+                    min={field.type === "number" ? 0 : undefined}
+                    value={form.sectorCustom[field.key] ?? ""}
+                    placeholder={field.placeholder}
+                    onChange={(e) => setSectorField(field.key, e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </label>
+              ),
+            )}
           </div>
         </div>
       )}

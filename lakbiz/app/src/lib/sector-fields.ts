@@ -1,7 +1,7 @@
 import type { SectorId } from "@/lib/types";
 import { sectorById } from "./sectors";
 
-export type SectorFieldType = "text" | "number" | "date";
+export type SectorFieldType = "text" | "number" | "date" | "boolean";
 
 export type SectorFieldDef = {
   key: string;
@@ -184,6 +184,25 @@ const FIELD_DEFS: Record<string, SectorFieldDef> = {
     labelSi: "Lease bank",
     placeholder: "Sampath, LOLC…",
   },
+  compatibleModels: {
+    key: "compatibleModels",
+    type: "text",
+    labelEn: "Compatible AC type / model",
+    labelSi: "ගැලපෙන AC වර්ගය / මාදිලිය",
+    placeholder: "Daikin FTKC series, LG S4-Q…",
+  },
+  supplierPartNo: {
+    key: "supplierPartNo",
+    type: "text",
+    labelEn: "Supplier's part number",
+    labelSi: "සැපයුම්කරුගේ කොටස් අංකය",
+  },
+  serialRequired: {
+    key: "serialRequired",
+    type: "boolean",
+    labelEn: "Serial number required per unit",
+    labelSi: "එක් ඒකකයකට අනුක්‍රමික අංකයක් අවශ්‍යයි",
+  },
 };
 
 export function sectorFormFields(sectorId: SectorId): SectorFieldDef[] {
@@ -198,7 +217,7 @@ export function emptyCustomFieldsForSector(
   sectorId: SectorId,
 ): Record<string, string | number> {
   const fields = sectorFormFields(sectorId);
-  return Object.fromEntries(fields.map((f) => [f.key, f.type === "number" ? "" : ""]));
+  return Object.fromEntries(fields.map((f) => [f.key, f.type === "boolean" ? "false" : ""]));
 }
 
 export function sanitizeCustomFields(
@@ -212,6 +231,8 @@ export function sanitizeCustomFields(
     if (field.type === "number") {
       const n = Number(value);
       if (!Number.isNaN(n)) out[field.key] = n;
+    } else if (field.type === "boolean") {
+      out[field.key] = value === true || value === "true";
     } else {
       out[field.key] = String(value);
     }
@@ -236,6 +257,9 @@ export function formatProductFieldBadge(
   const { sectorId, customFields } = product;
   if (sectorId === "ac_hvac" && customFields.btu) {
     return `${customFields.btu} BTU`;
+  }
+  if (sectorId === "ac_hvac" && customFields.partNo) {
+    return String(customFields.partNo);
   }
   if (sectorId === "electronics" && customFields.brand) {
     return String(customFields.brand);
