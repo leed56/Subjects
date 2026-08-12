@@ -277,3 +277,19 @@ export const ExpenseIcon = (p: IconProps) =>
     </>,
     p,
   );
+
+/** A zig-zag trend line with plotted points inside an axis frame — reads as
+ * "an analytical report over time", distinct from CostingIcon's static
+ * rising bars. */
+export const ReportsIcon = (p: IconProps) =>
+  base(
+    <>
+      <path d="M3 3v18h18" />
+      <path d="M6.5 15.5l4-4.5 3.5 3 5.5-7" />
+      <circle cx="6.5" cy="15.5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="10.5" cy="11" r="1" fill="currentColor" stroke="none" />
+      <circle cx="14" cy="14" r="1" fill="currentColor" stroke="none" />
+      <circle cx="19.5" cy="7" r="1" fill="currentColor" stroke="none" />
+    </>,
+    p,
+  );
