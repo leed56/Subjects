@@ -525,7 +525,12 @@ export default function DashboardPage() {
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard label={t("dash.today_sales")} value={formatLkr(stats.todaySales)} hint={`${stats.saleCount} ${t("dash.sales_today")}`} />
               {canSeeFinancials ? (
-                <MetricCard label={t("dash.today_profit")} value={formatLkr(stats.todayProfit)} hint={t("dash.kpi_margin").replace("{pct}", String(marginPct))} tone="positive" />
+                <MetricCard
+                  label={t("dash.today_profit")}
+                  value={formatLkr(stats.todayProfit)}
+                  hint={stats.todaySales > 0 ? t("dash.kpi_margin").replace("{pct}", String(marginPct)) : "—"}
+                  tone="positive"
+                />
               ) : (
                 // Non-financial roles (data_entry/cashier) don't get bank
                 // balance either — canUseBankingModule uses the same

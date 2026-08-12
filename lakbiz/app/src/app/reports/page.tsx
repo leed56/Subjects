@@ -69,9 +69,14 @@ export default function ReportsPage() {
   // "all" is selected (a multi-year bar chart would be unreadable and
   // isn't the point of this view; the metrics above already cover totals
   // for the full period).
+  // Sale.date is a full ISO timestamp (new Date().toISOString() at
+  // creation, see createSale in store/actions.ts), not a plain
+  // YYYY-MM-DD — bucket on the date portion only, or every key here
+  // silently fails to match trendDays' plain-date keys below.
   const byDay = new Map<string, number>();
   for (const s of sales) {
-    byDay.set(s.date, (byDay.get(s.date) ?? 0) + s.total);
+    const day = s.date.slice(0, 10);
+    byDay.set(day, (byDay.get(day) ?? 0) + s.total);
   }
   const trendDays = Array.from({ length: 14 }, (_, i) => {
     const d = new Date();
