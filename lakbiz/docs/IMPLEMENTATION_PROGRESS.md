@@ -1058,7 +1058,8 @@ data is always correct).
 Branch: `claude/lakbiz-phase14-reports`, stacked on
 `claude/lakbiz-phase13-messaging` (PR #38, not yet merged — same
 stacking convention as Phases 6–13). Status: implemented, build
-verified, pushed — draft PR #39, awaiting review.
+verified, pushed — draft PR #39 (https://github.com/leed56/Subjects/pull/39),
+awaiting review.
 
 **Scope call, same reason as Phases 6–13:** no spec text for this
 phase either. Checked first: the app already has export infrastructure
