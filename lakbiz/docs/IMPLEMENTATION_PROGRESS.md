@@ -1137,7 +1137,8 @@ local-first `sales` data already loaded by every other page).
 Branch: `claude/lakbiz-phase15-field-ux`, stacked on
 `claude/lakbiz-phase14-reports` (PR #39, not yet merged — same
 stacking convention as Phases 6–14). Status: implemented, build
-verified, pushed — draft PR #40, awaiting review.
+verified, pushed — draft PR #40 (https://github.com/leed56/Subjects/pull/40),
+awaiting review.
 
 **Scope call, same reason as Phases 6–14:** no spec text for this
 phase either. Checked first: the mobile nav/shell (Phase 1) is already
