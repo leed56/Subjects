@@ -8,6 +8,7 @@ import { AcInAppAlertSettings } from "@/components/ac-in-app-alert-settings";
 import { AcServiceDoneDialog } from "@/components/ac-service-done-dialog";
 import { useAcInAppAlerts } from "@/hooks/use-ac-in-app-alerts";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
+import { CallLink, NavigateLink } from "@/components/ui/field-links";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
 import { PageHeader, MetricCard, EmptyState, SearchInput, FilterBar } from "@/components/ui/primitives";
@@ -553,7 +554,10 @@ function JobCard({ job, assigneePhone, locale, business, notificationLogs, notif
             {job.assigneeType === "team" && <span className="rounded-md bg-teal-100 px-1.5 py-0.5 text-teal-800">{t("work.team")}</span>}
           </p>
         )}
-        <p className="mt-2 text-sm text-slate-500">{job.address}</p>
+        <div className="mt-2 flex items-center gap-2">
+          <p className="min-w-0 flex-1 truncate text-sm text-slate-500">{job.address}</p>
+          <NavigateLink address={job.address} label={t("common.navigate")} variant="icon" />
+        </div>
         <p className="mt-2 text-sm text-slate-700">{job.description}{job.btu && ` · ${job.btu} BTU`}{job.pipeMeters != null && ` · ${job.pipeMeters}m pipe`}</p>
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
           <Metric label={t("jobs.quote_label")} value={formatLkr(job.quotedAmount)} />
@@ -569,6 +573,7 @@ function JobCard({ job, assigneePhone, locale, business, notificationLogs, notif
         {(job.scheduledDate || job.serviceDueDate) && <div className="mt-3 flex flex-wrap gap-1.5 text-xs font-semibold">{job.scheduledDate && <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700">{t("jobs.install_label")}: {job.scheduledDate}</span>}{job.serviceDueDate && <span className={`rounded-md border px-2 py-1 ${serviceDueUrgencyClass(serviceDueUrgency(job.serviceDueDate))}`}>{t("jobs.service_due_label")}: {job.serviceDueDate} ({serviceDueLabel(job.serviceDueDate, locale)}){job.serviceDueManual && ` · ${t("jobs.service_due_manual_short")}`}</span>}</div>}
         <div className="mt-3"><AcJobReminderTimeline job={job} logs={notificationLogs} settings={notifySettings} /></div>
         <div className="mt-3 flex flex-wrap gap-1.5">
+          {job.phone && <CallLink phone={job.phone} label={t("common.call")} />}
           {job.phone && <MessageSendButton phone={job.phone} recipientName={job.customerName} context={{ type: "ac_job", job, business }} defaultTemplate={defaultTemplateForJob(job.status)} contextId={job.id} />}
           {canOperateJobs && assigneePhone && job.assignedTechnician && <MessageSendButton phone={assigneePhone} recipientName={job.assignedTechnician} context={{ type: "ac_job", job, business }} defaultTemplate="job_assignee_dispatch" contextId={job.id} label={t("jobs.notify_assignee")} />}
           {canMarkServiceDone(job) && (
@@ -691,13 +696,15 @@ function JobSheetDrawer({ job, locale, items, history, canSeeFinancials, canOper
       description={`${job.jobNo} · ${jobTypeLabel(job.jobType ?? "installation", locale)} · ${job.address}`}
       widthClassName="max-w-2xl"
     >
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Link
           href={`/jobs/${job.id}/invoice`}
           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
           {t("jinv.view_invoice")}
         </Link>
+        {job.phone && <CallLink phone={job.phone} label={t("common.call")} />}
+        <NavigateLink address={job.address} label={t("common.navigate")} />
       </div>
 
       {canSeeFinancials && (

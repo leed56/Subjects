@@ -1132,10 +1132,81 @@ have not been visually verified. No new DB objects, so no RLS testing
 was needed this phase (the page reads only from the already-RLS'd
 local-first `sales` data already loaded by every other page).
 
+### Phase 15 — Mobile field UX (tap-to-call / tap-to-navigate)
+
+Branch: `claude/lakbiz-phase15-field-ux`, stacked on
+`claude/lakbiz-phase14-reports` (PR #39, not yet merged — same
+stacking convention as Phases 6–14). Status: implemented, build
+verified, pushed — draft PR #40, awaiting review.
+
+**Scope call, same reason as Phases 6–14:** no spec text for this
+phase either. Checked first: the mobile nav/shell (Phase 1) is already
+solid — responsive sidebar/drawer, touch-sized nav items — but every
+job/customer phone number and address renders as plain text
+everywhere; there is no `tel:` call link and no map/navigation link
+anywhere in the app. That's the sharpest, most concrete gap for a
+technician standing at (or driving to) a job site. Asked the repo
+owner directly; confirmed scope: add tap-to-call and tap-to-navigate
+links on the two screens technicians actually use on-site — Jobs and
+Schedule — not an app-wide pass, and not the bigger offline
+field-mode/sync-queue work (both flagged as follow-ups below).
+
+**No new dependency:** `tel:` links need nothing; navigation uses a
+plain `https://www.google.com/maps/search/?api=1&query=...` URL
+(opens the user's default maps app on mobile, a new tab on desktop) —
+deliberately the `/search` endpoint, not `/dir`, since only the job's
+destination address is known, not the technician's live starting
+point.
+
+- New `CallLink`/`NavigateLink` components
+  (`src/components/ui/field-links.tsx`) — `chip` variant (icon +
+  label) and `icon` variant (36×36px tap target, icon only), styled
+  to match the existing `ActionButton`/`MessageSendButton` chip
+  convention rather than introducing a one-off larger touch-target
+  size across the shared button set (a broad resize of existing
+  shared components across every phase's shipped UI was judged too
+  risky to make unverified — flagged as a follow-up below instead).
+- New `PhoneIcon` and `NavigateIcon` (hand-rolled SVG, same
+  philosophy as every icon in the set).
+- **Jobs (`/jobs`):** job cards gained a navigate icon next to the
+  address and a call chip next to the existing WhatsApp/SMS message
+  button; the job-sheet detail drawer gained call + navigate chips
+  next to "View invoice".
+- **Schedule (`/schedule`):** the reschedule drawer's job-detail view
+  (previously status + job type only) gained an address block with
+  call + navigate chips, so a technician can see where they're going
+  and how to get there before confirming a new date.
+- New `common.call` / `common.navigate` i18n keys (both locales).
+
+Files changed:
+- `src/components/ui/field-links.tsx` — new `CallLink`/`NavigateLink`.
+- `src/components/ui/icons.tsx` — new `PhoneIcon`, `NavigateIcon`.
+- `src/lib/i18n/translations.ts` — `common.call`/`common.navigate`
+  keys, both locales.
+- `src/app/jobs/page.tsx` — call/navigate links on the job card and
+  job-sheet drawer.
+- `src/app/schedule/page.tsx` — call/navigate links in the reschedule
+  drawer's job-detail view.
+
+Tests performed:
+- `tsc --noEmit`: clean.
+- `eslint`: 0 errors, same 3 pre-existing warnings, none new.
+- `next build`: succeeds, still 47 routes (unchanged — extended two
+  existing pages, added no new routes).
+
+Remaining risks: same "no browser" caveat as every UI phase since 1 —
+the call/navigate chips have not been visually verified, including on
+an actual mobile device where `tel:`/maps deep-linking matters most
+(this was built and typechecked in a container with no phone to test
+the handoff to a dialer/maps app). A broader touch-target-size pass
+over the *existing* shared action buttons (not just the two new link
+components) is deferred, flagged above, to avoid an unverified layout
+change across every already-shipped phase's UI.
+
 ## Not started
 
-Phases 15–18 (mobile field UX, performance/a11y, final security audit,
-final QA). Plus deferred items: customer notes field,
+Phases 16–18 (performance/a11y, final security audit, final QA). Plus
+deferred items: customer notes field,
 Receive Stock / Stock Adjustment as real features, `schema_migrations`
 RLS (single-membership migration `20250628000001` also still unapplied —
 needs a duplicate-membership check against production first), offline
@@ -1158,18 +1229,26 @@ generic `"custom"` context instead), a UI modernization pass on
 `/reports` (the existing `src/lib/export/*` CSV/print helpers are
 per-domain — sales, VAT, customers — and were not wired into this new
 aggregate view), plus a longer trend window / month-over-month
-comparison on the reports chart.
+comparison on the reports chart. (Phase 15) call/navigate links on
+Customers/Suppliers/Vehicles/Teams (scoped to Jobs/Schedule only this
+phase), the offline field-mode indicator + local sync queue for
+job/schedule updates made while offline, and a broader touch-target
+sizing pass over the existing shared action-button components (this
+phase only sized the two new link components, to avoid an unverified
+layout change across every already-shipped phase's UI).
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase14-reports`, open a draft PR stacked on
-   `claude/lakbiz-phase13-messaging` (PR #38 —
-   merge #31→#32→#33→#34→#35→#36→#37→#38 first, or review this one
+1. Push `claude/lakbiz-phase15-field-ux`, open a draft PR stacked on
+   `claude/lakbiz-phase14-reports` (PR #39 —
+   merge #31→#32→#33→#34→#35→#36→#37→#38→#39 first, or review this one
    with that in mind).
-2. Visual/click-through pass on the Phase 14 preview — switch the
-   period filter, confirm the trend chart/top-products/top-customers
-   render correctly, and confirm a non-owner/manager role sees the
-   access-denied empty state instead of financial numbers.
-3. Begin Phase 15 (mobile field UX) as its own branch/PR once Phase 14
-   is reviewed — get the actual spec text for it from the repo owner
-   first if it's not already available, same as Phases 6–14 had to.
+2. Visual/click-through pass on the Phase 15 preview, ideally on an
+   actual phone — confirm the call chip opens the dialer with the
+   right number and the navigate chip opens maps with the right
+   address, on both the Jobs card/job-sheet drawer and the Schedule
+   reschedule drawer.
+3. Begin Phase 16 (performance/a11y) as its own branch/PR once Phase
+   15 is reviewed — get the actual spec text for it from the repo
+   owner first if it's not already available, same as Phases 6–15 had
+   to.
