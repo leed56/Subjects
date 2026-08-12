@@ -768,16 +768,74 @@ Remaining risks: same "no browser" caveat as every UI phase since 1 — the
 print layout, the tax-invoice legal box, and the WhatsApp share text have
 not been visually checked against a real job.
 
+### Phase 10 — Dashboard rebuild
+Branch: `claude/lakbiz-phase10-dashboard`, stacked on `claude/lakbiz-phase9-job-invoicing`
+(PR #34, not yet merged — same stacking convention as Phases 6–9). Status:
+implemented, build verified, pushed — draft PR #35, awaiting review.
+
+**Scope call, same reason as Phases 6–9:** no spec text for this phase
+either. Asked the repo owner directly; confirmed: UI modernization only —
+same pattern as Phases 2/3/5 (migrate onto the Phase 1 design system,
+same widgets/data, no new features, behavior preserved 1:1), not a
+rethink of what the dashboard shows. The dashboard was the one page
+Phase 1 deliberately left on `pro-shell.tsx` primitives — it already had
+real, working content and migrating it alongside 16 pages' chrome swap in
+one sweep was judged too much surface area for that phase; this is the
+follow-up.
+
+**Every stat, panel, and piece of business logic is unchanged** —
+`getDashboardStats`, `getVatQuarterSummary`, `getIncomeTaxYearSummary`,
+the accountant CSV export (identical label set, identical
+`exportAccountantPack` call), `AcServiceDuePanel`, `AcServiceDoneDialog`,
+`OfflineSyncNotice`, and the reset-all-data flow are all reused exactly
+as they were — only the visual chrome around them moved onto
+`PageHeader`/`MetricCard`/`SectionHeader`/`EmptyState`/`StatusBadge`.
+Two small, deliberate modernizations in the same spirit as Phase 2's
+"delete confirmation: `window.confirm()` → `ConfirmDialog`": the
+reset-all-data button now opens the `ConfirmDialog` primitive instead of
+a native `confirm()` popup, and the quick-action tiles' emoji icons
+(🧾📦👥🏦) became the existing hand-rolled SVG icon set
+(`SalesIcon`/`StockIcon`/`CustomersIcon`/`BankingIcon`), matching the "no
+emoji as primary production icons" direction from Phase 1 — the
+VAT/income-tax meter cards keep their dark accent styling (the one
+deliberate departure from the flat card look, since it's a meaningful
+visual highlight, not decoration) via a small local `MeterCard` helper
+rather than `ProCard`'s heavier shadow/radius.
+
+Files changed:
+- `src/app/dashboard/page.tsx` — full rewrite onto Phase 1 primitives;
+  `ProPageHeader`/`ProStatCard`/`ProCard`/`ProBadge`/`ProButton`/
+  `ProEmptyState` all replaced. No data/store-hook changes.
+
+Tests performed:
+- `tsc --noEmit`: clean.
+- `eslint`: 0 errors, same 3 pre-existing warnings, none new.
+- `next build`: succeeds, `/dashboard` still statically prerenders (same
+  as before — it was already static).
+- **Verified in the built static HTML** (`.next/server/app/dashboard.html`,
+  same technique Phase 1 used): zero occurrences of the old
+  `rounded-[2rem]` pro-shell signature class, 12 occurrences of the new
+  `rounded-xl` primitive style — confirms the migration actually took
+  effect in the rendered output, not just "the build didn't error."
+
+Remaining risks: same "no browser" caveat as every UI phase since 1 —
+this is the densest page migrated so far (12+ stat cards, three
+list panels, two accent meter cards, conditional vehicles/AC-jobs
+sections, the service-due panel), and the static-HTML check above only
+confirms markup presence, not that every conditional section
+(`canSeeFinancials`, `showVehicles`, `showAcJobs`, empty-state branches)
+renders correctly with real data across roles.
+
 ## Not started
 
-Phases 10–18 (dashboard rebuild, expenses, workforce/roles, messaging
-integration, reporting, mobile field UX, performance/a11y, final security
-audit, final QA). Plus deferred items: customer notes field, Receive
-Stock / Stock Adjustment as real features, `schema_migrations` RLS
-(single-membership migration `20250628000001` also still unapplied —
-needs a duplicate-membership check against production first), offline
-support for AC Assets and Crews, the full field-service status/dispatch
-model (New/Assigned/On the way/Awaiting parts/Invoiced/Paid), before/after
+Phases 11–18 (expenses, workforce/roles, messaging integration,
+reporting, mobile field UX, performance/a11y, final security audit, final
+QA). Plus deferred items: customer notes field, Receive Stock / Stock
+Adjustment as real features, `schema_migrations` RLS (single-membership
+migration `20250628000001` also still unapplied — needs a
+duplicate-membership check against production first), offline support for
+AC Assets and Crews, the full field-service status/dispatch model
+(New/Assigned/On the way/Awaiting parts/Invoiced/Paid), before/after
 photos, customer signature, wiring `asset_id`/`crew_id` into the `/jobs`
 create/edit form (this is also what blocks true crew-column grouping on
 the Schedule board — see Phase 7), drag-and-drop rescheduling,
@@ -788,13 +846,13 @@ only), and a distinct job-invoice numbering scheme (Phase 9 reuses
 
 ## Next exact tasks
 
-1. Push `claude/lakbiz-phase9-job-invoicing`, open a draft PR stacked on
-   `claude/lakbiz-phase8-job-costing` (PR #33 — merge #31→#32→#33 first,
-   or review this one with that in mind).
-2. Visual/click-through pass on the Phase 9 preview — open a job's
-   invoice, check the print layout and the WhatsApp share button, and
-   confirm a VAT-registered test org renders the tax-invoice legal box
-   correctly.
-3. Begin Phase 10 (Dashboard rebuild) as its own branch/PR once Phase 9 is
-   reviewed — get the actual spec text for it from the repo owner first if
-   it's not already available, same as Phases 6–9 had to.
+1. Push `claude/lakbiz-phase10-dashboard`, open a draft PR stacked on
+   `claude/lakbiz-phase9-job-invoicing` (PR #34 — merge #31→#32→#33→#34
+   first, or review this one with that in mind).
+2. Visual/click-through pass on the Phase 10 preview, across roles —
+   this page has the most role-conditional branches of any migrated page
+   so far, so it's worth checking as owner, then as a role without
+   `canSeeFinancials` (data_entry/cashier/technician).
+3. Begin Phase 11 (Expenses) as its own branch/PR once Phase 10 is
+   reviewed — get the actual spec text for it from the repo owner first
+   if it's not already available, same as Phases 6–10 had to.
