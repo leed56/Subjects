@@ -1791,6 +1791,53 @@ Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
 pre-existing warnings, none new, `next build` succeeds. No browser
 verification — standing sandbox limitation.
 
+### Phase 8 — Job profitability engine
+
+Extracted the formula every prior phase (4/5/6/7) had been feeding
+inputs toward — `Total Job Cost = Material + Labor + Other`,
+`Gross Profit = Revenue − Total Job Cost`,
+`Gross Margin % = Gross Profit / Revenue × 100` (null, not a divide-by-
+zero or a misleading 0%, when revenue is 0) — into one function,
+`computeJobProfitability()` in a new `src/lib/job-profitability.ts`.
+Before this phase the formula lived only inline inside `/job-costing`'s
+page component.
+
+- **Bucket mapping** (the spec's 3 buckets vs. this app's actual data
+  shapes, documented in the function's own header comment): Material =
+  Σ `job_items` where `itemType === "part"`. Labor = Σ `job_items` where
+  `itemType === "labour"` **plus** `job.subcontractCost` when the job is
+  contractor-assigned (paying an external party to do the work is still
+  labor, just not in-house — folding it in here also matches how
+  `/workforce`'s own margin stat already treated it). Other = Σ
+  `job_items` where `itemType === "service"` **plus** the Phase 7
+  job-linked Expenses total (passed in by the caller, since Expenses is
+  cloud-only and this function stays a pure function over already-
+  fetched data, not a fetcher itself).
+- **VAT check, per the spec's explicit instruction**: audited
+  `ACJob`/`ACJobInput` before writing this — no VAT field exists
+  anywhere on an AC job. `quotedAmount` is a flat negotiated price with
+  no VAT breakout, unlike `Sale.outputVat`/`Purchase.inputVat`. There is
+  currently nothing to accidentally include; documented in the function
+  header as the one place to revisit if AC jobs ever gain VAT tracking.
+- `/job-costing` now calls this function instead of its own inline
+  `costJob()` (deleted).
+- **Job Sheet drawer** (`/jobs`) also switched from its own separate
+  inline calc (`itemsTotal`/`subcontract`/`profit`, which conflated
+  parts+labour+service into one undifferentiated figure and never
+  included Phase 7 costs at all) to the same shared function — the
+  drawer now shows Material cost and Labor cost as distinct figures
+  instead of one combined "Parts/labour" number, a real improvement.
+  Passes `linkedExpenseTotal = 0` since this view is local-first only
+  and doesn't fetch cloud-only Expenses (same call this project made in
+  Phase 7) — same formula, an admittedly incomplete input in this one
+  view, not a second competing calculation. `/job-costing` remains the
+  complete, authoritative profitability view until Phase 9's Job Detail
+  redesign potentially changes that.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds. No browser
+verification — standing sandbox limitation.
+
 ## Not started
 
 Deferred items: customer notes field,
