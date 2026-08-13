@@ -71,6 +71,8 @@ export function addProduct(data: AppData, input: ProductInput): AppData {
     sellPrice: input.sellPrice,
     stockQty: input.stockQty,
     reorderLevel: input.reorderLevel,
+    active: input.active ?? true,
+    notes: input.notes?.trim() || undefined,
     customFields: {
       unit: input.unit,
       ...sanitizeCustomFields(input.sectorId, input.customFields ?? {}),
@@ -117,6 +119,8 @@ export function updateProduct(
             sellPrice: input.sellPrice,
             stockQty: input.stockQty,
             reorderLevel: input.reorderLevel,
+            active: input.active ?? p.active ?? true,
+            notes: input.notes?.trim() || undefined,
             customFields: {
               unit: input.unit,
               ...sanitizeCustomFields(input.sectorId, input.customFields ?? {}),
@@ -1866,6 +1870,7 @@ export function updateBusiness(
 
 export function getLowStockProducts(products: AppData["products"]) {
   return products
+    .filter((p) => p.active)
     .filter(
       (p) =>
         p.stockQty <= 0 ||

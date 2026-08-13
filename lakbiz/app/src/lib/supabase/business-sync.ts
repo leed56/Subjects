@@ -330,6 +330,8 @@ export async function pullBusinessData(
       sellPrice: num(row.sell_price),
       stockQty: num(row.stock_qty),
       reorderLevel: row.reorder_level != null ? num(row.reorder_level) : undefined,
+      active: row.active ?? true,
+      notes: row.notes ?? undefined,
       customFields: customFieldsFromDb(
         row.custom_fields as Record<string, unknown>,
         row.unit,
@@ -956,6 +958,8 @@ function productRowsFromList(
     reorder_level: p.reorderLevel ?? null,
     unit: (p.customFields.unit as string) || "pcs",
     custom_fields: p.customFields,
+    active: p.active,
+    notes: p.notes ?? null,
   }));
 }
 
@@ -2193,6 +2197,8 @@ export async function pushBusinessData(
     reorder_level: p.reorderLevel ?? null,
     unit: (p.customFields.unit as string) || "pcs",
     custom_fields: p.customFields,
+    active: p.active,
+    notes: p.notes ?? null,
   }));
 
   const customerRows = customerRowsForOrg(organizationId, data.customers);
