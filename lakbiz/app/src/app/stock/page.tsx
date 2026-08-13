@@ -17,7 +17,7 @@ import { exportStockCsv } from "@/lib/export";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { formatProductFieldBadge } from "@/lib/sector-fields";
 import { useAppStore } from "@/lib/store/use-app-store";
-import { getLowStockProducts } from "@/lib/store/actions";
+import { getLowStockProducts, getReorderSuggestions } from "@/lib/store/actions";
 import { getPlan } from "@/lib/subscription/plans";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
@@ -79,6 +79,9 @@ export default function StockPage() {
   // sale picker, which already ignore inactive items — with an explicit
   // toggle to review/reactivate them instead of losing them silently.
   const [showInactive, setShowInactive] = useState(false);
+  // HVAC platform Phase 12 — a real filtered view of exactly what needs
+  // reordering, not just the metric-card count that existed before.
+  const [showLowStockOnly, setShowLowStockOnly] = useState(false);
 
   if (!ready || !data) {
     return (
@@ -100,12 +103,16 @@ export default function StockPage() {
       )
     : data.products;
   const byCondition = conditionFilter === "all" ? searched : searched.filter((p) => p.condition === conditionFilter);
-  const products = showInactive ? byCondition : byCondition.filter((p) => p.active);
+  const byActive = showInactive ? byCondition : byCondition.filter((p) => p.active);
+  const lowStock = getLowStockProducts(data.products);
+  const lowStockIds = new Set(lowStock.map((p) => p.id));
+  const products = showLowStockOnly ? byActive.filter((p) => lowStockIds.has(p.id)) : byActive;
+  const reorderSuggestions = showLowStockOnly ? getReorderSuggestions(data) : [];
+  const reorderByProductId = new Map(reorderSuggestions.map((r) => [r.product.id, r] as const));
 
   const newCount = data.products.filter((p) => p.condition === "new").length;
   const usedCount = data.products.filter((p) => p.condition === "used").length;
   const inactiveCount = data.products.filter((p) => !p.active).length;
-  const lowStock = getLowStockProducts(data.products);
   const inventoryValue = data.products.reduce((sum, p) => sum + p.stockQty * p.buyPrice, 0);
   const sellValue = data.products.reduce((sum, p) => sum + p.stockQty * p.sellPrice, 0);
   const stockInProduct = stockInId ? data.products.find((p) => p.id === stockInId) : null;
@@ -263,6 +270,16 @@ export default function StockPage() {
               {p.category || "General"}
               {badge ? ` · ${badge}` : ""}
             </p>
+            {showLowStockOnly && (() => {
+              const suggestion = reorderByProductId.get(p.id);
+              if (!suggestion?.lastSupplierName) return null;
+              return (
+                <p className="mt-0.5 text-xs text-amber-700">
+                  {t("stock.last_bought_from")} {suggestion.lastSupplierName}
+                  {suggestion.lastPurchaseDate ? ` · ${new Date(suggestion.lastPurchaseDate).toLocaleDateString("en-LK")}` : ""}
+                </p>
+              );
+            })()}
           </div>
         );
       },
@@ -405,6 +422,17 @@ export default function StockPage() {
               </button>
             ))}
           </div>
+          {lowStock.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowLowStockOnly((v) => !v)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                showLowStockOnly ? "bg-amber-600 text-white" : "border border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300"
+              }`}
+            >
+              {t("stock.low_stock_filter")} <span className="opacity-70">({lowStock.length})</span>
+            </button>
+          )}
           {inactiveCount > 0 && (
             <button
               type="button"

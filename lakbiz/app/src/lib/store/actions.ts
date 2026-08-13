@@ -1717,6 +1717,53 @@ export function getLowStockProducts(products: AppData["products"]) {
     .sort((a, b) => a.stockQty - b.stockQty);
 }
 
+export type ReorderSuggestion = {
+  product: Product;
+  /** From the most recent Purchase that included this product — real
+   * purchase history, not a guess. Undefined when the product has never
+   * been purchased through /suppliers (e.g. opening stock only). */
+  lastSupplierId?: string;
+  lastSupplierName?: string;
+  lastPurchaseDate?: string;
+  lastUnitCost?: number;
+};
+
+/** HVAC platform Phase 12 — low stock & reordering. Reuses the existing
+ * per-item `reorderLevel` (already configurable per product, not a
+ * global hardcoded threshold — confirmed sound in the Phase 1 audit) and
+ * adds one genuinely new thing: which supplier this item was last bought
+ * from, so "what needs reordering" also answers "from whom" without
+ * guessing. Deliberately does **not** suggest a reorder quantity — that
+ * would need a demand/sales-velocity model that doesn't exist anywhere
+ * in this codebase, and inventing one here would be exactly the
+ * fabricated-signal the spec's absolute rules forbid. Purchase-order
+ * creation itself is Phase 13's, not duplicated here. */
+export function getReorderSuggestions(data: AppData): ReorderSuggestion[] {
+  const lastPurchaseByProduct = new Map<string, Purchase>();
+  // data.purchases is already sorted newest-first at creation time
+  // (createPurchase unshifts) — the first match per product is the most
+  // recent, so this loop doesn't need to sort or compare dates itself.
+  for (const purchase of data.purchases) {
+    for (const line of purchase.lines) {
+      if (!lastPurchaseByProduct.has(line.productId)) {
+        lastPurchaseByProduct.set(line.productId, purchase);
+      }
+    }
+  }
+
+  return getLowStockProducts(data.products).map((product) => {
+    const purchase = lastPurchaseByProduct.get(product.id);
+    const line = purchase?.lines.find((l) => l.productId === product.id);
+    return {
+      product,
+      lastSupplierId: purchase?.supplierId,
+      lastSupplierName: purchase?.supplierName,
+      lastPurchaseDate: purchase?.date,
+      lastUnitCost: line?.unitCost,
+    };
+  });
+}
+
 function monthKeyFromDate(date = new Date()): string {
   return date.toISOString().slice(0, 7);
 }
