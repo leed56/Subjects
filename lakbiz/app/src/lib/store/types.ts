@@ -466,6 +466,9 @@ export type ProductInput = {
   unit: string;
   /** Sector-specific fields (BTU, brand, barcode, etc.) — unit is stored separately */
   customFields?: Record<string, string | number | boolean>;
+  /** Defaults true when omitted (new items are active by default). */
+  active?: boolean;
+  notes?: string;
 };
 
 export type CustomerInput = {
