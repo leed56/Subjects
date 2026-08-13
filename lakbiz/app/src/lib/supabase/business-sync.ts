@@ -10,9 +10,12 @@ import type {
   AppData,
   Sale,
   StockLog,
+  StockMovementType,
   ACJob,
   ChequeRecord,
   Purchase,
+  PurchaseOrder,
+  PurchaseOrderStatus,
   SupplierPayment,
   CustomerPayment,
   ContractorPayment,
@@ -99,6 +102,18 @@ function asPaymentMethod(value: string | null | undefined): PaymentMethod {
   return "cash";
 }
 
+function asPurchaseOrderStatus(value: string | null | undefined): PurchaseOrderStatus {
+  if (
+    value === "pending" ||
+    value === "partial" ||
+    value === "received" ||
+    value === "cancelled"
+  ) {
+    return value;
+  }
+  return "pending";
+}
+
 function asSectorId(value: string | null | undefined): SectorId {
   const allowed: SectorId[] = [
     "grocery",
@@ -173,6 +188,8 @@ export async function pullBusinessData(
     saleLinesRes,
     purchasesRes,
     purchaseLinesRes,
+    purchaseOrdersRes,
+    purchaseOrderLinesRes,
     customerPaymentsRes,
     customerProductPricesRes,
     supplierPaymentsRes,
@@ -198,6 +215,14 @@ export async function pullBusinessData(
     supabase.from("purchases").select("*").eq("organization_id", organizationId),
     supabase
       .from("purchase_lines")
+      .select("*")
+      .eq("organization_id", organizationId),
+    supabase
+      .from("purchase_orders")
+      .select("*")
+      .eq("organization_id", organizationId),
+    supabase
+      .from("purchase_order_lines")
       .select("*")
       .eq("organization_id", organizationId),
     supabase
@@ -250,6 +275,8 @@ export async function pullBusinessData(
   const purchaseLines = rowsOrEmpty(purchaseLinesRes, "purchase_lines");
   const suppliers = rowsOrEmpty(suppliersRes, "suppliers");
   const purchases = rowsOrEmpty(purchasesRes, "purchases");
+  const purchaseOrders = rowsOrEmpty(purchaseOrdersRes, "purchase_orders");
+  const purchaseOrderLines = rowsOrEmpty(purchaseOrderLinesRes, "purchase_order_lines");
   const customerPayments = rowsOrEmpty(customerPaymentsRes, "customer_payments");
   const customerProductPrices = rowsOrEmpty(
     customerProductPricesRes,
@@ -283,6 +310,13 @@ export async function pullBusinessData(
     purchaseLinesByPurchase.set(line.purchase_id, list);
   }
 
+  const purchaseOrderLinesByPo = new Map<string, typeof purchaseOrderLines>();
+  for (const line of purchaseOrderLines) {
+    const list = purchaseOrderLinesByPo.get(line.purchase_order_id) ?? [];
+    list.push(line);
+    purchaseOrderLinesByPo.set(line.purchase_order_id, list);
+  }
+
   const data: AppData = {
     business: business ?? localBusiness ?? defaultBusiness(),
     products: (productsRes.data ?? []).map((row) => ({
@@ -296,6 +330,8 @@ export async function pullBusinessData(
       sellPrice: num(row.sell_price),
       stockQty: num(row.stock_qty),
       reorderLevel: row.reorder_level != null ? num(row.reorder_level) : undefined,
+      active: row.active ?? true,
+      notes: row.notes ?? undefined,
       customFields: customFieldsFromDb(
         row.custom_fields as Record<string, unknown>,
         row.unit,
@@ -374,6 +410,31 @@ export async function pullBusinessData(
         note: row.note ?? undefined,
       };
     }),
+    purchaseOrders: purchaseOrders.map((row) => {
+      const lines = (purchaseOrderLinesByPo.get(row.id) ?? [])
+        .sort((a, b) => a.line_order - b.line_order)
+        .map((line) => ({
+          productId: line.product_id ?? "",
+          productName: line.product_name,
+          qtyOrdered: num(line.qty_ordered),
+          qtyReceived: num(line.qty_received),
+          unitCost: num(line.unit_cost),
+        }));
+
+      return {
+        id: row.id,
+        poNo: row.po_no,
+        date: row.order_date,
+        supplierId: row.supplier_id ?? "",
+        supplierName: row.supplier_name,
+        lines,
+        expectedTotal: num(row.expected_total),
+        status: asPurchaseOrderStatus(row.status),
+        relatedJobId: row.related_job_id ?? undefined,
+        note: row.note ?? undefined,
+        receivedDate: row.received_date ?? undefined,
+      };
+    }),
     customerPayments: customerPayments.map((row) => ({
       id: row.id,
       customerId: row.customer_id,
@@ -402,10 +463,13 @@ export async function pullBusinessData(
       id: row.id,
       productId: row.product_id,
       productName: row.product_name,
-      type: row.log_type as "in" | "out" | "sale",
+      type: row.log_type as StockMovementType,
       qty: num(row.qty),
       note: row.note ?? undefined,
       date: row.log_date,
+      relatedJobId: row.related_job_id ?? undefined,
+      relatedSupplierId: row.related_supplier_id ?? undefined,
+      userId: row.user_id ?? undefined,
     })),
     bankAccounts: bankAccounts.map((row) => ({
       id: row.id,
@@ -480,6 +544,8 @@ export async function pullBusinessData(
       subcontractCost:
         row.subcontract_cost != null ? num(row.subcontract_cost) : undefined,
       notes: row.notes ?? undefined,
+      complaint: row.complaint ?? undefined,
+      diagnosis: row.diagnosis ?? undefined,
     })),
     jobItems: jobItems.map((row) => ({
       id: row.id,
@@ -489,6 +555,13 @@ export async function pullBusinessData(
       qty: num(row.qty),
       unitPrice: num(row.unit_price),
       lineTotal: num(row.line_total),
+      source: (row.source as AppData["jobItems"][number]["source"]) ?? undefined,
+      productId: row.product_id ?? undefined,
+      supplierId: row.supplier_id ?? undefined,
+      purchaseRef: row.purchase_ref ?? undefined,
+      purchaseDate: row.purchase_date ?? undefined,
+      customerPrice: row.customer_price != null ? num(row.customer_price) : undefined,
+      technicianId: row.technician_id ?? undefined,
     })),
     jobStatusHistory: jobStatusHistory.map((row) => ({
       id: row.id,
@@ -507,6 +580,7 @@ export async function pullBusinessData(
         : [],
       active: row.active ?? true,
       notes: row.notes ?? undefined,
+      hourlyRate: row.hourly_rate != null ? num(row.hourly_rate) : undefined,
     })),
     contractors: contractors.map((row) => ({
       id: row.id,
@@ -589,6 +663,7 @@ async function upsertOrgRows(
     | "sales"
     | "sales_base"
     | "purchases"
+    | "purchase_orders"
     | "customer_payments"
     | "customer_product_prices"
     | "supplier_payments"
@@ -605,7 +680,8 @@ async function upsertOrgRows(
     | "contractor_payments"
     | "vehicles"
     | "sale_lines"
-    | "purchase_lines",
+    | "purchase_lines"
+    | "purchase_order_lines",
   rows: Record<string, unknown>[],
 ): Promise<string | null> {
   if (rows.length === 0) return null;
@@ -712,6 +788,7 @@ async function deleteOrgRowsNotIn(
     | "sales"
     | "sales_base"
     | "purchases"
+    | "purchase_orders"
     | "customer_payments"
     | "customer_product_prices"
     | "supplier_payments"
@@ -843,6 +920,26 @@ async function replacePurchaseLines(
   return insErr?.message ?? null;
 }
 
+async function replacePurchaseOrderLines(
+  organizationId: string,
+  purchaseOrderId: string,
+  rows: Record<string, unknown>[],
+): Promise<string | null> {
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const { error: delErr } = await supabase
+    .from("purchase_order_lines")
+    .delete()
+    .eq("organization_id", organizationId)
+    .eq("purchase_order_id", purchaseOrderId);
+  if (delErr) return delErr.message;
+
+  if (rows.length === 0) return null;
+  const { error: insErr } = await supabase.from("purchase_order_lines").insert(rows);
+  return insErr?.message ?? null;
+}
+
 function productRowsFromList(
   organizationId: string,
   products: AppData["products"],
@@ -861,6 +958,8 @@ function productRowsFromList(
     reorder_level: p.reorderLevel ?? null,
     unit: (p.customFields.unit as string) || "pcs",
     custom_fields: p.customFields,
+    active: p.active,
+    notes: p.notes ?? null,
   }));
 }
 
@@ -898,6 +997,9 @@ function stockLogRow(
     qty: log.qty,
     note: log.note ?? null,
     log_date: log.date,
+    related_job_id: log.relatedJobId ?? null,
+    related_supplier_id: log.relatedSupplierId ?? null,
+    user_id: log.userId ?? null,
   };
 }
 
@@ -997,6 +1099,8 @@ function acJobRowFromJob(
     assignee_id: job.assigneeId ?? null,
     subcontract_cost: job.subcontractCost ?? null,
     notes: job.notes ?? null,
+    complaint: job.complaint ?? null,
+    diagnosis: job.diagnosis ?? null,
   };
 }
 
@@ -1277,8 +1381,12 @@ export async function syncPurchaseSnapshot(
   if (linesErr) return linesErr;
 
   const grnTag = purchase.grnNo;
+  // Phase 13 audit fix: createPurchase tags its StockLogs "purchase" (see
+  // StockMovementType), not "in" — this filter predates that vocabulary
+  // and never matched, so eager push after a GRN silently skipped its
+  // stock logs (the periodic full sync still carries them eventually).
   const purchaseLogs = data.stockLogs.filter(
-    (log) => log.type === "in" && log.note?.includes(grnTag),
+    (log) => log.type === "purchase" && log.note?.includes(grnTag),
   );
   if (purchaseLogs.length > 0) {
     const logErr = await upsertOrgRows(
@@ -1297,6 +1405,95 @@ export async function syncPurchaseSnapshot(
         cheques.map((cheque) => chequeRowFromCheque(organizationId, cheque)),
       );
       if (chequeErr) return chequeErr;
+    }
+  }
+
+  return null;
+}
+
+function purchaseOrderRowFromPurchaseOrder(
+  organizationId: string,
+  po: PurchaseOrder,
+): Record<string, unknown> {
+  return {
+    id: po.id,
+    organization_id: organizationId,
+    po_no: po.poNo,
+    order_date: po.date,
+    supplier_id: po.supplierId || null,
+    supplier_name: po.supplierName,
+    expected_total: po.expectedTotal,
+    status: po.status,
+    related_job_id: po.relatedJobId ?? null,
+    note: po.note ?? null,
+    received_date: po.receivedDate ?? null,
+  };
+}
+
+function purchaseOrderLineRowsFromPurchaseOrder(
+  organizationId: string,
+  po: PurchaseOrder,
+): Record<string, unknown>[] {
+  return po.lines.map((line, index) => ({
+    organization_id: organizationId,
+    purchase_order_id: po.id,
+    product_id: line.productId || null,
+    product_name: line.productName,
+    qty_ordered: line.qtyOrdered,
+    qty_received: line.qtyReceived,
+    unit_cost: line.unitCost,
+    line_order: index,
+  }));
+}
+
+/** Upsert a purchase order and its lines directly to Supabase (HVAC Phase
+ * 13). Used both when a PO is first created and again after receiving —
+ * both paths push the same header+lines shape, so one function covers it.
+ * `newStockLogIds` carries any stock movements a receiving call just
+ * created locally (diffed by the caller, same pattern as
+ * syncPurchaseSnapshot's newChequeIds) so they reach the cloud stock_logs
+ * table immediately instead of waiting for the next periodic full sync. */
+export async function syncPurchaseOrderSnapshot(
+  organizationId: string,
+  data: AppData,
+  purchaseOrderId: string,
+  options?: { newStockLogIds?: string[] },
+): Promise<string | null> {
+  const po = data.purchaseOrders.find((row) => row.id === purchaseOrderId);
+  if (!po) return "Purchase order not found locally";
+
+  const poErr = await upsertOrgRows("purchase_orders", [
+    purchaseOrderRowFromPurchaseOrder(organizationId, po),
+  ]);
+  if (poErr) return poErr;
+
+  const linesErr = await replacePurchaseOrderLines(
+    organizationId,
+    purchaseOrderId,
+    purchaseOrderLineRowsFromPurchaseOrder(organizationId, po),
+  );
+  if (linesErr) return linesErr;
+
+  const newStockLogIds = options?.newStockLogIds ?? [];
+  if (newStockLogIds.length > 0) {
+    const logs = data.stockLogs.filter((log) => newStockLogIds.includes(log.id));
+    if (logs.length > 0) {
+      const logErr = await upsertOrgRows(
+        "stock_logs",
+        logs.map((log) => stockLogRow(organizationId, log)),
+      );
+      if (logErr) return logErr;
+
+      const productIds = [...new Set(logs.map((log) => log.productId))];
+      const prodErr = await upsertMaskedViewRows(
+        "products",
+        organizationId,
+        productRowsFromList(
+          organizationId,
+          data.products.filter((p) => productIds.includes(p.id)),
+        ),
+      );
+      if (prodErr) return prodErr;
     }
   }
 
@@ -1436,6 +1633,13 @@ function jobItemRow(
     qty: item.qty,
     unit_price: item.unitPrice,
     line_total: item.lineTotal,
+    source: item.source ?? null,
+    product_id: item.productId ?? null,
+    supplier_id: item.supplierId ?? null,
+    purchase_ref: item.purchaseRef ?? null,
+    purchase_date: item.purchaseDate ?? null,
+    customer_price: item.customerPrice ?? null,
+    technician_id: item.technicianId ?? null,
   };
 }
 
@@ -1890,6 +2094,7 @@ function technicianRow(
     specialties: technician.specialties,
     active: technician.active,
     notes: technician.notes ?? null,
+    hourly_rate: technician.hourlyRate ?? null,
   };
 }
 
@@ -1992,6 +2197,8 @@ export async function pushBusinessData(
     reorder_level: p.reorderLevel ?? null,
     unit: (p.customFields.unit as string) || "pcs",
     custom_fields: p.customFields,
+    active: p.active,
+    notes: p.notes ?? null,
   }));
 
   const customerRows = customerRowsForOrg(organizationId, data.customers);
@@ -2074,6 +2281,14 @@ export async function pushBusinessData(
     })),
   );
 
+  const purchaseOrderRows = data.purchaseOrders.map((po) =>
+    purchaseOrderRowFromPurchaseOrder(organizationId, po),
+  );
+
+  const purchaseOrderLineRows = data.purchaseOrders.flatMap((po) =>
+    purchaseOrderLineRowsFromPurchaseOrder(organizationId, po),
+  );
+
   const customerPaymentRows = data.customerPayments.map((p) => ({
     id: p.id,
     organization_id: organizationId,
@@ -2113,6 +2328,9 @@ export async function pushBusinessData(
     qty: log.qty,
     note: log.note ?? null,
     log_date: log.date,
+    related_job_id: log.relatedJobId ?? null,
+    related_supplier_id: log.relatedSupplierId ?? null,
+    user_id: log.userId ?? null,
   }));
 
   const bankTransactionRows = data.bankTransactions.map((tx) => ({
@@ -2185,6 +2403,8 @@ export async function pushBusinessData(
     assignee_id: job.assigneeId ?? null,
     subcontract_cost: job.subcontractCost ?? null,
     notes: job.notes ?? null,
+    complaint: job.complaint ?? null,
+    diagnosis: job.diagnosis ?? null,
   }));
 
   const jobItemRows = data.jobItems.map((i) => ({
@@ -2196,6 +2416,13 @@ export async function pushBusinessData(
     qty: i.qty,
     unit_price: i.unitPrice,
     line_total: i.lineTotal,
+    source: i.source ?? null,
+    product_id: i.productId ?? null,
+    supplier_id: i.supplierId ?? null,
+    purchase_ref: i.purchaseRef ?? null,
+    purchase_date: i.purchaseDate ?? null,
+    customer_price: i.customerPrice ?? null,
+    technician_id: i.technicianId ?? null,
   }));
 
   const jobStatusHistoryRows = data.jobStatusHistory.map((h) => ({
@@ -2216,6 +2443,7 @@ export async function pushBusinessData(
     specialties: tch.specialties,
     active: tch.active,
     notes: tch.notes ?? null,
+    hourly_rate: tch.hourlyRate ?? null,
   }));
 
   const contractorRows = data.contractors.map((c) => ({
@@ -2283,6 +2511,7 @@ export async function pushBusinessData(
       | "sales"
       | "sales_base"
       | "purchases"
+      | "purchase_orders"
       | "customer_payments"
       | "customer_product_prices"
       | "supplier_payments"
@@ -2319,6 +2548,7 @@ export async function pushBusinessData(
     { table: "products", rows: productRows },
     { table: "sales", rows: saleRows },
     { table: "purchases", rows: purchaseRows },
+    { table: "purchase_orders", rows: purchaseOrderRows },
   ];
 
   for (const step of upsertSteps) {
@@ -2351,6 +2581,14 @@ export async function pushBusinessData(
     if (err) return { error: err, stale: false, generation: seenGeneration };
   }
 
+  for (const po of data.purchaseOrders) {
+    const lines = purchaseOrderLineRows.filter(
+      (row) => row.purchase_order_id === po.id,
+    );
+    const err = await replacePurchaseOrderLines(organizationId, po.id, lines);
+    if (err) return { error: err, stale: false, generation: seenGeneration };
+  }
+
   const supabase = createBrowserClient();
   if (!supabase) {
     return { error: "Supabase not configured", stale: false, generation: seenGeneration };
@@ -2373,6 +2611,7 @@ export async function pushBusinessData(
     table:
       | "sales"
       | "purchases"
+      | "purchase_orders"
       | "customer_payments"
       | "customer_product_prices"
       | "supplier_payments"
@@ -2395,6 +2634,7 @@ export async function pushBusinessData(
   }> = [
     { table: "sales", ids: data.sales.map((s) => s.id) },
     { table: "purchases", ids: data.purchases.map((p) => p.id) },
+    { table: "purchase_orders", ids: data.purchaseOrders.map((po) => po.id) },
     { table: "customer_payments", ids: data.customerPayments.map((p) => p.id) },
     {
       table: "customer_product_prices",

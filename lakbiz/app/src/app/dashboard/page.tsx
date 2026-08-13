@@ -12,7 +12,7 @@
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AcServiceDoneDialog } from "@/components/ac-service-done-dialog";
 import { OfflineSyncNotice } from "@/components/offline-sync-notice";
 import { AppShell } from "@/components/shell/app-shell";
@@ -41,6 +41,9 @@ import type { ACJob, Contractor, Sale, Technician } from "@/lib/store/types";
 import { getVatQuarterSummary } from "@/lib/vat";
 import { getIncomeTaxYearSummary } from "@/lib/income-tax";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { canAccessShopRoute } from "@/lib/org-role/permissions";
+import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
+import { computeJobProfitability, isLowMarginJob } from "@/lib/job-profitability";
 
 type Locale = "si" | "en";
 type TrendPeriod = "30d" | "3m" | "6m" | "12m";
@@ -166,6 +169,33 @@ export default function DashboardPage() {
   const [trendPeriod, setTrendPeriod] = useState<TrendPeriod>("6m");
   const [showIncomeTax, setShowIncomeTax] = useState(false);
 
+  // HVAC platform Phase 14 — job profitability needs job-linked Expenses
+  // (Phase 7), which are cloud-only, not part of the local-first store
+  // this page otherwise reads from. Same fetch-on-mount pattern as
+  // /job-costing, which already does exactly this. Gated on
+  // canSeeFinancials up front: never even request the data a technician
+  // isn't allowed to see.
+  const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<string, number> | null>(null);
+  useEffect(() => {
+    if (!showAcJobs || !canSeeFinancials || !org.isAuthenticated || !org.id) {
+      setJobLinkedExpenseTotals(new Map());
+      return;
+    }
+    let cancelled = false;
+    void fetchOrgExpenses(org.id).then((result) => {
+      if (cancelled) return;
+      const totals = new Map<string, number>();
+      for (const e of result.data) {
+        if (!e.jobId) continue;
+        totals.set(e.jobId, (totals.get(e.jobId) ?? 0) + e.amount);
+      }
+      setJobLinkedExpenseTotals(totals);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [showAcJobs, canSeeFinancials, org.isAuthenticated, org.id]);
+
   if (!ready || !data) {
     return (
       <AppShell>
@@ -185,6 +215,33 @@ export default function DashboardPage() {
   // flag — otherwise a cashier sees job data and a "+ New job" button
   // that just bounces them back here via the route guard.
   const canSeeJobs = showAcJobs && orgRole !== "cashier";
+
+  // Job profitability this month — reuses computeJobProfitability (Phase
+  // 8), the one authoritative calculation, exactly as /job-costing does.
+  // Not a separate/simplified dashboard-only formula. Feeds a compact
+  // "Needs Attention" row below rather than its own card — consistent
+  // with this page's "one row per alert, not a card per alert" density
+  // rule (see AttentionRow's docstring).
+  const jobItemsByJob = new Map<string, typeof data.jobItems>();
+  for (const item of data.jobItems) {
+    const list = jobItemsByJob.get(item.jobId) ?? [];
+    list.push(item);
+    jobItemsByJob.set(item.jobId, list);
+  }
+  const monthKey = new Date().toISOString().slice(0, 7);
+  const monthJobs =
+    showAcJobs && canSeeFinancials
+      ? data.acJobs.filter((j) => j.date.startsWith(monthKey) && j.status !== "cancelled")
+      : [];
+  const monthCosted = jobLinkedExpenseTotals
+    ? monthJobs.map((j) => ({
+        job: j,
+        profit: computeJobProfitability(j, jobItemsByJob.get(j.id) ?? [], jobLinkedExpenseTotals.get(j.id) ?? 0),
+      }))
+    : [];
+  const lowMarginJobs = monthCosted
+    .filter((c) => isLowMarginJob(c.profit))
+    .sort((a, b) => (a.profit.grossMarginPct ?? 0) - (b.profit.grossMarginPct ?? 0));
 
   const handleReset = async () => {
     if (resetting || isReadOnly) return;
@@ -390,6 +447,26 @@ export default function DashboardPage() {
       tone: "warning",
     });
   }
+  if (canSeeFinancials && lowMarginJobs.length > 0) {
+    alerts.push({
+      key: "low_margin_jobs",
+      title: t("dash.attention_low_margin").replace("{count}", String(lowMarginJobs.length)),
+      description: t("dash.attention_low_margin_desc"),
+      actionLabel: t("costing.title"),
+      actionHref: "/job-costing",
+      tone: "warning",
+    });
+  }
+  if (canSeeFinancials && stats.openPurchaseOrderCount > 0) {
+    alerts.push({
+      key: "open_pos",
+      title: t("dash.attention_open_pos").replace("{count}", String(stats.openPurchaseOrderCount)),
+      description: formatLkr(stats.openPurchaseOrderValue),
+      actionLabel: t("nav.suppliers"),
+      actionHref: "/suppliers",
+      tone: "warning",
+    });
+  }
 
   // Today's Operations table columns.
   const operationsColumns: DataTableColumn<ACJob>[] = [
@@ -549,12 +626,14 @@ export default function DashboardPage() {
                 value={formatLkr(stats.paymentsReceivedToday)}
                 hint={t("dash.kpi_payments_count").replace("{count}", String(stats.paymentsReceivedCount))}
               />
-              <MetricCard
-                label={t("dash.kpi_jobs_today")}
-                value={String(stats.todayJobsCount)}
-                hint={t("dash.kpi_jobs_breakdown").replace("{completed}", String(stats.todayJobsCompletedCount)).replace("{remaining}", String(stats.todayJobsRemainingCount))}
-                tone={stats.todayJobsUnassignedCount > 0 ? "warning" : "default"}
-              />
+              {canSeeJobs && (
+                <MetricCard
+                  label={t("dash.kpi_jobs_today")}
+                  value={String(stats.todayJobsCount)}
+                  hint={t("dash.kpi_jobs_breakdown").replace("{completed}", String(stats.todayJobsCompletedCount)).replace("{remaining}", String(stats.todayJobsRemainingCount))}
+                  tone={stats.todayJobsUnassignedCount > 0 ? "warning" : "default"}
+                />
+              )}
             </div>
           }
         />
@@ -679,14 +758,19 @@ export default function DashboardPage() {
                       <div className="flex w-full flex-1 items-end justify-center gap-0.5">
                         <div
                           title={`${t("dash.today_sales")}: ${formatLkr(p.revenue)}`}
-                          className="w-1/2 rounded-t bg-teal-500"
+                          className={canSeeFinancials ? "w-1/2 rounded-t bg-teal-500" : "w-full rounded-t bg-teal-500"}
                           style={{ height: `${Math.max(2, (p.revenue / trendMax) * 100)}%` }}
                         />
-                        <div
-                          title={`${t("dash.gross_profit")}: ${formatLkr(p.profit)}`}
-                          className="w-1/2 rounded-t bg-emerald-300"
-                          style={{ height: `${Math.max(2, (p.profit / trendMax) * 100)}%` }}
-                        />
+                        {/* Profit bar is financial data — never rendered for
+                            a role canSeeFinancials excludes (see the P1
+                            fix note below the stats row). */}
+                        {canSeeFinancials && (
+                          <div
+                            title={`${t("dash.gross_profit")}: ${formatLkr(p.profit)}`}
+                            className="w-1/2 rounded-t bg-emerald-300"
+                            style={{ height: `${Math.max(2, (p.profit / trendMax) * 100)}%` }}
+                          />
+                        )}
                       </div>
                       <span className="text-[10px] text-slate-400">{p.label}</span>
                     </div>
@@ -694,29 +778,42 @@ export default function DashboardPage() {
                 </div>
                 <div className="mt-3 flex items-center gap-4 text-xs">
                   <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-teal-500" />{t("dash.today_sales")}</span>
-                  <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-emerald-300" />{t("dash.gross_profit")}</span>
+                  {canSeeFinancials && (
+                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-emerald-300" />{t("dash.gross_profit")}</span>
+                  )}
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3 text-sm">
+                {/* Gross profit / margin are financial data — this whole
+                    stat row was previously unconditional, showing them to
+                    every role regardless of canSeeFinancials. Only the
+                    revenue stat is safe to keep for non-financial roles. */}
+                <div className={`mt-3 grid gap-2 border-t border-slate-100 pt-3 text-sm ${canSeeFinancials ? "grid-cols-3" : "grid-cols-1"}`}>
                   <div>
                     <p className="text-xs text-slate-500">{t("dash.today_sales")}</p>
                     <p className="font-mono font-semibold text-slate-900">{formatLkr(trendRevenueTotal)}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-slate-500">{t("dash.gross_profit")}</p>
-                    <p className="font-mono font-semibold text-slate-900">{formatLkr(trendProfitTotal)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">{t("dash.avg_margin")}</p>
-                    <p className="font-mono font-semibold text-slate-900">{trendAvgMargin}%</p>
-                  </div>
+                  {canSeeFinancials && (
+                    <>
+                      <div>
+                        <p className="text-xs text-slate-500">{t("dash.gross_profit")}</p>
+                        <p className="font-mono font-semibold text-slate-900">{formatLkr(trendProfitTotal)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">{t("dash.avg_margin")}</p>
+                        <p className="font-mono font-semibold text-slate-900">{trendAvgMargin}%</p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </>
             )}
           </Card>
         </div>
 
-        {/* Teams Today. */}
-        {canSeeJobs && (
+        {/* Teams Today — gated on route access, not just canSeeJobs:
+            data_entry has canSeeJobs=true (only cashier is excluded) but
+            DATA_ENTRY_ROUTES doesn't include /teams, so the link would
+            bounce that role straight back here via ShopRouteGuard. */}
+        {canSeeJobs && canAccessShopRoute(orgRole, "/teams") && (
           <Card className="mt-4">
             <SectionHeader title={t("dash.teams_title")} action={<Link href="/teams" className={ghostLink}>{t("nav.field_teams")}</Link>} />
             <p className="-mt-2 mb-3 text-xs text-slate-500">{t("dash.teams_subtitle")}</p>

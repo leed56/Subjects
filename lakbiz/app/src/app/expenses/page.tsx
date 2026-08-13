@@ -27,7 +27,8 @@ import {
 } from "@/lib/supabase/expenses-client";
 
 const CATEGORIES: ExpenseCategory[] = [
-  "rent", "utilities", "salaries", "fuel", "transport", "supplies", "maintenance", "insurance", "marketing", "other",
+  "rent", "utilities", "salaries", "fuel", "transport", "supplies", "maintenance", "insurance", "marketing",
+  "parking", "equipment_rental", "outsourced_repair", "other",
 ];
 const PAY_METHODS: ExpensePaymentMethod[] = ["cash", "bank_transfer", "card", "cheque"];
 
@@ -38,6 +39,7 @@ const emptyForm = {
   paymentMethod: "cash" as ExpensePaymentMethod,
   vendor: "",
   notes: "",
+  jobId: "",
 };
 
 /** Module-level helper so "today" isn't computed inline during render
@@ -129,6 +131,7 @@ export default function ExpensesPage() {
       paymentMethod: expense.paymentMethod,
       vendor: expense.vendor ?? "",
       notes: expense.notes ?? "",
+      jobId: expense.jobId ?? "",
     });
     setFormOpen(true);
   };
@@ -142,6 +145,7 @@ export default function ExpensesPage() {
       paymentMethod: form.paymentMethod,
       vendor: form.vendor,
       notes: form.notes,
+      jobId: form.jobId || null,
     };
     setSaving(true);
     const result = editing ? await updateExpense(editing.id, input) : await createExpense(orgId!, input);
@@ -218,6 +222,16 @@ export default function ExpensesPage() {
       header: t("common.payment"),
       hideOnMobile: true,
       render: (e) => paymentLabel(t, e.paymentMethod),
+    },
+    {
+      key: "job",
+      header: t("expenses.job"),
+      hideOnMobile: true,
+      render: (e) => {
+        if (!e.jobId) return <span className="text-slate-400">—</span>;
+        const job = localData.acJobs.find((j) => j.id === e.jobId);
+        return job ? <span className="text-slate-600">{job.jobNo} · {job.customerName}</span> : <span className="text-slate-400">—</span>;
+      },
     },
     {
       key: "amount",
@@ -337,6 +351,16 @@ export default function ExpensesPage() {
             </FormField>
             <FormField label={t("expenses.vendor")}>
               <TextInput value={form.vendor} onChange={(e) => setForm((f) => ({ ...f, vendor: e.target.value }))} placeholder={t("expenses.vendor_ph")} />
+            </FormField>
+            <FormField label={t("expenses.link_job")}>
+              <SelectInput
+                value={form.jobId}
+                onChange={(v) => setForm((f) => ({ ...f, jobId: v }))}
+                options={[
+                  { value: "", label: t("expenses.no_job") },
+                  ...localData.acJobs.map((j) => ({ value: j.id, label: `${j.jobNo} · ${j.customerName}` })),
+                ]}
+              />
             </FormField>
             <FormField label={t("common.notes")}>
               <TextInput value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />

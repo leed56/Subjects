@@ -11,7 +11,7 @@ import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { CallLink, NavigateLink } from "@/components/ui/field-links";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
-import { PageHeader, MetricCard, EmptyState, SearchInput, FilterBar } from "@/components/ui/primitives";
+import { PageHeader, MetricCard, EmptyState, SearchInput, FilterBar, Tabs } from "@/components/ui/primitives";
 import { Drawer, ConfirmDialog } from "@/components/ui/overlay";
 import { FormField, TextInput, SelectInput, MoneyInput, DateInput } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
@@ -47,12 +47,15 @@ import type { BusinessInfo } from "@/lib/invoice";
 import { defaultTemplateForJob, loadNotificationSettings } from "@/lib/messaging";
 import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useAppStore } from "@/lib/store/use-app-store";
-import type { ACJob, ACJobInput, JobAssigneeType, JobItem, JobItemType, JobItemInput, JobStatusEntry } from "@/lib/store/types";
+import type { ACJob, ACJobInput, JobAssigneeType, JobItem, JobItemType, JobItemSource, JobItemInput, JobStatusEntry, Supplier, Technician } from "@/lib/store/types";
+import type { Product } from "@/lib/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { canManageAcJobs, canOperateAcJobs } from "@/lib/org-role/permissions";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { fetchAsset, fetchCustomerAssets, fetchJobAssetId, linkJobAsset, type AcAsset } from "@/lib/supabase/ac-assets-client";
+import { computeJobProfitability } from "@/lib/job-profitability";
+import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
 
 const UNIT_TYPES = ["Wall mounted", "Cassette", "Ducted", "Ceiling suspended", "Portable", "Window"];
 
@@ -101,6 +104,8 @@ export default function JobsPage() {
   const [serviceDueDate, setServiceDueDate] = useState("");
   const [amcContract, setAmcContract] = useState(false);
   const [notes, setNotes] = useState("");
+  const [complaint, setComplaint] = useState("");
+  const [diagnosis, setDiagnosis] = useState("");
 
   useEffect(() => {
     markAllSeen();
@@ -119,7 +124,8 @@ export default function JobsPage() {
     setBtu(18000); setUnitType(UNIT_TYPES[0]); setUnitCount(1); setDescription("");
     setQuotedAmount(""); setDepositAmount(""); setPipeMeters(4); setStatus("quote"); setScheduledDate("");
     setServiceIntervalDays(180); setServiceDueManual(false); setServiceDueDate(""); setAmcContract(false);
-    setJobType("installation"); setAssigneeKey(""); setSubcontractCost(""); setNotes(""); setEditing(null);
+    setJobType("installation"); setAssigneeKey(""); setSubcontractCost(""); setNotes("");
+    setComplaint(""); setDiagnosis(""); setEditing(null);
   };
 
   const openCreate = () => {
@@ -136,7 +142,8 @@ export default function JobsPage() {
     setServiceDueManual(job.serviceDueManual ?? false); setServiceDueDate(job.serviceDueDate ?? "");
     setAmcContract(job.amcContract ?? false); setJobType(job.jobType ?? "installation");
     setAssigneeKey(job.assigneeId ? `${job.assigneeType}:${job.assigneeId}` : "");
-    setSubcontractCost(String(job.subcontractCost ?? "")); setNotes(job.notes ?? ""); setFormOpen(true);
+    setSubcontractCost(String(job.subcontractCost ?? "")); setNotes(job.notes ?? "");
+    setComplaint(job.complaint ?? ""); setDiagnosis(job.diagnosis ?? ""); setFormOpen(true);
   };
 
   const autoServiceDuePreview = (): string | undefined => {
@@ -183,6 +190,8 @@ export default function JobsPage() {
       amcContract,
       installedDate: status === "installed" && !editing?.installedDate ? new Date().toISOString().slice(0, 10) : editing?.installedDate,
       notes,
+      complaint: complaint || undefined,
+      diagnosis: diagnosis || undefined,
     };
   };
 
@@ -449,6 +458,12 @@ export default function JobsPage() {
               <DateInput value={scheduledDate} onChange={setScheduledDate} />
             </FormField>
           </div>
+          <FormField label={t("jobs.complaint")} hint={t("jobs.complaint_hint")}>
+            <TextInput value={complaint} onChange={(e) => setComplaint(e.target.value)} placeholder={t("jobs.complaint_ph")} />
+          </FormField>
+          <FormField label={t("jobs.diagnosis")} hint={t("jobs.diagnosis_hint")}>
+            <TextInput value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} placeholder={t("jobs.diagnosis_ph")} />
+          </FormField>
           <FormField label={t("jobs.job_notes")}>
             <TextInput value={notes} onChange={(e) => setNotes(e.target.value)} />
           </FormField>
@@ -507,6 +522,10 @@ export default function JobsPage() {
           locale={locale}
           items={data.jobItems.filter((i) => i.jobId === sheetJob.id)}
           history={data.jobStatusHistory.filter((h) => h.jobId === sheetJob.id)}
+          products={data.products}
+          suppliers={data.suppliers}
+          technicians={data.technicians}
+          orgId={org.isAuthenticated ? org.id : null}
           canSeeFinancials={canSeeFinancials}
           canOperateJobs={canOperateJobs}
           canWrite={canWrite}
@@ -623,21 +642,72 @@ function ActionButton({ children, onClick, disabled, title }: { children: ReactN
   );
 }
 
-const JOB_ITEM_TYPES: JobItemType[] = ["part", "labour", "service"];
-
 /** Job detail as a work order: financials, parts/labour, equipment, status history —
  * now a Drawer instead of a fixed-overlay dialog. Equipment section (Phase 5) is new:
  * a direct-cloud read/write against ac_jobs.asset_id, bypassing the local-first ACJob
  * type which doesn't carry that column yet — see ac-assets-client.ts. */
-function JobSheetDrawer({ job, locale, items, history, canSeeFinancials, canOperateJobs, canWrite, onAddItem, onDeleteItem, onClose }: { job: ACJob; locale: Locale; items: JobItem[]; history: JobStatusEntry[]; canSeeFinancials: boolean; canOperateJobs: boolean; canWrite: boolean; onAddItem: (input: JobItemInput) => Promise<{ ok: boolean; error?: string }>; onDeleteItem: (id: string) => Promise<{ ok: boolean; error?: string }>; onClose: () => void }) {
+type JobDetailTab = "overview" | "parts" | "labor" | "economics" | "invoice";
+
+/** Job Detail as progressive disclosure (HVAC platform Phase 9) — was one
+ * long scroll of every section at once; now tabbed so Parts/Labor entry
+ * (the frequent, quick actions) don't compete for space with Job
+ * Economics or Invoice & Payment (checked rarely, in one sitting). */
+function JobSheetDrawer({ job, locale, items, history, products, suppliers, technicians, orgId, canSeeFinancials, canOperateJobs, canWrite, onAddItem, onDeleteItem, onClose }: { job: ACJob; locale: Locale; items: JobItem[]; history: JobStatusEntry[]; products: Product[]; suppliers: Supplier[]; technicians: Technician[]; orgId: string | null; canSeeFinancials: boolean; canOperateJobs: boolean; canWrite: boolean; onAddItem: (input: JobItemInput) => Promise<{ ok: boolean; error?: string }>; onDeleteItem: (id: string) => Promise<{ ok: boolean; error?: string }>; onClose: () => void }) {
   const { t } = useLocale();
   const { toast } = useToast();
+  const [tab, setTab] = useState<JobDetailTab>("overview");
   const [itemType, setItemType] = useState<JobItemType>("part");
+  // Material source (HVAC platform Phase 4) — only meaningful when
+  // itemType === "part"; labour/service keep the original free-text flow.
+  const [source, setSource] = useState<JobItemSource>("stock");
   const [name, setName] = useState("");
   const [qty, setQty] = useState(1);
   const [unitPrice, setUnitPrice] = useState("");
+  const [productId, setProductId] = useState("");
+  const [supplierId, setSupplierId] = useState("");
+  const [purchaseRef, setPurchaseRef] = useState("");
+  const [customerPrice, setCustomerPrice] = useState("");
+  // itemType === "labour" only (HVAC platform Phase 6).
+  const [technicianId, setTechnicianId] = useState("");
   const [savingItem, setSavingItem] = useState(false);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+
+  const inStockProducts = products.filter((p) => p.stockQty > 0);
+  const selectedProduct = productId ? products.find((p) => p.id === productId) : undefined;
+  const activeTechnicians = technicians.filter((tc) => tc.active);
+  const partItems = items.filter((i) => i.itemType === "part");
+  const laborItems = items.filter((i) => i.itemType === "labour" || i.itemType === "service");
+
+  const resetItemForm = () => {
+    setName("");
+    setQty(1);
+    setUnitPrice("");
+    setProductId("");
+    setSupplierId("");
+    setPurchaseRef("");
+    setTechnicianId("");
+    setCustomerPrice("");
+  };
+
+  // Job-linked Expenses (Phase 7) — fetched here now so Job Economics is
+  // complete in this view, closing the gap Phases 7/8 explicitly deferred
+  // to "Phase 9's Job Detail redesign potentially changing that."
+  const [jobExpenseTotal, setJobExpenseTotal] = useState<number | null>(null);
+  useEffect(() => {
+    if (!orgId || !canSeeFinancials) {
+      setJobExpenseTotal(0);
+      return;
+    }
+    let cancelled = false;
+    void fetchOrgExpenses(orgId).then((result) => {
+      if (cancelled) return;
+      const total = result.data.filter((e) => e.jobId === job.id).reduce((s, e) => s + e.amount, 0);
+      setJobExpenseTotal(total);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, canSeeFinancials, job.id]);
 
   const [asset, setAsset] = useState<AcAsset | null | undefined>(undefined);
   const [customerAssets, setCustomerAssets] = useState<AcAsset[] | null>(null);
@@ -683,10 +753,19 @@ function JobSheetDrawer({ job, locale, items, history, canSeeFinancials, canOper
     service: t("jobs.item.service"),
   };
 
-  const itemsTotal = items.reduce((s, i) => s + i.lineTotal, 0);
-  const subcontract = job.assigneeType === "contractor" ? job.subcontractCost ?? 0 : 0;
-  const profit = job.quotedAmount - itemsTotal - subcontract;
+  const sourceLabels: Record<JobItemSource, string> = {
+    stock: t("jobs.source.stock"),
+    purchased: t("jobs.source.purchased"),
+    customer_supplied: t("jobs.source.customer_supplied"),
+  };
+
+  // Shared with /job-costing (HVAC platform Phase 8 — one authoritative
+  // formula, not a second one duplicated here). Now fed a real
+  // linkedExpenseTotal (fetched above), so this drawer's numbers match
+  // /job-costing's exactly.
+  const profit = computeJobProfitability(job, items, jobExpenseTotal ?? 0);
   const sortedHistory = [...history].sort((a, b) => (a.date < b.date ? 1 : -1));
+  const balance = job.quotedAmount - job.depositAmount;
 
   return (
     <Drawer
@@ -708,16 +787,53 @@ function JobSheetDrawer({ job, locale, items, history, canSeeFinancials, canOper
       </div>
 
       {canSeeFinancials && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Metric label={t("jobs.quote_label")} value={formatLkr(job.quotedAmount)} />
-          <Metric label={t("jobs.parts_labour")} value={formatLkr(itemsTotal)} />
-          {subcontract > 0 && <Metric label={t("jobs.subcontract_cost")} value={formatLkr(subcontract)} />}
-          <Metric label={t("jobs.net_profit")} value={formatLkr(profit)} />
+          <Metric label={t("jobs.material_cost")} value={formatLkr(profit.materialCost)} />
+          <Metric label={t("jobs.labor_cost")} value={formatLkr(profit.laborCost)} />
+          <Metric label={t("jobs.net_profit")} value={formatLkr(profit.grossProfit)} />
+        </div>
+      )}
+
+      <Tabs
+        value={tab}
+        onChange={(v) => {
+          const next = v as JobDetailTab;
+          setTab(next);
+          if (next === "parts") setItemType("part");
+          else if (next === "labor") setItemType("labour");
+          resetItemForm();
+        }}
+        tabs={[
+          { value: "overview", label: t("jobs.tab_overview") },
+          { value: "parts", label: t("jobs.tab_parts") },
+          { value: "labor", label: t("jobs.tab_labor") },
+          ...(canSeeFinancials ? [{ value: "economics", label: t("jobs.tab_economics") }] : []),
+          { value: "invoice", label: t("jobs.tab_invoice") },
+        ]}
+      />
+
+      {tab === "overview" && (
+      <div className="mt-4 space-y-5">
+      {(job.complaint || job.diagnosis) && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {job.complaint && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.complaint")}</p>
+              <p className="mt-1 text-sm text-slate-800">{job.complaint}</p>
+            </div>
+          )}
+          {job.diagnosis && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.diagnosis")}</p>
+              <p className="mt-1 text-sm text-slate-800">{job.diagnosis}</p>
+            </div>
+          )}
         </div>
       )}
 
       {/* Equipment (Phase 4/5) */}
-      <div className="mt-5">
+      <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("assets.title")}</p>
         {asset === undefined ? (
           <ProLoadingState label={t("common.loading")} />
@@ -768,8 +884,32 @@ function JobSheetDrawer({ job, locale, items, history, canSeeFinancials, canOper
         )}
       </div>
 
+      {/* Attachments — disclosed, not fabricated: no photo/document
+          architecture exists anywhere in this codebase yet (confirmed in
+          the Phase 1 audit). */}
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.attachments")}</p>
+        <p className="text-sm text-slate-400">{t("jobs.attachments_unavailable")}</p>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.status_history")}</p>
+        <ol className="mt-2 space-y-1.5">
+          {sortedHistory.map((h) => (
+            <li key={h.id} className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+              <span className="font-mono text-xs text-slate-500">{h.date.slice(0, 10)}</span>
+              <span className="font-medium text-slate-900">{h.oldStatus ? `${jobStatusLabel(h.oldStatus as ACJobStatus, locale)} → ` : ""}{jobStatusLabel(h.newStatus as ACJobStatus, locale)}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+      </div>
+      )}
+
+      {(tab === "parts" || tab === "labor") && (
+      <div className="mt-4">
       {canSeeFinancials && (
-        <div className="mt-5 overflow-hidden rounded-lg border border-slate-200">
+        <div className="overflow-hidden rounded-lg border border-slate-200">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-500">
               <tr>
@@ -782,11 +922,19 @@ function JobSheetDrawer({ job, locale, items, history, canSeeFinancials, canOper
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {items.length === 0 ? (
+              {(tab === "parts" ? partItems : laborItems).length === 0 ? (
                 <tr><td colSpan={6} className="px-3 py-4 text-center text-sm text-slate-400">{t("jobs.no_items")}</td></tr>
-              ) : items.map((i) => (
+              ) : (tab === "parts" ? partItems : laborItems).map((i) => (
                 <tr key={i.id}>
-                  <td className="px-3 py-2 font-medium text-slate-900">{i.name}</td>
+                  <td className="px-3 py-2 font-medium text-slate-900">
+                    {i.name}
+                    {i.source && <p className="mt-0.5 text-xs font-normal text-slate-400">{sourceLabels[i.source]}</p>}
+                    {i.technicianId && (
+                      <p className="mt-0.5 text-xs font-normal text-slate-400">
+                        {technicians.find((tc) => tc.id === i.technicianId)?.name ?? t("jobs.no_technician")}
+                      </p>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-slate-600">{itemTypeLabels[i.itemType]}</td>
                   <td className="px-3 py-2 text-right font-mono">{i.qty}</td>
                   <td className="px-3 py-2 text-right font-mono">{formatLkr(i.unitPrice)}</td>
@@ -815,8 +963,8 @@ function JobSheetDrawer({ job, locale, items, history, canSeeFinancials, canOper
         </div>
       )}
 
-      {!canSeeFinancials && items.length > 0 && (
-        <div className="mt-5 overflow-hidden rounded-lg border border-slate-200">
+      {!canSeeFinancials && (tab === "parts" ? partItems : laborItems).length > 0 && (
+        <div className="overflow-hidden rounded-lg border border-slate-200">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-500">
               <tr>
@@ -826,7 +974,7 @@ function JobSheetDrawer({ job, locale, items, history, canSeeFinancials, canOper
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {items.map((i) => (
+              {(tab === "parts" ? partItems : laborItems).map((i) => (
                 <tr key={i.id}>
                   <td className="px-3 py-2 font-medium text-slate-900">{i.name}</td>
                   <td className="px-3 py-2 text-slate-600">{itemTypeLabels[i.itemType]}</td>
@@ -840,43 +988,221 @@ function JobSheetDrawer({ job, locale, items, history, canSeeFinancials, canOper
 
       {canOperateJobs && (
         <form
-          className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-[1fr_auto_auto_auto_auto]"
+          className="mt-3 space-y-2"
           onSubmit={async (e) => {
             e.preventDefault();
-            if (!name.trim() || !canWrite || savingItem) return;
+            if (!canWrite || savingItem) return;
+
+            const isPart = itemType === "part";
+            const isLabour = itemType === "labour";
+            const isStock = isPart && source === "stock";
+            const isPurchased = isPart && source === "purchased";
+
+            const itemName = isStock ? selectedProduct?.name ?? "" : name.trim();
+            if (!itemName) return;
+            if (isStock && !selectedProduct) return;
+
             setSavingItem(true);
-            const result = await onAddItem({ jobId: job.id, itemType, name, qty, unitPrice: canSeeFinancials ? Number(unitPrice) || 0 : 0 });
+            const result = await onAddItem({
+              jobId: job.id,
+              itemType,
+              name: itemName,
+              qty,
+              // Stock items: server (addJobItem) overwrites this with the
+              // product's current buyPrice regardless — this value is only
+              // a display placeholder before that snapshot is taken.
+              unitPrice: canSeeFinancials ? Number(unitPrice) || 0 : 0,
+              source: isPart ? source : undefined,
+              productId: isStock ? productId : undefined,
+              supplierId: isPurchased ? supplierId || undefined : undefined,
+              purchaseRef: isPurchased ? purchaseRef || undefined : undefined,
+              purchaseDate: isPurchased ? new Date().toISOString().slice(0, 10) : undefined,
+              customerPrice: (isPart || isLabour) && customerPrice !== "" ? Number(customerPrice) || 0 : undefined,
+              technicianId: isLabour ? technicianId || undefined : undefined,
+            });
             setSavingItem(false);
             if (!result.ok) {
               toast({ tone: "error", title: t("common.save_failed"), description: result.error });
               return;
             }
-            setName("");
-            setQty(1);
-            setUnitPrice("");
+            resetItemForm();
           }}
         >
-          <TextInput placeholder={t("jobs.item_name")} value={name} onChange={(e) => setName(e.target.value)} className="col-span-2 sm:col-span-1" />
-          <SelectInput value={itemType} onChange={(v) => setItemType(v as JobItemType)} options={JOB_ITEM_TYPES.map((ty) => ({ value: ty, label: itemTypeLabels[ty] }))} />
-          <TextInput type="number" min={1} value={String(qty)} onChange={(e) => setQty(Number(e.target.value))} className="w-20" />
-          {canSeeFinancials && <MoneyInput value={unitPrice} onChange={setUnitPrice} className="w-28" />}
-          <button type="submit" disabled={!canWrite || savingItem} className="rounded-lg bg-teal-600 px-3 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
-            {savingItem ? t("common.saving") : t("jobs.add_item")}
-          </button>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {tab === "labor" && (
+              <SelectInput
+                value={itemType}
+                onChange={(v) => {
+                  setItemType(v as JobItemType);
+                  resetItemForm();
+                }}
+                options={(["labour", "service"] as JobItemType[]).map((ty) => ({ value: ty, label: itemTypeLabels[ty] }))}
+              />
+            )}
+            {itemType === "part" && (
+              <SelectInput
+                value={source}
+                onChange={(v) => {
+                  setSource(v as JobItemSource);
+                  resetItemForm();
+                }}
+                options={[
+                  { value: "stock", label: t("jobs.source.stock") },
+                  { value: "purchased", label: t("jobs.source.purchased") },
+                  { value: "customer_supplied", label: t("jobs.source.customer_supplied") },
+                ]}
+                className="col-span-2 sm:col-span-1"
+              />
+            )}
+          </div>
+
+          {itemType === "part" && source === "stock" ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_auto_auto]">
+              <SelectInput
+                value={productId}
+                onChange={(v) => {
+                  setProductId(v);
+                  const p = products.find((row) => row.id === v);
+                  setUnitPrice(p ? String(p.buyPrice) : "");
+                }}
+                options={[
+                  { value: "", label: t("jobs.pick_product") },
+                  ...inStockProducts.map((p) => ({ value: p.id, label: `${p.name} (${p.stockQty})` })),
+                ]}
+                className="col-span-2 sm:col-span-1"
+              />
+              <TextInput
+                type="number"
+                min={1}
+                max={selectedProduct?.stockQty}
+                value={String(qty)}
+                onChange={(e) => setQty(Number(e.target.value))}
+                className="w-20"
+              />
+              <button type="submit" disabled={!canWrite || savingItem || !productId} className="rounded-lg bg-teal-600 px-3 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
+                {savingItem ? t("common.saving") : t("jobs.add_item")}
+              </button>
+              {canSeeFinancials && selectedProduct && (
+                <p className="col-span-2 text-xs text-slate-500 sm:col-span-3">{t("jobs.stock_cost_hint")} {formatLkr(selectedProduct.buyPrice)}</p>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+                <TextInput placeholder={t("jobs.item_name")} value={name} onChange={(e) => setName(e.target.value)} className="col-span-2 sm:col-span-1" />
+                <TextInput type="number" min={1} value={String(qty)} onChange={(e) => setQty(Number(e.target.value))} className="w-20" />
+                {canSeeFinancials && (
+                  <MoneyInput
+                    value={unitPrice}
+                    onChange={setUnitPrice}
+                    className="w-28"
+                    placeholder={itemType === "part" && source === "customer_supplied" ? "0" : undefined}
+                  />
+                )}
+                <button type="submit" disabled={!canWrite || savingItem} className="rounded-lg bg-teal-600 px-3 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  {savingItem ? t("common.saving") : t("jobs.add_item")}
+                </button>
+              </div>
+              {itemType === "part" && source === "purchased" && (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  <SelectInput
+                    value={supplierId}
+                    onChange={setSupplierId}
+                    options={[{ value: "", label: t("jobs.no_supplier") }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]}
+                  />
+                  <TextInput placeholder={t("jobs.purchase_ref")} value={purchaseRef} onChange={(e) => setPurchaseRef(e.target.value)} />
+                  {canSeeFinancials && (
+                    <MoneyInput value={customerPrice} onChange={setCustomerPrice} placeholder={t("jobs.customer_price_ph")} />
+                  )}
+                </div>
+              )}
+              {itemType === "labour" && (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-2">
+                  <SelectInput
+                    value={technicianId}
+                    onChange={(v) => {
+                      setTechnicianId(v);
+                      const tc = activeTechnicians.find((row) => row.id === v);
+                      if (tc?.hourlyRate) setUnitPrice(String(tc.hourlyRate));
+                    }}
+                    options={[
+                      { value: "", label: t("jobs.no_technician") },
+                      ...activeTechnicians.map((tc) => ({ value: tc.id, label: tc.name })),
+                    ]}
+                  />
+                  {canSeeFinancials && (
+                    <MoneyInput value={customerPrice} onChange={setCustomerPrice} placeholder={t("jobs.customer_price_ph")} />
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </form>
       )}
-
-      <div className="mt-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.status_history")}</p>
-        <ol className="mt-2 space-y-1.5">
-          {sortedHistory.map((h) => (
-            <li key={h.id} className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm">
-              <span className="font-mono text-xs text-slate-500">{h.date.slice(0, 10)}</span>
-              <span className="font-medium text-slate-900">{h.oldStatus ? `${jobStatusLabel(h.oldStatus as ACJobStatus, locale)} → ` : ""}{jobStatusLabel(h.newStatus as ACJobStatus, locale)}</span>
-            </li>
-          ))}
-        </ol>
       </div>
+      )}
+
+      {tab === "economics" && canSeeFinancials && (
+      <div className="mt-4 space-y-4">
+        <div className="overflow-hidden rounded-lg border border-slate-200">
+          <table className="w-full text-left text-sm">
+            <tbody className="divide-y divide-slate-100">
+              <tr>
+                <td className="px-3 py-2 text-slate-600">{t("jobs.economics_material")}</td>
+                <td className="px-3 py-2 text-right font-mono">{formatLkr(profit.materialCost)}</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 text-slate-600">{t("jobs.economics_labor")}</td>
+                <td className="px-3 py-2 text-right font-mono">{formatLkr(profit.laborCost)}</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 text-slate-600">{t("jobs.economics_other")}</td>
+                <td className="px-3 py-2 text-right font-mono">{formatLkr(profit.otherCost)}</td>
+              </tr>
+              <tr className="bg-slate-50">
+                <td className="px-3 py-2 font-semibold text-slate-900">{t("jobs.economics_total_cost")}</td>
+                <td className="px-3 py-2 text-right font-mono font-semibold">{formatLkr(profit.totalCost)}</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 text-slate-600">{t("jobs.economics_revenue")}</td>
+                <td className="px-3 py-2 text-right font-mono">{formatLkr(profit.revenue)}</td>
+              </tr>
+              <tr className="bg-slate-50">
+                <td className="px-3 py-2 font-semibold text-slate-900">{t("jobs.economics_gross_profit")}</td>
+                <td className={`px-3 py-2 text-right font-mono font-semibold ${profit.grossProfit < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatLkr(profit.grossProfit)}</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 text-slate-600">{t("jobs.economics_margin")}</td>
+                <td className="px-3 py-2 text-right font-mono">{profit.grossMarginPct !== null ? `${profit.grossMarginPct.toFixed(1)}%` : "—"}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {(jobExpenseTotal ?? 0) > 0 && (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.linked_expenses")}</p>
+            <p className="text-sm text-slate-600">{formatLkr(jobExpenseTotal ?? 0)}</p>
+          </div>
+        )}
+      </div>
+      )}
+
+      {tab === "invoice" && (
+      <div className="mt-4 space-y-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <Metric label={t("jobs.quote_label")} value={formatLkr(job.quotedAmount)} />
+          <Metric label={t("jobs.deposit_label")} value={formatLkr(job.depositAmount)} />
+          <Metric label={t("common.balance")} value={formatLkr(balance)} />
+        </div>
+        <Link
+          href={`/jobs/${job.id}/invoice`}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          {t("jinv.view_invoice")}
+        </Link>
+      </div>
+      )}
     </Drawer>
   );
 }

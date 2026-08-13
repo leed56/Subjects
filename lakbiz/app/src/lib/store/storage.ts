@@ -32,6 +32,7 @@ export const emptyAppData = (): AppData => ({
   customerProductPrices: [],
   suppliers: [],
   purchases: [],
+  purchaseOrders: [],
   supplierPayments: [],
   acJobs: [],
   jobItems: [],

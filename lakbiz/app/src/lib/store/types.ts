@@ -43,6 +43,13 @@ export interface ACJob {
   /** Annual maintenance contract */
   amcContract?: boolean;
   notes?: string;
+  /** What the customer reported (HVAC platform Phase 9) — distinct from
+   * `description`, which is an auto-generated equipment summary
+   * (brand/BTU/unit type), not an editable "what's wrong" field. */
+  complaint?: string;
+  /** What the technician found on inspection (Phase 9) — distinct from
+   * the complaint, which is the customer's own account before diagnosis. */
+  diagnosis?: string;
 }
 
 export interface ACJobInput {
@@ -77,6 +84,13 @@ export interface ACJobInput {
   /** Annual maintenance contract */
   amcContract?: boolean;
   notes?: string;
+  /** What the customer reported (HVAC platform Phase 9) — distinct from
+   * `description`, which is an auto-generated equipment summary
+   * (brand/BTU/unit type), not an editable "what's wrong" field. */
+  complaint?: string;
+  /** What the technician found on inspection (Phase 9) — distinct from
+   * the complaint, which is the customer's own account before diagnosis. */
+  diagnosis?: string;
 }
 
 export type RecordACServiceInput = {
@@ -86,14 +100,49 @@ export type RecordACServiceInput = {
 
 export type JobItemType = "part" | "labour" | "service";
 
+/** Only meaningful when itemType === "part" (HVAC platform Phase 4/5).
+ * - stock: decremented from real inventory, unitPrice frozen from the
+ *   product's buyPrice at the moment this item is created.
+ * - purchased: bought specifically for this job, not from warehouse stock.
+ * - customer_supplied: the customer provided the part; no inventory
+ *   decrement, unitPrice defaults to 0. */
+export type JobItemSource = "stock" | "purchased" | "customer_supplied";
+
 export interface JobItem {
   id: string;
   jobId: string;
   itemType: JobItemType;
   name: string;
   qty: number;
+  /** Internal cost per unit — NOT what the customer is charged (see
+   * `customerPrice`). For source "stock" this is a historical snapshot,
+   * frozen when the item is created; never recalculated from the
+   * product's current price afterward. */
   unitPrice: number;
   lineTotal: number;
+  source?: JobItemSource;
+  /** Set only when source === "stock" — links back to the real product
+   * this material was decremented from. */
+  productId?: string;
+  /** source === "purchased" only. */
+  supplierId?: string;
+  purchaseRef?: string;
+  purchaseDate?: string;
+  /** What the customer is being charged for this specific item, when the
+   * owner wants to track it per-line. Does not feed the job invoice,
+   * which still shows one flat `quotedAmount` — itemizing the invoice
+   * itself is a Job Detail redesign concern, not this phase's. Applies to
+   * "part" and "labour" lines (HVAC platform Phase 6 extended this from
+   * parts-only, to support the internal-cost-vs-customer-charge split
+   * the spec asks for on labor specifically). */
+  customerPrice?: number;
+  /** itemType === "labour" only (HVAC platform Phase 6) — which roster
+   * technician performed this line. Multiple technicians on one job are
+   * supported by adding multiple labour lines with different
+   * technicianId, rather than a schema change to ACJob's single
+   * assigneeId — a job already has many job_items, so this needed no new
+   * join table. */
+  technicianId?: string;
 }
 
 export type JobItemInput = {
@@ -102,6 +151,13 @@ export type JobItemInput = {
   name: string;
   qty: number;
   unitPrice: number;
+  source?: JobItemSource;
+  productId?: string;
+  supplierId?: string;
+  purchaseRef?: string;
+  purchaseDate?: string;
+  customerPrice?: number;
+  technicianId?: string;
 };
 
 export interface JobStatusEntry {
@@ -204,14 +260,43 @@ export interface Sale {
   chequeId?: string;
 }
 
+/** "in"/"out" = manual adjustment (Stock In / Stock Out); "sale" and
+ * "purchase" are existing/renamed-going-forward automatic movements;
+ * the rest are new (HVAC platform Phase 3). Old rows saved with "in" for
+ * a purchase receipt (pre-Phase-3 data) are left as-is — this only
+ * changes what new records get tagged, so nothing that reads `type`
+ * needs a migration. */
+export type StockMovementType =
+  | "in"
+  | "out"
+  | "sale"
+  | "purchase"
+  | "job_usage"
+  | "job_return"
+  | "supplier_return"
+  | "write_off";
+
 export interface StockLog {
   id: string;
   productId: string;
   productName: string;
-  type: "in" | "out" | "sale";
+  type: StockMovementType;
   qty: number;
   note?: string;
   date: string;
+  /** job_usage/job_return only */
+  relatedJobId?: string;
+  /** purchase/supplier_return only — the Purchase record already implies
+   * this for "purchase", but logging it directly keeps StockLog
+   * self-describing without a join back to `purchases`. */
+  relatedSupplierId?: string;
+  /** Org member who performed this movement, when known. Cloud-authenticated
+   * actions only — actions.ts itself has no auth context (it's a pure
+   * data-in/data-out module), so this is populated by the caller
+   * (app-store-provider.tsx, which does have the Supabase user) and stays
+   * unset for anything before this field existed or done fully offline
+   * without a resolved session. */
+  userId?: string;
 }
 
 export interface Customer {
@@ -265,6 +350,11 @@ export interface Technician {
   specialties: WorkSpecialty[];
   active: boolean;
   notes?: string;
+  /** Internal labor cost basis (LKR/hour) — HVAC platform Phase 6.
+   * Optional: no fabricated cost for technicians with no configured rate.
+   * Financial data, masked from non-financial roles at the DB level the
+   * same way products.buyPrice is (see the Phase 6 migration). */
+  hourlyRate?: number;
 }
 
 export type TechnicianInput = {
@@ -273,6 +363,7 @@ export type TechnicianInput = {
   specialties?: WorkSpecialty[];
   active?: boolean;
   notes?: string;
+  hourlyRate?: number;
 };
 
 export type ContractorRateType = "per_job" | "per_unit" | "per_meter" | "fixed";
@@ -390,6 +481,53 @@ export interface Purchase {
   note?: string;
 }
 
+/** HVAC platform Phase 13 — purchase orders are a distinct workflow from
+ * `Purchase` (GRN): a PO is placed before goods arrive and may be received
+ * in one or more partial deliveries. `Purchase`/GRN remains the "I already
+ * have the goods + the supplier bill in hand" flow and is unaffected. */
+export type PurchaseOrderStatus = "pending" | "partial" | "received" | "cancelled";
+
+export interface PurchaseOrderLine {
+  productId: string;
+  productName: string;
+  qtyOrdered: number;
+  /** Cumulative quantity received against this line so far — never exceeds
+   * qtyOrdered. Only qtyReceived (not qtyOrdered) ever moves stock. */
+  qtyReceived: number;
+  unitCost: number;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  poNo: string;
+  date: string;
+  supplierId: string;
+  supplierName: string;
+  lines: PurchaseOrderLine[];
+  /** Sum of qtyOrdered × unitCost across lines — an estimate, not a bill. */
+  expectedTotal: number;
+  status: PurchaseOrderStatus;
+  /** Optional link to the job this stock was ordered for (HVAC Phase 13:
+   * "linked job" per the spec's field list) — informational only, does not
+   * itself move job costing; job costing still runs off job_items. */
+  relatedJobId?: string;
+  note?: string;
+  /** Set once the PO first receives any quantity; not cleared on later
+   * partial receipts, so it reads as "receiving started on". */
+  receivedDate?: string;
+}
+
+export type PurchaseOrderInput = {
+  supplierId: string;
+  lines: { productId: string; qty: number; unitCost: number }[];
+  relatedJobId?: string;
+  note?: string;
+};
+
+/** One line's newly-received quantity for a single receiving event — not
+ * the cumulative total, the delta being added now. */
+export type PurchaseOrderReceiveLine = { productId: string; qtyReceived: number };
+
 export interface SupplierPayment {
   id: string;
   supplierId: string;
@@ -410,6 +548,7 @@ export interface AppData {
   customerProductPrices: CustomerProductPrice[];
   suppliers: Supplier[];
   purchases: Purchase[];
+  purchaseOrders: PurchaseOrder[];
   supplierPayments: SupplierPayment[];
   acJobs: ACJob[];
   jobItems: JobItem[];
@@ -437,6 +576,9 @@ export type ProductInput = {
   unit: string;
   /** Sector-specific fields (BTU, brand, barcode, etc.) — unit is stored separately */
   customFields?: Record<string, string | number | boolean>;
+  /** Defaults true when omitted (new items are active by default). */
+  active?: boolean;
+  notes?: string;
 };
 
 export type CustomerInput = {

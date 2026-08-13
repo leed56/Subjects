@@ -1709,6 +1709,1027 @@ that the review process is catching real things, but not a substitute
 for someone looking at the populated dashboard too. Add both pages to
 `docs/QA_CHECKLIST.md`'s next revision once that happens.
 
+### Dashboard command center — merge into main, and 4 more real bugs
+
+This branch sat unmerged long enough that `/dashboard` diverged
+significantly on `main` (Phases 14/15 of the HVAC platform work below
+added their own job-profitability and purchase-order-pipeline cards to
+the *old* dashboard structure, unaware this rewrite existed). Merging
+required real reconciliation, not a mechanical conflict resolution:
+kept this branch's whole information architecture (TODAY → OPERATIONS →
+NEEDS ATTENTION → FINANCIAL POSITION → TREND) and folded the HVAC
+work's job-profitability/purchase-order signals in as two new compact
+"Needs Attention" rows (low-margin-jobs-this-month, open-purchase-
+orders) rather than reviving their old bigger card layout — consistent
+with this page's own "one row per alert, never a card per alert"
+density rule.
+
+An automated review (Codex) on this PR also found 4 real, pre-existing
+issues in this branch's own code, confirmed by reading the flagged
+lines directly rather than trusted blind, and fixed in the same merge:
+- **P1 — profit shown to non-financial roles.** The "Business
+  Performance" trend card rendered its gross-profit bar, legend, and
+  stat unconditionally — unlike every other financial widget on this
+  page, it had no `canSeeFinancials` gate at all. Fixed to keep the
+  revenue bar/stat visible to everyone (useful, non-financial context)
+  while gating only the profit-derived bar/legend/stats behind
+  `canSeeFinancials`, matching the reviewer's exact ask ("gate all
+  profit-derived chart content") rather than hiding the whole card.
+- **P2 — jobs KPI shown to cashiers.** The "Jobs today" metric card in
+  the header wasn't gated by `canSeeJobs` at all, unlike its sibling
+  cards. Fixed.
+- **P2 — Teams Today reachable by roles that can't open it.** Gated
+  only by `canSeeJobs`, which is true for `data_entry` (only `cashier`
+  is excluded) — but `DATA_ENTRY_ROUTES` doesn't include `/teams`, so
+  the link would bounce that role straight back to `/dashboard` via
+  `ShopRouteGuard`. Fixed by also requiring
+  `canAccessShopRoute(orgRole, "/teams")`.
+- **P2 — "My Jobs Today" / "Your assigned work" wording.** The
+  technician view's own code comment already explained *why* it can't
+  filter to "my jobs" (no `org_members` → `technicians.id` mapping
+  exists) and says it's "deliberately titled 'Today's Jobs'" — but the
+  actual translation strings still said "My Jobs Today" / "Your
+  assigned work for today" in both languages, contradicting the
+  comment's stated intent and implying a filter that doesn't exist.
+  Fixed the strings to match what the code already claimed.
+
+`tsc`/`eslint`/`next build` re-verified clean after the merge and all
+four fixes.
+## HVAC operational platform (new spec, separate from the 26-phase dashboard-only work above)
+
+data model (Customer → Site → AC Asset → Complaint → Diagnosis → Work
+performed → Parts/materials used → Technician labor → Other costs →
+Invoice → Job cost → Gross profit → Margin → Asset service history →
+Dashboard intelligence) so the Owner Dashboard can answer real
+operational questions, instead of another cosmetic dashboard pass. 26
+phases; explicitly gated — "the dashboard redesign should happen only
+after these real operational signals exist." This section is separate
+from, and independent of, the "Dashboard command center" work (draft PR
+#44, not yet merged) — Phase 2 here branches from `main`, not from that
+branch, since the data-model work has no dependency on the pending
+dashboard redesign.
+
+### Phase 1 — Architecture audit (report before migrating)
+
+Read the actual code/SQL (not memory) for every area the spec asked
+about, before writing anything. Full findings were reported to the user
+directly (see chat) rather than duplicated here in full; summary of the
+load-bearing conclusions that shaped every phase after this one:
+
+- **Job costing already has a real cost/charge split, just not itemized
+  or stock-linked.** `job.quotedAmount` (customer charge) vs.
+  `Σ job_items.lineTotal` (internal cost) already feeds `/job-costing`'s
+  margin calc, and `job_items` is never shown on the customer invoice
+  (`/jobs/[id]/invoice` renders only `quotedAmount`). What's missing:
+  `job_items` has no `productId`, no stock decrement, no historical-cost
+  snapshot, no stock/purchased-for-job/customer-supplied distinction.
+- **Stock mutation is already centralized.** Every `stockQty` change
+  goes through exactly four functions in `store/actions.ts`
+  (`addProduct`, `adjustStock`, `createSale`, `createPurchase`), each
+  writing a matching `StockLog` row. Grepped every other call site —
+  nothing in UI code mutates `stockQty` directly. Phase 3 needs richer
+  movement types/link fields, not a rebuild.
+- **The historical-cost risk the spec warns about is real and
+  currently live-but-latent.** `createPurchase` overwrites
+  `product.buyPrice` with the new `unitCost` on every purchase — so the
+  moment `job_items` gets linked to real products (Phase 4/5), an old
+  job's cost must snapshot the unit cost at the time, not read today's
+  (by-then-overwritten) `buyPrice`.
+- **Categories are per-sector configurable, but the ac_hvac list was
+  too shallow to be a real parts taxonomy**, and — this was a genuine
+  bug worth knowing about — `normalizeProductCategory()` silently
+  coerces any category string not in `categoriesForSector(sectorId)`
+  back to the sector default. Fixed in Phase 2 by extending the list,
+  not by removing the coercion (the coercion itself is legitimate
+  defense against bad data).
+- **Sector-specific fields are already a configurable dictionary**
+  (`sector-fields.ts` + `sectors.ts`'s `extraFields`) — Phase 2 extends
+  this dictionary rather than inventing a parallel parts-catalog schema.
+- **No `active`/`notes` field existed on `Product` at all.** A real,
+  clean gap — added in Phase 2.
+- **`Technician` has no cost/rate field** (only `Contractor` does, via
+  `rateType`/`rateAmount`) — confirms Phase 6 will need the smallest
+  possible addition, not a rebuild.
+- **`expenses` has no job linkage column** — confirms Phase 7 needs an
+  additive nullable `job_id`, not a parallel "other costs" table.
+- **No Site entity** — `ac_assets.site_address` and `customers.address`
+  are both free text; one customer can have multiple asset-level site
+  addresses today, just not a normalized, reusable Site table. Flagged
+  as a decision point, not changed.
+- **No multi-location/warehouse stock tracking** — a single `stockQty`
+  per product, no per-location breakdown. The spec only asked for this
+  "if supported" — it isn't, and this phase does not fabricate it.
+- **VAT is a tenant-level flag/rate, not per-product** — no per-part
+  VAT/tax-treatment field is needed; Phase 2 parts reuse the existing
+  shop-level VAT model as-is.
+- **`org_members.role='technician'` still has no FK to any
+  `technicians.id` row** (re-confirmed, unchanged from the earlier
+  19-phase project) — a technician-scoped view can only ever show
+  "today's jobs," never "my jobs," with the current data model.
+
+### Phase 2 — HVAC parts & materials catalog
+
+Purely additive, built on the two existing configurable systems the
+audit confirmed are sound (`categoriesForSector`/`sector-fields.ts`) —
+no new catalogue table, no hardcoded category enum on top of what
+already exists.
+
+- `sectors.ts`: `categoriesForSector("ac_hvac")` expanded from 5 generic
+  categories to ~19, covering every group named in the spec
+  (compressors; condenser/evaporator coils; PCBs & control boards;
+  capacitors/relays/contactors; motors & fans; sensors & thermostats;
+  valves & refrigerant controls; refrigerant & gas; copper pipe &
+  fittings; insulation & cladding; drain components; filters; bearings
+  & mounts; terminal blocks/breakers/fuses/cables — grouped under one
+  "Electrical" category rather than 4 near-empty ones; brackets &
+  vibration pads). The original 5 strings are kept byte-for-byte first
+  in the list — removing any of them would have silently
+  reclassified already-saved production rows the next time
+  `normalizeProductCategory()`/the edit form ran, since neither is
+  additive-safe against a shrunk list.
+- `sector-fields.ts`: added `compatibleModels` (text), `supplierPartNo`
+  (text), and `serialRequired` (new **boolean** field type — the
+  sector-field system only supported text/number/date before this;
+  extended `SectorFieldType`, `sanitizeCustomFields`,
+  `emptyCustomFieldsForSector`, and the form's checkbox rendering to
+  match). Reused the already-existing `partNo`, `binLocation`, and
+  `warrantyMonths` field defs by adding them to `ac_hvac.extraFields`
+  instead of duplicating them.
+- Deliberately **not** built: a separate manufacturer field (judged
+  redundant with the existing `brand` field for a parts catalog — same
+  concept, documented rather than duplicated); per-item VAT/tax
+  treatment (no per-product VAT model exists anywhere in the app;
+  parts reuse the shop-level VAT rate like everything else);
+  warehouse/truck multi-location stock (no location concept exists at
+  all — the spec said "if supported," and it isn't; fabricating one
+  here would be a stock-model rebuild, not a Phase 2 addition);
+  per-category dynamic field sets (the product form shows one field
+  set per sector, not per category — a capacitor and a wall unit share
+  the same field list today; splitting that is a bigger form redesign
+  than this phase's scope).
+- `Product`/`ProductInput` gained two **generic** (not sector-specific)
+  fields the audit found genuinely missing: `active: boolean` (default
+  `true` — discontinue a part without deleting it, since deleting would
+  orphan any `job_items`/`stock_logs`/`sale_lines` history that
+  references the product id) and `notes?: string`. Wired through
+  `addProduct`/`updateProduct`, the product form (a checkbox shown only
+  when editing, plus a notes textarea), `getLowStockProducts` (inactive
+  items no longer generate reorder alerts), the `/sales` product picker
+  (inactive items can't be sold), `/stock` (inactive items hidden by
+  default behind a "count" toggle, badged when shown), and
+  `sync-conflict.ts`'s product-diff check.
+- Supabase migration `20250703000001_products_active_notes.sql`: adds
+  `products_base.active`/`.notes`, and — since `products` is a masked
+  view over `products_base` with `INSTEAD OF` triggers (hiding
+  `buy_price` from non-financial roles, per
+  `20250623000001_financial_data_rls.sql`) — appends both columns to
+  the view and both trigger functions. Columns are appended at the end
+  of the view's column list, not inserted, matching the same
+  `CREATE OR REPLACE VIEW` constraint already documented in
+  `20250629000001_ac_asset_lifecycle.sql`.
+- `business-sync.ts`: both product push-mappers and the pull-mapper
+  updated for the two new columns; pull defaults `active` to `true`
+  when the column is null (pre-migration rows / older cached data).
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds with the same 47
+routes (no new routes this phase). No browser verification performed —
+same standing sandbox limitation as every prior phase (see Phase 18
+above); this phase is schema/data-model/form work with no new page, so
+the risk surface is smaller than a UI phase, but the checkbox rendering
+and the expanded category `<select>` have not been visually confirmed.
+
+Remaining limitations (disclosed): Site is still not a distinct entity;
+multi-location stock is still not supported; per-category dynamic
+fields still aren't split out; the "manufacturer" field the spec listed
+separately from "brand" was deliberately not duplicated (documented
+above, not an oversight).
+
+### Phase 3 — Stock movements
+
+The audit (Phase 1, above) found stock mutation already centralized —
+every `stockQty` change goes through exactly one of `addProduct`,
+`adjustStock`, `createSale`, `createPurchase` in `actions.ts`, each
+writing a matching `StockLog` row — but `StockLog.type` only supported
+`"in" | "out" | "sale"`, with no way to distinguish a purchase receipt
+from a manual correction, no job/supplier linkage, and no record of who
+performed a movement.
+
+- All four mutating functions now funnel through one new internal
+  `applyStockMovement()` — `adjustStock`/`writeOffStock`/
+  `returnStockToSupplier` all call it; `createPurchase` was updated to
+  call it via the same log-shape. "One place writes stockQty + a
+  matching log" stays true as movement kinds grow, per the audit's own
+  finding about this module.
+- `StockMovementType` widened to `"in" | "out" | "sale" | "purchase" |
+  "job_usage" | "job_return" | "supplier_return" | "write_off"`.
+  `createPurchase`'s stock-in logs now tag `"purchase"` (previously
+  `"in"` — old rows are left as-is, nothing reads `type` yet, confirmed
+  by grep before making this change) and set the new
+  `relatedSupplierId`. `job_usage`/`job_return` are defined here but not
+  yet emitted by anything — Phase 4 (job → parts used) is what will
+  create them.
+- **Not modeled**: "transfer between locations" from the spec's movement
+  list. The product model has no location/warehouse concept at all
+  (confirmed in the Phase 1 audit) — a transfer type with nothing to
+  transfer between would be fabricated, not real.
+- Two new standalone movement kinds got real UI, since they don't
+  depend on Phase 4: **Write off** (damaged/lost stock, decrements,
+  `type: "write_off"`) and **Return to supplier** (decrements, tied to a
+  `supplierId`, `type: "supplier_return"` — deliberately does not touch
+  `suppliers.payableBalance`; reconciling a return against what's owed
+  is an owner accounting decision, not something to infer silently).
+  Both added to `/stock`'s row overflow menu, disabled when stock is
+  already zero; "Return to supplier" only appears once at least one
+  supplier exists.
+- `userId` (the acting org member) is threaded through
+  `adjustStock`/`writeOffStock`/`returnStockToSupplier`/`createPurchase`
+  from `app-store-provider.tsx`, which has the authenticated Supabase
+  user via `useAuth()` — `actions.ts` itself is a pure data-in/data-out
+  module with no auth context, so this couldn't originate there.
+  Deliberately **not** threaded onto `createSale`'s stock-out logging
+  this phase — sales already have independent attribution via the Sale
+  record itself, "user" wasn't in the spec's list of things a *sale*
+  movement needs, and doing so would mean touching every one of
+  `createSale`'s several call sites for a capture the spec didn't ask
+  for here.
+- Migration `20250704000001_stock_movement_types.sql`: drops and
+  replaces `stock_logs`'s `log_type` CHECK constraint (previously
+  limited to `in`/`out`/`sale` — every new movement kind would have been
+  rejected outright without this), adds `related_job_id` (no FK — jobs
+  are local-first text ids, same as `job_items.job_id`),
+  `related_supplier_id`, and `user_id` columns.
+- `business-sync.ts`: both the pull-mapper and both push-mapper call
+  sites (there are two independent inline mappers for stock log rows,
+  not one shared helper — updated both) carry the three new fields.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds with the same 47
+routes. No browser verification performed — same standing sandbox
+limitation as every prior phase.
+
+Remaining limitations (disclosed): no movement-history UI exists
+anywhere yet (grepped — `stockLogs` is written everywhere but read/
+displayed nowhere in the app today; this phase didn't add one, since
+the closest natural home is a per-product view that doesn't exist until
+Phase 9's Job Detail redesign or a future reports addition). Multi-
+location transfer remains unmodeled, as above.
+
+### Phase 4/5 — Job → Parts Used, and the historical-cost snapshot
+
+Combined into one PR/phase because they're inseparable in practice: you
+cannot correctly wire job materials to real stock without simultaneously
+solving how an old job's cost stays fixed after today's stock price
+changes — the spec's own Phase 5 gate says as much. Branched from Phase
+3 (`claude/lakbiz-hvac-phase3-stock-movements`), not `main` — this phase
+needs the `job_usage`/`job_return` `StockMovementType` values Phase 3
+defined but left unused, so a real dependency, unlike Phase 2 vs 3.
+
+**Key realization that simplified the design**: `job_items` rows are
+already immutable once created — the app has an Add and a Delete for
+job items, no Edit. So a `JobItem.unitPrice` set once at creation
+*already behaves as a historical snapshot* by construction, as long as
+(a) it's populated from the product's cost at that moment and (b)
+nothing ever goes back and rewrites it later (already true — grepped,
+nothing does). No separate `costSnapshot` field was needed; `unitPrice`
+itself just had to become authoritative instead of free-typed for
+stock-sourced items.
+
+- **Three material sources**, `JobItem.source` (only meaningful for
+  `itemType: "part"`):
+  - **`stock`** — the UI's product picker only offers real in-stock
+    products; on save, `addJobItem` looks the product up itself and
+    **overwrites `unitPrice` with the product's current `buyPrice`
+    regardless of whatever the client sent** — this is the actual
+    historical-cost guarantee, not client trust. Decrements
+    `stockQty` once and writes a `job_usage` `StockLog` linked to the
+    job (Phase 3's movement layer, finally used). Deleting the item
+    reverses this with a `job_return` movement — the audit trail shows
+    the material genuinely came back, not a silent `stockQty` edit.
+  - **`purchased`** — a one-off buy for this specific job. Free-typed
+    name/cost, optional supplier/reference/date. Deliberately **does
+    not touch `products`/`stockQty` at all** ("do not pretend this item
+    came from warehouse stock if it did not").
+  - **`customer_supplied`** — free-typed name/qty, cost defaults to 0
+    ("do not create fake costs"), overridable for the rare case the
+    shop genuinely incurred a handling cost. No stock movement.
+  - Labour/service items are completely unaffected — same free-text
+    flow as before Phase 4, since "material source" is a parts-only
+    concept.
+- **`customerPrice`** (optional, per-line): what the customer is
+  charged for that specific item, when the owner wants to track it.
+  Deliberately **does not change the job invoice**, which still totals
+  from `quotedAmount` as one flat figure — itemizing the customer
+  invoice is a Job Detail redesign concern (Phase 9), not this one.
+- **Duplicate-submit protection**: reused the existing `savingItem`
+  guard already on the add-item form (pre-dates this phase) rather than
+  inventing a second mechanism.
+- **Job-costing math needed zero changes.** `/job-costing` already sums
+  `Σ job_items.lineTotal` as cost regardless of where a line came from —
+  the three sources just make that sum honest instead of free-typed.
+- Migration `20250705000001_job_item_material_source.sql`: adds
+  `source`, `product_id` (FK to `products_base`, nullable, set on
+  delete), `supplier_id`, `purchase_ref`, `purchase_date`,
+  `customer_price` to the existing `job_items` table.
+- `business-sync.ts`: pull-mapper and both push call sites (the direct
+  `jobItemRow()` helper and the second inline mapper used by the
+  full-snapshot push path) carry the six new fields. `addJobItemToCloud`/
+  `deleteJobItemToCloud` in `app-store-provider.tsx` now also push the
+  affected product + new `StockLog` row via the existing
+  `syncProductSnapshot()` whenever the item's source is `"stock"` —
+  `syncJobItemSnapshot()` alone only pushes the `job_items` row itself,
+  so without this the stock decrement/return would have stayed local-only.
+
+## Deliberately not built this phase
+
+- **`product.active` is not checked** when picking a stock source —
+  that field lives in the still-unmerged Phase 2 PR (#45), not in this
+  branch's lineage. One-line follow-up once #45 merges: also reject
+  consuming a deactivated product in `addJobItem`.
+- **"Purchased for this job" doesn't create an Expense/Purchase
+  record.** It correctly feeds this job's own cost/profitability, but
+  won't appear in shop-wide expense totals or VAT input-tax figures
+  yet — a real, disclosed gap, not a silent one. Bridging it needs a
+  deliberate design call (auto-create an Expense once Phase 7 adds
+  `job_id` there? extend `Purchase` to allow a non-catalogued line?)
+  that's bigger than "smallest necessary addition" for this phase.
+- **Not itemizing the customer invoice** — `customerPrice` is captured
+  per-line but the invoice still shows one flat `quotedAmount`, as
+  discussed above.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds with the same 47
+routes. No browser verification — standing sandbox limitation.
+
+### Phase 6 — Job labor costing
+
+Audited first (per the spec's own instruction): `Technician` had no
+cost field at all; only `Contractor` did (`rateType`/`rateAmount`,
+already used in job costing via `subcontractCost`). Confirms the spec's
+prediction — added the smallest explicit configuration necessary,
+nothing more.
+
+- `Technician.hourlyRate?: number` — nullable, no fabricated cost for a
+  technician with no configured rate.
+- `JobItem.technicianId?: string` (labour-only) — a job already gets as
+  many `job_items` rows as it needs, so **multiple technicians per job**
+  needed no schema change to `ACJob`'s single `assigneeId`: just add
+  several labour lines, each with a different `technicianId`.
+- `JobItem.customerPrice` (added Phase 4 for parts) extended to labour
+  lines too — this is exactly the "2hrs × Rs.1,000 internal cost vs
+  Rs.4,000 customer charge, not the same concept" distinction the spec
+  asked for. Job Sheet's labour form: pick a technician → `unitPrice`
+  pre-fills from their `hourlyRate` (editable, not locked, unlike the
+  stock-material snapshot — labor cost per job can legitimately vary
+  from a technician's base rate) → optional customer-charge field.
+
+**Found and fixed alongside this, not fabricated new scope**: `/workforce`
+is in `TECHNICIAN_ROUTES` (technicians have route access), and the
+route's own documented permission comment already says technicians get
+"no financial fields" there — but the page had zero `canSeeFinancials`
+gating anywhere. Contractor rate/payable balance, per-contractor margin,
+and the page's outstanding-payout/total-margin stat cards were all
+rendered unconditionally. Since Phase 6 was about to add a *second*
+financial field (`hourlyRate`) to this exact page, shipping it without
+fixing the existing leak would have been adding a new instance of the
+bug next to an old one. Gated all of it behind `canSeeFinancials`
+(learned from the Dashboard Command Center pass: adjusted the stat-card
+grid's column count instead of leaving an empty track when 2 of 4 cards
+disappear).
+
+**DB-level masking, not just UI hiding**: RLS on `technicians`/`job_items`
+only ever enforced tenant isolation, no column-level masking — meaning
+a technician could read `hourly_rate`/`unit_price`/`line_total`/
+`customer_price` directly via a REST call even with the UI gate above in
+place. Migration `20250706000001_labor_costing.sql` renames both tables
+to `_base` and adds masked views + `INSTEAD OF` triggers, the exact
+pattern already proven for `products`
+(`20250623000001_financial_data_rls.sql`) and `ac_jobs.subcontract_cost`.
+This is the actual "do not expose company profit to unauthorized
+technicians" guarantee — the client-side gate alone was never enough.
+
+**Known pre-existing gap, disclosed not fixed here**: `contractors.rate_amount`/
+`payable_balance` have the identical unmasked-at-the-DB-level problem
+and predate this phase — same root cause, different table. Out of scope
+for this migration since Phase 6 didn't touch `contractors`; flagged for
+a dedicated follow-up (this maps to the spec's own later Phase 19/20).
+
+- `business-sync.ts`: technician pull/push mappers and both job_items
+  push mappers carry `hourlyRate`/`technicianId`.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds. No browser
+verification — standing sandbox limitation.
+
+### Phase 7 — Other job costs
+
+Audited first: Expenses (built in the prior 19-phase spec's Phase 11)
+already covers ad-hoc operating costs with category/amount/date/payment
+method/vendor/notes — everything the spec's field list asked for except
+a job link. One column, not a parallel "job costs" table.
+
+- `expenses.job_id` (nullable text, no FK — same pattern as
+  `job_items.job_id`). `/expenses`' form gets an optional "Link to a
+  job" picker; the table gets a Job column.
+- Three new expense categories genuinely missing before: `parking`,
+  `equipment_rental`, `outsourced_repair`. **Deliberately no
+  `subcontractor` category** — that cost already lives in
+  `ACJob.subcontractCost` for contractor-assigned jobs; adding a second
+  place to record the same cost would invite double-counting it, which
+  the spec's absolute rules explicitly forbid.
+- `/job-costing` (the existing profitability report) now fetches
+  expenses (cloud-only, same pattern `/expenses` itself uses) and adds
+  each job's linked-expense total as `otherCost`, folded into
+  `totalCost` alongside `itemsCost`/`subcontractCost`. The cost column
+  shows an "incl. other costs" hint when `otherCost > 0`, for
+  transparency about what's in the number.
+- Checked for the double-count risk explicitly: a job-linked expense
+  still counts (correctly) toward the shop's month/fiscal-year expense
+  totals on `/expenses` itself, and toward the income-tax deduction
+  calc — that's not a bug, it's the same real cost viewed from two
+  different questions ("what did the business spend" vs. "was this job
+  profitable"), which is exactly the distinction the spec's Phase 20
+  asks reporting layers to preserve. Nothing sums both totals *together*
+  anywhere, which is the actual double-counting failure mode.
+
+**Deliberately not built this phase**: wiring "other costs" into the Job
+Sheet drawer (`/jobs`) itself — that page is already local-first only
+and doesn't fetch cloud-only Expenses; adding a second fetch there
+increases the risk surface of an already-large file for a view that's
+naturally superseded by Phase 9's Job Detail redesign anyway.
+`/job-costing` is the authoritative profitability view for now.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds. No browser
+verification — standing sandbox limitation.
+
+### Phase 8 — Job profitability engine
+
+Extracted the formula every prior phase (4/5/6/7) had been feeding
+inputs toward — `Total Job Cost = Material + Labor + Other`,
+`Gross Profit = Revenue − Total Job Cost`,
+`Gross Margin % = Gross Profit / Revenue × 100` (null, not a divide-by-
+zero or a misleading 0%, when revenue is 0) — into one function,
+`computeJobProfitability()` in a new `src/lib/job-profitability.ts`.
+Before this phase the formula lived only inline inside `/job-costing`'s
+page component.
+
+- **Bucket mapping** (the spec's 3 buckets vs. this app's actual data
+  shapes, documented in the function's own header comment): Material =
+  Σ `job_items` where `itemType === "part"`. Labor = Σ `job_items` where
+  `itemType === "labour"` **plus** `job.subcontractCost` when the job is
+  contractor-assigned (paying an external party to do the work is still
+  labor, just not in-house — folding it in here also matches how
+  `/workforce`'s own margin stat already treated it). Other = Σ
+  `job_items` where `itemType === "service"` **plus** the Phase 7
+  job-linked Expenses total (passed in by the caller, since Expenses is
+  cloud-only and this function stays a pure function over already-
+  fetched data, not a fetcher itself).
+- **VAT check, per the spec's explicit instruction**: audited
+  `ACJob`/`ACJobInput` before writing this — no VAT field exists
+  anywhere on an AC job. `quotedAmount` is a flat negotiated price with
+  no VAT breakout, unlike `Sale.outputVat`/`Purchase.inputVat`. There is
+  currently nothing to accidentally include; documented in the function
+  header as the one place to revisit if AC jobs ever gain VAT tracking.
+- `/job-costing` now calls this function instead of its own inline
+  `costJob()` (deleted).
+- **Job Sheet drawer** (`/jobs`) also switched from its own separate
+  inline calc (`itemsTotal`/`subcontract`/`profit`, which conflated
+  parts+labour+service into one undifferentiated figure and never
+  included Phase 7 costs at all) to the same shared function — the
+  drawer now shows Material cost and Labor cost as distinct figures
+  instead of one combined "Parts/labour" number, a real improvement.
+  Passes `linkedExpenseTotal = 0` since this view is local-first only
+  and doesn't fetch cloud-only Expenses (same call this project made in
+  Phase 7) — same formula, an admittedly incomplete input in this one
+  view, not a second competing calculation. `/job-costing` remains the
+  complete, authoritative profitability view until Phase 9's Job Detail
+  redesign potentially changes that.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds. No browser
+verification — standing sandbox limitation.
+
+### Phase 9 — Job Detail experience redesign
+
+The Job Sheet drawer was one long scroll — KPI row, Equipment, a combined
+parts/labour items table, one add-item form covering every material
+source and labor case at once, then status history — all rendered
+unconditionally at the same visual weight. Restructured into 5 tabs
+(`Overview`, `Parts & Materials`, `Labor & Other Costs`, `Job Economics`,
+`Invoice & Payment`) using the existing `Tabs` primitive (already in the
+design system, unused until now), mapping the spec's 10 named
+sub-sections onto a smaller set of grouped tabs rather than 10
+individual tabs, which would have been excessive:
+
+- **Overview**: Identity (customer/phone/address, in the drawer header)
+  + **Complaint** and **Diagnosis** (both genuinely new fields, see
+  below) + Equipment (existing Phase 4/5 asset link) + Attachments
+  (disclosed unavailable, not fabricated — see below) + Status history.
+- **Parts & Materials**: the existing parts table + add-item form,
+  filtered to `itemType === "part"`, source selector unchanged from
+  Phase 4.
+- **Labor & Other Costs**: the same table/form filtered to
+  `itemType === "labour" || "service"` — a technician picker for
+  labour lines (Phase 6), unchanged.
+- **Job Economics**: full Material/Labor/Other/Total/Revenue/Gross
+  Profit/Margin breakdown via `computeJobProfitability()` (Phase 8) —
+  **now fed a real job-linked-expenses total**, fetched in this drawer
+  for the first time (see below), so these numbers match `/job-costing`
+  exactly instead of omitting Phase 7 costs as before.
+- **Invoice & Payment**: the existing "View invoice" link plus
+  quote/deposit/balance figures pulled out of the old always-visible
+  header into their own tab.
+
+The single add-item form (covering part/labour/service/source
+combinations from Phases 4–6) was **not duplicated** across the Parts
+and Labor tabs — the same form component is reused, with the item-type
+selector's available options and the displayed item list both switching
+on which tab is active, and a tab-change handler that resets the form
+and picks a sensible default `itemType` for the new tab. One form, one
+set of validation/submit logic, two contexts.
+
+**Two genuinely new fields**: `ACJob.complaint` (what the customer
+reported) and `ACJob.diagnosis` (what the technician found). Audited
+first — `description` was assumed to be a "what's wrong" field before
+checking; it's actually an **auto-generated equipment summary**
+(brand/BTU/unit type, built in `addACJob`) with no editable UI input
+anywhere in the app. Complaint and Diagnosis are real, new, editable
+fields added to the job create/edit form, distinct from both
+`description` and the free-text `notes` field that already existed.
+Migration `20250708000001_job_complaint_diagnosis.sql` widens
+`ac_jobs_base` and the masked `ac_jobs` view + its `INSTEAD OF` triggers
+(same append-only `CREATE OR REPLACE VIEW` pattern as every prior
+`ac_jobs` schema change) — both fields are plain text, not financial, so
+no masking `case`/`when` was needed for them specifically.
+
+**Closing a disclosed gap from Phases 7/8**: the Job Sheet drawer now
+fetches job-linked Expenses itself (`fetchOrgExpenses`, filtered to this
+job's id) instead of passing `linkedExpenseTotal = 0` to
+`computeJobProfitability()` — both Phase 7's and Phase 8's docs
+explicitly flagged this as deferred to "Phase 9's Job Detail redesign
+potentially changing that." It has.
+
+**Attachments — disclosed, not fabricated**: the Overview tab has an
+Attachments section with a plain "not available yet" message. No photo/
+document upload architecture exists anywhere in this codebase (confirmed
+in the Phase 1 audit and re-confirmed here) — building real file
+upload/storage is a substantial feature (Supabase Storage bucket, upload
+UI, RLS policies for file access) that the spec's own "do not fabricate"
+instructions rule out inventing as a side effect of a tab reshuffle.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds. No browser
+verification — standing sandbox limitation, and this phase carries more
+risk than most from that gap since it's a substantial, freeform JSX
+restructure with no visual confirmation; reviewed the full render tree
+manually line-by-line after the edit to check every tab's JSX opens and
+closes correctly, but a real browser pass is the one thing that would
+actually confirm the tabs render and switch as intended.
+
+### Phase 10 — AC Asset service history
+
+Audited first — `/assets` already had more than expected: an asset
+profile drawer with a "Jobs" tab (`fetchAssetJobs`, direct read against
+the masked `ac_jobs` view filtered by `asset_id`), just a thin list
+(job number/status/date/description, no cost, no parts). No separate
+manual "service log" to worry about duplicating — jobs were already the
+source, exactly as the spec wants; this phase deepens that existing tab
+rather than replacing anything.
+
+- `AssetJob` extended with the Phase 9 fields (`complaint`, `diagnosis`)
+  and enough financial context (`quotedAmount`, `assigneeType`,
+  `subcontractCost`) to compute a real lifetime cost — all already
+  exposed by the existing masked `ac_jobs` view, so no new masking
+  logic was needed; `subcontract_cost` arrives pre-masked to `null` for
+  non-financial roles and is trusted as-is.
+- New `fetchAssetJobItems(jobIds)` — one query against the masked
+  `job_items` view for every job linked to the asset. This is the real,
+  stored basis for two things the spec asked for that had no home
+  before:
+  - **Components replaced**: parts (`itemType === "part"`) across every
+    linked job, grouped by name, with a replacement count and the most
+    recent date — not a separate manually-maintained list, derived
+    entirely from real job material records (Phase 4/5).
+  - **Lifetime repair cost**: `Σ job_items.lineTotal` (material + labor
+    + service, already masked to 0 for non-financial roles by the view
+    itself) **plus** `subcontractCost` for contractor-assigned linked
+    jobs — the same Material+Labor bucket logic as
+    `computeJobProfitability()` (Phase 8), reimplemented inline here
+    rather than reused because `computeJobProfitability` takes a full
+    `ACJob`, and `AssetJob` is a deliberately narrower read-only
+    projection from a different client module; duplicating the two-line
+    sum was judged lower-risk than reshaping either type to share it.
+  - **Deliberately excluded from lifetime cost**: per-job Phase 7
+    linked-Expenses totals. Including them would mean an extra query
+    fetching and cross-referencing Expenses against every linked job's
+    id, adding real complexity for a number that's already visible,
+    correctly, on `/job-costing` and each job's own Job Economics tab
+    (Phase 9). Disclosed here rather than silently included as "close
+    enough."
+- Visit history rows now show each visit's real complaint/diagnosis
+  (Phase 9 fields, when recorded) and quoted amount, not just status/
+  description as before.
+- "Jobs" tab renamed "Service History" to match what it now actually
+  shows.
+
+**Not built this phase**: repeat-repair intelligence (e.g. "3 repairs in
+90 days") — that's Phase 11's, and mixing it in here would risk
+inventing the exact "likely failure" language the spec explicitly rules
+out without the dedicated, deterministic-only design that phase
+requires. This phase's per-asset job list is real data that Phase 11
+will consume, not duplicate.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds. No browser
+verification — standing sandbox limitation.
+
+### Phase 11 — Repeat-repair intelligence
+
+The spec's sharpest guardrail: deterministic only, no AI, no fabricated
+"likely failure" claims, only messages exactly supported by stored data
+— explicitly allowing exactly the shape "This unit has had 3 repair jobs
+in the last 90 days."
+
+New `src/lib/repeat-repair.ts`, `computeRepeatRepairSignal()` — a plain
+count over real `AssetJob` records within a fixed window, nothing
+predictive or inferred:
+
+- **Window and threshold are explicit, disclosed choices, documented in
+  the function's own header**: 2+ repair/service jobs within the last
+  90 days. Two visits inside one quarter is a real, defensible "this
+  keeps coming back" signal; one visit is just a repair, not a pattern.
+  Picked and written down rather than left as an unstated magic number,
+  per the spec's "do not invent the threshold silently" instruction
+  (stated elsewhere in the spec for margin flagging, applied here to
+  the same class of problem).
+- **Only `jobType === "repair"` or `"service"` count.** Installation/
+  inspection/warranty/other jobs aren't repeat *repairs* — counting
+  them would make the message less exact than the spec's "exactly
+  supported by stored data" instruction asks for. `AssetJob` gained a
+  `jobType` field (already available on the underlying `ac_jobs` view,
+  just not previously selected) to make this possible.
+- Surfaced in the asset profile's Service History tab (the same tab
+  Phase 10 built out) as a plain amber banner when triggered, using the
+  spec's own example wording verbatim: "This unit has had {count}
+  repair jobs in the last {days} days." No severity scoring, no
+  "urgent"/"critical" language beyond that one factual sentence.
+- Exported as a pure, reusable function (mirroring Phase 8's
+  `computeJobProfitability` precedent) specifically so a future
+  dashboard "Needs Attention" pass (Phases 14–18) can reuse the exact
+  same signal instead of re-deriving a competing one.
+
+**Not built this phase**: surfacing the signal inside the Job Sheet
+drawer when a job is linked to a repeat-repair asset — would need
+fetching that asset's job history from within `/jobs`, adding a second
+data-fetch path for a signal that's already visible, correctly, on the
+asset's own profile page. Deferred rather than duplicated.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds. No browser
+verification — standing sandbox limitation.
+
+### Phase 12 — Low stock & reordering
+
+Audited first: `getLowStockProducts()` already existed and already used
+a genuinely **per-item configured minimum** (`product.reorderLevel`),
+not a global hardcoded threshold — the spec's core requirement here was
+already sound. The real gap: it was only ever used as a metric-card
+*count* on `/stock` ("12 items low"), with no way to see *which* items
+or act on them — no filtered list, no indication of where to reorder
+from.
+
+- Added a "Low stock" filter toggle to `/stock`, alongside the existing
+  condition filter tabs — shows exactly the same set `getLowStockProducts()`
+  already computed, just as a real, actionable, filtered view instead of
+  only a number.
+- New `getReorderSuggestions()` in `actions.ts`: for each low-stock
+  product, looks up the most recent `Purchase` that included it and
+  surfaces that supplier's name and the date — "last bought from X on
+  Y" — shown as a subtitle under each item when the Low Stock filter is
+  active. Real purchase history (`data.purchases`, already loaded
+  locally), not a guess.
+- **Deliberately does not suggest a reorder quantity.** That would need
+  a demand/sales-velocity model that doesn't exist anywhere in this
+  codebase — inventing one here would be exactly the fabricated-signal
+  the spec's absolute rules forbid. Current qty vs. the configured
+  minimum (already shown) is the honest, complete picture.
+- Purchase-order *creation* is deliberately not built here — that's
+  Phase 13's, not duplicated.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds. No browser
+verification — standing sandbox limitation.
+
+### Phase 13 — Purchase orders & suppliers
+
+Audited first (per the spec's "audit before building" instruction for
+this phase specifically): `purchases`/`purchase_lines` already exist as
+a normalized two-table pair (`20250616000002_business_data_schema.sql`),
+not JSONB-embedded — a real GRN/bill entity, immediate-receipt only. It
+carries the **full-row SELECT-deny** RLS pattern (a
+`can_see_org_financials()`-gated policy replacing the plain member-select
+policy entirely), shared with `suppliers`, `supplier_payments`, and the
+banking tables — a different, simpler masking approach than the
+security-barrier-view-plus-INSTEAD-OF-triggers pattern used for
+`products`/`ac_jobs`/`technicians`/`job_items`. Nothing in the existing
+schema represented "goods ordered but not yet delivered" — the gap the
+spec describes was real, not already covered under another name.
+
+Built the smallest genuinely-required new layer, additive to `purchases`,
+not a replacement:
+
+- New `PurchaseOrder`/`PurchaseOrderLine` local-first entities (mirrors
+  `Purchase`/`PurchaseLine`'s shape) with `supplier`, `lines` (product,
+  qty ordered, qty received, unit cost), `expectedTotal`, `status`
+  (`pending` / `partial` / `received` / `cancelled`), an optional
+  `relatedJobId`, and a `receivedDate`. **Deliberately no
+  `paymentMethod`/`creditAmount`/`inputVat`** — a PO is not a bill; those
+  fields belong to the existing `Purchase`/GRN record the owner still
+  enters separately once the supplier's actual invoice arrives.
+- `createPurchaseOrder()` — creates the order. Touches nothing else:
+  no stock movement, no `buyPrice` update, no `supplier.payableBalance`
+  change. A plan to buy is not a delivery or a debt.
+- `receivePurchaseOrder()` — the only place a PO is allowed to move
+  stock. Each call is one delivery event (quantity arriving *now*, not a
+  new cumulative total), so partial deliveries against the same PO can
+  be recorded as they happen. Received qty is clamped to what's still
+  outstanding per line — a PO cannot be over-received. Every unit
+  received produces a real `StockLog` (`type: "purchase"`, `note: "PO
+  <no>"`) through the same trail a GRN purchase uses, and updates
+  `product.stockQty`/`buyPrice` the same way `createPurchase` already
+  does. Status recomputes to `partial` or `received` off the lines
+  actually delivered so far — never inferred, never a manual toggle.
+  Nothing moves until this function is explicitly called, per the
+  spec's "do not automatically mark unreceived goods as available
+  stock."
+- `cancelPurchaseOrder()` — guarded: refuses once any line has received
+  quantity, since a partially-received PO already has real stock
+  movements against it that cancelling would misrepresent.
+- **Deliberately does not auto-create a `Purchase`/GRN record on
+  receipt.** Receiving a PO and recording the supplier's bill are
+  different real-world events (a delivery note and an invoice routinely
+  arrive at different times, sometimes for different partial
+  quantities); auto-generating a GRN for every receipt would let the
+  same delivery be counted twice if the owner also enters the actual
+  bill by hand later — exactly the double-counting the spec's absolute
+  rules forbid. The owner still records the GRN through the existing
+  Suppliers screen when the invoice arrives, with the real payment
+  terms.
+- New `supabase/migrations/20250709000001_purchase_orders.sql`:
+  `purchase_orders`/`purchase_order_lines`, mirroring `purchases`/
+  `purchase_lines`'s shape plus the new status/expected-total/job-link/
+  received fields, using the audited full-row-SELECT-deny RLS pattern
+  (financial-gated SELECT, member-scoped INSERT/UPDATE/DELETE) rather
+  than the masked-view pattern — its closest sibling table already
+  established this as the right approach for supplier/purchasing data.
+  No FK to `ac_jobs` for `related_job_id`, same as `job_items.job_id`
+  and `stock_logs.related_job_id` already do — jobs are local-first,
+  client-assigned ids, and `ac_jobs` itself is a view, not a base table.
+- Full local-first wiring: `AppData.purchaseOrders`, pull/push mappers
+  in `business-sync.ts` (both the eager per-action snapshot push and the
+  periodic full `pushBusinessData`/prune sweep), and the offline
+  merge-conflict resolver (`mergeAppData` — otherwise a genuine offline
+  edit to a PO could silently vanish on the next reconnect merge).
+  `createPurchaseOrderToCloud` / `receivePurchaseOrderToCloud` /
+  `cancelPurchaseOrderToCloud` added to the store provider, gated behind
+  the same `canUseSuppliersModule` write-permission check as the
+  existing purchase flow.
+- UI: `/suppliers` gained a "New purchase order" entry point next to
+  the existing "Record purchase (GRN)" button, a create form (supplier +
+  per-product qty/unit-cost lines + optional linked job), a Purchase
+  Orders list with status badges and per-row Receive/Cancel actions, and
+  a Receive dialog (remaining-quantity inputs per line, clamped to what's
+  outstanding).
+- **Audit side-fix**: while reading `syncPurchaseSnapshot` as the
+  template for the new PO sync function, found its eager-push stock-log
+  filter checked `log.type === "in"` — stale from before Phase 3
+  introduced the `"purchase"` movement type (`createPurchase` has always
+  tagged its logs `"purchase"`, never `"in"`), so a GRN's stock logs
+  never reached the eager per-action cloud push. Not a data-loss bug —
+  the periodic full `pushBusinessData` sweep pushes all stock logs
+  unconditionally and already covered the gap — but a real completeness
+  bug in the exact function this phase's sync code is modeled on, so
+  fixed it in the same commit (`log.type === "purchase"`) rather than
+  knowingly copying a broken filter into new code.
+- Not built: reorder-quantity suggestions on a PO (Phase 12 already
+  covered and declined this — no demand model exists to base one on);
+  a supplier-facing PO PDF/print view; multi-currency or landed-cost
+  allocation across a PO's lines.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 2
+pre-existing warnings (`deleteACJobFromCloud` unused import,
+`useMemo` dependency on `org.id`), neither new nor touched by this
+phase, `next build` succeeds. No browser verification — standing
+sandbox limitation.
+
+### Phase 14 — Dashboard: job profitability (first slice of the dashboard redesign)
+
+The spec gates the dashboard redesign on Phases 2-13 existing first —
+they now do. Rather than one giant rewrite, splitting the redesign into
+reviewable slices; this is the first: **surface real job profitability
+on `/dashboard`, where today there is none.**
+
+Audited first: `getDashboardStats()` (the dashboard's one stats
+function) computes AC job *counts* by status (pending, service-due,
+overdue) but never touches cost or margin — that calculation has only
+ever lived inside `/job-costing`'s page component (Phase 8). No
+fabricated placeholder metric existed to replace; the gap was a true
+absence, not a bad number.
+
+- Dashboard now fetches job-linked Expenses (Phase 7, cloud-only) the
+  same way `/job-costing` already does, and reuses
+  `computeJobProfitability()` (Phase 8) — the one authoritative
+  calculation — over this month's non-cancelled AC jobs. No parallel
+  formula.
+- New **Job profitability (this month)** card: total margin + average
+  margin % (quoted-weighted, same formula as `/job-costing`'s totals
+  row), linking to the full report.
+- New **Jobs to review** card: jobs flagged low-margin, worst first.
+- New explicit, disclosed "low margin" rule — the spec's absolute
+  rule requires one before any job can be labelled this way. Added
+  `LOW_MARGIN_THRESHOLD_PCT = 15` and `isLowMarginJob()` to
+  `job-profitability.ts` (the one file that already owns the
+  profitability formula, so the label rule lives next to what it
+  labels) — a flat 15% gross-margin floor, documented inline with the
+  reasoning. Jobs with no assessable margin (`grossMarginPct === null`,
+  i.e. zero revenue) are never flagged: "can't be assessed" is not the
+  same claim as "low margin."
+- Retrofitted `/job-costing` itself to use the same `isLowMarginJob()`
+  helper for a small badge on its margin column, so a job flagged "low
+  margin" means the identical thing on both screens — one rule, not two
+  independently-tuned ones.
+- Gated on `showAcJobs && canSeeFinancials`, same guard `/job-costing`
+  already uses — company margin stays invisible to any role that
+  shouldn't see it, including while the Expenses fetch is still
+  in flight (the section simply doesn't render until data has
+  arrived, rather than flashing a zero).
+- Section only renders when there's at least one job this month to
+  report on — consistent with how the existing vehicles/AC-jobs
+  attention grid below it already behaves.
+
+Deliberately not built in this slice (next dashboard phases):
+- **Purchase order pipeline widget** (Phase 13's new pending/partial
+  POs) — kept out to keep this PR reviewable as one clear addition;
+  next slice.
+- **Org-wide repeat-repair rollup** (Phase 11's signal) — audited and
+  found genuinely blocked, not skipped for convenience: `ac_jobs.asset_id`
+  exists at the DB level but isn't in the local `ACJob` type and isn't
+  settable from the `/jobs` create/edit form yet (a pre-existing,
+  already-documented gap — see "Not started" below). Almost no job
+  today would carry a real `asset_id`, so a dashboard-wide count would
+  read as "0 repeat repairs" for reasons that have nothing to do with
+  actual repair history — exactly the misleading-signal the spec's
+  absolute rules forbid. Stays per-asset (`/assets`) until that wiring
+  gap is closed.
+- A dashboard-level low-stock **reorder-supplier** hint (Phase 12
+  already put this on `/stock` itself, where the action happens).
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 2
+pre-existing warnings, unchanged, `next build` succeeds. No browser
+verification — standing sandbox limitation.
+
+### Phase 15 — Dashboard: purchase order pipeline (redesign slice 2)
+
+Second dashboard-redesign slice, the one deliberately deferred out of
+Phase 14 to keep that PR reviewable: surface Phase 13's purchase orders
+on `/dashboard`.
+
+- `getDashboardStats()` gains `openPurchaseOrderCount` /
+  `openPurchaseOrderValue` / `openPurchaseOrders` — pure local
+  computation, no cloud fetch needed (unlike Phase 14's job
+  profitability, purchase orders already live in local-first `AppData`
+  since Phase 13).
+- **"Outstanding value" is deliberately not a PO's `expectedTotal`.** A
+  partially-received PO has already turned part of that total into real
+  stock; summing full `expectedTotal` across open POs would double-count
+  value that already landed. Computed instead as
+  `Σ (qtyOrdered − qtyReceived) × unitCost` per line — what's still
+  actually expected to arrive.
+- New **Open purchase orders** card: count + outstanding value, plus
+  the oldest 5 open (pending/partial) POs by order date — oldest first,
+  so the ones waiting longest surface first, not the most recent.
+- Gated on `canSeeFinancials`, matching the RLS reality underneath it:
+  `purchase_orders`/`purchase_order_lines` are already invisible at the
+  database layer to non-owner/manager roles (Phase 13's audited
+  full-row-SELECT-deny policy), so this is belt-and-suspenders
+  consistency with the other financial dashboard cards, not a new gate.
+- Section only renders when there's at least one open PO — same
+  "don't render empty cards" convention as every other conditional
+  section on this page.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 2
+pre-existing warnings, unchanged, `next build` succeeds. No browser
+verification — standing sandbox limitation. (A screenshot of the live
+Vercel preview from Phase 14 confirmed the dashboard renders cleanly on
+a fresh/empty org — first real visual confirmation this engagement has
+had of the actual running app, though it couldn't exercise this card
+specifically since that org has no purchase orders yet.)
+
+### Critical infra fix — live database schema drift (Phases 3, 4/5, 6, 7, 9, 13 never actually applied)
+
+Reported by the user testing the live Vercel preview: a "Cloud save
+failed" banner reading `Could not find the 'hourly_rate' column of
+'technicians' in the schema cache`, plus the Suppliers screen appearing
+unresponsive.
+
+Root cause, found via direct introspection of the live Supabase project
+(`nexus-erp`) using the Supabase MCP tools — access this session had the
+whole time but had not yet used for live verification: **every migration
+file written for Phases 3, 4/5, 6, 7, 9, and 13 in this engagement had
+only ever existed in git.** None had been applied to the actual database
+the deployed app talks to. `list_migrations`' tracked history turned out
+to be an unreliable signal on its own (several older, unrelated
+migrations exist live without a matching tracked entry, evidently
+applied by hand at some point) — the only trustworthy check was
+introspecting real table/column/constraint state directly, which is what
+this fix is based on, not migration-file bookkeeping.
+
+Concretely, before this fix, the live database was missing:
+- `stock_logs.related_job_id`/`related_supplier_id`/`user_id`, and its
+  `log_type` check constraint still only allowed `('in','out','sale')` —
+  meaning any stock movement of type `purchase`/`job_usage`/`job_return`/
+  `supplier_return`/`write_off` would have been rejected outright by the
+  database. This affected the base `createPurchase` (GRN) flow, not just
+  HVAC-specific ones — no purchase's stock log has likely ever
+  successfully synced to the cloud on this project.
+- `job_items.source`/`product_id`/`supplier_id`/`purchase_ref`/
+  `purchase_date`/`customer_price`, and the `job_items`/`technicians`
+  masked views + `hourly_rate` entirely (this is what the user's
+  reported error came from).
+- `expenses.job_id`.
+- `ac_jobs_base.complaint`/`diagnosis`.
+- `purchase_orders`/`purchase_order_lines` — didn't exist at all.
+
+Applied all six missing migrations directly to the live project via
+`mcp__Supabase__apply_migration`, in dependency order, verifying table/
+column/constraint state before and after each one.
+
+**Two real bugs found and fixed while applying, not just replayed
+blind:**
+1. **Cross-tenant data leak.** The original `labor_costing.sql`'s
+   `technicians`/`job_items` masked views had no tenant `WHERE` clause at
+   all — unlike every other masked view in this codebase (`ac_jobs`,
+   `products`, `sales`, `contractors`, `vehicles`), which all filter to
+   the caller's own orgs. Any authenticated user from any organization
+   could have read every organization's technician names/phones/notes
+   and job_items' job_id/qty/source (the numeric financial columns would
+   still have masked to null/0 per-row, but the rest would not). The
+   trigger functions were also `security invoker` with no write-permission
+   check, unlike every other masked-view trigger, so any authenticated
+   org member — including a role explicitly barred from managing
+   technicians — could write or delete any org's technician or job_item
+   row. Fixed to match the established pattern exactly (tenant-filtered
+   view, `security_invoker = false`, `security definer` trigger functions
+   gated by `org_member_can_write_module`).
+2. **Self-caught deployment mistake, corrected before it caused harm.**
+   The first live-apply attempt gated the new write-permission check on
+   `org_member_can_write_module(org_id, 'technicians')` — 'technicians'
+   is not a real module key (`plans.features` has no such key), so
+   `org_has_module` would have returned false unconditionally, blocking
+   *all* technician writes for *every* role, including owners. Caught by
+   checking the live `plans.features` keys and `contractors_view_insert`'s
+   already-working equivalent (which gates the same workforce-adjacent
+   write under `'ac_jobs'`) before reporting the fix as done — corrected
+   immediately, live and in the repo file, to use `'ac_jobs'`.
+
+Also found, while applying `job_complaint_diagnosis.sql`, that a
+*pre-existing, unrelated* gap already lived in the `ac_jobs` view's
+trigger functions: neither INSERT nor UPDATE ever forwarded
+`asset_id`/`crew_id` at all, meaning linking a job to an asset or a crew
+has never actually persisted at the database layer, regardless of what
+the UI sent. Since this migration already had to rewrite the same view
+and both trigger functions to append `complaint`/`diagnosis`, fixed this
+in the same pass rather than reproducing a known-broken column list a
+third time — this is also part of why Phase 14's audit found "almost no
+job carries a real `asset_id`."
+
+Also ran the Supabase security advisor after all six migrations: the new
+`technicians_view_*`/`job_items_view_*` functions showed up as
+anon/public-executable — the exact class of gap this repo's own earlier
+security-hardening migrations
+(`revoke_anon_execute_internal_functions.sql` /
+`revoke_public_execute_internal_functions.sql`) already closed for every
+*other* masked-view trigger function, just before these two existed.
+Applied the identical revoke/grant pattern to match, live and as a new
+migration file in the repo.
+
+**Corrected the two affected repo migration files in place** (rather
+than leaving a known-bad version in git history for the next fresh
+deploy to replay) and added one new migration file for the anon-execute
+revoke. Verified live afterward: `hourly_rate` column present, both
+masked views tenant-filtered, `purchase_orders`/`purchase_order_lines`
+exist with RLS, security advisor clean of anything but the two
+pre-existing, already-accepted categories (the `security_definer_view`
+lint every masked view in this codebase triggers by design, and the
+already-known, dashboard-only-fixable leaked-password-protection
+setting).
+
+This was found and fixed live-first (the user was actively blocked) —
+the corrected migration files are being shipped as their own PR to keep
+git as the source of truth for any future fresh deployment, separate
+from the phase-by-phase feature PRs.
+
 ## Not started
 
 Deferred items: customer notes field,

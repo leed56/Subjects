@@ -17,7 +17,7 @@ import { exportStockCsv } from "@/lib/export";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { formatProductFieldBadge } from "@/lib/sector-fields";
 import { useAppStore } from "@/lib/store/use-app-store";
-import { getLowStockProducts } from "@/lib/store/actions";
+import { getLowStockProducts, getReorderSuggestions } from "@/lib/store/actions";
 import { getPlan } from "@/lib/subscription/plans";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
@@ -27,7 +27,16 @@ import type { Product, ProductCondition } from "@/lib/types";
 type ConditionFilter = "all" | ProductCondition;
 
 export default function StockPage() {
-  const { data, ready, saveProductToCloud, deleteProductToCloud, stockInToCloud, stockOutToCloud } = useAppStore();
+  const {
+    data,
+    ready,
+    saveProductToCloud,
+    deleteProductToCloud,
+    stockInToCloud,
+    stockOutToCloud,
+    writeOffStockToCloud,
+    returnStockToSupplierToCloud,
+  } = useAppStore();
   const { org, subscription, canSeeFinancials, can } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
   const { t } = useLocale();
@@ -47,11 +56,32 @@ export default function StockPage() {
   const [stockOutNote, setStockOutNote] = useState("");
   const [savingStockOut, setSavingStockOut] = useState(false);
 
+  // Write-off / return-to-supplier dialogs (HVAC platform Phase 3 —
+  // distinct stock-movement kinds from a manual Stock Out, kept in the
+  // overflow menu since they're rarer than Stock In/Out).
+  const [writeOffId, setWriteOffId] = useState<string | null>(null);
+  const [writeOffQty, setWriteOffQty] = useState("1");
+  const [writeOffNote, setWriteOffNote] = useState("");
+  const [savingWriteOff, setSavingWriteOff] = useState(false);
+
+  const [returnId, setReturnId] = useState<string | null>(null);
+  const [returnQty, setReturnQty] = useState("1");
+  const [returnSupplierId, setReturnSupplierId] = useState("");
+  const [returnNote, setReturnNote] = useState("");
+  const [savingReturn, setSavingReturn] = useState(false);
+
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
+  // Discontinued items default to hidden — matches getLowStockProducts/the
+  // sale picker, which already ignore inactive items — with an explicit
+  // toggle to review/reactivate them instead of losing them silently.
+  const [showInactive, setShowInactive] = useState(false);
+  // HVAC platform Phase 12 — a real filtered view of exactly what needs
+  // reordering, not just the metric-card count that existed before.
+  const [showLowStockOnly, setShowLowStockOnly] = useState(false);
 
   if (!ready || !data) {
     return (
@@ -72,17 +102,27 @@ export default function StockPage() {
           p.category.toLowerCase().includes(query),
       )
     : data.products;
-  const products = conditionFilter === "all" ? searched : searched.filter((p) => p.condition === conditionFilter);
+  const byCondition = conditionFilter === "all" ? searched : searched.filter((p) => p.condition === conditionFilter);
+  const byActive = showInactive ? byCondition : byCondition.filter((p) => p.active);
+  const lowStock = getLowStockProducts(data.products);
+  const lowStockIds = new Set(lowStock.map((p) => p.id));
+  const products = showLowStockOnly ? byActive.filter((p) => lowStockIds.has(p.id)) : byActive;
+  const reorderSuggestions = showLowStockOnly ? getReorderSuggestions(data) : [];
+  const reorderByProductId = new Map(reorderSuggestions.map((r) => [r.product.id, r] as const));
 
   const newCount = data.products.filter((p) => p.condition === "new").length;
   const usedCount = data.products.filter((p) => p.condition === "used").length;
-  const lowStock = getLowStockProducts(data.products);
+  const inactiveCount = data.products.filter((p) => !p.active).length;
   const inventoryValue = data.products.reduce((sum, p) => sum + p.stockQty * p.buyPrice, 0);
   const sellValue = data.products.reduce((sum, p) => sum + p.stockQty * p.sellPrice, 0);
   const stockInProduct = stockInId ? data.products.find((p) => p.id === stockInId) : null;
   const stockOutProduct = stockOutId ? data.products.find((p) => p.id === stockOutId) : null;
   const stockInQtyNumber = Number(stockInQty) || 0;
   const stockOutQtyNumber = Number(stockOutQty) || 0;
+  const writeOffProduct = writeOffId ? data.products.find((p) => p.id === writeOffId) : null;
+  const writeOffQtyNumber = Number(writeOffQty) || 0;
+  const returnProduct = returnId ? data.products.find((p) => p.id === returnId) : null;
+  const returnQtyNumber = Number(returnQty) || 0;
 
   const openCreate = () => {
     setEditing(null);
@@ -151,6 +191,53 @@ export default function StockPage() {
     toast({ tone: "success", title: t("stock.updated") });
   };
 
+  const openWriteOff = (productId: string) => {
+    setWriteOffId(productId);
+    setWriteOffQty("1");
+    setWriteOffNote("");
+  };
+
+  const handleWriteOff = async () => {
+    if (!writeOffId || !writeOffProduct || savingWriteOff || writeOffQtyNumber < 1) return;
+    if (writeOffQtyNumber > writeOffProduct.stockQty) {
+      toast({ tone: "error", title: t("stock.out_qty_exceeds") });
+      return;
+    }
+    setSavingWriteOff(true);
+    const result = await writeOffStockToCloud(writeOffId, writeOffQtyNumber, writeOffNote.trim() || undefined);
+    setSavingWriteOff(false);
+    if (!result.ok) {
+      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
+      return;
+    }
+    setWriteOffId(null);
+    toast({ tone: "success", title: t("stock.updated") });
+  };
+
+  const openReturn = (productId: string) => {
+    setReturnId(productId);
+    setReturnQty("1");
+    setReturnSupplierId("");
+    setReturnNote("");
+  };
+
+  const handleReturn = async () => {
+    if (!returnId || !returnProduct || !returnSupplierId || savingReturn || returnQtyNumber < 1) return;
+    if (returnQtyNumber > returnProduct.stockQty) {
+      toast({ tone: "error", title: t("stock.out_qty_exceeds") });
+      return;
+    }
+    setSavingReturn(true);
+    const result = await returnStockToSupplierToCloud(returnId, returnQtyNumber, returnSupplierId, returnNote.trim() || undefined);
+    setSavingReturn(false);
+    if (!result.ok) {
+      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
+      return;
+    }
+    setReturnId(null);
+    toast({ tone: "success", title: t("stock.updated") });
+  };
+
   const canExport = can("export");
   const stockExportLabels = {
     name: t("common.name"),
@@ -172,16 +259,27 @@ export default function StockPage() {
         return (
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={() => openEdit(p)} className="font-semibold text-slate-900 hover:text-teal-700 hover:underline">
+              <button type="button" onClick={() => openEdit(p)} className={`font-semibold hover:text-teal-700 hover:underline ${p.active ? "text-slate-900" : "text-slate-400"}`}>
                 {p.name}
               </button>
               <ProductConditionBadge condition={p.condition} />
+              {!p.active && <StatusBadge tone="neutral">{t("stock.inactive_badge")}</StatusBadge>}
             </div>
             <p className="mt-0.5 text-xs text-slate-500">
               {p.sku ? `${p.sku} · ` : ""}
               {p.category || "General"}
               {badge ? ` · ${badge}` : ""}
             </p>
+            {showLowStockOnly && (() => {
+              const suggestion = reorderByProductId.get(p.id);
+              if (!suggestion?.lastSupplierName) return null;
+              return (
+                <p className="mt-0.5 text-xs text-amber-700">
+                  {t("stock.last_bought_from")} {suggestion.lastSupplierName}
+                  {suggestion.lastPurchaseDate ? ` · ${new Date(suggestion.lastPurchaseDate).toLocaleDateString("en-LK")}` : ""}
+                </p>
+              );
+            })()}
           </div>
         );
       },
@@ -240,6 +338,10 @@ export default function StockPage() {
           <ActionMenu
             items={[
               { label: t("common.edit"), onSelect: () => openEdit(p) },
+              ...(data.suppliers.length > 0
+                ? [{ label: t("stock.return_to_supplier"), onSelect: () => openReturn(p.id), disabled: p.stockQty <= 0 }]
+                : []),
+              { label: t("stock.write_off"), onSelect: () => openWriteOff(p.id), disabled: p.stockQty <= 0 },
               { label: t("common.delete"), tone: "danger" as const, onSelect: () => setDeleteTarget(p) },
             ]}
           />
@@ -320,6 +422,28 @@ export default function StockPage() {
               </button>
             ))}
           </div>
+          {lowStock.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowLowStockOnly((v) => !v)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                showLowStockOnly ? "bg-amber-600 text-white" : "border border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300"
+              }`}
+            >
+              {t("stock.low_stock_filter")} <span className="opacity-70">({lowStock.length})</span>
+            </button>
+          )}
+          {inactiveCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowInactive((v) => !v)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                showInactive ? "bg-slate-700 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
+              }`}
+            >
+              {t("stock.filter_inactive")} <span className="opacity-70">({inactiveCount})</span>
+            </button>
+          )}
         </FilterBar>
 
         {data.products.length === 0 ? (
@@ -462,6 +586,98 @@ export default function StockPage() {
               </FormField>
               <FormField label={t("stock.out_note")}>
                 <TextInput value={stockOutNote} onChange={(e) => setStockOutNote(e.target.value)} placeholder={t("stock.out_note_ph")} />
+              </FormField>
+            </div>
+          )}
+        </Dialog>
+
+        {/* Write off (HVAC platform Phase 3) */}
+        <Dialog
+          open={!!writeOffId && !!writeOffProduct}
+          onClose={() => setWriteOffId(null)}
+          title={t("stock.write_off")}
+          description={writeOffProduct?.name}
+          footer={
+            <>
+              <button type="button" onClick={() => setWriteOffId(null)} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                {t("common.cancel")}
+              </button>
+              <button
+                type="button"
+                disabled={savingWriteOff || !writeOffProduct || writeOffQtyNumber < 1 || writeOffProduct.stockQty <= 0}
+                onClick={() => void handleWriteOff()}
+                className="rounded-lg bg-rose-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+              >
+                {savingWriteOff ? t("common.saving") : t("stock.write_off")}
+              </button>
+            </>
+          }
+        >
+          {writeOffProduct && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-medium uppercase text-slate-500">{t("stock.current_qty")}</p>
+                <p className="mt-1 text-xl font-bold text-slate-900">
+                  {writeOffProduct.stockQty} {String(writeOffProduct.customFields.unit ?? "pcs")}
+                </p>
+              </div>
+              <FormField label={t("stock.write_off")} required>
+                <TextInput type="number" min={1} max={writeOffProduct.stockQty} value={writeOffQty} onChange={(e) => setWriteOffQty(e.target.value)} autoFocus />
+              </FormField>
+              <FormField label={t("stock.out_note")}>
+                <TextInput value={writeOffNote} onChange={(e) => setWriteOffNote(e.target.value)} placeholder={t("stock.write_off_note_ph")} />
+              </FormField>
+            </div>
+          )}
+        </Dialog>
+
+        {/* Return to supplier (HVAC platform Phase 3) */}
+        <Dialog
+          open={!!returnId && !!returnProduct}
+          onClose={() => setReturnId(null)}
+          title={t("stock.return_to_supplier")}
+          description={returnProduct?.name}
+          footer={
+            <>
+              <button type="button" onClick={() => setReturnId(null)} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                {t("common.cancel")}
+              </button>
+              <button
+                type="button"
+                disabled={savingReturn || !returnProduct || !returnSupplierId || returnQtyNumber < 1 || returnProduct.stockQty <= 0}
+                onClick={() => void handleReturn()}
+                className="rounded-lg bg-amber-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {savingReturn ? t("common.saving") : t("stock.return_to_supplier")}
+              </button>
+            </>
+          }
+        >
+          {returnProduct && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-medium uppercase text-slate-500">{t("stock.current_qty")}</p>
+                <p className="mt-1 text-xl font-bold text-slate-900">
+                  {returnProduct.stockQty} {String(returnProduct.customFields.unit ?? "pcs")}
+                </p>
+              </div>
+              <FormField label={t("sup.title")} required>
+                <select
+                  value={returnSupplierId}
+                  onChange={(e) => setReturnSupplierId(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                >
+                  <option value="">{t("common.select")}</option>
+                  {data.suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField label={t("stock.return_to_supplier")} required>
+                <TextInput type="number" min={1} max={returnProduct.stockQty} value={returnQty} onChange={(e) => setReturnQty(e.target.value)} />
+              </FormField>
+              <FormField label={t("stock.out_note")}>
+                <TextInput value={returnNote} onChange={(e) => setReturnNote(e.target.value)} placeholder={t("stock.out_note_ph")} />
               </FormField>
             </div>
           )}

@@ -18,7 +18,16 @@ export type ExpenseCategory =
   | "maintenance"
   | "insurance"
   | "marketing"
-  | "other";
+  | "other"
+  // HVAC platform Phase 7 — "other job costs". Deliberately no
+  // "subcontractor" category here: that cost is already captured by
+  // ACJob.subcontractCost for contractor-assigned jobs, so adding one
+  // would invite double-counting the same cost two ways. These three
+  // cover the spec's remaining named examples (parking, equipment
+  // rental, outsourced repair) that had no existing home.
+  | "parking"
+  | "equipment_rental"
+  | "outsourced_repair";
 
 export type ExpensePaymentMethod = "cash" | "bank_transfer" | "card" | "cheque";
 
@@ -33,6 +42,10 @@ export type Expense = {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Links this expense into a specific job's "other costs" (HVAC
+   * platform Phase 7) — nullable, most expenses (rent, salaries, ...)
+   * aren't tied to any one job. */
+  jobId: string | null;
 };
 
 export type ExpenseInput = {
@@ -42,6 +55,7 @@ export type ExpenseInput = {
   paymentMethod?: ExpensePaymentMethod;
   vendor?: string;
   notes?: string;
+  jobId?: string | null;
 };
 
 type ExpenseRow = {
@@ -55,6 +69,7 @@ type ExpenseRow = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  job_id: string | null;
 };
 
 function fromRow(row: ExpenseRow): Expense {
@@ -69,6 +84,7 @@ function fromRow(row: ExpenseRow): Expense {
     notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    jobId: row.job_id,
   };
 }
 
@@ -80,6 +96,7 @@ function toRow(input: ExpenseInput): Partial<ExpenseRow> {
   if (input.paymentMethod !== undefined) row.payment_method = input.paymentMethod;
   if (input.vendor !== undefined) row.vendor = input.vendor.trim() || null;
   if (input.notes !== undefined) row.notes = input.notes.trim() || null;
+  if (input.jobId !== undefined) row.job_id = input.jobId || null;
   return row;
 }
 

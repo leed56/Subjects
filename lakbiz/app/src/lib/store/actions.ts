@@ -1,5 +1,5 @@
 import { newId, todayKey } from "@/lib/format";
-import { generateBillNo, generateGrnNo, type BusinessInfo } from "@/lib/invoice";
+import { generateBillNo, generateGrnNo, generatePoNo, type BusinessInfo } from "@/lib/invoice";
 import { clampCompanyIncomeTaxRatePct } from "@/lib/income-tax";
 import { calcInputVat, isVatEnabled, splitInclusiveTotal } from "@/lib/vat";
 import { generateJobNo } from "@/lib/ac-jobs";
@@ -46,9 +46,13 @@ import type {
   ProductInput,
   Purchase,
   PurchaseInput,
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderReceiveLine,
   Sale,
   SaleOptions,
   StockLog,
+  StockMovementType,
   SupplierInput,
   VehicleInput,
   VehicleSaleInput,
@@ -67,6 +71,8 @@ export function addProduct(data: AppData, input: ProductInput): AppData {
     sellPrice: input.sellPrice,
     stockQty: input.stockQty,
     reorderLevel: input.reorderLevel,
+    active: input.active ?? true,
+    notes: input.notes?.trim() || undefined,
     customFields: {
       unit: input.unit,
       ...sanitizeCustomFields(input.sectorId, input.customFields ?? {}),
@@ -113,6 +119,8 @@ export function updateProduct(
             sellPrice: input.sellPrice,
             stockQty: input.stockQty,
             reorderLevel: input.reorderLevel,
+            active: input.active ?? p.active ?? true,
+            notes: input.notes?.trim() || undefined,
             customFields: {
               unit: input.unit,
               ...sanitizeCustomFields(input.sectorId, input.customFields ?? {}),
@@ -130,36 +138,108 @@ export function deleteProduct(data: AppData, id: string): AppData {
   };
 }
 
+/** Every StockLog-producing stock-quantity change in the app funnels
+ * through this one function (HVAC platform Phase 3) — adjustStock,
+ * writeOffStock, returnStockToSupplier below, and createPurchase further
+ * down all call it, so "one place writes stockQty + a matching log" stays
+ * true as movement kinds grow. `direction` says which way qty moves;
+ * everything else is metadata carried straight onto the StockLog row. */
+function applyStockMovement(
+  data: AppData,
+  params: {
+    productId: string;
+    qty: number;
+    direction: "in" | "out";
+    type: StockMovementType;
+    note?: string;
+    relatedJobId?: string;
+    relatedSupplierId?: string;
+    userId?: string;
+  },
+): AppData {
+  const product = data.products.find((p) => p.id === params.productId);
+  if (!product) return data;
+
+  const delta = params.direction === "in" ? params.qty : -params.qty;
+  const nextQty = Math.max(0, product.stockQty + delta);
+
+  const log: StockLog = {
+    id: newId(),
+    productId: params.productId,
+    productName: product.name,
+    type: params.type,
+    qty: params.qty,
+    note: params.note,
+    date: new Date().toISOString(),
+    relatedJobId: params.relatedJobId,
+    relatedSupplierId: params.relatedSupplierId,
+    userId: params.userId,
+  };
+
+  return {
+    ...data,
+    products: data.products.map((p) =>
+      p.id === params.productId ? { ...p, stockQty: nextQty } : p,
+    ),
+    stockLogs: [log, ...data.stockLogs],
+  };
+}
+
 export function adjustStock(
   data: AppData,
   productId: string,
   qty: number,
   type: "in" | "out",
   note?: string,
+  userId?: string,
 ): AppData {
-  const product = data.products.find((p) => p.id === productId);
-  if (!product) return data;
+  return applyStockMovement(data, { productId, qty, direction: type, type, note, userId });
+}
 
-  const delta = type === "in" ? qty : -qty;
-  const nextQty = Math.max(0, product.stockQty + delta);
-
-  const log: StockLog = {
-    id: newId(),
+/** Damaged / expired / lost stock — decrements without pretending it was
+ * a sale or a return. Not shown to the customer anywhere; purely an
+ * internal movement + audit trail. */
+export function writeOffStock(
+  data: AppData,
+  productId: string,
+  qty: number,
+  note?: string,
+  userId?: string,
+): AppData {
+  return applyStockMovement(data, {
     productId,
-    productName: product.name,
-    type,
     qty,
+    direction: "out",
+    type: "write_off",
     note,
-    date: new Date().toISOString(),
-  };
+    userId,
+  });
+}
 
-  return {
-    ...data,
-    products: data.products.map((p) =>
-      p.id === productId ? { ...p, stockQty: nextQty } : p,
-    ),
-    stockLogs: [log, ...data.stockLogs],
-  };
+/** Goods sent back to the supplier (defective/wrong item/etc.) —
+ * decrements stock the same as a write-off but is a distinct, traceable
+ * movement kind tied to the supplier, not an internal loss. Deliberately
+ * does not touch `suppliers.payableBalance` — reconciling a return
+ * against what's owed is an accounting decision the owner should make
+ * explicitly (e.g. via a credit note), not one this function should
+ * infer silently. */
+export function returnStockToSupplier(
+  data: AppData,
+  productId: string,
+  qty: number,
+  supplierId: string,
+  note?: string,
+  userId?: string,
+): AppData {
+  return applyStockMovement(data, {
+    productId,
+    qty,
+    direction: "out",
+    type: "supplier_return",
+    note,
+    relatedSupplierId: supplierId,
+    userId,
+  });
 }
 
 export function addCustomer(data: AppData, input: CustomerInput): AppData {
@@ -398,6 +478,7 @@ export function recordSupplierPayment(
 export function createPurchase(
   data: AppData,
   input: PurchaseInput,
+  userId?: string,
 ): AppData {
   const supplier = data.suppliers.find((s) => s.id === input.supplierId);
   if (!supplier) return data;
@@ -478,10 +559,12 @@ export function createPurchase(
     id: newId(),
     productId: line.productId,
     productName: line.productName,
-    type: "in",
+    type: "purchase" as StockMovementType,
     qty: line.qty,
     note: `GRN ${purchase.grnNo}`,
     date,
+    relatedSupplierId: supplier.id,
+    userId,
   }));
 
   let suppliers = data.suppliers;
@@ -508,6 +591,165 @@ export function createPurchase(
       };
     }),
     stockLogs: [...stockLogs, ...data.stockLogs],
+  };
+}
+
+/** HVAC platform Phase 13 — create a purchase order. Deliberately does not
+ * touch stock, product buyPrice, or supplier.payableBalance: a PO is a
+ * plan to buy, not a delivery or a bill. Those only move when the order is
+ * actually received (see receivePurchaseOrder) or a separate GRN/purchase
+ * is recorded once the supplier's invoice arrives — recording both would
+ * double-count the same delivery. */
+export function createPurchaseOrder(
+  data: AppData,
+  input: PurchaseOrderInput,
+): AppData {
+  const supplier = data.suppliers.find((s) => s.id === input.supplierId);
+  if (!supplier) return data;
+
+  const lines: PurchaseOrder["lines"] = input.lines
+    .map(({ productId, qty, unitCost }) => {
+      const product = data.products.find((p) => p.id === productId);
+      if (!product || qty <= 0 || unitCost < 0) return null;
+      return {
+        productId,
+        productName: product.name,
+        qtyOrdered: qty,
+        qtyReceived: 0,
+        unitCost,
+      };
+    })
+    .filter((l): l is PurchaseOrder["lines"][number] => l !== null);
+
+  if (lines.length === 0) return data;
+
+  const expectedTotal = lines.reduce((s, l) => s + l.qtyOrdered * l.unitCost, 0);
+
+  const purchaseOrder: PurchaseOrder = {
+    id: newId(),
+    poNo: generatePoNo(data.purchaseOrders.length),
+    date: new Date().toISOString(),
+    supplierId: supplier.id,
+    supplierName: supplier.name,
+    lines,
+    expectedTotal,
+    status: "pending",
+    relatedJobId: input.relatedJobId || undefined,
+    note: input.note?.trim() || undefined,
+  };
+
+  return {
+    ...data,
+    purchaseOrders: [purchaseOrder, ...data.purchaseOrders],
+  };
+}
+
+/** Receive quantity against an open purchase order. This is the only place
+ * a purchase order is allowed to move stock — creating the PO itself never
+ * does. Each call is one delivery event: `receiveLines` carries the
+ * quantity arriving *now* (not the new cumulative total), so partial
+ * deliveries against the same PO can be recorded as they happen. Received
+ * quantity is capped to what's still outstanding on each line — you cannot
+ * over-receive a PO. Every unit received produces a real "purchase" stock
+ * movement through the same StockLog trail as a GRN purchase, per the
+ * spec's "do not automatically mark unreceived goods as available stock" —
+ * nothing here moves until this function is explicitly called. */
+export function receivePurchaseOrder(
+  data: AppData,
+  purchaseOrderId: string,
+  receiveLines: PurchaseOrderReceiveLine[],
+  userId?: string,
+): AppData {
+  const po = data.purchaseOrders.find((p) => p.id === purchaseOrderId);
+  if (!po || po.status === "cancelled" || po.status === "received") return data;
+
+  const receiveByProduct = new Map(
+    receiveLines
+      .filter((l) => l.qtyReceived > 0)
+      .map((l) => [l.productId, l.qtyReceived] as const),
+  );
+  if (receiveByProduct.size === 0) return data;
+
+  const date = new Date().toISOString();
+  const stockLogs: StockLog[] = [];
+  let anyReceived = false;
+
+  const updatedLines = po.lines.map((line) => {
+    const requested = receiveByProduct.get(line.productId);
+    if (!requested || requested <= 0) return line;
+    const outstanding = Math.max(0, line.qtyOrdered - line.qtyReceived);
+    const received = Math.min(requested, outstanding);
+    if (received <= 0) return line;
+
+    anyReceived = true;
+    stockLogs.push({
+      id: newId(),
+      productId: line.productId,
+      productName: line.productName,
+      type: "purchase",
+      qty: received,
+      note: `PO ${po.poNo}`,
+      date,
+      relatedSupplierId: po.supplierId,
+      userId,
+    });
+
+    return { ...line, qtyReceived: line.qtyReceived + received };
+  });
+
+  if (!anyReceived) return data;
+
+  const allReceived = updatedLines.every((l) => l.qtyReceived >= l.qtyOrdered);
+  const status = allReceived ? "received" : "partial";
+
+  const receivedProductIds = new Set(stockLogs.map((l) => l.productId));
+  const unitCostByProduct = new Map(
+    updatedLines
+      .filter((l) => receivedProductIds.has(l.productId))
+      .map((l) => [l.productId, l.unitCost] as const),
+  );
+  const qtyByProduct = new Map(stockLogs.map((l) => [l.productId, l.qty] as const));
+
+  return {
+    ...data,
+    purchaseOrders: data.purchaseOrders.map((p) =>
+      p.id === purchaseOrderId
+        ? {
+            ...p,
+            lines: updatedLines,
+            status,
+            receivedDate: p.receivedDate ?? date,
+          }
+        : p,
+    ),
+    products: data.products.map((product) => {
+      const qty = qtyByProduct.get(product.id);
+      if (!qty) return product;
+      return {
+        ...product,
+        stockQty: product.stockQty + qty,
+        buyPrice: unitCostByProduct.get(product.id) ?? product.buyPrice,
+      };
+    }),
+    stockLogs: [...stockLogs, ...data.stockLogs],
+  };
+}
+
+/** Cancel a purchase order that hasn't received anything yet. Guarded:
+ * once any quantity has been received, the PO already has real stock
+ * movements tied to it and cancelling would misrepresent what happened —
+ * the owner should let the remainder lapse or receive the rest instead. */
+export function cancelPurchaseOrder(data: AppData, purchaseOrderId: string): AppData {
+  const po = data.purchaseOrders.find((p) => p.id === purchaseOrderId);
+  if (!po || po.status === "cancelled") return data;
+  const hasReceived = po.lines.some((l) => l.qtyReceived > 0);
+  if (hasReceived) return data;
+
+  return {
+    ...data,
+    purchaseOrders: data.purchaseOrders.map((p) =>
+      p.id === purchaseOrderId ? { ...p, status: "cancelled" as const } : p,
+    ),
   };
 }
 
@@ -572,6 +814,8 @@ export function addACJob(data: AppData, input: ACJobInput): AppData {
     serviceIntervalMonths: Math.max(1, Math.round(intervalDays / 30)),
     amcContract: input.amcContract ?? false,
     notes: input.notes?.trim() || undefined,
+    complaint: input.complaint?.trim() || undefined,
+    diagnosis: input.diagnosis?.trim() || undefined,
   };
 
   const statusEntry: JobStatusEntry = {
@@ -693,6 +937,8 @@ export function updateACJob(
         serviceIntervalMonths: Math.max(1, Math.round(intervalDays / 30)),
         amcContract: input.amcContract ?? j.amcContract ?? false,
         notes: input.notes?.trim() ?? j.notes,
+        complaint: input.complaint?.trim() ?? j.complaint,
+        diagnosis: input.diagnosis?.trim() ?? j.diagnosis,
       };
       nextStatusValue = result.status;
       return result;
@@ -725,11 +971,76 @@ export function deleteACJob(data: AppData, id: string): AppData {
   });
 }
 
-export function addJobItem(data: AppData, input: JobItemInput): AppData {
+/** HVAC platform Phase 4/5: three material sources for a "part" item, each
+ * with different rules — everything else (labour/service items, and
+ * pre-Phase-4 parts with no `source`) behaves exactly as before.
+ *
+ * - "stock": must reference a real, active, in-stock `productId`. Stock is
+ *   decremented once via the Phase 3 movement layer (type "job_usage",
+ *   linked to the job) and `unitPrice` is overwritten with the product's
+ *   *current* `buyPrice` regardless of what the caller passed — this is
+ *   the historical-cost snapshot the spec requires: once written here, an
+ *   old job's material cost never moves again even if the product's price
+ *   changes later, because nothing in this codebase ever rewrites an
+ *   existing JobItem. The UI pre-fills the same value for display, but
+ *   this line is the actual source of truth, not trust in the client.
+ * - "purchased": a one-off buy for this specific job — does not touch
+ *   `products`/`stockQty` at all ("do not pretend this item came from
+ *   warehouse stock if it did not"). `unitPrice` is trusted as entered
+ *   (there's no other authoritative cost basis for an off-books
+ *   purchase). Known gap, disclosed in the progress doc: this does not
+ *   yet create a matching Expense/Purchase record, so it won't appear in
+ *   shop-wide expense/VAT-input totals yet — only in this job's own cost.
+ * - "customer_supplied": defaults `unitPrice` to 0 ("do not create fake
+ *   costs") but allows a caller-supplied value for the rare case the shop
+ *   genuinely incurred a cost handling a customer-supplied part. Does not
+ *   touch stock.
+ */
+export function addJobItem(data: AppData, input: JobItemInput, userId?: string): AppData {
   const name = input.name.trim();
   if (!name || !data.acJobs.some((j) => j.id === input.jobId)) return data;
   const qty = input.qty > 0 ? input.qty : 1;
-  const unitPrice = Math.max(0, input.unitPrice);
+
+  let unitPrice = Math.max(0, input.unitPrice);
+  let products = data.products;
+  let stockLogs = data.stockLogs;
+  let productId = input.productId;
+  let source = input.source;
+
+  if (input.itemType === "part" && input.source === "stock") {
+    const product = productId ? data.products.find((p) => p.id === productId) : undefined;
+    // Not checking product.active here: that field lands in a separate,
+    // not-yet-merged PR (#45). Follow-up once it lands: also reject
+    // consuming a deactivated/discontinued product.
+    if (!product || qty > product.stockQty) return data;
+    unitPrice = product.buyPrice;
+    const nextQty = Math.max(0, product.stockQty - qty);
+    products = data.products.map((p) => (p.id === product.id ? { ...p, stockQty: nextQty } : p));
+    stockLogs = [
+      {
+        id: newId(),
+        productId: product.id,
+        productName: product.name,
+        type: "job_usage",
+        qty,
+        note: `Used on job`,
+        date: new Date().toISOString(),
+        relatedJobId: input.jobId,
+        userId,
+      },
+      ...data.stockLogs,
+    ];
+  } else if (input.itemType !== "part") {
+    // Labour/service items never carry material-source fields.
+    productId = undefined;
+    source = undefined;
+  } else {
+    // "purchased" / "customer_supplied" — never decrement real stock, and
+    // never carry a productId even if one was stray-passed in, since
+    // nothing here actually links to that product's inventory.
+    productId = undefined;
+  }
+
   const item: JobItem = {
     id: newId(),
     jobId: input.jobId,
@@ -738,12 +1049,58 @@ export function addJobItem(data: AppData, input: JobItemInput): AppData {
     qty,
     unitPrice,
     lineTotal: Math.round(qty * unitPrice * 100) / 100,
+    source,
+    productId,
+    supplierId: input.itemType === "part" && input.source === "purchased" ? input.supplierId : undefined,
+    purchaseRef: input.itemType === "part" && input.source === "purchased" ? input.purchaseRef?.trim() || undefined : undefined,
+    purchaseDate: input.itemType === "part" && input.source === "purchased" ? input.purchaseDate : undefined,
+    // Part and labour lines both support a customer-charge figure
+    // distinct from internal cost — labour's is the Phase 6 addition.
+    customerPrice: input.itemType === "part" || input.itemType === "labour" ? input.customerPrice : undefined,
+    technicianId:
+      input.itemType === "labour" && input.technicianId && data.technicians.some((tc) => tc.id === input.technicianId)
+        ? input.technicianId
+        : undefined,
   };
-  return { ...data, jobItems: [item, ...data.jobItems] };
+
+  return { ...data, products, stockLogs, jobItems: [item, ...data.jobItems] };
 }
 
-export function deleteJobItem(data: AppData, id: string): AppData {
-  return { ...data, jobItems: data.jobItems.filter((i) => i.id !== id) };
+/** Deleting a "stock"-sourced item reverses the decrement it caused —
+ * a "job_return" movement (Phase 3), not a silent products.stockQty edit,
+ * so the audit trail shows the material actually came back. Every other
+ * item type/source is unaffected by this (nothing to reverse). */
+export function deleteJobItem(data: AppData, id: string, userId?: string): AppData {
+  const item = data.jobItems.find((i) => i.id === id);
+  if (!item) return data;
+
+  let products = data.products;
+  let stockLogs = data.stockLogs;
+
+  if (item.source === "stock" && item.productId) {
+    const product = data.products.find((p) => p.id === item.productId);
+    if (product) {
+      products = data.products.map((p) =>
+        p.id === product.id ? { ...p, stockQty: p.stockQty + item.qty } : p,
+      );
+      stockLogs = [
+        {
+          id: newId(),
+          productId: product.id,
+          productName: product.name,
+          type: "job_return",
+          qty: item.qty,
+          note: `Removed from job`,
+          date: new Date().toISOString(),
+          relatedJobId: item.jobId,
+          userId,
+        },
+        ...data.stockLogs,
+      ];
+    }
+  }
+
+  return { ...data, products, stockLogs, jobItems: data.jobItems.filter((i) => i.id !== id) };
 }
 
 /** Mark service visit complete and schedule next due date (days-based) */
@@ -792,6 +1149,7 @@ export function addTechnician(data: AppData, input: TechnicianInput): AppData {
     specialties: cleanSpecialties(input.specialties),
     active: input.active ?? true,
     notes: input.notes?.trim() || undefined,
+    hourlyRate: input.hourlyRate != null && input.hourlyRate > 0 ? input.hourlyRate : undefined,
   };
   return { ...data, technicians: [technician, ...data.technicians] };
 }
@@ -816,6 +1174,12 @@ export function updateTechnician(
             active: input.active ?? t.active,
             notes:
               input.notes !== undefined ? input.notes.trim() || undefined : t.notes,
+            hourlyRate:
+              input.hourlyRate !== undefined
+                ? input.hourlyRate > 0
+                  ? input.hourlyRate
+                  : undefined
+                : t.hourlyRate,
           }
         : t,
     ),
@@ -1506,12 +1870,60 @@ export function updateBusiness(
 
 export function getLowStockProducts(products: AppData["products"]) {
   return products
+    .filter((p) => p.active)
     .filter(
       (p) =>
         p.stockQty <= 0 ||
         (p.reorderLevel != null && p.stockQty <= p.reorderLevel),
     )
     .sort((a, b) => a.stockQty - b.stockQty);
+}
+
+export type ReorderSuggestion = {
+  product: Product;
+  /** From the most recent Purchase that included this product — real
+   * purchase history, not a guess. Undefined when the product has never
+   * been purchased through /suppliers (e.g. opening stock only). */
+  lastSupplierId?: string;
+  lastSupplierName?: string;
+  lastPurchaseDate?: string;
+  lastUnitCost?: number;
+};
+
+/** HVAC platform Phase 12 — low stock & reordering. Reuses the existing
+ * per-item `reorderLevel` (already configurable per product, not a
+ * global hardcoded threshold — confirmed sound in the Phase 1 audit) and
+ * adds one genuinely new thing: which supplier this item was last bought
+ * from, so "what needs reordering" also answers "from whom" without
+ * guessing. Deliberately does **not** suggest a reorder quantity — that
+ * would need a demand/sales-velocity model that doesn't exist anywhere
+ * in this codebase, and inventing one here would be exactly the
+ * fabricated-signal the spec's absolute rules forbid. Purchase-order
+ * creation itself is Phase 13's, not duplicated here. */
+export function getReorderSuggestions(data: AppData): ReorderSuggestion[] {
+  const lastPurchaseByProduct = new Map<string, Purchase>();
+  // data.purchases is already sorted newest-first at creation time
+  // (createPurchase unshifts) — the first match per product is the most
+  // recent, so this loop doesn't need to sort or compare dates itself.
+  for (const purchase of data.purchases) {
+    for (const line of purchase.lines) {
+      if (!lastPurchaseByProduct.has(line.productId)) {
+        lastPurchaseByProduct.set(line.productId, purchase);
+      }
+    }
+  }
+
+  return getLowStockProducts(data.products).map((product) => {
+    const purchase = lastPurchaseByProduct.get(product.id);
+    const line = purchase?.lines.find((l) => l.productId === product.id);
+    return {
+      product,
+      lastSupplierId: purchase?.supplierId,
+      lastSupplierName: purchase?.supplierName,
+      lastPurchaseDate: purchase?.date,
+      lastUnitCost: line?.unitCost,
+    };
+  });
 }
 
 function monthKeyFromDate(date = new Date()): string {
@@ -1650,6 +2062,23 @@ export function getDashboardStats(data: AppData) {
     return s + ((v.soldPrice ?? 0) - cost);
   }, 0);
 
+  // HVAC platform Phase 15 (dashboard) — purchase orders still waiting on
+  // delivery. "Outstanding value" is what's still expected to arrive, not
+  // a PO's full expectedTotal — a partially-received PO has already
+  // landed some of that value as real stock.
+  const openPurchaseOrders = [...data.purchaseOrders]
+    .filter((po) => po.status === "pending" || po.status === "partial")
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const openPurchaseOrderValue = openPurchaseOrders.reduce(
+    (sum, po) =>
+      sum +
+      po.lines.reduce(
+        (s, l) => s + Math.max(0, l.qtyOrdered - l.qtyReceived) * l.unitCost,
+        0,
+      ),
+    0,
+  );
+
   return {
     todaySales: salesTotal,
     todayProfit: profitTotal,
@@ -1704,5 +2133,8 @@ export function getDashboardStats(data: AppData) {
     vehicleProfitThisMonth,
     recentSoldVehicles: soldVehicles.slice(0, 5),
     recentLogs: data.stockLogs.slice(0, 5),
+    openPurchaseOrderCount: openPurchaseOrders.length,
+    openPurchaseOrderValue,
+    openPurchaseOrders: openPurchaseOrders.slice(0, 5),
   };
 }

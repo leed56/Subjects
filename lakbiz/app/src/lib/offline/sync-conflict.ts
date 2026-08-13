@@ -30,7 +30,8 @@ function productChanged(a: Product, b: Product): boolean {
     a.sellPrice !== b.sellPrice ||
     a.buyPrice !== b.buyPrice ||
     a.name !== b.name ||
-    a.reorderLevel !== b.reorderLevel
+    a.reorderLevel !== b.reorderLevel ||
+    a.active !== b.active
   );
 }
 
@@ -121,6 +122,9 @@ export function mergeAppData(local: AppData, remote: AppData): AppData {
     suppliers: mergeById(local.suppliers, remote.suppliers),
     purchases: mergeById(local.purchases, remote.purchases).sort((a, b) =>
       b.date.localeCompare(a.date),
+    ),
+    purchaseOrders: mergeById(local.purchaseOrders, remote.purchaseOrders).sort(
+      (a, b) => b.date.localeCompare(a.date),
     ),
     supplierPayments: mergeById(local.supplierPayments, remote.supplierPayments).sort(
       (a, b) => b.date.localeCompare(a.date),

@@ -33,6 +33,7 @@ import {
   syncSaleSnapshot,
   syncSuppliersSnapshot,
   syncPurchaseSnapshot,
+  syncPurchaseOrderSnapshot,
   syncSupplierPaymentSnapshot,
   syncCustomerPaymentSnapshot,
   syncACJobSnapshot,
@@ -107,7 +108,12 @@ import {
   addTechnician,
   addVehicle,
   adjustStock,
+  writeOffStock,
+  returnStockToSupplier,
   createPurchase,
+  createPurchaseOrder,
+  receivePurchaseOrder,
+  cancelPurchaseOrder,
   createSale,
   deleteACJob,
   deleteBankAccount,
@@ -158,6 +164,8 @@ import type {
   CustomerInput,
   ProductInput,
   PurchaseInput,
+  PurchaseOrderInput,
+  PurchaseOrderReceiveLine,
   SaleOptions,
   SupplierInput,
   RecordACServiceInput,
@@ -193,6 +201,17 @@ export type AppStoreValue = {
     qty: number,
     note?: string,
   ) => Promise<{ ok: boolean; error?: string }>;
+  writeOffStockToCloud: (
+    productId: string,
+    qty: number,
+    note?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  returnStockToSupplierToCloud: (
+    productId: string,
+    qty: number,
+    supplierId: string,
+    note?: string,
+  ) => Promise<{ ok: boolean; error?: string }>;
   saveCustomerToCloud: (
     input: CustomerInput,
     existingId?: string,
@@ -214,6 +233,16 @@ export type AppStoreValue = {
   deleteSupplierToCloud: (id: string) => Promise<{ ok: boolean; error?: string }>;
   createPurchaseToCloud: (
     input: PurchaseInput,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  createPurchaseOrderToCloud: (
+    input: PurchaseOrderInput,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  receivePurchaseOrderToCloud: (
+    purchaseOrderId: string,
+    lines: PurchaseOrderReceiveLine[],
+  ) => Promise<{ ok: boolean; error?: string }>;
+  cancelPurchaseOrderToCloud: (
+    purchaseOrderId: string,
   ) => Promise<{ ok: boolean; error?: string }>;
   recordSupplierPaymentToCloud: (
     supplierId: string,
@@ -1240,7 +1269,7 @@ function useAppStoreState(): AppStoreValue {
 
       const prevChequeIds = new Set(data.cheques.map((cheque) => cheque.id));
       const prevPurchasesLen = data.purchases.length;
-      const next = createPurchase(data, input);
+      const next = createPurchase(data, input, user?.id);
       if (next.purchases.length === prevPurchasesLen) {
         return { ok: false, error: "Could not record purchase" };
       }
@@ -1269,6 +1298,192 @@ function useAppStoreState(): AppStoreValue {
       const err = await syncPurchaseSnapshot(org.id, next, purchaseId, {
         newChequeIds,
       });
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const createPurchaseOrderToCloud = useCallback(
+    async (input: PurchaseOrderInput): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canUseSuppliersModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const next = createPurchaseOrder(data, input);
+      if (next === data) {
+        return { ok: false, error: "Could not create purchase order" };
+      }
+
+      const purchaseOrderId = next.purchaseOrders[0].id;
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncPurchaseOrderSnapshot(org.id, next, purchaseOrderId);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const receivePurchaseOrderToCloud = useCallback(
+    async (
+      purchaseOrderId: string,
+      lines: PurchaseOrderReceiveLine[],
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canUseSuppliersModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
+      const next = receivePurchaseOrder(data, purchaseOrderId, lines, user?.id);
+      if (next === data) {
+        return { ok: false, error: "Nothing to receive" };
+      }
+
+      const newStockLogIds = next.stockLogs
+        .filter((log) => !prevLogIds.has(log.id))
+        .map((log) => log.id);
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncPurchaseOrderSnapshot(org.id, next, purchaseOrderId, {
+        newStockLogIds,
+      });
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const cancelPurchaseOrderToCloud = useCallback(
+    async (purchaseOrderId: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canUseSuppliersModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const next = cancelPurchaseOrder(data, purchaseOrderId);
+      if (next === data) {
+        return { ok: false, error: "Could not cancel purchase order" };
+      }
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncPurchaseOrderSnapshot(org.id, next, purchaseOrderId);
       if (err) {
         setCloudSyncError(err);
         touchOfflinePending(org.id);
@@ -1621,12 +1836,14 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
 
       const prevLen = data.jobItems.length;
-      const next = addJobItem(data, input);
+      const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
+      const next = addJobItem(data, input, user?.id);
       if (next.jobItems.length === prevLen) {
         return { ok: false, error: "Could not add item" };
       }
 
-      const itemId = next.jobItems[0].id;
+      const newItem = next.jobItems[0];
+      const itemId = newItem.id;
       setData(next);
       latestDataRef.current = next;
       saveAppData(next, org.id);
@@ -1652,6 +1869,26 @@ function useAppStoreState(): AppStoreValue {
         return { ok: false, error: err };
       }
 
+      // A "stock"-sourced item also decremented a real product + wrote a
+      // job_usage StockLog (see addJobItem) — that needs its own push,
+      // syncJobItemSnapshot above only touches the job_items row itself.
+      if (newItem.source === "stock" && newItem.productId) {
+        const newStockLogIds = next.stockLogs
+          .filter((log) => !prevLogIds.has(log.id))
+          .map((log) => log.id);
+        const stockErr = await syncProductSnapshot(org.id, next, [newItem.productId], {
+          preserveBuyPrices: !canSeeFinancials,
+          stockLogIds: newStockLogIds,
+        });
+        if (stockErr) {
+          setCloudSyncError(stockErr);
+          touchOfflinePending(org.id);
+          refreshOfflinePendingState(org.id);
+          scheduleCloudPush(next);
+          return { ok: false, error: stockErr };
+        }
+      }
+
       setCloudSyncError(null);
       scheduleCloudPush(next);
       return { ok: true };
@@ -1666,6 +1903,7 @@ function useAppStoreState(): AppStoreValue {
       org.id,
       org.isAuthenticated,
       user,
+      canSeeFinancials,
       scheduleCloudPush,
       refreshOfflinePendingState,
     ],
@@ -1684,7 +1922,9 @@ function useAppStoreState(): AppStoreValue {
         return { ok: false, error: "Item not found" };
       }
 
-      const next = deleteJobItem(data, id);
+      const deletedItem = data.jobItems.find((item) => item.id === id);
+      const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
+      const next = deleteJobItem(data, id, user?.id);
       setData(next);
       latestDataRef.current = next;
       saveAppData(next, org.id);
@@ -1710,6 +1950,25 @@ function useAppStoreState(): AppStoreValue {
         return { ok: false, error: err };
       }
 
+      // Deleting a "stock"-sourced item reverses its decrement (job_return
+      // — see deleteJobItem) — push that product + StockLog too.
+      if (deletedItem?.source === "stock" && deletedItem.productId) {
+        const newStockLogIds = next.stockLogs
+          .filter((log) => !prevLogIds.has(log.id))
+          .map((log) => log.id);
+        const stockErr = await syncProductSnapshot(org.id, next, [deletedItem.productId], {
+          preserveBuyPrices: !canSeeFinancials,
+          stockLogIds: newStockLogIds,
+        });
+        if (stockErr) {
+          setCloudSyncError(stockErr);
+          touchOfflinePending(org.id);
+          refreshOfflinePendingState(org.id);
+          scheduleCloudPush(next);
+          return { ok: false, error: stockErr };
+        }
+      }
+
       setCloudSyncError(null);
       scheduleCloudPush(next);
       return { ok: true };
@@ -1724,6 +1983,7 @@ function useAppStoreState(): AppStoreValue {
       org.id,
       org.isAuthenticated,
       user,
+      canSeeFinancials,
       scheduleCloudPush,
       refreshOfflinePendingState,
     ],
@@ -3017,7 +3277,7 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
 
       const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
-      const next = adjustStock(data, productId, qty, "in", note);
+      const next = adjustStock(data, productId, qty, "in", note, user?.id);
       if (next === data) return { ok: false, error: "Could not adjust stock" };
 
       const newStockLogIds = next.stockLogs
@@ -3083,7 +3343,143 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
 
       const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
-      const next = adjustStock(data, productId, qty, "out", note);
+      const next = adjustStock(data, productId, qty, "out", note, user?.id);
+      if (next === data) return { ok: false, error: "Could not adjust stock" };
+
+      const newStockLogIds = next.stockLogs
+        .filter((log) => !prevLogIds.has(log.id))
+        .map((log) => log.id);
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncProductSnapshot(org.id, next, [productId], {
+        preserveBuyPrices: !canSeeFinancials,
+        stockLogIds: newStockLogIds,
+      });
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      canSeeFinancials,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  // Mirrors stockOutToCloud exactly — same decrement/sync shape, just a
+  // distinct StockLog movement type (HVAC platform Phase 3) so a write-off
+  // never gets mistaken for a sale or a manual correction later.
+  const writeOffStockToCloud = useCallback(
+    async (
+      productId: string,
+      qty: number,
+      note?: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
+      const next = writeOffStock(data, productId, qty, note, user?.id);
+      if (next === data) return { ok: false, error: "Could not adjust stock" };
+
+      const newStockLogIds = next.stockLogs
+        .filter((log) => !prevLogIds.has(log.id))
+        .map((log) => log.id);
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncProductSnapshot(org.id, next, [productId], {
+        preserveBuyPrices: !canSeeFinancials,
+        stockLogIds: newStockLogIds,
+      });
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      canSeeFinancials,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const returnStockToSupplierToCloud = useCallback(
+    async (
+      productId: string,
+      qty: number,
+      supplierId: string,
+      note?: string,
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
+      const next = returnStockToSupplier(data, productId, qty, supplierId, note, user?.id);
       if (next === data) return { ok: false, error: "Could not adjust stock" };
 
       const newStockLogIds = next.stockLogs
@@ -3336,6 +3732,8 @@ function useAppStoreState(): AppStoreValue {
       deleteProductToCloud,
       stockInToCloud,
       stockOutToCloud,
+      writeOffStockToCloud,
+      returnStockToSupplierToCloud,
       saveCustomerToCloud,
       deleteCustomerToCloud,
       setCustomerProductPriceToCloud,
@@ -3343,6 +3741,9 @@ function useAppStoreState(): AppStoreValue {
       saveSupplierToCloud,
       deleteSupplierToCloud,
       createPurchaseToCloud,
+      createPurchaseOrderToCloud,
+      receivePurchaseOrderToCloud,
+      cancelPurchaseOrderToCloud,
       recordSupplierPaymentToCloud,
       recordCustomerPaymentToCloud,
       addBankAccountToCloud,
@@ -3392,12 +3793,17 @@ function useAppStoreState(): AppStoreValue {
     deleteProductToCloud,
     stockInToCloud,
     stockOutToCloud,
+    writeOffStockToCloud,
+    returnStockToSupplierToCloud,
     updateBusinessToCloud,
     deleteACJobToCloud,
     createSaleToCloud,
     saveSupplierToCloud,
     deleteSupplierToCloud,
     createPurchaseToCloud,
+    createPurchaseOrderToCloud,
+    receivePurchaseOrderToCloud,
+    cancelPurchaseOrderToCloud,
     recordSupplierPaymentToCloud,
     recordCustomerPaymentToCloud,
     saveACJobToCloud,
