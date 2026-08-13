@@ -54,6 +54,7 @@ import { canManageAcJobs, canOperateAcJobs } from "@/lib/org-role/permissions";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { fetchAsset, fetchCustomerAssets, fetchJobAssetId, linkJobAsset, type AcAsset } from "@/lib/supabase/ac-assets-client";
+import { computeJobProfitability } from "@/lib/job-profitability";
 
 const UNIT_TYPES = ["Wall mounted", "Cassette", "Ducted", "Ceiling suspended", "Portable", "Window"];
 
@@ -717,9 +718,14 @@ function JobSheetDrawer({ job, locale, items, history, products, suppliers, tech
     customer_supplied: t("jobs.source.customer_supplied"),
   };
 
-  const itemsTotal = items.reduce((s, i) => s + i.lineTotal, 0);
-  const subcontract = job.assigneeType === "contractor" ? job.subcontractCost ?? 0 : 0;
-  const profit = job.quotedAmount - itemsTotal - subcontract;
+  // Shared with /job-costing (HVAC platform Phase 8 — one authoritative
+  // formula, not a second one duplicated here). `linkedExpenseTotal` is
+  // passed as 0: this view is local-first only and doesn't fetch
+  // cloud-only Expenses, so job-linked "other costs" from Phase 7 aren't
+  // reflected in this drawer's numbers yet — same formula, an admittedly
+  // incomplete input here, not a competing calculation. /job-costing
+  // remains the complete, authoritative profitability view.
+  const profit = computeJobProfitability(job, items, 0);
   const sortedHistory = [...history].sort((a, b) => (a.date < b.date ? 1 : -1));
 
   return (
@@ -744,9 +750,9 @@ function JobSheetDrawer({ job, locale, items, history, products, suppliers, tech
       {canSeeFinancials && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Metric label={t("jobs.quote_label")} value={formatLkr(job.quotedAmount)} />
-          <Metric label={t("jobs.parts_labour")} value={formatLkr(itemsTotal)} />
-          {subcontract > 0 && <Metric label={t("jobs.subcontract_cost")} value={formatLkr(subcontract)} />}
-          <Metric label={t("jobs.net_profit")} value={formatLkr(profit)} />
+          <Metric label={t("jobs.material_cost")} value={formatLkr(profit.materialCost)} />
+          <Metric label={t("jobs.labor_cost")} value={formatLkr(profit.laborCost)} />
+          <Metric label={t("jobs.net_profit")} value={formatLkr(profit.grossProfit)} />
         </div>
       )}
 
