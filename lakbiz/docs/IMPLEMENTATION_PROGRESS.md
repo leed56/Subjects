@@ -1521,6 +1521,157 @@ in `/tmp/.../scratchpad` this session, not committed — trivial to
 recreate from this doc) from an environment where the browser has real
 outbound network access.
 
+## HVAC operational platform (new spec, separate from the 26-phase dashboard-only work above)
+
+A second, much larger spec: rebuild the underlying economic/operational
+data model (Customer → Site → AC Asset → Complaint → Diagnosis → Work
+performed → Parts/materials used → Technician labor → Other costs →
+Invoice → Job cost → Gross profit → Margin → Asset service history →
+Dashboard intelligence) so the Owner Dashboard can answer real
+operational questions, instead of another cosmetic dashboard pass. 26
+phases; explicitly gated — "the dashboard redesign should happen only
+after these real operational signals exist." This section is separate
+from, and independent of, the "Dashboard command center" work (draft PR
+#44, not yet merged) — Phase 2 here branches from `main`, not from that
+branch, since the data-model work has no dependency on the pending
+dashboard redesign.
+
+### Phase 1 — Architecture audit (report before migrating)
+
+Read the actual code/SQL (not memory) for every area the spec asked
+about, before writing anything. Full findings were reported to the user
+directly (see chat) rather than duplicated here in full; summary of the
+load-bearing conclusions that shaped every phase after this one:
+
+- **Job costing already has a real cost/charge split, just not itemized
+  or stock-linked.** `job.quotedAmount` (customer charge) vs.
+  `Σ job_items.lineTotal` (internal cost) already feeds `/job-costing`'s
+  margin calc, and `job_items` is never shown on the customer invoice
+  (`/jobs/[id]/invoice` renders only `quotedAmount`). What's missing:
+  `job_items` has no `productId`, no stock decrement, no historical-cost
+  snapshot, no stock/purchased-for-job/customer-supplied distinction.
+- **Stock mutation is already centralized.** Every `stockQty` change
+  goes through exactly four functions in `store/actions.ts`
+  (`addProduct`, `adjustStock`, `createSale`, `createPurchase`), each
+  writing a matching `StockLog` row. Grepped every other call site —
+  nothing in UI code mutates `stockQty` directly. Phase 3 needs richer
+  movement types/link fields, not a rebuild.
+- **The historical-cost risk the spec warns about is real and
+  currently live-but-latent.** `createPurchase` overwrites
+  `product.buyPrice` with the new `unitCost` on every purchase — so the
+  moment `job_items` gets linked to real products (Phase 4/5), an old
+  job's cost must snapshot the unit cost at the time, not read today's
+  (by-then-overwritten) `buyPrice`.
+- **Categories are per-sector configurable, but the ac_hvac list was
+  too shallow to be a real parts taxonomy**, and — this was a genuine
+  bug worth knowing about — `normalizeProductCategory()` silently
+  coerces any category string not in `categoriesForSector(sectorId)`
+  back to the sector default. Fixed in Phase 2 by extending the list,
+  not by removing the coercion (the coercion itself is legitimate
+  defense against bad data).
+- **Sector-specific fields are already a configurable dictionary**
+  (`sector-fields.ts` + `sectors.ts`'s `extraFields`) — Phase 2 extends
+  this dictionary rather than inventing a parallel parts-catalog schema.
+- **No `active`/`notes` field existed on `Product` at all.** A real,
+  clean gap — added in Phase 2.
+- **`Technician` has no cost/rate field** (only `Contractor` does, via
+  `rateType`/`rateAmount`) — confirms Phase 6 will need the smallest
+  possible addition, not a rebuild.
+- **`expenses` has no job linkage column** — confirms Phase 7 needs an
+  additive nullable `job_id`, not a parallel "other costs" table.
+- **No Site entity** — `ac_assets.site_address` and `customers.address`
+  are both free text; one customer can have multiple asset-level site
+  addresses today, just not a normalized, reusable Site table. Flagged
+  as a decision point, not changed.
+- **No multi-location/warehouse stock tracking** — a single `stockQty`
+  per product, no per-location breakdown. The spec only asked for this
+  "if supported" — it isn't, and this phase does not fabricate it.
+- **VAT is a tenant-level flag/rate, not per-product** — no per-part
+  VAT/tax-treatment field is needed; Phase 2 parts reuse the existing
+  shop-level VAT model as-is.
+- **`org_members.role='technician'` still has no FK to any
+  `technicians.id` row** (re-confirmed, unchanged from the earlier
+  19-phase project) — a technician-scoped view can only ever show
+  "today's jobs," never "my jobs," with the current data model.
+
+### Phase 2 — HVAC parts & materials catalog
+
+Purely additive, built on the two existing configurable systems the
+audit confirmed are sound (`categoriesForSector`/`sector-fields.ts`) —
+no new catalogue table, no hardcoded category enum on top of what
+already exists.
+
+- `sectors.ts`: `categoriesForSector("ac_hvac")` expanded from 5 generic
+  categories to ~19, covering every group named in the spec
+  (compressors; condenser/evaporator coils; PCBs & control boards;
+  capacitors/relays/contactors; motors & fans; sensors & thermostats;
+  valves & refrigerant controls; refrigerant & gas; copper pipe &
+  fittings; insulation & cladding; drain components; filters; bearings
+  & mounts; terminal blocks/breakers/fuses/cables — grouped under one
+  "Electrical" category rather than 4 near-empty ones; brackets &
+  vibration pads). The original 5 strings are kept byte-for-byte first
+  in the list — removing any of them would have silently
+  reclassified already-saved production rows the next time
+  `normalizeProductCategory()`/the edit form ran, since neither is
+  additive-safe against a shrunk list.
+- `sector-fields.ts`: added `compatibleModels` (text), `supplierPartNo`
+  (text), and `serialRequired` (new **boolean** field type — the
+  sector-field system only supported text/number/date before this;
+  extended `SectorFieldType`, `sanitizeCustomFields`,
+  `emptyCustomFieldsForSector`, and the form's checkbox rendering to
+  match). Reused the already-existing `partNo`, `binLocation`, and
+  `warrantyMonths` field defs by adding them to `ac_hvac.extraFields`
+  instead of duplicating them.
+- Deliberately **not** built: a separate manufacturer field (judged
+  redundant with the existing `brand` field for a parts catalog — same
+  concept, documented rather than duplicated); per-item VAT/tax
+  treatment (no per-product VAT model exists anywhere in the app;
+  parts reuse the shop-level VAT rate like everything else);
+  warehouse/truck multi-location stock (no location concept exists at
+  all — the spec said "if supported," and it isn't; fabricating one
+  here would be a stock-model rebuild, not a Phase 2 addition);
+  per-category dynamic field sets (the product form shows one field
+  set per sector, not per category — a capacitor and a wall unit share
+  the same field list today; splitting that is a bigger form redesign
+  than this phase's scope).
+- `Product`/`ProductInput` gained two **generic** (not sector-specific)
+  fields the audit found genuinely missing: `active: boolean` (default
+  `true` — discontinue a part without deleting it, since deleting would
+  orphan any `job_items`/`stock_logs`/`sale_lines` history that
+  references the product id) and `notes?: string`. Wired through
+  `addProduct`/`updateProduct`, the product form (a checkbox shown only
+  when editing, plus a notes textarea), `getLowStockProducts` (inactive
+  items no longer generate reorder alerts), the `/sales` product picker
+  (inactive items can't be sold), `/stock` (inactive items hidden by
+  default behind a "count" toggle, badged when shown), and
+  `sync-conflict.ts`'s product-diff check.
+- Supabase migration `20250703000001_products_active_notes.sql`: adds
+  `products_base.active`/`.notes`, and — since `products` is a masked
+  view over `products_base` with `INSTEAD OF` triggers (hiding
+  `buy_price` from non-financial roles, per
+  `20250623000001_financial_data_rls.sql`) — appends both columns to
+  the view and both trigger functions. Columns are appended at the end
+  of the view's column list, not inserted, matching the same
+  `CREATE OR REPLACE VIEW` constraint already documented in
+  `20250629000001_ac_asset_lifecycle.sql`.
+- `business-sync.ts`: both product push-mappers and the pull-mapper
+  updated for the two new columns; pull defaults `active` to `true`
+  when the column is null (pre-migration rows / older cached data).
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds with the same 47
+routes (no new routes this phase). No browser verification performed —
+same standing sandbox limitation as every prior phase (see Phase 18
+above); this phase is schema/data-model/form work with no new page, so
+the risk surface is smaller than a UI phase, but the checkbox rendering
+and the expanded category `<select>` have not been visually confirmed.
+
+Remaining limitations (disclosed): Site is still not a distinct entity;
+multi-location stock is still not supported; per-category dynamic
+fields still aren't split out; the "manufacturer" field the spec listed
+separately from "brand" was deliberately not duplicated (documented
+above, not an oversight).
+
 ## Not started
 
 Deferred items: customer notes field,
