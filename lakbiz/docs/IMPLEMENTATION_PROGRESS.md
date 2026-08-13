@@ -2053,6 +2053,63 @@ manually line-by-line after the edit to check every tab's JSX opens and
 closes correctly, but a real browser pass is the one thing that would
 actually confirm the tabs render and switch as intended.
 
+### Phase 10 — AC Asset service history
+
+Audited first — `/assets` already had more than expected: an asset
+profile drawer with a "Jobs" tab (`fetchAssetJobs`, direct read against
+the masked `ac_jobs` view filtered by `asset_id`), just a thin list
+(job number/status/date/description, no cost, no parts). No separate
+manual "service log" to worry about duplicating — jobs were already the
+source, exactly as the spec wants; this phase deepens that existing tab
+rather than replacing anything.
+
+- `AssetJob` extended with the Phase 9 fields (`complaint`, `diagnosis`)
+  and enough financial context (`quotedAmount`, `assigneeType`,
+  `subcontractCost`) to compute a real lifetime cost — all already
+  exposed by the existing masked `ac_jobs` view, so no new masking
+  logic was needed; `subcontract_cost` arrives pre-masked to `null` for
+  non-financial roles and is trusted as-is.
+- New `fetchAssetJobItems(jobIds)` — one query against the masked
+  `job_items` view for every job linked to the asset. This is the real,
+  stored basis for two things the spec asked for that had no home
+  before:
+  - **Components replaced**: parts (`itemType === "part"`) across every
+    linked job, grouped by name, with a replacement count and the most
+    recent date — not a separate manually-maintained list, derived
+    entirely from real job material records (Phase 4/5).
+  - **Lifetime repair cost**: `Σ job_items.lineTotal` (material + labor
+    + service, already masked to 0 for non-financial roles by the view
+    itself) **plus** `subcontractCost` for contractor-assigned linked
+    jobs — the same Material+Labor bucket logic as
+    `computeJobProfitability()` (Phase 8), reimplemented inline here
+    rather than reused because `computeJobProfitability` takes a full
+    `ACJob`, and `AssetJob` is a deliberately narrower read-only
+    projection from a different client module; duplicating the two-line
+    sum was judged lower-risk than reshaping either type to share it.
+  - **Deliberately excluded from lifetime cost**: per-job Phase 7
+    linked-Expenses totals. Including them would mean an extra query
+    fetching and cross-referencing Expenses against every linked job's
+    id, adding real complexity for a number that's already visible,
+    correctly, on `/job-costing` and each job's own Job Economics tab
+    (Phase 9). Disclosed here rather than silently included as "close
+    enough."
+- Visit history rows now show each visit's real complaint/diagnosis
+  (Phase 9 fields, when recorded) and quoted amount, not just status/
+  description as before.
+- "Jobs" tab renamed "Service History" to match what it now actually
+  shows.
+
+**Not built this phase**: repeat-repair intelligence (e.g. "3 repairs in
+90 days") — that's Phase 11's, and mixing it in here would risk
+inventing the exact "likely failure" language the spec explicitly rules
+out without the dedicated, deterministic-only design that phase
+requires. This phase's per-asset job list is real data that Phase 11
+will consume, not duplicate.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds. No browser
+verification — standing sandbox limitation.
+
 ## Not started
 
 Deferred items: customer notes field,

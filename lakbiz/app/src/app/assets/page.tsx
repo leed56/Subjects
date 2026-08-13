@@ -12,9 +12,11 @@ import { PlusIcon } from "@/components/ui/icons";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
+import { formatLkr } from "@/lib/format";
 import {
   createAsset,
   deleteAsset,
+  fetchAssetJobItems,
   fetchAssetJobs,
   fetchOrgAssets,
   updateAsset,
@@ -22,6 +24,7 @@ import {
   type AcAssetInput,
   type AcAssetStatus,
   type AssetJob,
+  type AssetJobItem,
 } from "@/lib/supabase/ac-assets-client";
 
 type StatusFilter = "all" | AcAssetStatus;
@@ -60,7 +63,7 @@ function isUnderWarranty(asset: AcAsset): boolean {
 
 export default function AssetsPage() {
   const { t } = useLocale();
-  const { org } = useSubscription();
+  const { org, canSeeFinancials } = useSubscription();
   const { data: localData, ready: localReady } = useAppStore();
   const { toast } = useToast();
 
@@ -75,6 +78,9 @@ export default function AssetsPage() {
   const [profileAsset, setProfileAsset] = useState<AcAsset | null>(null);
   const [profileTab, setProfileTab] = useState<"overview" | "jobs">("overview");
   const [profileJobs, setProfileJobs] = useState<AssetJob[] | null>(null);
+  // HVAC platform Phase 10 — parts used across this asset's linked jobs,
+  // the real basis for "components replaced" and lifetime repair cost.
+  const [profileJobItems, setProfileJobItems] = useState<AssetJobItem[] | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<AcAsset | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -103,8 +109,11 @@ export default function AssetsPage() {
   useEffect(() => {
     if (!profileAsset || profileTab !== "jobs") return;
     let cancelled = false;
-    void fetchAssetJobs(profileAsset.id).then((result) => {
-      if (!cancelled) setProfileJobs(result.data);
+    void fetchAssetJobs(profileAsset.id).then(async (result) => {
+      if (cancelled) return;
+      setProfileJobs(result.data);
+      const itemsResult = await fetchAssetJobItems(result.data.map((j) => j.id));
+      if (!cancelled) setProfileJobItems(itemsResult.data);
     });
     return () => {
       cancelled = true;
@@ -238,7 +247,7 @@ export default function AssetsPage() {
       header: t("assets.asset"),
       render: (a) => (
         <div>
-          <button type="button" onClick={() => { setProfileAsset(a); setProfileTab("overview"); setProfileJobs(null); }} className="font-semibold text-slate-900 hover:text-teal-700 hover:underline">
+          <button type="button" onClick={() => { setProfileAsset(a); setProfileTab("overview"); setProfileJobs(null); setProfileJobItems(null); }} className="font-semibold text-slate-900 hover:text-teal-700 hover:underline">
             {[a.brand, a.model].filter(Boolean).join(" ") || t("assets.untitled")}
           </button>
           <p className="mt-0.5 text-xs text-slate-500">{a.serialNo ?? "—"}</p>
@@ -455,7 +464,7 @@ export default function AssetsPage() {
               onChange={(v) => setProfileTab(v as "overview" | "jobs")}
               tabs={[
                 { value: "overview", label: t("cust.tab_overview") },
-                { value: "jobs", label: `${t("nav.jobs")}${profileJobs ? ` (${profileJobs.length})` : ""}` },
+                { value: "jobs", label: `${t("assets.service_history")}${profileJobs ? ` (${profileJobs.length})` : ""}` },
               ]}
             />
             <div className="mt-4">
@@ -524,24 +533,79 @@ export default function AssetsPage() {
                 </dl>
               )}
               {profileTab === "jobs" &&
-                (profileJobs === null ? (
+                (profileJobs === null || profileJobItems === null ? (
                   <ProLoadingState label={t("common.loading")} />
                 ) : profileJobs.length === 0 ? (
                   <EmptyState title={t("assets.no_jobs")} description={t("assets.no_jobs_hint")} />
                 ) : (
-                  <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-                    {profileJobs.map((j) => (
-                      <li key={j.id} className="px-3.5 py-2.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-semibold text-slate-900">{j.jobNo}</p>
-                          <StatusBadge>{j.status}</StatusBadge>
-                        </div>
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          {new Date(j.jobDate).toLocaleDateString("en-LK")} · {j.description}
+                  <div className="space-y-5">
+                    {canSeeFinancials && (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("assets.lifetime_cost")}</p>
+                        <p className="mt-1 text-xl font-bold text-slate-900">
+                          {formatLkr(
+                            profileJobItems.reduce((s, i) => s + i.lineTotal, 0) +
+                              profileJobs.reduce((s, j) => s + (j.assigneeType === "contractor" ? j.subcontractCost ?? 0 : 0), 0),
+                          )}
                         </p>
-                      </li>
-                    ))}
-                  </ul>
+                        <p className="mt-0.5 text-xs text-slate-400">{t("assets.lifetime_cost_hint")}</p>
+                      </div>
+                    )}
+
+                    {(() => {
+                      const components = new Map<string, { count: number; qty: number; lastDate: string }>();
+                      for (const item of profileJobItems) {
+                        if (item.itemType !== "part") continue;
+                        const jobDate = profileJobs.find((j) => j.id === item.jobId)?.jobDate ?? "";
+                        const existing = components.get(item.name);
+                        if (existing) {
+                          existing.count += 1;
+                          existing.qty += item.qty;
+                          if (jobDate > existing.lastDate) existing.lastDate = jobDate;
+                        } else {
+                          components.set(item.name, { count: 1, qty: item.qty, lastDate: jobDate });
+                        }
+                      }
+                      const rows = [...components.entries()].sort((a, b) => (b[1].lastDate).localeCompare(a[1].lastDate));
+                      return rows.length > 0 ? (
+                        <div>
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("assets.components_replaced")}</p>
+                          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                            {rows.map(([name, info]) => (
+                              <li key={name} className="flex items-center justify-between gap-3 px-3.5 py-2 text-sm">
+                                <span className="font-medium text-slate-900">{name}</span>
+                                <span className="text-xs text-slate-500">
+                                  {t("assets.replaced_times").replace("{count}", String(info.count))} · {info.lastDate ? new Date(info.lastDate).toLocaleDateString("en-LK") : "—"}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null;
+                    })()}
+
+                    <div>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("assets.visit_history")}</p>
+                      <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                        {profileJobs.map((j) => (
+                          <li key={j.id} className="px-3.5 py-2.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-semibold text-slate-900">{j.jobNo}</p>
+                              <div className="flex items-center gap-2">
+                                {canSeeFinancials && <span className="text-xs font-mono text-slate-500">{formatLkr(j.quotedAmount)}</span>}
+                                <StatusBadge>{j.status}</StatusBadge>
+                              </div>
+                            </div>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              {new Date(j.jobDate).toLocaleDateString("en-LK")} · {j.description}
+                            </p>
+                            {j.complaint && <p className="mt-1 text-xs text-slate-600"><span className="font-medium">{t("jobs.complaint")}:</span> {j.complaint}</p>}
+                            {j.diagnosis && <p className="mt-0.5 text-xs text-slate-600"><span className="font-medium">{t("jobs.diagnosis")}:</span> {j.diagnosis}</p>}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
                 ))}
             </div>
           </Drawer>
