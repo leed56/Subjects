@@ -83,3 +83,24 @@ export function computeJobProfitability(
 
   return { materialCost, laborCost, otherCost, totalCost, revenue, grossProfit, grossMarginPct };
 }
+
+/**
+ * HVAC platform Phase 14 (dashboard) — the one explicit, defensible
+ * "low margin" rule, per the spec's "do not label a job low margin
+ * without an explicit defensible rule." A flat percentage threshold,
+ * not a guess or a trend: 15% gross margin is a conservative floor for
+ * HVAC field service (materials + labor typically run 60-85% of a
+ * quoted price in this trade), disclosed here as the single place this
+ * number is defined so every screen that flags a job means the same
+ * thing by it.
+ *
+ * Jobs with no assessable margin (revenue is 0, `grossMarginPct` is
+ * null) are never flagged — "cannot be assessed" is not the same claim
+ * as "low margin," and conflating them would be exactly the kind of
+ * fabricated signal the spec forbids.
+ */
+export const LOW_MARGIN_THRESHOLD_PCT = 15;
+
+export function isLowMarginJob(profit: JobProfitability): boolean {
+  return profit.grossMarginPct !== null && profit.grossMarginPct < LOW_MARGIN_THRESHOLD_PCT;
+}
