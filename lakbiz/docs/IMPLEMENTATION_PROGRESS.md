@@ -1827,6 +1827,66 @@ Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
 pre-existing warnings, none new, `next build` succeeds with the same 47
 routes. No browser verification — standing sandbox limitation.
 
+### Phase 6 — Job labor costing
+
+Audited first (per the spec's own instruction): `Technician` had no
+cost field at all; only `Contractor` did (`rateType`/`rateAmount`,
+already used in job costing via `subcontractCost`). Confirms the spec's
+prediction — added the smallest explicit configuration necessary,
+nothing more.
+
+- `Technician.hourlyRate?: number` — nullable, no fabricated cost for a
+  technician with no configured rate.
+- `JobItem.technicianId?: string` (labour-only) — a job already gets as
+  many `job_items` rows as it needs, so **multiple technicians per job**
+  needed no schema change to `ACJob`'s single `assigneeId`: just add
+  several labour lines, each with a different `technicianId`.
+- `JobItem.customerPrice` (added Phase 4 for parts) extended to labour
+  lines too — this is exactly the "2hrs × Rs.1,000 internal cost vs
+  Rs.4,000 customer charge, not the same concept" distinction the spec
+  asked for. Job Sheet's labour form: pick a technician → `unitPrice`
+  pre-fills from their `hourlyRate` (editable, not locked, unlike the
+  stock-material snapshot — labor cost per job can legitimately vary
+  from a technician's base rate) → optional customer-charge field.
+
+**Found and fixed alongside this, not fabricated new scope**: `/workforce`
+is in `TECHNICIAN_ROUTES` (technicians have route access), and the
+route's own documented permission comment already says technicians get
+"no financial fields" there — but the page had zero `canSeeFinancials`
+gating anywhere. Contractor rate/payable balance, per-contractor margin,
+and the page's outstanding-payout/total-margin stat cards were all
+rendered unconditionally. Since Phase 6 was about to add a *second*
+financial field (`hourlyRate`) to this exact page, shipping it without
+fixing the existing leak would have been adding a new instance of the
+bug next to an old one. Gated all of it behind `canSeeFinancials`
+(learned from the Dashboard Command Center pass: adjusted the stat-card
+grid's column count instead of leaving an empty track when 2 of 4 cards
+disappear).
+
+**DB-level masking, not just UI hiding**: RLS on `technicians`/`job_items`
+only ever enforced tenant isolation, no column-level masking — meaning
+a technician could read `hourly_rate`/`unit_price`/`line_total`/
+`customer_price` directly via a REST call even with the UI gate above in
+place. Migration `20250706000001_labor_costing.sql` renames both tables
+to `_base` and adds masked views + `INSTEAD OF` triggers, the exact
+pattern already proven for `products`
+(`20250623000001_financial_data_rls.sql`) and `ac_jobs.subcontract_cost`.
+This is the actual "do not expose company profit to unauthorized
+technicians" guarantee — the client-side gate alone was never enough.
+
+**Known pre-existing gap, disclosed not fixed here**: `contractors.rate_amount`/
+`payable_balance` have the identical unmasked-at-the-DB-level problem
+and predate this phase — same root cause, different table. Out of scope
+for this migration since Phase 6 didn't touch `contractors`; flagged for
+a dedicated follow-up (this maps to the spec's own later Phase 19/20).
+
+- `business-sync.ts`: technician pull/push mappers and both job_items
+  push mappers carry `hourlyRate`/`technicianId`.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds. No browser
+verification — standing sandbox limitation.
+
 ## Not started
 
 Deferred items: customer notes field,

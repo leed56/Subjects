@@ -117,8 +117,18 @@ export interface JobItem {
   /** What the customer is being charged for this specific item, when the
    * owner wants to track it per-line. Does not feed the job invoice,
    * which still shows one flat `quotedAmount` — itemizing the invoice
-   * itself is a Job Detail redesign concern, not this phase's. */
+   * itself is a Job Detail redesign concern, not this phase's. Applies to
+   * "part" and "labour" lines (HVAC platform Phase 6 extended this from
+   * parts-only, to support the internal-cost-vs-customer-charge split
+   * the spec asks for on labor specifically). */
   customerPrice?: number;
+  /** itemType === "labour" only (HVAC platform Phase 6) — which roster
+   * technician performed this line. Multiple technicians on one job are
+   * supported by adding multiple labour lines with different
+   * technicianId, rather than a schema change to ACJob's single
+   * assigneeId — a job already has many job_items, so this needed no new
+   * join table. */
+  technicianId?: string;
 }
 
 export type JobItemInput = {
@@ -133,6 +143,7 @@ export type JobItemInput = {
   purchaseRef?: string;
   purchaseDate?: string;
   customerPrice?: number;
+  technicianId?: string;
 };
 
 export interface JobStatusEntry {
@@ -325,6 +336,11 @@ export interface Technician {
   specialties: WorkSpecialty[];
   active: boolean;
   notes?: string;
+  /** Internal labor cost basis (LKR/hour) — HVAC platform Phase 6.
+   * Optional: no fabricated cost for technicians with no configured rate.
+   * Financial data, masked from non-financial roles at the DB level the
+   * same way products.buyPrice is (see the Phase 6 migration). */
+  hourlyRate?: number;
 }
 
 export type TechnicianInput = {
@@ -333,6 +349,7 @@ export type TechnicianInput = {
   specialties?: WorkSpecialty[];
   active?: boolean;
   notes?: string;
+  hourlyRate?: number;
 };
 
 export type ContractorRateType = "per_job" | "per_unit" | "per_meter" | "fixed";
