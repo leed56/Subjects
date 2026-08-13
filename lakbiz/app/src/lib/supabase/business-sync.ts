@@ -486,6 +486,8 @@ export async function pullBusinessData(
       subcontractCost:
         row.subcontract_cost != null ? num(row.subcontract_cost) : undefined,
       notes: row.notes ?? undefined,
+      complaint: row.complaint ?? undefined,
+      diagnosis: row.diagnosis ?? undefined,
     })),
     jobItems: jobItems.map((row) => ({
       id: row.id,
@@ -1016,6 +1018,8 @@ function acJobRowFromJob(
     assignee_id: job.assigneeId ?? null,
     subcontract_cost: job.subcontractCost ?? null,
     notes: job.notes ?? null,
+    complaint: job.complaint ?? null,
+    diagnosis: job.diagnosis ?? null,
   };
 }
 
@@ -2217,6 +2221,8 @@ export async function pushBusinessData(
     assignee_id: job.assigneeId ?? null,
     subcontract_cost: job.subcontractCost ?? null,
     notes: job.notes ?? null,
+    complaint: job.complaint ?? null,
+    diagnosis: job.diagnosis ?? null,
   }));
 
   const jobItemRows = data.jobItems.map((i) => ({
