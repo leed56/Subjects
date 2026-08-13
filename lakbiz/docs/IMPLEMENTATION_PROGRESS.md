@@ -2049,6 +2049,108 @@ Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
 pre-existing warnings, none new, `next build` succeeds. No browser
 verification — standing sandbox limitation.
 
+### Phase 13 — Purchase orders & suppliers
+
+Audited first (per the spec's "audit before building" instruction for
+this phase specifically): `purchases`/`purchase_lines` already exist as
+a normalized two-table pair (`20250616000002_business_data_schema.sql`),
+not JSONB-embedded — a real GRN/bill entity, immediate-receipt only. It
+carries the **full-row SELECT-deny** RLS pattern (a
+`can_see_org_financials()`-gated policy replacing the plain member-select
+policy entirely), shared with `suppliers`, `supplier_payments`, and the
+banking tables — a different, simpler masking approach than the
+security-barrier-view-plus-INSTEAD-OF-triggers pattern used for
+`products`/`ac_jobs`/`technicians`/`job_items`. Nothing in the existing
+schema represented "goods ordered but not yet delivered" — the gap the
+spec describes was real, not already covered under another name.
+
+Built the smallest genuinely-required new layer, additive to `purchases`,
+not a replacement:
+
+- New `PurchaseOrder`/`PurchaseOrderLine` local-first entities (mirrors
+  `Purchase`/`PurchaseLine`'s shape) with `supplier`, `lines` (product,
+  qty ordered, qty received, unit cost), `expectedTotal`, `status`
+  (`pending` / `partial` / `received` / `cancelled`), an optional
+  `relatedJobId`, and a `receivedDate`. **Deliberately no
+  `paymentMethod`/`creditAmount`/`inputVat`** — a PO is not a bill; those
+  fields belong to the existing `Purchase`/GRN record the owner still
+  enters separately once the supplier's actual invoice arrives.
+- `createPurchaseOrder()` — creates the order. Touches nothing else:
+  no stock movement, no `buyPrice` update, no `supplier.payableBalance`
+  change. A plan to buy is not a delivery or a debt.
+- `receivePurchaseOrder()` — the only place a PO is allowed to move
+  stock. Each call is one delivery event (quantity arriving *now*, not a
+  new cumulative total), so partial deliveries against the same PO can
+  be recorded as they happen. Received qty is clamped to what's still
+  outstanding per line — a PO cannot be over-received. Every unit
+  received produces a real `StockLog` (`type: "purchase"`, `note: "PO
+  <no>"`) through the same trail a GRN purchase uses, and updates
+  `product.stockQty`/`buyPrice` the same way `createPurchase` already
+  does. Status recomputes to `partial` or `received` off the lines
+  actually delivered so far — never inferred, never a manual toggle.
+  Nothing moves until this function is explicitly called, per the
+  spec's "do not automatically mark unreceived goods as available
+  stock."
+- `cancelPurchaseOrder()` — guarded: refuses once any line has received
+  quantity, since a partially-received PO already has real stock
+  movements against it that cancelling would misrepresent.
+- **Deliberately does not auto-create a `Purchase`/GRN record on
+  receipt.** Receiving a PO and recording the supplier's bill are
+  different real-world events (a delivery note and an invoice routinely
+  arrive at different times, sometimes for different partial
+  quantities); auto-generating a GRN for every receipt would let the
+  same delivery be counted twice if the owner also enters the actual
+  bill by hand later — exactly the double-counting the spec's absolute
+  rules forbid. The owner still records the GRN through the existing
+  Suppliers screen when the invoice arrives, with the real payment
+  terms.
+- New `supabase/migrations/20250709000001_purchase_orders.sql`:
+  `purchase_orders`/`purchase_order_lines`, mirroring `purchases`/
+  `purchase_lines`'s shape plus the new status/expected-total/job-link/
+  received fields, using the audited full-row-SELECT-deny RLS pattern
+  (financial-gated SELECT, member-scoped INSERT/UPDATE/DELETE) rather
+  than the masked-view pattern — its closest sibling table already
+  established this as the right approach for supplier/purchasing data.
+  No FK to `ac_jobs` for `related_job_id`, same as `job_items.job_id`
+  and `stock_logs.related_job_id` already do — jobs are local-first,
+  client-assigned ids, and `ac_jobs` itself is a view, not a base table.
+- Full local-first wiring: `AppData.purchaseOrders`, pull/push mappers
+  in `business-sync.ts` (both the eager per-action snapshot push and the
+  periodic full `pushBusinessData`/prune sweep), and the offline
+  merge-conflict resolver (`mergeAppData` — otherwise a genuine offline
+  edit to a PO could silently vanish on the next reconnect merge).
+  `createPurchaseOrderToCloud` / `receivePurchaseOrderToCloud` /
+  `cancelPurchaseOrderToCloud` added to the store provider, gated behind
+  the same `canUseSuppliersModule` write-permission check as the
+  existing purchase flow.
+- UI: `/suppliers` gained a "New purchase order" entry point next to
+  the existing "Record purchase (GRN)" button, a create form (supplier +
+  per-product qty/unit-cost lines + optional linked job), a Purchase
+  Orders list with status badges and per-row Receive/Cancel actions, and
+  a Receive dialog (remaining-quantity inputs per line, clamped to what's
+  outstanding).
+- **Audit side-fix**: while reading `syncPurchaseSnapshot` as the
+  template for the new PO sync function, found its eager-push stock-log
+  filter checked `log.type === "in"` — stale from before Phase 3
+  introduced the `"purchase"` movement type (`createPurchase` has always
+  tagged its logs `"purchase"`, never `"in"`), so a GRN's stock logs
+  never reached the eager per-action cloud push. Not a data-loss bug —
+  the periodic full `pushBusinessData` sweep pushes all stock logs
+  unconditionally and already covered the gap — but a real completeness
+  bug in the exact function this phase's sync code is modeled on, so
+  fixed it in the same commit (`log.type === "purchase"`) rather than
+  knowingly copying a broken filter into new code.
+- Not built: reorder-quantity suggestions on a PO (Phase 12 already
+  covered and declined this — no demand model exists to base one on);
+  a supplier-facing PO PDF/print view; multi-currency or landed-cost
+  allocation across a PO's lines.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 2
+pre-existing warnings (`deleteACJobFromCloud` unused import,
+`useMemo` dependency on `org.id`), neither new nor touched by this
+phase, `next build` succeeds. No browser verification — standing
+sandbox limitation.
+
 ## Not started
 
 Deferred items: customer notes field,

@@ -19,7 +19,7 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { buildLedger } from "@/lib/ledger";
 import { useAppStore } from "@/lib/store/use-app-store";
-import type { Supplier } from "@/lib/store/types";
+import type { PurchaseOrder, Supplier } from "@/lib/store/types";
 import type { PaymentMethod } from "@/lib/types";
 import { calcInputVat } from "@/lib/vat";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
@@ -32,6 +32,9 @@ export default function SuppliersPage() {
     saveSupplierToCloud,
     deleteSupplierToCloud,
     createPurchaseToCloud,
+    createPurchaseOrderToCloud,
+    receivePurchaseOrderToCloud,
+    cancelPurchaseOrderToCloud,
     recordSupplierPaymentToCloud,
   } = useAppStore();
   const { t } = useLocale();
@@ -65,6 +68,16 @@ export default function SuppliersPage() {
   const [payAmount, setPayAmount] = useState(0);
   const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
 
+  const [showPo, setShowPo] = useState(false);
+  const [poSupplierId, setPoSupplierId] = useState("");
+  const [poJobId, setPoJobId] = useState("");
+  const [poLines, setPoLines] = useState<Record<string, { qty: number; unitCost: number }>>({});
+  const [savingPo, setSavingPo] = useState(false);
+  const [receivingPo, setReceivingPo] = useState<PurchaseOrder | null>(null);
+  const [receiveQty, setReceiveQty] = useState<Record<string, number>>({});
+  const [savingReceive, setSavingReceive] = useState(false);
+  const [cancellingPoId, setCancellingPoId] = useState<string | null>(null);
+
   const purchaseTotal = useMemo(() => {
     if (!data) return 0;
     return Object.entries(purchaseLines).reduce((sum, [, line]) => {
@@ -72,6 +85,13 @@ export default function SuppliersPage() {
       return sum + line.qty * line.unitCost;
     }, 0);
   }, [purchaseLines, data]);
+
+  const poExpectedTotal = useMemo(() => {
+    return Object.entries(poLines).reduce((sum, [, line]) => {
+      if (line.qty <= 0) return sum;
+      return sum + line.qty * line.unitCost;
+    }, 0);
+  }, [poLines]);
 
   const vatRegistered = data?.business.vatRegistered === true;
   const defaultInputVat = vatRegistered ? calcInputVat(purchaseTotal) : 0;
@@ -215,6 +235,83 @@ export default function SuppliersPage() {
     setTimeout(() => setMessage(""), 2500);
   };
 
+  const handleCreatePo = async () => {
+    if (savingPo) return;
+    if (!poSupplierId) {
+      setMessage(t("sup.select_supplier"));
+      return;
+    }
+    const lines = Object.entries(poLines)
+      .filter(([, l]) => l.qty > 0)
+      .map(([productId, l]) => ({ productId, qty: l.qty, unitCost: l.unitCost }));
+    if (lines.length === 0) {
+      setMessage(t("sup.add_qty"));
+      return;
+    }
+    setSavingPo(true);
+    setMessage("");
+    const result = await createPurchaseOrderToCloud({
+      supplierId: poSupplierId,
+      lines,
+      relatedJobId: poJobId || undefined,
+    });
+    setSavingPo(false);
+    if (!result.ok) {
+      setMessage(result.error ?? t("sup.po_failed"));
+      setTimeout(() => setMessage(""), 4000);
+      return;
+    }
+    setShowPo(false);
+    setPoLines({});
+    setPoJobId("");
+    setMessage(t("sup.po_saved"));
+    setTimeout(() => setMessage(""), 3000);
+  };
+
+  const openReceive = (po: PurchaseOrder) => {
+    setReceivingPo(po);
+    setReceiveQty({});
+  };
+
+  const handleReceivePo = async () => {
+    if (!receivingPo || savingReceive) return;
+    const lines = Object.entries(receiveQty)
+      .filter(([, qty]) => qty > 0)
+      .map(([productId, qtyReceived]) => ({ productId, qtyReceived }));
+    if (lines.length === 0) {
+      setMessage(t("sup.add_qty"));
+      return;
+    }
+    setSavingReceive(true);
+    setMessage("");
+    const result = await receivePurchaseOrderToCloud(receivingPo.id, lines);
+    setSavingReceive(false);
+    if (!result.ok) {
+      setMessage(result.error ?? t("sup.po_receive_failed"));
+      setTimeout(() => setMessage(""), 4000);
+      return;
+    }
+    setReceivingPo(null);
+    setReceiveQty({});
+    setMessage(t("sup.po_receive_saved"));
+    setTimeout(() => setMessage(""), 3000);
+  };
+
+  const handleCancelPo = async (po: PurchaseOrder) => {
+    if (cancellingPoId) return;
+    if (!confirm(t("sup.po_cancel_confirm"))) return;
+    setCancellingPoId(po.id);
+    const result = await cancelPurchaseOrderToCloud(po.id);
+    setCancellingPoId(null);
+    if (!result.ok) {
+      setMessage(result.error ?? t("common.save_failed"));
+      setTimeout(() => setMessage(""), 4000);
+      return;
+    }
+    setMessage(t("sup.po_cancelled"));
+    setTimeout(() => setMessage(""), 2500);
+  };
+
   const ledgerEntries = ledgerSupplier
     ? buildLedger(
         data.purchases
@@ -239,6 +336,26 @@ export default function SuppliersPage() {
     if (!purchaseSupplierId && data.suppliers[0]) setPurchaseSupplierId(data.suppliers[0].id);
   };
 
+  const setPoLine = (productId: string, qty: number, unitCost: number) => {
+    setPoLines((prev) => ({ ...prev, [productId]: { qty, unitCost } }));
+  };
+
+  const openPo = () => {
+    setShowPo((v) => !v);
+    if (!poSupplierId && data.suppliers[0]) setPoSupplierId(data.suppliers[0].id);
+  };
+
+  const setReceiveLineQty = (productId: string, qty: number) => {
+    setReceiveQty((prev) => ({ ...prev, [productId]: qty }));
+  };
+
+  const poStatusTone = (status: PurchaseOrder["status"]): "slate" | "amber" | "emerald" | "teal" => {
+    if (status === "received") return "emerald";
+    if (status === "partial") return "teal";
+    if (status === "cancelled") return "slate";
+    return "amber";
+  };
+
   return (
     <AppShell>
       <ProMain>
@@ -249,6 +366,13 @@ export default function SuppliersPage() {
           actions={
             <>
               <ProButton href="/stock" variant="secondary">{t("nav.stock")}</ProButton>
+              <button
+                onClick={openPo}
+                disabled={data.suppliers.length === 0 || data.products.length === 0}
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-teal-200 bg-white px-4 py-2.5 text-sm font-black text-teal-700 shadow-sm transition hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {t("sup.new_po")}
+              </button>
               <button
                 onClick={openPurchase}
                 disabled={data.suppliers.length === 0 || data.products.length === 0}
@@ -397,6 +521,63 @@ export default function SuppliersPage() {
           </section>
         )}
 
+        {showPo && (
+          <section className="mt-6">
+            <ProCard eyebrow="Purchase order" title={t("sup.po_create_title")} action={<ProBadge tone="teal">{formatLkr(poExpectedTotal)}</ProBadge>}>
+              <p className="mb-4 rounded-2xl border border-teal-100 bg-teal-50/70 p-3 text-xs font-semibold text-teal-900">{t("sup.po_hint")}</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <select value={poSupplierId} onChange={(e) => setPoSupplierId(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                  <option value="">{t("sup.select")}</option>
+                  {data.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                {data.acJobs.length > 0 && (
+                  <select value={poJobId} onChange={(e) => setPoJobId(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                    <option value="">{t("sup.po_no_job")}</option>
+                    {data.acJobs.map((j) => <option key={j.id} value={j.id}>{j.jobNo} — {j.customerName}</option>)}
+                  </select>
+                )}
+              </div>
+
+              <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                {data.products.map((p) => {
+                  const line = poLines[p.id] ?? { qty: 0, unitCost: p.buyPrice };
+                  return (
+                    <div key={p.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-slate-950">{p.name}</p>
+                          <p className="mt-1 text-xs font-semibold text-slate-500">{formatLkr(p.buyPrice)}</p>
+                        </div>
+                        {line.qty > 0 && <ProBadge tone="teal">{formatLkr(line.qty * line.unitCost)}</ProBadge>}
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <input type="number" min={0} placeholder={t("common.qty")} value={line.qty || ""} onChange={(e) => setPoLine(p.id, Number(e.target.value), line.unitCost)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black outline-none focus:border-teal-300" />
+                        <input type="number" min={0} placeholder={t("sup.unit_cost")} value={line.unitCost || ""} onChange={(e) => setPoLine(p.id, line.qty, Number(e.target.value))} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black outline-none focus:border-teal-300" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-5 rounded-[1.25rem] bg-slate-950 p-4 text-white">
+                <div className="flex justify-between text-lg font-black text-teal-300">
+                  <span>{t("sup.po_expected")}</span>
+                  <span className="font-mono">{formatLkr(poExpectedTotal)}</span>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <button onClick={() => void handleCreatePo()} disabled={savingPo} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  {savingPo ? t("common.saving") : t("common.save")}
+                </button>
+                <button onClick={() => setShowPo(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
+                  {t("common.cancel")}
+                </button>
+              </div>
+            </ProCard>
+          </section>
+        )}
+
         <section className="mt-6">
           {data.suppliers.length === 0 ? (
             <ProCard>
@@ -501,6 +682,87 @@ export default function SuppliersPage() {
           </section>
         )}
 
+        {data.purchaseOrders.length > 0 && (
+          <section className="mt-6">
+            <ProCard title={t("sup.po_title")} action={<ProBadge tone="teal">{data.purchaseOrders.length}</ProBadge>}>
+              <div className="hidden overflow-hidden rounded-2xl border border-slate-200 lg:block">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">PO</th>
+                      <th className="px-4 py-3">{t("common.supplier")}</th>
+                      <th className="px-4 py-3">{t("common.items")}</th>
+                      <th className="px-4 py-3">{t("sup.po_expected")}</th>
+                      <th className="px-4 py-3">{t("common.status")}</th>
+                      <th className="px-4 py-3">{t("common.actions")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.purchaseOrders.map((po) => {
+                      const canReceive = po.status === "pending" || po.status === "partial";
+                      const canCancel = po.status !== "cancelled" && po.status !== "received" && po.lines.every((l) => l.qtyReceived === 0);
+                      return (
+                        <tr key={po.id} className="border-b last:border-0">
+                          <td className="px-4 py-3 font-mono text-xs font-black text-slate-700">{po.poNo}</td>
+                          <td className="px-4 py-3 font-black text-slate-950">{po.supplierName}</td>
+                          <td className="px-4 py-3 font-semibold text-slate-600">{po.lines.map((l) => `${l.productName} (${l.qtyReceived}/${l.qtyOrdered})`).join(", ")}</td>
+                          <td className="px-4 py-3 font-mono font-black text-slate-950">{formatLkr(po.expectedTotal)}</td>
+                          <td className="px-4 py-3"><ProBadge tone={poStatusTone(po.status)}>{t(`sup.po_status_${po.status}`)}</ProBadge></td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-2">
+                              {canReceive && (
+                                <button onClick={() => openReceive(po)} className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700 hover:bg-teal-100">
+                                  {t("sup.po_receive_action")}
+                                </button>
+                              )}
+                              {canCancel && (
+                                <button onClick={() => void handleCancelPo(po)} disabled={cancellingPoId === po.id} className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50">
+                                  {t("sup.po_cancel_action")}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="grid gap-3 lg:hidden">
+                {data.purchaseOrders.map((po) => {
+                  const canReceive = po.status === "pending" || po.status === "partial";
+                  const canCancel = po.status !== "cancelled" && po.status !== "received" && po.lines.every((l) => l.qtyReceived === 0);
+                  return (
+                    <div key={po.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-mono text-xs font-black uppercase tracking-wide text-teal-700">{po.poNo}</p>
+                          <p className="mt-2 font-black text-slate-950">{po.supplierName}</p>
+                        </div>
+                        <ProBadge tone={poStatusTone(po.status)}>{t(`sup.po_status_${po.status}`)}</ProBadge>
+                      </div>
+                      <p className="mt-3 text-xs font-semibold text-slate-500">{po.lines.map((l) => `${l.productName} (${l.qtyReceived}/${l.qtyOrdered})`).join(", ")}</p>
+                      <p className="mt-3 font-mono text-lg font-black text-slate-950">{formatLkr(po.expectedTotal)}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {canReceive && (
+                          <button onClick={() => openReceive(po)} className="rounded-2xl bg-teal-50 px-3 py-3 text-xs font-black text-teal-700 hover:bg-teal-100">
+                            {t("sup.po_receive_action")}
+                          </button>
+                        )}
+                        {canCancel && (
+                          <button onClick={() => void handleCancelPo(po)} disabled={cancellingPoId === po.id} className="rounded-2xl bg-rose-50 px-3 py-3 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50">
+                            {t("sup.po_cancel_action")}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </ProCard>
+          </section>
+        )}
+
         {paySupplierId && paySupplier && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
@@ -531,6 +793,57 @@ export default function SuppliersPage() {
                   {savingPayment ? t("common.saving") : t("common.save")}
                 </button>
                 <button onClick={() => setPaySupplierId(null)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
+                  {t("common.cancel")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {receivingPo && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+            <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">{t("sup.po_receive_title")}</p>
+                  <h3 className="mt-2 text-xl font-black text-slate-950">{receivingPo.poNo}</h3>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">{receivingPo.supplierName}</p>
+                </div>
+                <button onClick={() => setReceivingPo(null)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+              </div>
+              <p className="mt-4 rounded-2xl border border-teal-100 bg-teal-50/70 p-3 text-xs font-semibold text-teal-900">{t("sup.po_receive_hint")}</p>
+              <div className="mt-4 flex-1 space-y-3 overflow-y-auto">
+                {receivingPo.lines.map((line) => {
+                  const outstanding = Math.max(0, line.qtyOrdered - line.qtyReceived);
+                  if (outstanding <= 0) return null;
+                  return (
+                    <div key={line.productId} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="truncate text-sm font-black text-slate-950">{line.productName}</p>
+                        <p className="text-xs font-semibold text-slate-500">{t("sup.po_qty_received")}: {line.qtyReceived}/{line.qtyOrdered}</p>
+                      </div>
+                      <input
+                        type="number"
+                        min={0}
+                        max={outstanding}
+                        placeholder={t("common.qty")}
+                        value={receiveQty[line.productId] || ""}
+                        onChange={(e) => setReceiveLineQty(line.productId, Math.min(outstanding, Math.max(0, Number(e.target.value))))}
+                        className="mt-3 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-black outline-none focus:border-teal-300"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                <button
+                  onClick={() => void handleReceivePo()}
+                  disabled={savingReceive}
+                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {savingReceive ? t("common.saving") : t("common.save")}
+                </button>
+                <button onClick={() => setReceivingPo(null)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
                   {t("common.cancel")}
                 </button>
               </div>
