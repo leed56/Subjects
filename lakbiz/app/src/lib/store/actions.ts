@@ -2022,6 +2022,23 @@ export function getDashboardStats(data: AppData) {
     return s + ((v.soldPrice ?? 0) - cost);
   }, 0);
 
+  // HVAC platform Phase 15 (dashboard) — purchase orders still waiting on
+  // delivery. "Outstanding value" is what's still expected to arrive, not
+  // a PO's full expectedTotal — a partially-received PO has already
+  // landed some of that value as real stock.
+  const openPurchaseOrders = [...data.purchaseOrders]
+    .filter((po) => po.status === "pending" || po.status === "partial")
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const openPurchaseOrderValue = openPurchaseOrders.reduce(
+    (sum, po) =>
+      sum +
+      po.lines.reduce(
+        (s, l) => s + Math.max(0, l.qtyOrdered - l.qtyReceived) * l.unitCost,
+        0,
+      ),
+    0,
+  );
+
   return {
     todaySales: salesTotal,
     todayProfit: profitTotal,
@@ -2066,5 +2083,8 @@ export function getDashboardStats(data: AppData) {
     vehicleProfitThisMonth,
     recentSoldVehicles: soldVehicles.slice(0, 5),
     recentLogs: data.stockLogs.slice(0, 5),
+    openPurchaseOrderCount: openPurchaseOrders.length,
+    openPurchaseOrderValue,
+    openPurchaseOrders: openPurchaseOrders.slice(0, 5),
   };
 }
