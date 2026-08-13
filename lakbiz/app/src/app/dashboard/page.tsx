@@ -456,6 +456,35 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {canSeeFinancials && stats.openPurchaseOrderCount > 0 && (
+          <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
+            <SectionHeader
+              title={t("dash.open_purchase_orders")}
+              action={<Link href="/suppliers" className={ghostLink}>{t("nav.suppliers")}</Link>}
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("dash.po_outstanding_count")}</p>
+                <p className="mt-1 font-mono text-lg font-bold text-slate-900">{stats.openPurchaseOrderCount}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("dash.po_outstanding_value")}</p>
+                <p className="mt-1 font-mono text-lg font-bold text-slate-900">{formatLkr(stats.openPurchaseOrderValue)}</p>
+              </div>
+            </div>
+            <div className="mt-3 space-y-2">
+              {stats.openPurchaseOrders.map((po) => (
+                <ListRow
+                  key={po.id}
+                  title={`${po.poNo} · ${po.supplierName}`}
+                  tone="teal"
+                  badge={po.status === "partial" ? t("sup.po_status_partial") : t("sup.po_status_pending")}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {(showVehicles && stats.aging60VehicleCount > 0) || (showAcJobs && stats.pendingACJobCount > 0) ? (
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             {showVehicles && stats.aging60VehicleCount > 0 && (

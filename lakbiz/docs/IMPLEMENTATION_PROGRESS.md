@@ -2355,6 +2355,43 @@ Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 2
 pre-existing warnings, unchanged, `next build` succeeds. No browser
 verification — standing sandbox limitation.
 
+### Phase 15 — Dashboard: purchase order pipeline (redesign slice 2)
+
+Second dashboard-redesign slice, the one deliberately deferred out of
+Phase 14 to keep that PR reviewable: surface Phase 13's purchase orders
+on `/dashboard`.
+
+- `getDashboardStats()` gains `openPurchaseOrderCount` /
+  `openPurchaseOrderValue` / `openPurchaseOrders` — pure local
+  computation, no cloud fetch needed (unlike Phase 14's job
+  profitability, purchase orders already live in local-first `AppData`
+  since Phase 13).
+- **"Outstanding value" is deliberately not a PO's `expectedTotal`.** A
+  partially-received PO has already turned part of that total into real
+  stock; summing full `expectedTotal` across open POs would double-count
+  value that already landed. Computed instead as
+  `Σ (qtyOrdered − qtyReceived) × unitCost` per line — what's still
+  actually expected to arrive.
+- New **Open purchase orders** card: count + outstanding value, plus
+  the oldest 5 open (pending/partial) POs by order date — oldest first,
+  so the ones waiting longest surface first, not the most recent.
+- Gated on `canSeeFinancials`, matching the RLS reality underneath it:
+  `purchase_orders`/`purchase_order_lines` are already invisible at the
+  database layer to non-owner/manager roles (Phase 13's audited
+  full-row-SELECT-deny policy), so this is belt-and-suspenders
+  consistency with the other financial dashboard cards, not a new gate.
+- Section only renders when there's at least one open PO — same
+  "don't render empty cards" convention as every other conditional
+  section on this page.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 2
+pre-existing warnings, unchanged, `next build` succeeds. No browser
+verification — standing sandbox limitation. (A screenshot of the live
+Vercel preview from Phase 14 confirmed the dashboard renders cleanly on
+a fresh/empty org — first real visual confirmation this engagement has
+had of the actual running app, though it couldn't exercise this card
+specifically since that org has no purchase orders yet.)
+
 ## Not started
 
 Deferred items: customer notes field,
