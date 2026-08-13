@@ -14,6 +14,8 @@ import type {
   ACJob,
   ChequeRecord,
   Purchase,
+  PurchaseOrder,
+  PurchaseOrderStatus,
   SupplierPayment,
   CustomerPayment,
   ContractorPayment,
@@ -100,6 +102,18 @@ function asPaymentMethod(value: string | null | undefined): PaymentMethod {
   return "cash";
 }
 
+function asPurchaseOrderStatus(value: string | null | undefined): PurchaseOrderStatus {
+  if (
+    value === "pending" ||
+    value === "partial" ||
+    value === "received" ||
+    value === "cancelled"
+  ) {
+    return value;
+  }
+  return "pending";
+}
+
 function asSectorId(value: string | null | undefined): SectorId {
   const allowed: SectorId[] = [
     "grocery",
@@ -174,6 +188,8 @@ export async function pullBusinessData(
     saleLinesRes,
     purchasesRes,
     purchaseLinesRes,
+    purchaseOrdersRes,
+    purchaseOrderLinesRes,
     customerPaymentsRes,
     customerProductPricesRes,
     supplierPaymentsRes,
@@ -199,6 +215,14 @@ export async function pullBusinessData(
     supabase.from("purchases").select("*").eq("organization_id", organizationId),
     supabase
       .from("purchase_lines")
+      .select("*")
+      .eq("organization_id", organizationId),
+    supabase
+      .from("purchase_orders")
+      .select("*")
+      .eq("organization_id", organizationId),
+    supabase
+      .from("purchase_order_lines")
       .select("*")
       .eq("organization_id", organizationId),
     supabase
@@ -251,6 +275,8 @@ export async function pullBusinessData(
   const purchaseLines = rowsOrEmpty(purchaseLinesRes, "purchase_lines");
   const suppliers = rowsOrEmpty(suppliersRes, "suppliers");
   const purchases = rowsOrEmpty(purchasesRes, "purchases");
+  const purchaseOrders = rowsOrEmpty(purchaseOrdersRes, "purchase_orders");
+  const purchaseOrderLines = rowsOrEmpty(purchaseOrderLinesRes, "purchase_order_lines");
   const customerPayments = rowsOrEmpty(customerPaymentsRes, "customer_payments");
   const customerProductPrices = rowsOrEmpty(
     customerProductPricesRes,
@@ -282,6 +308,13 @@ export async function pullBusinessData(
     const list = purchaseLinesByPurchase.get(line.purchase_id) ?? [];
     list.push(line);
     purchaseLinesByPurchase.set(line.purchase_id, list);
+  }
+
+  const purchaseOrderLinesByPo = new Map<string, typeof purchaseOrderLines>();
+  for (const line of purchaseOrderLines) {
+    const list = purchaseOrderLinesByPo.get(line.purchase_order_id) ?? [];
+    list.push(line);
+    purchaseOrderLinesByPo.set(line.purchase_order_id, list);
   }
 
   const data: AppData = {
@@ -375,6 +408,31 @@ export async function pullBusinessData(
         paymentMethod: asPaymentMethod(row.payment_method),
         creditAmount: num(row.credit_amount),
         note: row.note ?? undefined,
+      };
+    }),
+    purchaseOrders: purchaseOrders.map((row) => {
+      const lines = (purchaseOrderLinesByPo.get(row.id) ?? [])
+        .sort((a, b) => a.line_order - b.line_order)
+        .map((line) => ({
+          productId: line.product_id ?? "",
+          productName: line.product_name,
+          qtyOrdered: num(line.qty_ordered),
+          qtyReceived: num(line.qty_received),
+          unitCost: num(line.unit_cost),
+        }));
+
+      return {
+        id: row.id,
+        poNo: row.po_no,
+        date: row.order_date,
+        supplierId: row.supplier_id ?? "",
+        supplierName: row.supplier_name,
+        lines,
+        expectedTotal: num(row.expected_total),
+        status: asPurchaseOrderStatus(row.status),
+        relatedJobId: row.related_job_id ?? undefined,
+        note: row.note ?? undefined,
+        receivedDate: row.received_date ?? undefined,
       };
     }),
     customerPayments: customerPayments.map((row) => ({
@@ -605,6 +663,7 @@ async function upsertOrgRows(
     | "sales"
     | "sales_base"
     | "purchases"
+    | "purchase_orders"
     | "customer_payments"
     | "customer_product_prices"
     | "supplier_payments"
@@ -621,7 +680,8 @@ async function upsertOrgRows(
     | "contractor_payments"
     | "vehicles"
     | "sale_lines"
-    | "purchase_lines",
+    | "purchase_lines"
+    | "purchase_order_lines",
   rows: Record<string, unknown>[],
 ): Promise<string | null> {
   if (rows.length === 0) return null;
@@ -728,6 +788,7 @@ async function deleteOrgRowsNotIn(
     | "sales"
     | "sales_base"
     | "purchases"
+    | "purchase_orders"
     | "customer_payments"
     | "customer_product_prices"
     | "supplier_payments"
@@ -856,6 +917,26 @@ async function replacePurchaseLines(
 
   if (rows.length === 0) return null;
   const { error: insErr } = await supabase.from("purchase_lines").insert(rows);
+  return insErr?.message ?? null;
+}
+
+async function replacePurchaseOrderLines(
+  organizationId: string,
+  purchaseOrderId: string,
+  rows: Record<string, unknown>[],
+): Promise<string | null> {
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const { error: delErr } = await supabase
+    .from("purchase_order_lines")
+    .delete()
+    .eq("organization_id", organizationId)
+    .eq("purchase_order_id", purchaseOrderId);
+  if (delErr) return delErr.message;
+
+  if (rows.length === 0) return null;
+  const { error: insErr } = await supabase.from("purchase_order_lines").insert(rows);
   return insErr?.message ?? null;
 }
 
@@ -1300,8 +1381,12 @@ export async function syncPurchaseSnapshot(
   if (linesErr) return linesErr;
 
   const grnTag = purchase.grnNo;
+  // Phase 13 audit fix: createPurchase tags its StockLogs "purchase" (see
+  // StockMovementType), not "in" — this filter predates that vocabulary
+  // and never matched, so eager push after a GRN silently skipped its
+  // stock logs (the periodic full sync still carries them eventually).
   const purchaseLogs = data.stockLogs.filter(
-    (log) => log.type === "in" && log.note?.includes(grnTag),
+    (log) => log.type === "purchase" && log.note?.includes(grnTag),
   );
   if (purchaseLogs.length > 0) {
     const logErr = await upsertOrgRows(
@@ -1320,6 +1405,95 @@ export async function syncPurchaseSnapshot(
         cheques.map((cheque) => chequeRowFromCheque(organizationId, cheque)),
       );
       if (chequeErr) return chequeErr;
+    }
+  }
+
+  return null;
+}
+
+function purchaseOrderRowFromPurchaseOrder(
+  organizationId: string,
+  po: PurchaseOrder,
+): Record<string, unknown> {
+  return {
+    id: po.id,
+    organization_id: organizationId,
+    po_no: po.poNo,
+    order_date: po.date,
+    supplier_id: po.supplierId || null,
+    supplier_name: po.supplierName,
+    expected_total: po.expectedTotal,
+    status: po.status,
+    related_job_id: po.relatedJobId ?? null,
+    note: po.note ?? null,
+    received_date: po.receivedDate ?? null,
+  };
+}
+
+function purchaseOrderLineRowsFromPurchaseOrder(
+  organizationId: string,
+  po: PurchaseOrder,
+): Record<string, unknown>[] {
+  return po.lines.map((line, index) => ({
+    organization_id: organizationId,
+    purchase_order_id: po.id,
+    product_id: line.productId || null,
+    product_name: line.productName,
+    qty_ordered: line.qtyOrdered,
+    qty_received: line.qtyReceived,
+    unit_cost: line.unitCost,
+    line_order: index,
+  }));
+}
+
+/** Upsert a purchase order and its lines directly to Supabase (HVAC Phase
+ * 13). Used both when a PO is first created and again after receiving —
+ * both paths push the same header+lines shape, so one function covers it.
+ * `newStockLogIds` carries any stock movements a receiving call just
+ * created locally (diffed by the caller, same pattern as
+ * syncPurchaseSnapshot's newChequeIds) so they reach the cloud stock_logs
+ * table immediately instead of waiting for the next periodic full sync. */
+export async function syncPurchaseOrderSnapshot(
+  organizationId: string,
+  data: AppData,
+  purchaseOrderId: string,
+  options?: { newStockLogIds?: string[] },
+): Promise<string | null> {
+  const po = data.purchaseOrders.find((row) => row.id === purchaseOrderId);
+  if (!po) return "Purchase order not found locally";
+
+  const poErr = await upsertOrgRows("purchase_orders", [
+    purchaseOrderRowFromPurchaseOrder(organizationId, po),
+  ]);
+  if (poErr) return poErr;
+
+  const linesErr = await replacePurchaseOrderLines(
+    organizationId,
+    purchaseOrderId,
+    purchaseOrderLineRowsFromPurchaseOrder(organizationId, po),
+  );
+  if (linesErr) return linesErr;
+
+  const newStockLogIds = options?.newStockLogIds ?? [];
+  if (newStockLogIds.length > 0) {
+    const logs = data.stockLogs.filter((log) => newStockLogIds.includes(log.id));
+    if (logs.length > 0) {
+      const logErr = await upsertOrgRows(
+        "stock_logs",
+        logs.map((log) => stockLogRow(organizationId, log)),
+      );
+      if (logErr) return logErr;
+
+      const productIds = [...new Set(logs.map((log) => log.productId))];
+      const prodErr = await upsertMaskedViewRows(
+        "products",
+        organizationId,
+        productRowsFromList(
+          organizationId,
+          data.products.filter((p) => productIds.includes(p.id)),
+        ),
+      );
+      if (prodErr) return prodErr;
     }
   }
 
@@ -2107,6 +2281,14 @@ export async function pushBusinessData(
     })),
   );
 
+  const purchaseOrderRows = data.purchaseOrders.map((po) =>
+    purchaseOrderRowFromPurchaseOrder(organizationId, po),
+  );
+
+  const purchaseOrderLineRows = data.purchaseOrders.flatMap((po) =>
+    purchaseOrderLineRowsFromPurchaseOrder(organizationId, po),
+  );
+
   const customerPaymentRows = data.customerPayments.map((p) => ({
     id: p.id,
     organization_id: organizationId,
@@ -2329,6 +2511,7 @@ export async function pushBusinessData(
       | "sales"
       | "sales_base"
       | "purchases"
+      | "purchase_orders"
       | "customer_payments"
       | "customer_product_prices"
       | "supplier_payments"
@@ -2365,6 +2548,7 @@ export async function pushBusinessData(
     { table: "products", rows: productRows },
     { table: "sales", rows: saleRows },
     { table: "purchases", rows: purchaseRows },
+    { table: "purchase_orders", rows: purchaseOrderRows },
   ];
 
   for (const step of upsertSteps) {
@@ -2397,6 +2581,14 @@ export async function pushBusinessData(
     if (err) return { error: err, stale: false, generation: seenGeneration };
   }
 
+  for (const po of data.purchaseOrders) {
+    const lines = purchaseOrderLineRows.filter(
+      (row) => row.purchase_order_id === po.id,
+    );
+    const err = await replacePurchaseOrderLines(organizationId, po.id, lines);
+    if (err) return { error: err, stale: false, generation: seenGeneration };
+  }
+
   const supabase = createBrowserClient();
   if (!supabase) {
     return { error: "Supabase not configured", stale: false, generation: seenGeneration };
@@ -2419,6 +2611,7 @@ export async function pushBusinessData(
     table:
       | "sales"
       | "purchases"
+      | "purchase_orders"
       | "customer_payments"
       | "customer_product_prices"
       | "supplier_payments"
@@ -2441,6 +2634,7 @@ export async function pushBusinessData(
   }> = [
     { table: "sales", ids: data.sales.map((s) => s.id) },
     { table: "purchases", ids: data.purchases.map((p) => p.id) },
+    { table: "purchase_orders", ids: data.purchaseOrders.map((po) => po.id) },
     { table: "customer_payments", ids: data.customerPayments.map((p) => p.id) },
     {
       table: "customer_product_prices",

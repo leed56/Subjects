@@ -481,6 +481,53 @@ export interface Purchase {
   note?: string;
 }
 
+/** HVAC platform Phase 13 — purchase orders are a distinct workflow from
+ * `Purchase` (GRN): a PO is placed before goods arrive and may be received
+ * in one or more partial deliveries. `Purchase`/GRN remains the "I already
+ * have the goods + the supplier bill in hand" flow and is unaffected. */
+export type PurchaseOrderStatus = "pending" | "partial" | "received" | "cancelled";
+
+export interface PurchaseOrderLine {
+  productId: string;
+  productName: string;
+  qtyOrdered: number;
+  /** Cumulative quantity received against this line so far — never exceeds
+   * qtyOrdered. Only qtyReceived (not qtyOrdered) ever moves stock. */
+  qtyReceived: number;
+  unitCost: number;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  poNo: string;
+  date: string;
+  supplierId: string;
+  supplierName: string;
+  lines: PurchaseOrderLine[];
+  /** Sum of qtyOrdered × unitCost across lines — an estimate, not a bill. */
+  expectedTotal: number;
+  status: PurchaseOrderStatus;
+  /** Optional link to the job this stock was ordered for (HVAC Phase 13:
+   * "linked job" per the spec's field list) — informational only, does not
+   * itself move job costing; job costing still runs off job_items. */
+  relatedJobId?: string;
+  note?: string;
+  /** Set once the PO first receives any quantity; not cleared on later
+   * partial receipts, so it reads as "receiving started on". */
+  receivedDate?: string;
+}
+
+export type PurchaseOrderInput = {
+  supplierId: string;
+  lines: { productId: string; qty: number; unitCost: number }[];
+  relatedJobId?: string;
+  note?: string;
+};
+
+/** One line's newly-received quantity for a single receiving event — not
+ * the cumulative total, the delta being added now. */
+export type PurchaseOrderReceiveLine = { productId: string; qtyReceived: number };
+
 export interface SupplierPayment {
   id: string;
   supplierId: string;
@@ -501,6 +548,7 @@ export interface AppData {
   customerProductPrices: CustomerProductPrice[];
   suppliers: Supplier[];
   purchases: Purchase[];
+  purchaseOrders: PurchaseOrder[];
   supplierPayments: SupplierPayment[];
   acJobs: ACJob[];
   jobItems: JobItem[];

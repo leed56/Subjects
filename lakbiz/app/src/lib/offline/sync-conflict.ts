@@ -123,6 +123,9 @@ export function mergeAppData(local: AppData, remote: AppData): AppData {
     purchases: mergeById(local.purchases, remote.purchases).sort((a, b) =>
       b.date.localeCompare(a.date),
     ),
+    purchaseOrders: mergeById(local.purchaseOrders, remote.purchaseOrders).sort(
+      (a, b) => b.date.localeCompare(a.date),
+    ),
     supplierPayments: mergeById(local.supplierPayments, remote.supplierPayments).sort(
       (a, b) => b.date.localeCompare(a.date),
     ),

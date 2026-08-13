@@ -1,5 +1,5 @@
 import { newId, todayKey } from "@/lib/format";
-import { generateBillNo, generateGrnNo, type BusinessInfo } from "@/lib/invoice";
+import { generateBillNo, generateGrnNo, generatePoNo, type BusinessInfo } from "@/lib/invoice";
 import { clampCompanyIncomeTaxRatePct } from "@/lib/income-tax";
 import { calcInputVat, isVatEnabled, splitInclusiveTotal } from "@/lib/vat";
 import { generateJobNo } from "@/lib/ac-jobs";
@@ -46,6 +46,9 @@ import type {
   ProductInput,
   Purchase,
   PurchaseInput,
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderReceiveLine,
   Sale,
   SaleOptions,
   StockLog,
@@ -588,6 +591,165 @@ export function createPurchase(
       };
     }),
     stockLogs: [...stockLogs, ...data.stockLogs],
+  };
+}
+
+/** HVAC platform Phase 13 — create a purchase order. Deliberately does not
+ * touch stock, product buyPrice, or supplier.payableBalance: a PO is a
+ * plan to buy, not a delivery or a bill. Those only move when the order is
+ * actually received (see receivePurchaseOrder) or a separate GRN/purchase
+ * is recorded once the supplier's invoice arrives — recording both would
+ * double-count the same delivery. */
+export function createPurchaseOrder(
+  data: AppData,
+  input: PurchaseOrderInput,
+): AppData {
+  const supplier = data.suppliers.find((s) => s.id === input.supplierId);
+  if (!supplier) return data;
+
+  const lines: PurchaseOrder["lines"] = input.lines
+    .map(({ productId, qty, unitCost }) => {
+      const product = data.products.find((p) => p.id === productId);
+      if (!product || qty <= 0 || unitCost < 0) return null;
+      return {
+        productId,
+        productName: product.name,
+        qtyOrdered: qty,
+        qtyReceived: 0,
+        unitCost,
+      };
+    })
+    .filter((l): l is PurchaseOrder["lines"][number] => l !== null);
+
+  if (lines.length === 0) return data;
+
+  const expectedTotal = lines.reduce((s, l) => s + l.qtyOrdered * l.unitCost, 0);
+
+  const purchaseOrder: PurchaseOrder = {
+    id: newId(),
+    poNo: generatePoNo(data.purchaseOrders.length),
+    date: new Date().toISOString(),
+    supplierId: supplier.id,
+    supplierName: supplier.name,
+    lines,
+    expectedTotal,
+    status: "pending",
+    relatedJobId: input.relatedJobId || undefined,
+    note: input.note?.trim() || undefined,
+  };
+
+  return {
+    ...data,
+    purchaseOrders: [purchaseOrder, ...data.purchaseOrders],
+  };
+}
+
+/** Receive quantity against an open purchase order. This is the only place
+ * a purchase order is allowed to move stock — creating the PO itself never
+ * does. Each call is one delivery event: `receiveLines` carries the
+ * quantity arriving *now* (not the new cumulative total), so partial
+ * deliveries against the same PO can be recorded as they happen. Received
+ * quantity is capped to what's still outstanding on each line — you cannot
+ * over-receive a PO. Every unit received produces a real "purchase" stock
+ * movement through the same StockLog trail as a GRN purchase, per the
+ * spec's "do not automatically mark unreceived goods as available stock" —
+ * nothing here moves until this function is explicitly called. */
+export function receivePurchaseOrder(
+  data: AppData,
+  purchaseOrderId: string,
+  receiveLines: PurchaseOrderReceiveLine[],
+  userId?: string,
+): AppData {
+  const po = data.purchaseOrders.find((p) => p.id === purchaseOrderId);
+  if (!po || po.status === "cancelled" || po.status === "received") return data;
+
+  const receiveByProduct = new Map(
+    receiveLines
+      .filter((l) => l.qtyReceived > 0)
+      .map((l) => [l.productId, l.qtyReceived] as const),
+  );
+  if (receiveByProduct.size === 0) return data;
+
+  const date = new Date().toISOString();
+  const stockLogs: StockLog[] = [];
+  let anyReceived = false;
+
+  const updatedLines = po.lines.map((line) => {
+    const requested = receiveByProduct.get(line.productId);
+    if (!requested || requested <= 0) return line;
+    const outstanding = Math.max(0, line.qtyOrdered - line.qtyReceived);
+    const received = Math.min(requested, outstanding);
+    if (received <= 0) return line;
+
+    anyReceived = true;
+    stockLogs.push({
+      id: newId(),
+      productId: line.productId,
+      productName: line.productName,
+      type: "purchase",
+      qty: received,
+      note: `PO ${po.poNo}`,
+      date,
+      relatedSupplierId: po.supplierId,
+      userId,
+    });
+
+    return { ...line, qtyReceived: line.qtyReceived + received };
+  });
+
+  if (!anyReceived) return data;
+
+  const allReceived = updatedLines.every((l) => l.qtyReceived >= l.qtyOrdered);
+  const status = allReceived ? "received" : "partial";
+
+  const receivedProductIds = new Set(stockLogs.map((l) => l.productId));
+  const unitCostByProduct = new Map(
+    updatedLines
+      .filter((l) => receivedProductIds.has(l.productId))
+      .map((l) => [l.productId, l.unitCost] as const),
+  );
+  const qtyByProduct = new Map(stockLogs.map((l) => [l.productId, l.qty] as const));
+
+  return {
+    ...data,
+    purchaseOrders: data.purchaseOrders.map((p) =>
+      p.id === purchaseOrderId
+        ? {
+            ...p,
+            lines: updatedLines,
+            status,
+            receivedDate: p.receivedDate ?? date,
+          }
+        : p,
+    ),
+    products: data.products.map((product) => {
+      const qty = qtyByProduct.get(product.id);
+      if (!qty) return product;
+      return {
+        ...product,
+        stockQty: product.stockQty + qty,
+        buyPrice: unitCostByProduct.get(product.id) ?? product.buyPrice,
+      };
+    }),
+    stockLogs: [...stockLogs, ...data.stockLogs],
+  };
+}
+
+/** Cancel a purchase order that hasn't received anything yet. Guarded:
+ * once any quantity has been received, the PO already has real stock
+ * movements tied to it and cancelling would misrepresent what happened —
+ * the owner should let the remainder lapse or receive the rest instead. */
+export function cancelPurchaseOrder(data: AppData, purchaseOrderId: string): AppData {
+  const po = data.purchaseOrders.find((p) => p.id === purchaseOrderId);
+  if (!po || po.status === "cancelled") return data;
+  const hasReceived = po.lines.some((l) => l.qtyReceived > 0);
+  if (hasReceived) return data;
+
+  return {
+    ...data,
+    purchaseOrders: data.purchaseOrders.map((p) =>
+      p.id === purchaseOrderId ? { ...p, status: "cancelled" as const } : p,
+    ),
   };
 }
 

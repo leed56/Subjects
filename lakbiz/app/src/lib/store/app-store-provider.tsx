@@ -33,6 +33,7 @@ import {
   syncSaleSnapshot,
   syncSuppliersSnapshot,
   syncPurchaseSnapshot,
+  syncPurchaseOrderSnapshot,
   syncSupplierPaymentSnapshot,
   syncCustomerPaymentSnapshot,
   syncACJobSnapshot,
@@ -110,6 +111,9 @@ import {
   writeOffStock,
   returnStockToSupplier,
   createPurchase,
+  createPurchaseOrder,
+  receivePurchaseOrder,
+  cancelPurchaseOrder,
   createSale,
   deleteACJob,
   deleteBankAccount,
@@ -160,6 +164,8 @@ import type {
   CustomerInput,
   ProductInput,
   PurchaseInput,
+  PurchaseOrderInput,
+  PurchaseOrderReceiveLine,
   SaleOptions,
   SupplierInput,
   RecordACServiceInput,
@@ -227,6 +233,16 @@ export type AppStoreValue = {
   deleteSupplierToCloud: (id: string) => Promise<{ ok: boolean; error?: string }>;
   createPurchaseToCloud: (
     input: PurchaseInput,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  createPurchaseOrderToCloud: (
+    input: PurchaseOrderInput,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  receivePurchaseOrderToCloud: (
+    purchaseOrderId: string,
+    lines: PurchaseOrderReceiveLine[],
+  ) => Promise<{ ok: boolean; error?: string }>;
+  cancelPurchaseOrderToCloud: (
+    purchaseOrderId: string,
   ) => Promise<{ ok: boolean; error?: string }>;
   recordSupplierPaymentToCloud: (
     supplierId: string,
@@ -1282,6 +1298,192 @@ function useAppStoreState(): AppStoreValue {
       const err = await syncPurchaseSnapshot(org.id, next, purchaseId, {
         newChequeIds,
       });
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const createPurchaseOrderToCloud = useCallback(
+    async (input: PurchaseOrderInput): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canUseSuppliersModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const next = createPurchaseOrder(data, input);
+      if (next === data) {
+        return { ok: false, error: "Could not create purchase order" };
+      }
+
+      const purchaseOrderId = next.purchaseOrders[0].id;
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncPurchaseOrderSnapshot(org.id, next, purchaseOrderId);
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const receivePurchaseOrderToCloud = useCallback(
+    async (
+      purchaseOrderId: string,
+      lines: PurchaseOrderReceiveLine[],
+    ): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canUseSuppliersModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
+      const next = receivePurchaseOrder(data, purchaseOrderId, lines, user?.id);
+      if (next === data) {
+        return { ok: false, error: "Nothing to receive" };
+      }
+
+      const newStockLogIds = next.stockLogs
+        .filter((log) => !prevLogIds.has(log.id))
+        .map((log) => log.id);
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncPurchaseOrderSnapshot(org.id, next, purchaseOrderId, {
+        newStockLogIds,
+      });
+      if (err) {
+        setCloudSyncError(err);
+        touchOfflinePending(org.id);
+        refreshOfflinePendingState(org.id);
+        scheduleCloudPush(next);
+        return { ok: false, error: err };
+      }
+
+      setCloudSyncError(null);
+      scheduleCloudPush(next);
+      return { ok: true };
+    },
+    [
+      data,
+      syncConflict,
+      isReadOnly,
+      can,
+      orgRole,
+      isOnline,
+      org.id,
+      org.isAuthenticated,
+      user,
+      scheduleCloudPush,
+      refreshOfflinePendingState,
+    ],
+  );
+
+  const cancelPurchaseOrderToCloud = useCallback(
+    async (purchaseOrderId: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!data) return { ok: false, error: "Not ready" };
+      if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
+      if (isReadOnly || !can("write") || !canUseSuppliersModule(orgRole)) {
+        return { ok: false, error: "Read-only mode" };
+      }
+      if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const next = cancelPurchaseOrder(data, purchaseOrderId);
+      if (next === data) {
+        return { ok: false, error: "Could not cancel purchase order" };
+      }
+
+      setData(next);
+      latestDataRef.current = next;
+      saveAppData(next, org.id);
+
+      if (!isOnline) {
+        if (org.id) {
+          bumpOfflinePendingChange(org.id);
+          refreshOfflinePendingState(org.id);
+        }
+        return { ok: true };
+      }
+
+      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncPurchaseOrderSnapshot(org.id, next, purchaseOrderId);
       if (err) {
         setCloudSyncError(err);
         touchOfflinePending(org.id);
@@ -3539,6 +3741,9 @@ function useAppStoreState(): AppStoreValue {
       saveSupplierToCloud,
       deleteSupplierToCloud,
       createPurchaseToCloud,
+      createPurchaseOrderToCloud,
+      receivePurchaseOrderToCloud,
+      cancelPurchaseOrderToCloud,
       recordSupplierPaymentToCloud,
       recordCustomerPaymentToCloud,
       addBankAccountToCloud,
@@ -3596,6 +3801,9 @@ function useAppStoreState(): AppStoreValue {
     saveSupplierToCloud,
     deleteSupplierToCloud,
     createPurchaseToCloud,
+    createPurchaseOrderToCloud,
+    receivePurchaseOrderToCloud,
+    cancelPurchaseOrderToCloud,
     recordSupplierPaymentToCloud,
     recordCustomerPaymentToCloud,
     saveACJobToCloud,

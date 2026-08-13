@@ -46,6 +46,14 @@ export function generateGrnNo(existingPurchaseCount: number): string {
   return `GRN-${d}-${seq}`;
 }
 
+/** HVAC platform Phase 13 — purchase order number, distinct series from the
+ * GRN number: a PO is "goods ordered", a GRN is "goods received/billed". */
+export function generatePoNo(existingPurchaseOrderCount: number): string {
+  const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const seq = String(existingPurchaseOrderCount + 1).padStart(4, "0");
+  return `PO-${d}-${seq}`;
+}
+
 export function formatPaymentLabel(
   method: Sale["paymentMethod"],
   t?: (key: string) => string,
