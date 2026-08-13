@@ -75,6 +75,10 @@ export default function StockPage() {
 
   const [search, setSearch] = useState("");
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
+  // Discontinued items default to hidden — matches getLowStockProducts/the
+  // sale picker, which already ignore inactive items — with an explicit
+  // toggle to review/reactivate them instead of losing them silently.
+  const [showInactive, setShowInactive] = useState(false);
   // HVAC platform Phase 12 — a real filtered view of exactly what needs
   // reordering, not just the metric-card count that existed before.
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
@@ -99,14 +103,16 @@ export default function StockPage() {
       )
     : data.products;
   const byCondition = conditionFilter === "all" ? searched : searched.filter((p) => p.condition === conditionFilter);
+  const byActive = showInactive ? byCondition : byCondition.filter((p) => p.active);
   const lowStock = getLowStockProducts(data.products);
   const lowStockIds = new Set(lowStock.map((p) => p.id));
-  const products = showLowStockOnly ? byCondition.filter((p) => lowStockIds.has(p.id)) : byCondition;
+  const products = showLowStockOnly ? byActive.filter((p) => lowStockIds.has(p.id)) : byActive;
   const reorderSuggestions = showLowStockOnly ? getReorderSuggestions(data) : [];
   const reorderByProductId = new Map(reorderSuggestions.map((r) => [r.product.id, r] as const));
 
   const newCount = data.products.filter((p) => p.condition === "new").length;
   const usedCount = data.products.filter((p) => p.condition === "used").length;
+  const inactiveCount = data.products.filter((p) => !p.active).length;
   const inventoryValue = data.products.reduce((sum, p) => sum + p.stockQty * p.buyPrice, 0);
   const sellValue = data.products.reduce((sum, p) => sum + p.stockQty * p.sellPrice, 0);
   const stockInProduct = stockInId ? data.products.find((p) => p.id === stockInId) : null;
@@ -253,10 +259,11 @@ export default function StockPage() {
         return (
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={() => openEdit(p)} className="font-semibold text-slate-900 hover:text-teal-700 hover:underline">
+              <button type="button" onClick={() => openEdit(p)} className={`font-semibold hover:text-teal-700 hover:underline ${p.active ? "text-slate-900" : "text-slate-400"}`}>
                 {p.name}
               </button>
               <ProductConditionBadge condition={p.condition} />
+              {!p.active && <StatusBadge tone="neutral">{t("stock.inactive_badge")}</StatusBadge>}
             </div>
             <p className="mt-0.5 text-xs text-slate-500">
               {p.sku ? `${p.sku} · ` : ""}
@@ -424,6 +431,17 @@ export default function StockPage() {
               }`}
             >
               {t("stock.low_stock_filter")} <span className="opacity-70">({lowStock.length})</span>
+            </button>
+          )}
+          {inactiveCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowInactive((v) => !v)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                showInactive ? "bg-slate-700 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
+              }`}
+            >
+              {t("stock.filter_inactive")} <span className="opacity-70">({inactiveCount})</span>
             </button>
           )}
         </FilterBar>

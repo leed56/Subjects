@@ -44,6 +44,12 @@ export const sectors: SectorTemplate[] = [
     nameSi: "වායු සමනය",
     description: "BTU/HP units, serial pairs, installation jobs, service AMC.",
     icon: "❄️",
+    // Covers both whole AC units (brand/btu/hp/serials) and the parts &
+    // materials catalogue (partNo/compatibleModels/binLocation/etc.) — the
+    // product form shows one field set per sector, not per category, so a
+    // capacitor and a wall unit share this list; irrelevant fields are
+    // simply left blank. Splitting fields by category is a bigger form
+    // redesign, out of scope here (Phase 2 of the HVAC platform spec).
     extraFields: [
       "brand",
       "btu",
@@ -52,6 +58,12 @@ export const sectors: SectorTemplate[] = [
       "indoorSerial",
       "outdoorSerial",
       "compressorWarrantyMonths",
+      "partNo",
+      "supplierPartNo",
+      "compatibleModels",
+      "binLocation",
+      "warrantyMonths",
+      "serialRequired",
     ],
     reports: [
       "Installations pending",
@@ -121,10 +133,29 @@ export function categoriesForSector(sectorId: SectorId): string[] {
     electricals: ["Electricals", "Wire & Cable", "Fixtures", "Other"],
     spare_parts: ["Spare Parts", "Filters", "Other"],
     ac_hvac: [
+      // Original 5 kept as-is (existing saved products reference these
+      // strings by exact match — normalizeProductCategory() silently resets
+      // anything not in this list, so nothing already in production can be
+      // removed here). New HVAC parts/materials categories are appended.
       "Air Conditioning",
       "Pipe & Accessories",
       "Consumables",
       "Service Parts",
+      "Compressors",
+      "Coils (Condenser & Evaporator)",
+      "PCBs & Control Boards",
+      "Capacitors, Relays & Contactors",
+      "Motors & Fans",
+      "Sensors & Thermostats",
+      "Valves & Refrigerant Controls",
+      "Refrigerant & Gas",
+      "Copper Pipe & Fittings",
+      "Insulation & Cladding",
+      "Drain Components",
+      "Filters",
+      "Bearings & Mounts",
+      "Electrical (Terminals, Breakers, Fuses, Cables)",
+      "Brackets & Vibration Pads",
       "Other",
     ],
     car_sales: ["Vehicles", "Accessories", "Other"],

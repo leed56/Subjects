@@ -30,7 +30,8 @@ function productChanged(a: Product, b: Product): boolean {
     a.sellPrice !== b.sellPrice ||
     a.buyPrice !== b.buyPrice ||
     a.name !== b.name ||
-    a.reorderLevel !== b.reorderLevel
+    a.reorderLevel !== b.reorderLevel ||
+    a.active !== b.active
   );
 }
 
