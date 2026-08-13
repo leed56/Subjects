@@ -1972,6 +1972,51 @@ Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
 pre-existing warnings, none new, `next build` succeeds. No browser
 verification — standing sandbox limitation.
 
+### Phase 11 — Repeat-repair intelligence
+
+The spec's sharpest guardrail: deterministic only, no AI, no fabricated
+"likely failure" claims, only messages exactly supported by stored data
+— explicitly allowing exactly the shape "This unit has had 3 repair jobs
+in the last 90 days."
+
+New `src/lib/repeat-repair.ts`, `computeRepeatRepairSignal()` — a plain
+count over real `AssetJob` records within a fixed window, nothing
+predictive or inferred:
+
+- **Window and threshold are explicit, disclosed choices, documented in
+  the function's own header**: 2+ repair/service jobs within the last
+  90 days. Two visits inside one quarter is a real, defensible "this
+  keeps coming back" signal; one visit is just a repair, not a pattern.
+  Picked and written down rather than left as an unstated magic number,
+  per the spec's "do not invent the threshold silently" instruction
+  (stated elsewhere in the spec for margin flagging, applied here to
+  the same class of problem).
+- **Only `jobType === "repair"` or `"service"` count.** Installation/
+  inspection/warranty/other jobs aren't repeat *repairs* — counting
+  them would make the message less exact than the spec's "exactly
+  supported by stored data" instruction asks for. `AssetJob` gained a
+  `jobType` field (already available on the underlying `ac_jobs` view,
+  just not previously selected) to make this possible.
+- Surfaced in the asset profile's Service History tab (the same tab
+  Phase 10 built out) as a plain amber banner when triggered, using the
+  spec's own example wording verbatim: "This unit has had {count}
+  repair jobs in the last {days} days." No severity scoring, no
+  "urgent"/"critical" language beyond that one factual sentence.
+- Exported as a pure, reusable function (mirroring Phase 8's
+  `computeJobProfitability` precedent) specifically so a future
+  dashboard "Needs Attention" pass (Phases 14–18) can reuse the exact
+  same signal instead of re-deriving a competing one.
+
+**Not built this phase**: surfacing the signal inside the Job Sheet
+drawer when a job is linked to a repeat-repair asset — would need
+fetching that asset's job history from within `/jobs`, adding a second
+data-fetch path for a signal that's already visible, correctly, on the
+asset's own profile page. Deferred rather than duplicated.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds. No browser
+verification — standing sandbox limitation.
+
 ## Not started
 
 Deferred items: customer notes field,

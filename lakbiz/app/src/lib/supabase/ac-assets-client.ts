@@ -208,6 +208,10 @@ export type AssetJob = {
   /** Already masked to 0/null for non-financial roles by the ac_jobs view
    * itself (can_see_org_financials) — trusted as-is, not re-gated here. */
   subcontractCost: number | null;
+  /** installation/service/repair/inspection/warranty/other — needed by
+   * computeRepeatRepairSignal() (Phase 11), which only counts
+   * repair/service visits. */
+  jobType: string;
 };
 
 /** An asset's service/repair history — direct cloud read against the
@@ -222,7 +226,7 @@ export async function fetchAssetJobs(assetId: string): Promise<{ data: AssetJob[
 
   const { data, error } = await supabase
     .from("ac_jobs")
-    .select("id, job_no, job_date, status, description, complaint, diagnosis, quoted_amount, assignee_type, subcontract_cost")
+    .select("id, job_no, job_date, status, description, complaint, diagnosis, quoted_amount, assignee_type, subcontract_cost, job_type")
     .eq("asset_id", assetId)
     .order("job_date", { ascending: false });
 
@@ -238,6 +242,7 @@ export async function fetchAssetJobs(assetId: string): Promise<{ data: AssetJob[
       diagnosis: (r.diagnosis as string | null) ?? null,
       quotedAmount: Number(r.quoted_amount ?? 0),
       assigneeType: (r.assignee_type as string | null) ?? null,
+      jobType: (r.job_type as string | null) ?? "installation",
       subcontractCost: r.subcontract_cost != null ? Number(r.subcontract_cost) : null,
     })),
     error: null,
