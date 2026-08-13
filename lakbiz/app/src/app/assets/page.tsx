@@ -13,6 +13,7 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { formatLkr } from "@/lib/format";
+import { computeRepeatRepairSignal } from "@/lib/repeat-repair";
 import {
   createAsset,
   deleteAsset,
@@ -539,6 +540,23 @@ export default function AssetsPage() {
                   <EmptyState title={t("assets.no_jobs")} description={t("assets.no_jobs_hint")} />
                 ) : (
                   <div className="space-y-5">
+                    {(() => {
+                      // HVAC platform Phase 11 — deterministic only. This
+                      // is a plain count over real jobs within a fixed,
+                      // disclosed window/threshold (see repeat-repair.ts)
+                      // — never a prediction or a fabricated "likely
+                      // failure" claim.
+                      const signal = computeRepeatRepairSignal(profileJobs, new Date());
+                      if (!signal.triggered) return null;
+                      return (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                          <p className="text-sm font-semibold text-amber-900">
+                            {t("assets.repeat_repair_banner").replace("{count}", String(signal.count)).replace("{days}", String(signal.windowDays))}
+                          </p>
+                        </div>
+                      );
+                    })()}
+
                     {canSeeFinancials && (
                       <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("assets.lifetime_cost")}</p>
