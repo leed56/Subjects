@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
 import { PageHeader, MetricCard, EmptyState, SearchInput, FilterBar } from "@/components/ui/primitives";
@@ -14,22 +14,27 @@ import { jobStatusClass, jobStatusLabel } from "@/lib/ac-jobs";
 import { jobTypeLabel } from "@/lib/ac-job-types";
 import type { ACJobType } from "@/lib/ac-job-types";
 import type { ACJob } from "@/lib/store/types";
+import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
 
 type CostedJob = {
   job: ACJob;
   itemsCost: number;
   subcontractCost: number;
+  /** HVAC platform Phase 7 — job-linked Expenses rows (parking, equipment
+   * rental, outsourced repair, etc.), excluding "subcontractor" as a
+   * category since that cost already lives in subcontractCost above. */
+  otherCost: number;
   totalCost: number;
   margin: number;
   marginPct: number | null;
 };
 
-function costJob(job: ACJob, itemsCost: number): CostedJob {
+function costJob(job: ACJob, itemsCost: number, otherCost: number): CostedJob {
   const subcontractCost = job.assigneeType === "contractor" ? job.subcontractCost ?? 0 : 0;
-  const totalCost = itemsCost + subcontractCost;
+  const totalCost = itemsCost + subcontractCost + otherCost;
   const margin = job.quotedAmount - totalCost;
   const marginPct = job.quotedAmount > 0 ? (margin / job.quotedAmount) * 100 : null;
-  return { job, itemsCost, subcontractCost, totalCost, margin, marginPct };
+  return { job, itemsCost, subcontractCost, otherCost, totalCost, margin, marginPct };
 }
 
 type SortKey = "date" | "margin" | "marginPct" | "quoted";
@@ -46,8 +51,33 @@ export default function JobCostingPage() {
   const [sortKey, setSortKey] = useState<SortKey>("date");
 
   const canSeeFinancials = orgRole === "owner" || orgRole === "manager";
+  const orgId = org.isAuthenticated ? org.id : null;
 
-  if (!org.isAuthenticated || !localReady || !localData) {
+  // Expenses are cloud-only (not part of the local-first store — see
+  // expenses-client.ts), so job-linked "other costs" (Phase 7) need
+  // their own fetch here, same pattern as /expenses itself.
+  const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<string, number> | null>(null);
+  useEffect(() => {
+    if (!orgId || !canSeeFinancials) {
+      setJobLinkedExpenseTotals(new Map());
+      return;
+    }
+    let cancelled = false;
+    void fetchOrgExpenses(orgId).then((result) => {
+      if (cancelled) return;
+      const totals = new Map<string, number>();
+      for (const e of result.data) {
+        if (!e.jobId) continue;
+        totals.set(e.jobId, (totals.get(e.jobId) ?? 0) + e.amount);
+      }
+      setJobLinkedExpenseTotals(totals);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, canSeeFinancials]);
+
+  if (!org.isAuthenticated || !localReady || !localData || !jobLinkedExpenseTotals) {
     return (
       <AppShell>
         <ProMain>
@@ -76,7 +106,7 @@ export default function JobCostingPage() {
     .filter((j) => statusFilter === "all" || (statusFilter === "completed" ? j.status === "completed" : j.status !== "cancelled" && j.status !== "completed"))
     .filter((j) => typeFilter === "all" || j.jobType === typeFilter)
     .filter((j) => !search.trim() || j.customerName.toLowerCase().includes(search.trim().toLowerCase()))
-    .map((j) => costJob(j, itemsCostByJob.get(j.id) ?? 0));
+    .map((j) => costJob(j, itemsCostByJob.get(j.id) ?? 0, jobLinkedExpenseTotals.get(j.id) ?? 0));
 
   const sorted = [...costed].sort((a, b) => {
     if (sortKey === "margin") return a.margin - b.margin;
@@ -120,7 +150,12 @@ export default function JobCostingPage() {
       header: t("costing.cost"),
       align: "right",
       hideOnMobile: true,
-      render: (c) => formatLkr(c.totalCost),
+      render: (c) => (
+        <div>
+          <p>{formatLkr(c.totalCost)}</p>
+          {c.otherCost > 0 && <p className="text-xs text-slate-400">{t("costing.incl_other")} {formatLkr(c.otherCost)}</p>}
+        </div>
+      ),
     },
     {
       key: "margin",

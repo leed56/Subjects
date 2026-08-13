@@ -1749,6 +1749,48 @@ Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
 pre-existing warnings, none new, `next build` succeeds. No browser
 verification — standing sandbox limitation.
 
+### Phase 7 — Other job costs
+
+Audited first: Expenses (built in the prior 19-phase spec's Phase 11)
+already covers ad-hoc operating costs with category/amount/date/payment
+method/vendor/notes — everything the spec's field list asked for except
+a job link. One column, not a parallel "job costs" table.
+
+- `expenses.job_id` (nullable text, no FK — same pattern as
+  `job_items.job_id`). `/expenses`' form gets an optional "Link to a
+  job" picker; the table gets a Job column.
+- Three new expense categories genuinely missing before: `parking`,
+  `equipment_rental`, `outsourced_repair`. **Deliberately no
+  `subcontractor` category** — that cost already lives in
+  `ACJob.subcontractCost` for contractor-assigned jobs; adding a second
+  place to record the same cost would invite double-counting it, which
+  the spec's absolute rules explicitly forbid.
+- `/job-costing` (the existing profitability report) now fetches
+  expenses (cloud-only, same pattern `/expenses` itself uses) and adds
+  each job's linked-expense total as `otherCost`, folded into
+  `totalCost` alongside `itemsCost`/`subcontractCost`. The cost column
+  shows an "incl. other costs" hint when `otherCost > 0`, for
+  transparency about what's in the number.
+- Checked for the double-count risk explicitly: a job-linked expense
+  still counts (correctly) toward the shop's month/fiscal-year expense
+  totals on `/expenses` itself, and toward the income-tax deduction
+  calc — that's not a bug, it's the same real cost viewed from two
+  different questions ("what did the business spend" vs. "was this job
+  profitable"), which is exactly the distinction the spec's Phase 20
+  asks reporting layers to preserve. Nothing sums both totals *together*
+  anywhere, which is the actual double-counting failure mode.
+
+**Deliberately not built this phase**: wiring "other costs" into the Job
+Sheet drawer (`/jobs`) itself — that page is already local-first only
+and doesn't fetch cloud-only Expenses; adding a second fetch there
+increases the risk surface of an already-large file for a view that's
+naturally superseded by Phase 9's Job Detail redesign anyway.
+`/job-costing` is the authoritative profitability view for now.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds. No browser
+verification — standing sandbox limitation.
+
 ## Not started
 
 Deferred items: customer notes field,
