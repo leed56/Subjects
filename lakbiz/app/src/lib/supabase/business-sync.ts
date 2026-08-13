@@ -495,6 +495,12 @@ export async function pullBusinessData(
       qty: num(row.qty),
       unitPrice: num(row.unit_price),
       lineTotal: num(row.line_total),
+      source: (row.source as AppData["jobItems"][number]["source"]) ?? undefined,
+      productId: row.product_id ?? undefined,
+      supplierId: row.supplier_id ?? undefined,
+      purchaseRef: row.purchase_ref ?? undefined,
+      purchaseDate: row.purchase_date ?? undefined,
+      customerPrice: row.customer_price != null ? num(row.customer_price) : undefined,
     })),
     jobStatusHistory: jobStatusHistory.map((row) => ({
       id: row.id,
@@ -1447,6 +1453,12 @@ function jobItemRow(
     qty: item.qty,
     unit_price: item.unitPrice,
     line_total: item.lineTotal,
+    source: item.source ?? null,
+    product_id: item.productId ?? null,
+    supplier_id: item.supplierId ?? null,
+    purchase_ref: item.purchaseRef ?? null,
+    purchase_date: item.purchaseDate ?? null,
+    customer_price: item.customerPrice ?? null,
   };
 }
 
@@ -2212,6 +2224,12 @@ export async function pushBusinessData(
     qty: i.qty,
     unit_price: i.unitPrice,
     line_total: i.lineTotal,
+    source: i.source ?? null,
+    product_id: i.productId ?? null,
+    supplier_id: i.supplierId ?? null,
+    purchase_ref: i.purchaseRef ?? null,
+    purchase_date: i.purchaseDate ?? null,
+    customer_price: i.customerPrice ?? null,
   }));
 
   const jobStatusHistoryRows = data.jobStatusHistory.map((h) => ({

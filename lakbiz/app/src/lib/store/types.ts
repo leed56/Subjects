@@ -86,14 +86,39 @@ export type RecordACServiceInput = {
 
 export type JobItemType = "part" | "labour" | "service";
 
+/** Only meaningful when itemType === "part" (HVAC platform Phase 4/5).
+ * - stock: decremented from real inventory, unitPrice frozen from the
+ *   product's buyPrice at the moment this item is created.
+ * - purchased: bought specifically for this job, not from warehouse stock.
+ * - customer_supplied: the customer provided the part; no inventory
+ *   decrement, unitPrice defaults to 0. */
+export type JobItemSource = "stock" | "purchased" | "customer_supplied";
+
 export interface JobItem {
   id: string;
   jobId: string;
   itemType: JobItemType;
   name: string;
   qty: number;
+  /** Internal cost per unit — NOT what the customer is charged (see
+   * `customerPrice`). For source "stock" this is a historical snapshot,
+   * frozen when the item is created; never recalculated from the
+   * product's current price afterward. */
   unitPrice: number;
   lineTotal: number;
+  source?: JobItemSource;
+  /** Set only when source === "stock" — links back to the real product
+   * this material was decremented from. */
+  productId?: string;
+  /** source === "purchased" only. */
+  supplierId?: string;
+  purchaseRef?: string;
+  purchaseDate?: string;
+  /** What the customer is being charged for this specific item, when the
+   * owner wants to track it per-line. Does not feed the job invoice,
+   * which still shows one flat `quotedAmount` — itemizing the invoice
+   * itself is a Job Detail redesign concern, not this phase's. */
+  customerPrice?: number;
 }
 
 export type JobItemInput = {
@@ -102,6 +127,12 @@ export type JobItemInput = {
   name: string;
   qty: number;
   unitPrice: number;
+  source?: JobItemSource;
+  productId?: string;
+  supplierId?: string;
+  purchaseRef?: string;
+  purchaseDate?: string;
+  customerPrice?: number;
 };
 
 export interface JobStatusEntry {

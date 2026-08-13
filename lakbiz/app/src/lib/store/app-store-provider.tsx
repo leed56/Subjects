@@ -1634,12 +1634,14 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
 
       const prevLen = data.jobItems.length;
-      const next = addJobItem(data, input);
+      const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
+      const next = addJobItem(data, input, user?.id);
       if (next.jobItems.length === prevLen) {
         return { ok: false, error: "Could not add item" };
       }
 
-      const itemId = next.jobItems[0].id;
+      const newItem = next.jobItems[0];
+      const itemId = newItem.id;
       setData(next);
       latestDataRef.current = next;
       saveAppData(next, org.id);
@@ -1665,6 +1667,26 @@ function useAppStoreState(): AppStoreValue {
         return { ok: false, error: err };
       }
 
+      // A "stock"-sourced item also decremented a real product + wrote a
+      // job_usage StockLog (see addJobItem) — that needs its own push,
+      // syncJobItemSnapshot above only touches the job_items row itself.
+      if (newItem.source === "stock" && newItem.productId) {
+        const newStockLogIds = next.stockLogs
+          .filter((log) => !prevLogIds.has(log.id))
+          .map((log) => log.id);
+        const stockErr = await syncProductSnapshot(org.id, next, [newItem.productId], {
+          preserveBuyPrices: !canSeeFinancials,
+          stockLogIds: newStockLogIds,
+        });
+        if (stockErr) {
+          setCloudSyncError(stockErr);
+          touchOfflinePending(org.id);
+          refreshOfflinePendingState(org.id);
+          scheduleCloudPush(next);
+          return { ok: false, error: stockErr };
+        }
+      }
+
       setCloudSyncError(null);
       scheduleCloudPush(next);
       return { ok: true };
@@ -1679,6 +1701,7 @@ function useAppStoreState(): AppStoreValue {
       org.id,
       org.isAuthenticated,
       user,
+      canSeeFinancials,
       scheduleCloudPush,
       refreshOfflinePendingState,
     ],
@@ -1697,7 +1720,9 @@ function useAppStoreState(): AppStoreValue {
         return { ok: false, error: "Item not found" };
       }
 
-      const next = deleteJobItem(data, id);
+      const deletedItem = data.jobItems.find((item) => item.id === id);
+      const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
+      const next = deleteJobItem(data, id, user?.id);
       setData(next);
       latestDataRef.current = next;
       saveAppData(next, org.id);
@@ -1723,6 +1748,25 @@ function useAppStoreState(): AppStoreValue {
         return { ok: false, error: err };
       }
 
+      // Deleting a "stock"-sourced item reverses its decrement (job_return
+      // — see deleteJobItem) — push that product + StockLog too.
+      if (deletedItem?.source === "stock" && deletedItem.productId) {
+        const newStockLogIds = next.stockLogs
+          .filter((log) => !prevLogIds.has(log.id))
+          .map((log) => log.id);
+        const stockErr = await syncProductSnapshot(org.id, next, [deletedItem.productId], {
+          preserveBuyPrices: !canSeeFinancials,
+          stockLogIds: newStockLogIds,
+        });
+        if (stockErr) {
+          setCloudSyncError(stockErr);
+          touchOfflinePending(org.id);
+          refreshOfflinePendingState(org.id);
+          scheduleCloudPush(next);
+          return { ok: false, error: stockErr };
+        }
+      }
+
       setCloudSyncError(null);
       scheduleCloudPush(next);
       return { ok: true };
@@ -1737,6 +1781,7 @@ function useAppStoreState(): AppStoreValue {
       org.id,
       org.isAuthenticated,
       user,
+      canSeeFinancials,
       scheduleCloudPush,
       refreshOfflinePendingState,
     ],
