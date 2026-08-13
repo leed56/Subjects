@@ -200,6 +200,14 @@ export type AssetJob = {
   jobDate: string;
   status: string;
   description: string;
+  /** Phase 9 fields — real per-visit complaint/diagnosis, when recorded. */
+  complaint: string | null;
+  diagnosis: string | null;
+  quotedAmount: number;
+  assigneeType: string | null;
+  /** Already masked to 0/null for non-financial roles by the ac_jobs view
+   * itself (can_see_org_financials) — trusted as-is, not re-gated here. */
+  subcontractCost: number | null;
 };
 
 /** An asset's service/repair history — direct cloud read against the
@@ -214,7 +222,7 @@ export async function fetchAssetJobs(assetId: string): Promise<{ data: AssetJob[
 
   const { data, error } = await supabase
     .from("ac_jobs")
-    .select("id, job_no, job_date, status, description")
+    .select("id, job_no, job_date, status, description, complaint, diagnosis, quoted_amount, assignee_type, subcontract_cost")
     .eq("asset_id", assetId)
     .order("job_date", { ascending: false });
 
@@ -226,6 +234,48 @@ export async function fetchAssetJobs(assetId: string): Promise<{ data: AssetJob[
       jobDate: r.job_date as string,
       status: r.status as string,
       description: r.description as string,
+      complaint: (r.complaint as string | null) ?? null,
+      diagnosis: (r.diagnosis as string | null) ?? null,
+      quotedAmount: Number(r.quoted_amount ?? 0),
+      assigneeType: (r.assignee_type as string | null) ?? null,
+      subcontractCost: r.subcontract_cost != null ? Number(r.subcontract_cost) : null,
+    })),
+    error: null,
+  };
+}
+
+export type AssetJobItem = {
+  jobId: string;
+  itemType: string;
+  name: string;
+  qty: number;
+  /** Masked to 0 for non-financial roles by the job_items view itself
+   * (Phase 6) — trusted as-is. */
+  lineTotal: number;
+};
+
+/** Parts/labour/service lines across every job linked to this asset — the
+ * real, stored basis for "components replaced" and lifetime repair cost
+ * (HVAC platform Phase 10). No separate manual "components replaced" log:
+ * jobs are the authoritative service-history source, per the spec. */
+export async function fetchAssetJobItems(jobIds: string[]): Promise<{ data: AssetJobItem[]; error: string | null }> {
+  if (jobIds.length === 0) return { data: [], error: null };
+  const supabase = createBrowserClient();
+  if (!supabase) return { data: [], error: "Supabase not configured" };
+
+  const { data, error } = await supabase
+    .from("job_items")
+    .select("job_id, item_type, name, qty, line_total")
+    .in("job_id", jobIds);
+
+  if (error) return { data: [], error: error.message };
+  return {
+    data: (data ?? []).map((r) => ({
+      jobId: r.job_id as string,
+      itemType: r.item_type as string,
+      name: r.name as string,
+      qty: Number(r.qty ?? 0),
+      lineTotal: Number(r.line_total ?? 0),
     })),
     error: null,
   };
