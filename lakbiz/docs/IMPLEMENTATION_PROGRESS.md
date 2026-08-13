@@ -2254,6 +2254,110 @@ a fresh/empty org — first real visual confirmation this engagement has
 had of the actual running app, though it couldn't exercise this card
 specifically since that org has no purchase orders yet.)
 
+### Critical infra fix — live database schema drift (Phases 3, 4/5, 6, 7, 9, 13 never actually applied)
+
+Reported by the user testing the live Vercel preview: a "Cloud save
+failed" banner reading `Could not find the 'hourly_rate' column of
+'technicians' in the schema cache`, plus the Suppliers screen appearing
+unresponsive.
+
+Root cause, found via direct introspection of the live Supabase project
+(`nexus-erp`) using the Supabase MCP tools — access this session had the
+whole time but had not yet used for live verification: **every migration
+file written for Phases 3, 4/5, 6, 7, 9, and 13 in this engagement had
+only ever existed in git.** None had been applied to the actual database
+the deployed app talks to. `list_migrations`' tracked history turned out
+to be an unreliable signal on its own (several older, unrelated
+migrations exist live without a matching tracked entry, evidently
+applied by hand at some point) — the only trustworthy check was
+introspecting real table/column/constraint state directly, which is what
+this fix is based on, not migration-file bookkeeping.
+
+Concretely, before this fix, the live database was missing:
+- `stock_logs.related_job_id`/`related_supplier_id`/`user_id`, and its
+  `log_type` check constraint still only allowed `('in','out','sale')` —
+  meaning any stock movement of type `purchase`/`job_usage`/`job_return`/
+  `supplier_return`/`write_off` would have been rejected outright by the
+  database. This affected the base `createPurchase` (GRN) flow, not just
+  HVAC-specific ones — no purchase's stock log has likely ever
+  successfully synced to the cloud on this project.
+- `job_items.source`/`product_id`/`supplier_id`/`purchase_ref`/
+  `purchase_date`/`customer_price`, and the `job_items`/`technicians`
+  masked views + `hourly_rate` entirely (this is what the user's
+  reported error came from).
+- `expenses.job_id`.
+- `ac_jobs_base.complaint`/`diagnosis`.
+- `purchase_orders`/`purchase_order_lines` — didn't exist at all.
+
+Applied all six missing migrations directly to the live project via
+`mcp__Supabase__apply_migration`, in dependency order, verifying table/
+column/constraint state before and after each one.
+
+**Two real bugs found and fixed while applying, not just replayed
+blind:**
+1. **Cross-tenant data leak.** The original `labor_costing.sql`'s
+   `technicians`/`job_items` masked views had no tenant `WHERE` clause at
+   all — unlike every other masked view in this codebase (`ac_jobs`,
+   `products`, `sales`, `contractors`, `vehicles`), which all filter to
+   the caller's own orgs. Any authenticated user from any organization
+   could have read every organization's technician names/phones/notes
+   and job_items' job_id/qty/source (the numeric financial columns would
+   still have masked to null/0 per-row, but the rest would not). The
+   trigger functions were also `security invoker` with no write-permission
+   check, unlike every other masked-view trigger, so any authenticated
+   org member — including a role explicitly barred from managing
+   technicians — could write or delete any org's technician or job_item
+   row. Fixed to match the established pattern exactly (tenant-filtered
+   view, `security_invoker = false`, `security definer` trigger functions
+   gated by `org_member_can_write_module`).
+2. **Self-caught deployment mistake, corrected before it caused harm.**
+   The first live-apply attempt gated the new write-permission check on
+   `org_member_can_write_module(org_id, 'technicians')` — 'technicians'
+   is not a real module key (`plans.features` has no such key), so
+   `org_has_module` would have returned false unconditionally, blocking
+   *all* technician writes for *every* role, including owners. Caught by
+   checking the live `plans.features` keys and `contractors_view_insert`'s
+   already-working equivalent (which gates the same workforce-adjacent
+   write under `'ac_jobs'`) before reporting the fix as done — corrected
+   immediately, live and in the repo file, to use `'ac_jobs'`.
+
+Also found, while applying `job_complaint_diagnosis.sql`, that a
+*pre-existing, unrelated* gap already lived in the `ac_jobs` view's
+trigger functions: neither INSERT nor UPDATE ever forwarded
+`asset_id`/`crew_id` at all, meaning linking a job to an asset or a crew
+has never actually persisted at the database layer, regardless of what
+the UI sent. Since this migration already had to rewrite the same view
+and both trigger functions to append `complaint`/`diagnosis`, fixed this
+in the same pass rather than reproducing a known-broken column list a
+third time — this is also part of why Phase 14's audit found "almost no
+job carries a real `asset_id`."
+
+Also ran the Supabase security advisor after all six migrations: the new
+`technicians_view_*`/`job_items_view_*` functions showed up as
+anon/public-executable — the exact class of gap this repo's own earlier
+security-hardening migrations
+(`revoke_anon_execute_internal_functions.sql` /
+`revoke_public_execute_internal_functions.sql`) already closed for every
+*other* masked-view trigger function, just before these two existed.
+Applied the identical revoke/grant pattern to match, live and as a new
+migration file in the repo.
+
+**Corrected the two affected repo migration files in place** (rather
+than leaving a known-bad version in git history for the next fresh
+deploy to replay) and added one new migration file for the anon-execute
+revoke. Verified live afterward: `hourly_rate` column present, both
+masked views tenant-filtered, `purchase_orders`/`purchase_order_lines`
+exist with RLS, security advisor clean of anything but the two
+pre-existing, already-accepted categories (the `security_definer_view`
+lint every masked view in this codebase triggers by design, and the
+already-known, dashboard-only-fixable leaked-password-protection
+setting).
+
+This was found and fixed live-first (the user was actively blocked) —
+the corrected migration files are being shipped as their own PR to keep
+git as the source of truth for any future fresh deployment, separate
+from the phase-by-phase feature PRs.
+
 ## Not started
 
 Deferred items: customer notes field,
