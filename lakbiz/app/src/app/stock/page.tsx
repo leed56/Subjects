@@ -75,6 +75,10 @@ export default function StockPage() {
 
   const [search, setSearch] = useState("");
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
+  // Discontinued items default to hidden — matches getLowStockProducts/the
+  // sale picker, which already ignore inactive items — with an explicit
+  // toggle to review/reactivate them instead of losing them silently.
+  const [showInactive, setShowInactive] = useState(false);
 
   if (!ready || !data) {
     return (
@@ -95,10 +99,12 @@ export default function StockPage() {
           p.category.toLowerCase().includes(query),
       )
     : data.products;
-  const products = conditionFilter === "all" ? searched : searched.filter((p) => p.condition === conditionFilter);
+  const byCondition = conditionFilter === "all" ? searched : searched.filter((p) => p.condition === conditionFilter);
+  const products = showInactive ? byCondition : byCondition.filter((p) => p.active);
 
   const newCount = data.products.filter((p) => p.condition === "new").length;
   const usedCount = data.products.filter((p) => p.condition === "used").length;
+  const inactiveCount = data.products.filter((p) => !p.active).length;
   const lowStock = getLowStockProducts(data.products);
   const inventoryValue = data.products.reduce((sum, p) => sum + p.stockQty * p.buyPrice, 0);
   const sellValue = data.products.reduce((sum, p) => sum + p.stockQty * p.sellPrice, 0);
@@ -246,10 +252,11 @@ export default function StockPage() {
         return (
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={() => openEdit(p)} className="font-semibold text-slate-900 hover:text-teal-700 hover:underline">
+              <button type="button" onClick={() => openEdit(p)} className={`font-semibold hover:text-teal-700 hover:underline ${p.active ? "text-slate-900" : "text-slate-400"}`}>
                 {p.name}
               </button>
               <ProductConditionBadge condition={p.condition} />
+              {!p.active && <StatusBadge tone="neutral">{t("stock.inactive_badge")}</StatusBadge>}
             </div>
             <p className="mt-0.5 text-xs text-slate-500">
               {p.sku ? `${p.sku} · ` : ""}
@@ -398,6 +405,17 @@ export default function StockPage() {
               </button>
             ))}
           </div>
+          {inactiveCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowInactive((v) => !v)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                showInactive ? "bg-slate-700 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
+              }`}
+            >
+              {t("stock.filter_inactive")} <span className="opacity-70">({inactiveCount})</span>
+            </button>
+          )}
         </FilterBar>
 
         {data.products.length === 0 ? (

@@ -244,7 +244,7 @@ export default function SalesPage() {
     setTimeout(() => setMessage(""), 6000);
   };
 
-  const inStock = data.products.filter((p) => p.stockQty > 0);
+  const inStock = data.products.filter((p) => p.stockQty > 0 && p.active);
   const query = search.trim().toLowerCase();
   const searched = query
     ? inStock.filter(

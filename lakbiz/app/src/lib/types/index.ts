@@ -71,6 +71,12 @@ export interface Product {
   sellPrice: number;
   stockQty: number;
   reorderLevel?: number;
+  /** Discontinued/retired items stay in the catalogue (job/sale history still
+   * references them by id) but drop out of sale pickers, reorder signals,
+   * and the default stock list. Defaults true for every existing row. */
+  active: boolean;
+  /** Free-text notes (storage/handling caveats, discontinued reason, etc.) — generic across every sector, not sector-specific like customFields. */
+  notes?: string;
   customFields: Record<string, string | number | boolean>;
 }
 
