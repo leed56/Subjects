@@ -2017,6 +2017,38 @@ Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
 pre-existing warnings, none new, `next build` succeeds. No browser
 verification — standing sandbox limitation.
 
+### Phase 12 — Low stock & reordering
+
+Audited first: `getLowStockProducts()` already existed and already used
+a genuinely **per-item configured minimum** (`product.reorderLevel`),
+not a global hardcoded threshold — the spec's core requirement here was
+already sound. The real gap: it was only ever used as a metric-card
+*count* on `/stock` ("12 items low"), with no way to see *which* items
+or act on them — no filtered list, no indication of where to reorder
+from.
+
+- Added a "Low stock" filter toggle to `/stock`, alongside the existing
+  condition filter tabs — shows exactly the same set `getLowStockProducts()`
+  already computed, just as a real, actionable, filtered view instead of
+  only a number.
+- New `getReorderSuggestions()` in `actions.ts`: for each low-stock
+  product, looks up the most recent `Purchase` that included it and
+  surfaces that supplier's name and the date — "last bought from X on
+  Y" — shown as a subtitle under each item when the Low Stock filter is
+  active. Real purchase history (`data.purchases`, already loaded
+  locally), not a guess.
+- **Deliberately does not suggest a reorder quantity.** That would need
+  a demand/sales-velocity model that doesn't exist anywhere in this
+  codebase — inventing one here would be exactly the fabricated-signal
+  the spec's absolute rules forbid. Current qty vs. the configured
+  minimum (already shown) is the honest, complete picture.
+- Purchase-order *creation* is deliberately not built here — that's
+  Phase 13's, not duplicated.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds. No browser
+verification — standing sandbox limitation.
+
 ## Not started
 
 Deferred items: customer notes field,
