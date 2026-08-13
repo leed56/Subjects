@@ -13,6 +13,18 @@
 -- and both trigger functions, same CREATE OR REPLACE VIEW append-only
 -- constraint already documented in prior phases' migrations. Neither
 -- field is financial, so no masking case/when is needed for them.
+--
+-- Live-DB audit fix (found while applying this phase's migrations):
+-- crews.sql (20250630000001) added ac_jobs_base.crew_id and appended it
+-- to this view's SELECT list, but this file's earlier draft rewrote the
+-- view without it — CREATE OR REPLACE VIEW cannot drop a column, so that
+-- draft would have failed outright. Also, crews.sql (and, further back,
+-- ac_asset_lifecycle.sql for asset_id) never taught the INSERT/UPDATE
+-- trigger functions to forward asset_id/crew_id at all — both existed
+-- only in the SELECT half of the view, silently no-opping any write.
+-- Since this migration already has to rewrite the same view + both
+-- trigger functions to append complaint/diagnosis, it corrects both
+-- gaps here rather than reproducing them a third time.
 
 alter table public.ac_jobs_base add column if not exists complaint text;
 alter table public.ac_jobs_base add column if not exists diagnosis text;
@@ -24,7 +36,7 @@ select id, organization_id, job_no, job_date, customer_id, customer_name, phone,
   last_service_date, service_interval_months, amc_contract, job_type, assigned_technician,
   service_due_manual, service_interval_days, assignee_type, assignee_id,
   case when can_see_org_financials(organization_id) then subcontract_cost else null::numeric end as subcontract_cost,
-  asset_id, complaint, diagnosis
+  asset_id, crew_id, complaint, diagnosis
 from public.ac_jobs_base j
 where organization_id in (select organization_id from public.org_members where user_id = auth.uid());
 
@@ -46,7 +58,7 @@ begin
     pipe_meters, status, scheduled_date, installed_date, notes, service_due_date,
     last_service_date, service_interval_months, amc_contract, job_type, assigned_technician,
     service_due_manual, service_interval_days, assignee_type, assignee_id, subcontract_cost,
-    complaint, diagnosis
+    asset_id, crew_id, complaint, diagnosis
   ) values (
     new.id, new.organization_id, new.job_no, new.job_date, new.customer_id, new.customer_name,
     new.phone, new.address, new.brand, new.btu, new.unit_type, new.unit_count, new.description,
@@ -54,7 +66,7 @@ begin
     new.installed_date, new.notes, new.service_due_date, new.last_service_date,
     new.service_interval_months, new.amc_contract, new.job_type, new.assigned_technician,
     new.service_due_manual, new.service_interval_days, new.assignee_type, new.assignee_id,
-    new.subcontract_cost, new.complaint, new.diagnosis
+    new.subcontract_cost, new.asset_id, new.crew_id, new.complaint, new.diagnosis
   );
   return new;
 end;
@@ -100,6 +112,8 @@ begin
     assignee_type = new.assignee_type,
     assignee_id = new.assignee_id,
     subcontract_cost = new.subcontract_cost,
+    asset_id = new.asset_id,
+    crew_id = new.crew_id,
     complaint = new.complaint,
     diagnosis = new.diagnosis,
     updated_at = coalesce(new.updated_at, now())

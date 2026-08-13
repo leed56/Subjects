@@ -25,6 +25,28 @@
 -- problem and predate this phase entirely — same root cause, different
 -- table, out of scope for this migration since this phase didn't touch
 -- contractors. Flagged in the progress doc for a dedicated follow-up.
+--
+-- Live-DB audit fix (found while first actually applying this migration,
+-- months after it was written — see IMPLEMENTATION_PROGRESS.md's DB
+-- sync remediation entry): the views below originally had no tenant
+-- WHERE clause at all — unlike every other masked view in this codebase
+-- (ac_jobs, products, sales, contractors, vehicles), which all filter to
+-- `organization_id in (select ... from org_members where user_id =
+-- auth.uid())`. Without it, any authenticated user from any org could
+-- read every org's technicians/job_items rows (hourly_rate/unit_price/
+-- line_total would still mask to null/0 per-row, but name/phone/notes/
+-- job_id/qty would not) — a real cross-tenant leak. The trigger
+-- functions were also `security invoker` with no write-permission check
+-- at all, unlike every other masked-view trigger, so any authenticated
+-- org member — including a role the permission matrix says can't manage
+-- technicians — could write/delete any technician or job_item row. Both
+-- fixed below, using `org_member_can_write_module(org_id, 'ac_jobs')` —
+-- confirmed by inspecting contractors_view_insert live, which gates the
+-- same workforce-adjacent write under the 'ac_jobs' module key (there is
+-- no separate 'technicians' key in plans.features; using one would have
+-- made org_has_module return false unconditionally and lock out every
+-- role, which is exactly what a first draft of this fix did before
+-- being caught against the live plans table and corrected).
 
 alter table public.technicians add column if not exists hourly_rate numeric(14, 2);
 alter table public.job_items add column if not exists technician_id text
@@ -47,17 +69,23 @@ select
   case when public.can_see_org_financials(t.organization_id) then t.hourly_rate else null::numeric(14, 2) end as hourly_rate,
   t.created_at,
   t.updated_at
-from public.technicians_base t;
+from public.technicians_base t
+where t.organization_id in (select organization_id from public.org_members where user_id = auth.uid());
+
+alter view public.technicians set (security_invoker = false);
 
 grant select, insert, update, delete on public.technicians to authenticated;
 
 create or replace function public.technicians_view_insert()
 returns trigger
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 begin
+  if not public.org_member_can_write_module(new.organization_id, 'ac_jobs') then
+    raise exception 'permission denied for table technicians_base' using errcode = '42501';
+  end if;
   insert into public.technicians_base (
     id, organization_id, name, phone, specialties, active, notes, hourly_rate, created_at, updated_at
   ) values (
@@ -71,10 +99,13 @@ $$;
 create or replace function public.technicians_view_update()
 returns trigger
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 begin
+  if not public.org_member_can_write_module(new.organization_id, 'ac_jobs') then
+    raise exception 'permission denied for table technicians_base' using errcode = '42501';
+  end if;
   update public.technicians_base set
     name = new.name,
     phone = new.phone,
@@ -94,10 +125,13 @@ $$;
 create or replace function public.technicians_view_delete()
 returns trigger
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 begin
+  if not public.org_member_can_write_module(new.organization_id, 'ac_jobs') then
+    raise exception 'permission denied for table technicians_base' using errcode = '42501';
+  end if;
   delete from public.technicians_base
   where id = old.id and organization_id = old.organization_id;
   return old;
@@ -141,17 +175,23 @@ select
   i.purchase_date,
   case when public.can_see_org_financials(i.organization_id) then i.customer_price else null::numeric end as customer_price,
   i.technician_id
-from public.job_items_base i;
+from public.job_items_base i
+where i.organization_id in (select organization_id from public.org_members where user_id = auth.uid());
+
+alter view public.job_items set (security_invoker = false);
 
 grant select, insert, update, delete on public.job_items to authenticated;
 
 create or replace function public.job_items_view_insert()
 returns trigger
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 begin
+  if not public.org_member_can_write_module(new.organization_id, 'ac_jobs') then
+    raise exception 'permission denied for table job_items_base' using errcode = '42501';
+  end if;
   insert into public.job_items_base (
     id, organization_id, job_id, item_type, name, qty, unit_price, line_total,
     created_at, updated_at, source, product_id, supplier_id, purchase_ref, purchase_date,
@@ -168,10 +208,13 @@ $$;
 create or replace function public.job_items_view_update()
 returns trigger
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 begin
+  if not public.org_member_can_write_module(new.organization_id, 'ac_jobs') then
+    raise exception 'permission denied for table job_items_base' using errcode = '42501';
+  end if;
   update public.job_items_base set
     job_id = new.job_id,
     item_type = new.item_type,
@@ -195,10 +238,13 @@ $$;
 create or replace function public.job_items_view_delete()
 returns trigger
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 begin
+  if not public.org_member_can_write_module(new.organization_id, 'ac_jobs') then
+    raise exception 'permission denied for table job_items_base' using errcode = '42501';
+  end if;
   delete from public.job_items_base
   where id = old.id and organization_id = old.organization_id;
   return old;
