@@ -27,7 +27,16 @@ import type { Product, ProductCondition } from "@/lib/types";
 type ConditionFilter = "all" | ProductCondition;
 
 export default function StockPage() {
-  const { data, ready, saveProductToCloud, deleteProductToCloud, stockInToCloud, stockOutToCloud } = useAppStore();
+  const {
+    data,
+    ready,
+    saveProductToCloud,
+    deleteProductToCloud,
+    stockInToCloud,
+    stockOutToCloud,
+    writeOffStockToCloud,
+    returnStockToSupplierToCloud,
+  } = useAppStore();
   const { org, subscription, canSeeFinancials, can } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
   const { t } = useLocale();
@@ -46,6 +55,20 @@ export default function StockPage() {
   const [stockOutQty, setStockOutQty] = useState("1");
   const [stockOutNote, setStockOutNote] = useState("");
   const [savingStockOut, setSavingStockOut] = useState(false);
+
+  // Write-off / return-to-supplier dialogs (HVAC platform Phase 3 —
+  // distinct stock-movement kinds from a manual Stock Out, kept in the
+  // overflow menu since they're rarer than Stock In/Out).
+  const [writeOffId, setWriteOffId] = useState<string | null>(null);
+  const [writeOffQty, setWriteOffQty] = useState("1");
+  const [writeOffNote, setWriteOffNote] = useState("");
+  const [savingWriteOff, setSavingWriteOff] = useState(false);
+
+  const [returnId, setReturnId] = useState<string | null>(null);
+  const [returnQty, setReturnQty] = useState("1");
+  const [returnSupplierId, setReturnSupplierId] = useState("");
+  const [returnNote, setReturnNote] = useState("");
+  const [savingReturn, setSavingReturn] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
@@ -89,6 +112,10 @@ export default function StockPage() {
   const stockOutProduct = stockOutId ? data.products.find((p) => p.id === stockOutId) : null;
   const stockInQtyNumber = Number(stockInQty) || 0;
   const stockOutQtyNumber = Number(stockOutQty) || 0;
+  const writeOffProduct = writeOffId ? data.products.find((p) => p.id === writeOffId) : null;
+  const writeOffQtyNumber = Number(writeOffQty) || 0;
+  const returnProduct = returnId ? data.products.find((p) => p.id === returnId) : null;
+  const returnQtyNumber = Number(returnQty) || 0;
 
   const openCreate = () => {
     setEditing(null);
@@ -154,6 +181,53 @@ export default function StockPage() {
       return;
     }
     setStockOutId(null);
+    toast({ tone: "success", title: t("stock.updated") });
+  };
+
+  const openWriteOff = (productId: string) => {
+    setWriteOffId(productId);
+    setWriteOffQty("1");
+    setWriteOffNote("");
+  };
+
+  const handleWriteOff = async () => {
+    if (!writeOffId || !writeOffProduct || savingWriteOff || writeOffQtyNumber < 1) return;
+    if (writeOffQtyNumber > writeOffProduct.stockQty) {
+      toast({ tone: "error", title: t("stock.out_qty_exceeds") });
+      return;
+    }
+    setSavingWriteOff(true);
+    const result = await writeOffStockToCloud(writeOffId, writeOffQtyNumber, writeOffNote.trim() || undefined);
+    setSavingWriteOff(false);
+    if (!result.ok) {
+      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
+      return;
+    }
+    setWriteOffId(null);
+    toast({ tone: "success", title: t("stock.updated") });
+  };
+
+  const openReturn = (productId: string) => {
+    setReturnId(productId);
+    setReturnQty("1");
+    setReturnSupplierId("");
+    setReturnNote("");
+  };
+
+  const handleReturn = async () => {
+    if (!returnId || !returnProduct || !returnSupplierId || savingReturn || returnQtyNumber < 1) return;
+    if (returnQtyNumber > returnProduct.stockQty) {
+      toast({ tone: "error", title: t("stock.out_qty_exceeds") });
+      return;
+    }
+    setSavingReturn(true);
+    const result = await returnStockToSupplierToCloud(returnId, returnQtyNumber, returnSupplierId, returnNote.trim() || undefined);
+    setSavingReturn(false);
+    if (!result.ok) {
+      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
+      return;
+    }
+    setReturnId(null);
     toast({ tone: "success", title: t("stock.updated") });
   };
 
@@ -247,6 +321,10 @@ export default function StockPage() {
           <ActionMenu
             items={[
               { label: t("common.edit"), onSelect: () => openEdit(p) },
+              ...(data.suppliers.length > 0
+                ? [{ label: t("stock.return_to_supplier"), onSelect: () => openReturn(p.id), disabled: p.stockQty <= 0 }]
+                : []),
+              { label: t("stock.write_off"), onSelect: () => openWriteOff(p.id), disabled: p.stockQty <= 0 },
               { label: t("common.delete"), tone: "danger" as const, onSelect: () => setDeleteTarget(p) },
             ]}
           />
@@ -480,6 +558,98 @@ export default function StockPage() {
               </FormField>
               <FormField label={t("stock.out_note")}>
                 <TextInput value={stockOutNote} onChange={(e) => setStockOutNote(e.target.value)} placeholder={t("stock.out_note_ph")} />
+              </FormField>
+            </div>
+          )}
+        </Dialog>
+
+        {/* Write off (HVAC platform Phase 3) */}
+        <Dialog
+          open={!!writeOffId && !!writeOffProduct}
+          onClose={() => setWriteOffId(null)}
+          title={t("stock.write_off")}
+          description={writeOffProduct?.name}
+          footer={
+            <>
+              <button type="button" onClick={() => setWriteOffId(null)} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                {t("common.cancel")}
+              </button>
+              <button
+                type="button"
+                disabled={savingWriteOff || !writeOffProduct || writeOffQtyNumber < 1 || writeOffProduct.stockQty <= 0}
+                onClick={() => void handleWriteOff()}
+                className="rounded-lg bg-rose-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+              >
+                {savingWriteOff ? t("common.saving") : t("stock.write_off")}
+              </button>
+            </>
+          }
+        >
+          {writeOffProduct && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-medium uppercase text-slate-500">{t("stock.current_qty")}</p>
+                <p className="mt-1 text-xl font-bold text-slate-900">
+                  {writeOffProduct.stockQty} {String(writeOffProduct.customFields.unit ?? "pcs")}
+                </p>
+              </div>
+              <FormField label={t("stock.write_off")} required>
+                <TextInput type="number" min={1} max={writeOffProduct.stockQty} value={writeOffQty} onChange={(e) => setWriteOffQty(e.target.value)} autoFocus />
+              </FormField>
+              <FormField label={t("stock.out_note")}>
+                <TextInput value={writeOffNote} onChange={(e) => setWriteOffNote(e.target.value)} placeholder={t("stock.write_off_note_ph")} />
+              </FormField>
+            </div>
+          )}
+        </Dialog>
+
+        {/* Return to supplier (HVAC platform Phase 3) */}
+        <Dialog
+          open={!!returnId && !!returnProduct}
+          onClose={() => setReturnId(null)}
+          title={t("stock.return_to_supplier")}
+          description={returnProduct?.name}
+          footer={
+            <>
+              <button type="button" onClick={() => setReturnId(null)} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                {t("common.cancel")}
+              </button>
+              <button
+                type="button"
+                disabled={savingReturn || !returnProduct || !returnSupplierId || returnQtyNumber < 1 || returnProduct.stockQty <= 0}
+                onClick={() => void handleReturn()}
+                className="rounded-lg bg-amber-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {savingReturn ? t("common.saving") : t("stock.return_to_supplier")}
+              </button>
+            </>
+          }
+        >
+          {returnProduct && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-medium uppercase text-slate-500">{t("stock.current_qty")}</p>
+                <p className="mt-1 text-xl font-bold text-slate-900">
+                  {returnProduct.stockQty} {String(returnProduct.customFields.unit ?? "pcs")}
+                </p>
+              </div>
+              <FormField label={t("sup.title")} required>
+                <select
+                  value={returnSupplierId}
+                  onChange={(e) => setReturnSupplierId(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                >
+                  <option value="">{t("common.select")}</option>
+                  {data.suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField label={t("stock.return_to_supplier")} required>
+                <TextInput type="number" min={1} max={returnProduct.stockQty} value={returnQty} onChange={(e) => setReturnQty(e.target.value)} />
+              </FormField>
+              <FormField label={t("stock.out_note")}>
+                <TextInput value={returnNote} onChange={(e) => setReturnNote(e.target.value)} placeholder={t("stock.out_note_ph")} />
               </FormField>
             </div>
           )}

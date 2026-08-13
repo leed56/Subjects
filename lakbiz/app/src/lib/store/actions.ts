@@ -49,6 +49,7 @@ import type {
   Sale,
   SaleOptions,
   StockLog,
+  StockMovementType,
   SupplierInput,
   VehicleInput,
   VehicleSaleInput,
@@ -134,36 +135,108 @@ export function deleteProduct(data: AppData, id: string): AppData {
   };
 }
 
+/** Every StockLog-producing stock-quantity change in the app funnels
+ * through this one function (HVAC platform Phase 3) — adjustStock,
+ * writeOffStock, returnStockToSupplier below, and createPurchase further
+ * down all call it, so "one place writes stockQty + a matching log" stays
+ * true as movement kinds grow. `direction` says which way qty moves;
+ * everything else is metadata carried straight onto the StockLog row. */
+function applyStockMovement(
+  data: AppData,
+  params: {
+    productId: string;
+    qty: number;
+    direction: "in" | "out";
+    type: StockMovementType;
+    note?: string;
+    relatedJobId?: string;
+    relatedSupplierId?: string;
+    userId?: string;
+  },
+): AppData {
+  const product = data.products.find((p) => p.id === params.productId);
+  if (!product) return data;
+
+  const delta = params.direction === "in" ? params.qty : -params.qty;
+  const nextQty = Math.max(0, product.stockQty + delta);
+
+  const log: StockLog = {
+    id: newId(),
+    productId: params.productId,
+    productName: product.name,
+    type: params.type,
+    qty: params.qty,
+    note: params.note,
+    date: new Date().toISOString(),
+    relatedJobId: params.relatedJobId,
+    relatedSupplierId: params.relatedSupplierId,
+    userId: params.userId,
+  };
+
+  return {
+    ...data,
+    products: data.products.map((p) =>
+      p.id === params.productId ? { ...p, stockQty: nextQty } : p,
+    ),
+    stockLogs: [log, ...data.stockLogs],
+  };
+}
+
 export function adjustStock(
   data: AppData,
   productId: string,
   qty: number,
   type: "in" | "out",
   note?: string,
+  userId?: string,
 ): AppData {
-  const product = data.products.find((p) => p.id === productId);
-  if (!product) return data;
+  return applyStockMovement(data, { productId, qty, direction: type, type, note, userId });
+}
 
-  const delta = type === "in" ? qty : -qty;
-  const nextQty = Math.max(0, product.stockQty + delta);
-
-  const log: StockLog = {
-    id: newId(),
+/** Damaged / expired / lost stock — decrements without pretending it was
+ * a sale or a return. Not shown to the customer anywhere; purely an
+ * internal movement + audit trail. */
+export function writeOffStock(
+  data: AppData,
+  productId: string,
+  qty: number,
+  note?: string,
+  userId?: string,
+): AppData {
+  return applyStockMovement(data, {
     productId,
-    productName: product.name,
-    type,
     qty,
+    direction: "out",
+    type: "write_off",
     note,
-    date: new Date().toISOString(),
-  };
+    userId,
+  });
+}
 
-  return {
-    ...data,
-    products: data.products.map((p) =>
-      p.id === productId ? { ...p, stockQty: nextQty } : p,
-    ),
-    stockLogs: [log, ...data.stockLogs],
-  };
+/** Goods sent back to the supplier (defective/wrong item/etc.) —
+ * decrements stock the same as a write-off but is a distinct, traceable
+ * movement kind tied to the supplier, not an internal loss. Deliberately
+ * does not touch `suppliers.payableBalance` — reconciling a return
+ * against what's owed is an accounting decision the owner should make
+ * explicitly (e.g. via a credit note), not one this function should
+ * infer silently. */
+export function returnStockToSupplier(
+  data: AppData,
+  productId: string,
+  qty: number,
+  supplierId: string,
+  note?: string,
+  userId?: string,
+): AppData {
+  return applyStockMovement(data, {
+    productId,
+    qty,
+    direction: "out",
+    type: "supplier_return",
+    note,
+    relatedSupplierId: supplierId,
+    userId,
+  });
 }
 
 export function addCustomer(data: AppData, input: CustomerInput): AppData {
@@ -402,6 +475,7 @@ export function recordSupplierPayment(
 export function createPurchase(
   data: AppData,
   input: PurchaseInput,
+  userId?: string,
 ): AppData {
   const supplier = data.suppliers.find((s) => s.id === input.supplierId);
   if (!supplier) return data;
@@ -482,10 +556,12 @@ export function createPurchase(
     id: newId(),
     productId: line.productId,
     productName: line.productName,
-    type: "in",
+    type: "purchase" as StockMovementType,
     qty: line.qty,
     note: `GRN ${purchase.grnNo}`,
     date,
+    relatedSupplierId: supplier.id,
+    userId,
   }));
 
   let suppliers = data.suppliers;

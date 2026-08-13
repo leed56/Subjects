@@ -10,6 +10,7 @@ import type {
   AppData,
   Sale,
   StockLog,
+  StockMovementType,
   ACJob,
   ChequeRecord,
   Purchase,
@@ -404,10 +405,13 @@ export async function pullBusinessData(
       id: row.id,
       productId: row.product_id,
       productName: row.product_name,
-      type: row.log_type as "in" | "out" | "sale",
+      type: row.log_type as StockMovementType,
       qty: num(row.qty),
       note: row.note ?? undefined,
       date: row.log_date,
+      relatedJobId: row.related_job_id ?? undefined,
+      relatedSupplierId: row.related_supplier_id ?? undefined,
+      userId: row.user_id ?? undefined,
     })),
     bankAccounts: bankAccounts.map((row) => ({
       id: row.id,
@@ -902,6 +906,9 @@ function stockLogRow(
     qty: log.qty,
     note: log.note ?? null,
     log_date: log.date,
+    related_job_id: log.relatedJobId ?? null,
+    related_supplier_id: log.relatedSupplierId ?? null,
+    user_id: log.userId ?? null,
   };
 }
 
@@ -2119,6 +2126,9 @@ export async function pushBusinessData(
     qty: log.qty,
     note: log.note ?? null,
     log_date: log.date,
+    related_job_id: log.relatedJobId ?? null,
+    related_supplier_id: log.relatedSupplierId ?? null,
+    user_id: log.userId ?? null,
   }));
 
   const bankTransactionRows = data.bankTransactions.map((tx) => ({
