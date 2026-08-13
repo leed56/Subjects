@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AcServiceDoneDialog } from "@/components/ac-service-done-dialog";
 import { AcServiceDuePanel } from "@/components/ac-service-due-panel";
 import { OfflineSyncNotice } from "@/components/offline-sync-notice";
@@ -22,6 +22,8 @@ import { getVatQuarterSummary } from "@/lib/vat";
 import { getIncomeTaxYearSummary } from "@/lib/income-tax";
 import { useNotificationLogs } from "@/lib/messaging/use-notification-logs";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
+import { computeJobProfitability, isLowMarginJob } from "@/lib/job-profitability";
 
 const primaryButton =
   "inline-flex h-10 items-center gap-1.5 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700";
@@ -81,6 +83,33 @@ export default function DashboardPage() {
   const [resetMessage, setResetMessage] = useState("");
   const [confirmReset, setConfirmReset] = useState(false);
 
+  // HVAC platform Phase 14 — job profitability needs job-linked Expenses
+  // (Phase 7), which are cloud-only, not part of the local-first store
+  // this page otherwise reads from. Same fetch-on-mount pattern as
+  // /job-costing, which already does exactly this. Gated on
+  // canSeeFinancials up front: never even request the data a technician
+  // isn't allowed to see.
+  const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<string, number> | null>(null);
+  useEffect(() => {
+    if (!showAcJobs || !canSeeFinancials || !org.isAuthenticated || !org.id) {
+      setJobLinkedExpenseTotals(new Map());
+      return;
+    }
+    let cancelled = false;
+    void fetchOrgExpenses(org.id).then((result) => {
+      if (cancelled) return;
+      const totals = new Map<string, number>();
+      for (const e of result.data) {
+        if (!e.jobId) continue;
+        totals.set(e.jobId, (totals.get(e.jobId) ?? 0) + e.amount);
+      }
+      setJobLinkedExpenseTotals(totals);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [showAcJobs, canSeeFinancials, org.isAuthenticated, org.id]);
+
   if (!ready || !data) {
     return (
       <AppShell>
@@ -95,6 +124,35 @@ export default function DashboardPage() {
   const vat = getVatQuarterSummary(data);
   const incomeTax = getIncomeTaxYearSummary(data);
   const shopName = data.business.name || org.name || "LakBiz";
+
+  // Job profitability this month — reuses computeJobProfitability (Phase
+  // 8), the one authoritative calculation, exactly as /job-costing does.
+  // Not a separate/simplified dashboard-only formula.
+  const jobItemsByJob = new Map<string, typeof data.jobItems>();
+  for (const item of data.jobItems) {
+    const list = jobItemsByJob.get(item.jobId) ?? [];
+    list.push(item);
+    jobItemsByJob.set(item.jobId, list);
+  }
+  const monthKey = new Date().toISOString().slice(0, 7);
+  const monthJobs =
+    showAcJobs && canSeeFinancials
+      ? data.acJobs.filter((j) => j.date.startsWith(monthKey) && j.status !== "cancelled")
+      : [];
+  const monthCosted = jobLinkedExpenseTotals
+    ? monthJobs.map((j) => ({
+        job: j,
+        profit: computeJobProfitability(j, jobItemsByJob.get(j.id) ?? [], jobLinkedExpenseTotals.get(j.id) ?? 0),
+      }))
+    : [];
+  const monthTotalQuoted = monthCosted.reduce((s, c) => s + c.job.quotedAmount, 0);
+  const monthTotalCost = monthCosted.reduce((s, c) => s + c.profit.totalCost, 0);
+  const monthTotalMargin = monthTotalQuoted - monthTotalCost;
+  const monthAvgMarginPct = monthTotalQuoted > 0 ? (monthTotalMargin / monthTotalQuoted) * 100 : null;
+  const lowMarginJobs = monthCosted
+    .filter((c) => isLowMarginJob(c.profit))
+    .sort((a, b) => (a.profit.grossMarginPct ?? 0) - (b.profit.grossMarginPct ?? 0));
+  const showJobProfitability = showAcJobs && canSeeFinancials && jobLinkedExpenseTotals !== null && monthJobs.length > 0;
 
   const primaryActions = [
     { href: "/sales", label: t("dash.new_sale"), icon: SalesIcon },
@@ -358,6 +416,45 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+
+        {showJobProfitability && (
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <SectionHeader title={t("dash.job_profitability")} action={<Link href="/job-costing" className={ghostLink}>{t("costing.title")}</Link>} />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("costing.total_margin")}</p>
+                  <p className={`mt-1 font-mono text-lg font-bold ${monthTotalMargin < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatLkr(monthTotalMargin)}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("costing.avg_margin_pct")}</p>
+                  <p className={`mt-1 font-mono text-lg font-bold ${monthAvgMarginPct !== null && monthAvgMarginPct < 0 ? "text-rose-700" : "text-slate-900"}`}>
+                    {monthAvgMarginPct !== null ? `${monthAvgMarginPct.toFixed(1)}%` : "—"}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-slate-400">{t("dash.job_profitability_hint").replace("{count}", String(monthJobs.length))}</p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <SectionHeader title={t("dash.low_margin_jobs")} action={<Link href="/job-costing" className={ghostLink}>{t("costing.title")}</Link>} />
+              {lowMarginJobs.length === 0 ? (
+                <EmptyState title={t("dash.no_low_margin_jobs")} description={t("dash.no_low_margin_jobs_desc")} />
+              ) : (
+                <div className="space-y-2">
+                  {lowMarginJobs.slice(0, 6).map((c) => (
+                    <ListRow
+                      key={c.job.id}
+                      title={c.job.customerName}
+                      tone="rose"
+                      amount={c.profit.grossMarginPct !== null ? `${c.profit.grossMarginPct.toFixed(1)}%` : "—"}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {(showVehicles && stats.aging60VehicleCount > 0) || (showAcJobs && stats.pendingACJobCount > 0) ? (
           <div className="mt-6 grid gap-4 lg:grid-cols-2">

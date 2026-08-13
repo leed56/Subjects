@@ -2151,6 +2151,72 @@ pre-existing warnings (`deleteACJobFromCloud` unused import,
 phase, `next build` succeeds. No browser verification — standing
 sandbox limitation.
 
+### Phase 14 — Dashboard: job profitability (first slice of the dashboard redesign)
+
+The spec gates the dashboard redesign on Phases 2-13 existing first —
+they now do. Rather than one giant rewrite, splitting the redesign into
+reviewable slices; this is the first: **surface real job profitability
+on `/dashboard`, where today there is none.**
+
+Audited first: `getDashboardStats()` (the dashboard's one stats
+function) computes AC job *counts* by status (pending, service-due,
+overdue) but never touches cost or margin — that calculation has only
+ever lived inside `/job-costing`'s page component (Phase 8). No
+fabricated placeholder metric existed to replace; the gap was a true
+absence, not a bad number.
+
+- Dashboard now fetches job-linked Expenses (Phase 7, cloud-only) the
+  same way `/job-costing` already does, and reuses
+  `computeJobProfitability()` (Phase 8) — the one authoritative
+  calculation — over this month's non-cancelled AC jobs. No parallel
+  formula.
+- New **Job profitability (this month)** card: total margin + average
+  margin % (quoted-weighted, same formula as `/job-costing`'s totals
+  row), linking to the full report.
+- New **Jobs to review** card: jobs flagged low-margin, worst first.
+- New explicit, disclosed "low margin" rule — the spec's absolute
+  rule requires one before any job can be labelled this way. Added
+  `LOW_MARGIN_THRESHOLD_PCT = 15` and `isLowMarginJob()` to
+  `job-profitability.ts` (the one file that already owns the
+  profitability formula, so the label rule lives next to what it
+  labels) — a flat 15% gross-margin floor, documented inline with the
+  reasoning. Jobs with no assessable margin (`grossMarginPct === null`,
+  i.e. zero revenue) are never flagged: "can't be assessed" is not the
+  same claim as "low margin."
+- Retrofitted `/job-costing` itself to use the same `isLowMarginJob()`
+  helper for a small badge on its margin column, so a job flagged "low
+  margin" means the identical thing on both screens — one rule, not two
+  independently-tuned ones.
+- Gated on `showAcJobs && canSeeFinancials`, same guard `/job-costing`
+  already uses — company margin stays invisible to any role that
+  shouldn't see it, including while the Expenses fetch is still
+  in flight (the section simply doesn't render until data has
+  arrived, rather than flashing a zero).
+- Section only renders when there's at least one job this month to
+  report on — consistent with how the existing vehicles/AC-jobs
+  attention grid below it already behaves.
+
+Deliberately not built in this slice (next dashboard phases):
+- **Purchase order pipeline widget** (Phase 13's new pending/partial
+  POs) — kept out to keep this PR reviewable as one clear addition;
+  next slice.
+- **Org-wide repeat-repair rollup** (Phase 11's signal) — audited and
+  found genuinely blocked, not skipped for convenience: `ac_jobs.asset_id`
+  exists at the DB level but isn't in the local `ACJob` type and isn't
+  settable from the `/jobs` create/edit form yet (a pre-existing,
+  already-documented gap — see "Not started" below). Almost no job
+  today would carry a real `asset_id`, so a dashboard-wide count would
+  read as "0 repeat repairs" for reasons that have nothing to do with
+  actual repair history — exactly the misleading-signal the spec's
+  absolute rules forbid. Stays per-asset (`/assets`) until that wiring
+  gap is closed.
+- A dashboard-level low-stock **reorder-supplier** hint (Phase 12
+  already put this on `/stock` itself, where the action happens).
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 2
+pre-existing warnings, unchanged, `next build` succeeds. No browser
+verification — standing sandbox limitation.
+
 ## Not started
 
 Deferred items: customer notes field,

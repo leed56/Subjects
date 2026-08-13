@@ -15,7 +15,7 @@ import { jobTypeLabel } from "@/lib/ac-job-types";
 import type { ACJobType } from "@/lib/ac-job-types";
 import type { ACJob } from "@/lib/store/types";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
-import { computeJobProfitability, type JobProfitability } from "@/lib/job-profitability";
+import { computeJobProfitability, isLowMarginJob, type JobProfitability } from "@/lib/job-profitability";
 
 type CostedJob = {
   job: ACJob;
@@ -156,6 +156,11 @@ export default function JobCostingPage() {
           <p className={`font-semibold ${marginTone(c.profit.grossProfit)}`}>{formatLkr(c.profit.grossProfit)}</p>
           {c.profit.grossMarginPct !== null && (
             <p className={`text-xs ${marginTone(c.profit.grossProfit)}`}>{c.profit.grossMarginPct.toFixed(1)}%</p>
+          )}
+          {isLowMarginJob(c.profit) && (
+            <span className="mt-1 inline-flex rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-700">
+              {t("costing.low_margin")}
+            </span>
           )}
         </div>
       ),
