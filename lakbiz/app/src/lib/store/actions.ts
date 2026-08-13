@@ -2013,6 +2013,41 @@ export function getDashboardStats(data: AppData) {
       isServiceOverdue(j.serviceDueDate) &&
       j.status !== "cancelled",
   );
+  // Payments received today (dashboard command-center KPI #3): the
+  // non-credit portion collected at point-of-sale today, plus any
+  // customerPayments recorded today against previous credit balances.
+  // creditAmount is binary in this data model (0 for a fully-paid sale,
+  // sale.total for a fully-credit one — no partial-at-sale split), so
+  // `total - creditAmount` is exactly what was actually collected today.
+  const todayCustomerPayments = data.customerPayments.filter((p) =>
+    p.date.startsWith(today),
+  );
+  const paymentsReceivedToday =
+    todaySales.reduce((s, sale) => s + (sale.total - sale.creditAmount), 0) +
+    todayCustomerPayments.reduce((s, p) => s + p.amount, 0);
+  const paymentsReceivedCount = todaySales.filter((s) => s.creditAmount < s.total).length + todayCustomerPayments.length;
+
+  // Today's field operations (dashboard command-center): jobs whose
+  // scheduledDate is today — same convention the Schedule page (Phase 7)
+  // already uses for "what's happening today", not a separate model.
+  const todayJobs = data.acJobs
+    .filter((j) => j.scheduledDate === today && j.status !== "cancelled")
+    .sort((a, b) => a.jobNo.localeCompare(b.jobNo));
+  const todayJobsCompletedCount = todayJobs.filter(
+    (j) => j.status === "completed" || j.status === "installed",
+  ).length;
+  const todayJobsUnassignedCount = todayJobs.filter(
+    (j) => !j.assigneeType || !j.assigneeId,
+  ).length;
+
+  // Customers over their credit limit — the same real, already-computed
+  // concept the Customers page (Phase 2) surfaces per-row; reused here
+  // rather than inventing a separate "overdue invoice" model this app's
+  // data doesn't have (no invoice due-date tracking exists anywhere).
+  const overLimitCustomers = data.customers.filter(
+    (c) => c.creditLimit != null && c.creditBalance > c.creditLimit,
+  );
+
   const forSaleVehicles = data.vehicles.filter((v) => v.status === "for_sale");
   const aging60Vehicles = forSaleVehicles.filter(
     (v) => daysInStock(v.dateAdded) >= 60,
@@ -2048,6 +2083,16 @@ export function getDashboardStats(data: AppData) {
     todaySales: salesTotal,
     todayProfit: profitTotal,
     saleCount: todaySales.length,
+    paymentsReceivedToday,
+    paymentsReceivedCount,
+    todayJobs,
+    todayJobsCount: todayJobs.length,
+    todayJobsCompletedCount,
+    todayJobsRemainingCount: todayJobs.length - todayJobsCompletedCount,
+    todayJobsUnassignedCount,
+    overLimitCustomers,
+    overLimitCustomerCount: overLimitCustomers.length,
+    overLimitCustomerTotal: overLimitCustomers.reduce((s, c) => s + c.creditBalance, 0),
     productCount: data.products.length,
     customerCount: data.customers.length,
     supplierCount: data.suppliers.length,

@@ -52,7 +52,22 @@ export function DataTable<T extends { id: string | number }>({
               <tr
                 key={row.id}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={onRowClick ? "cursor-pointer hover:bg-slate-50" : undefined}
+                onKeyDown={
+                  onRowClick
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onRowClick(row);
+                        }
+                      }
+                    : undefined
+                }
+                tabIndex={onRowClick ? 0 : undefined}
+                className={
+                  onRowClick
+                    ? "cursor-pointer hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500"
+                    : undefined
+                }
               >
                 {columns.map((col) => (
                   <td
@@ -76,7 +91,19 @@ export function DataTable<T extends { id: string | number }>({
           <div
             key={row.id}
             onClick={onRowClick ? () => onRowClick(row) : undefined}
-            className={`px-4 py-3 ${onRowClick ? "cursor-pointer active:bg-slate-50" : ""}`}
+            onKeyDown={
+              onRowClick
+                ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onRowClick(row);
+                    }
+                  }
+                : undefined
+            }
+            role={onRowClick ? "button" : undefined}
+            tabIndex={onRowClick ? 0 : undefined}
+            className={`px-4 py-3 ${onRowClick ? "cursor-pointer active:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500" : ""}`}
           >
             {columns
               .filter((col) => !col.hideOnMobile)

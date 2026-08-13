@@ -1521,6 +1521,240 @@ in `/tmp/.../scratchpad` this session, not committed — trivial to
 recreate from this doc) from an environment where the browser has real
 outbound network access.
 
+### Dashboard command center — Owner Dashboard refinement
+
+Branch: `claude/dashboard-command-center`, stacked on `main` (the full
+19-phase spec's PR stack, #31–#43, was merged before this work began —
+see above). Status: implemented, verified, pushed — draft PR pending,
+awaiting review. Not one of the original 19 numbered phases — a
+follow-up, explicitly-scoped design/UX pass over `/dashboard` only,
+requested separately after the spec shipped.
+
+**Scope, unusually well-specified this time:** a full design brief
+(target sections, priority order, visual language, role rules, explicit
+DO-NOT list) was provided directly — no scope question needed. Inspected
+first: `getDashboardStats()` (`store/actions.ts`) already computed most
+needed numbers; extended it (not duplicated) with three new fields
+(payments received today, today's scheduled jobs + completed/unassigned
+counts, over-limit customers) rather than recomputing any of it inline
+in the page.
+
+**Two real bugs found during inspection, fixed as part of this pass:**
+- `/dashboard` was in `GUARDED_SHOP_PREFIXES`/`SHOP_PREFIXES` but **not**
+  in `TECHNICIAN_ROUTES` — since middleware and `ShopRouteGuard` both
+  redirect a disallowed route *to* `/dashboard`, a technician hitting
+  any blocked route got bounced into an infinite redirect loop. Fixed
+  by adding `/dashboard` to `TECHNICIAN_ROUTES` and giving the page a
+  technician-specific branch (see below) instead of the owner view.
+- `DataTable`'s clickable rows (`onRowClick`) had no keyboard path at
+  all — no `tabIndex`, no `onKeyDown`. Added both (Enter/Space trigger,
+  visible focus ring) to the shared component. No other page uses
+  `onRowClick` yet, so this is purely additive — zero behavior change
+  for `assets`/`customers`/`expenses`/`job-costing`/`stock`/`teams`,
+  all of which use `DataTable` without it.
+
+**Structure**, replacing the old flat card-grid dashboard:
+1. Compact header (title · shop, weekday/date · "Live business
+   overview" · "Cloud synced") — 2 primary actions (`+ New sale`,
+   `+ New job`) + a `More ▾` menu (`ActionMenu`, reused as-is) for Add
+   stock / Add customer / Record expense / Export CSV.
+2. Exactly 4 KPIs: today's sales, today's gross profit (owner/manager
+   only — see role notes), payments received today, jobs today.
+3. **Today's Operations** — the new main section: a real `DataTable`
+   of jobs scheduled today (`scheduledDate === today`, same convention
+   Schedule/Phase 7 already uses), columns Customer/Job/Team/Status/
+   Action, desktop table ↔ mobile cards for free.
+4. **Needs Attention** — compact single-line rows, only for alerts that
+   are actually true right now (unassigned jobs today, customers over
+   credit limit, overdue/due-soon services, low stock, supplier
+   payables outstanding), most severe first; one calm "operations are
+   clear" line when there's nothing.
+5. **Financial Snapshot** — bank balance / receivables / payables / VAT
+   due, all the same visual weight; income tax estimate moved behind a
+   collapsed toggle (`▼ Estimated income tax`), not a standing card.
+   The old giant black VAT `MeterCard` and indigo income-tax
+   `MeterCard` are both gone.
+6. **Revenue & Gross Profit** — one dual-series (revenue + profit) bar
+   chart, period selector (30 days / 3 / 6 / 12 months), hand-rolled in
+   the same no-dependency style as the Reports page's chart (Phase 14)
+   but not the same component — that one is daily/single-metric only,
+   a different shape than this needs.
+7. **Teams Today** — today's jobs grouped by assignee (technician or
+   contractor via `assigneeType`/`assigneeId`), *not* `crews.crew_id` —
+   the crews table (Phase 6) is real but the `/jobs` form still can't
+   set `crew_id` on a job (a known gap since Phase 6), so grouping by
+   it would show empty for virtually every real shop. Reused the exact
+   assignee-resolution helper the Schedule page already uses.
+8. Low stock / credit customers / supplier payables — compact lists,
+   grid column count now matches how many of the three actually render
+   (was a fixed 3-col grid that left empty tracks when fewer applied).
+9. The old "Quick Actions" panel (4 big clickable cards duplicating the
+   header's own buttons) is gone; **not** replaced with a second
+   "+ Create" menu — the header's 2 primary buttons + `More ▾` already
+   cover every action Quick Actions offered, and a second entry point
+   would reintroduce the exact duplication this item exists to remove.
+10. Smart onboarding: `hasAnyData` (any customers, products, sales, *or*
+    jobs — not just "no products", the old check) gates a focused
+    3-step "Start using LakBiz" state instead of a dashboard full of
+    zeroes; switches to the real dashboard automatically the moment any
+    of that exists, nothing to dismiss.
+
+**Role behavior:**
+- Owner/manager: full dashboard, `canSeeFinancials` (existing gate,
+  unchanged) controls every dollar figure exactly as before.
+- data_entry/cashier: no profit/bank/receivables/payables/VAT/tax
+  anywhere — KPI slot 2 shows low-stock count instead of profit (bank
+  balance is equally financial-gated as profit, `canUseBankingModule`
+  uses the same `FINANCIAL_ROLES` check, so it can't fill that slot
+  either — an early draft of this page got this wrong and was caught
+  on self-review, see remaining risks). cashier additionally can't see
+  *any* AC-jobs section (Today's Operations, Teams Today, the unassigned/
+  service alerts, the "+ New job" button) — cashier isn't in
+  `DATA_ENTRY_ROUTES`'s job-adjacent routes at all, so showing job data
+  and a button that just bounces them back here was a second bug caught
+  on self-review.
+- technician: never reaches the owner dashboard — a separate branch
+  (`isTechnician`) renders a financial-free "Today's Jobs" list
+  (customer, job type, address, status, call/navigate icons) instead.
+  Honestly titled "Today's Jobs," not "My Jobs" — `org_members.role =
+  "technician"` (the login) has no link to a specific `technicians.id`
+  row (the workforce roster used for job assignment), so there's no
+  reliable way to filter to "this person's" jobs specifically without
+  guessing. Flagged as a known limitation, not silently faked.
+
+Files changed:
+- `src/app/dashboard/page.tsx` — full rewrite.
+- `src/lib/store/actions.ts` — `getDashboardStats` extended with
+  `paymentsReceivedToday`/`paymentsReceivedCount`, `todayJobs` +
+  completed/remaining/unassigned counts, `overLimitCustomers` +
+  count/total.
+- `src/components/ui/table.tsx` — keyboard accessibility on `DataTable`
+  clickable rows (additive, see above).
+- `src/lib/nav-sections.ts` — `/teams`'s sidebar label changed from
+  `crews.title` ("Installation & Maintenance Crews," the truncation the
+  brief called out) to a new short `nav.field_teams` ("Field Teams");
+  the `/teams` page's own header text is untouched.
+- `src/lib/org-role/permissions.ts` — `/dashboard` added to
+  `TECHNICIAN_ROUTES` (redirect-loop fix, see above).
+- `src/lib/i18n/translations.ts` — ~68 new `dash.*`/`nav.field_teams`
+  keys, both locales.
+
+**Data rules honesty note:** the brief's own example table used
+fictional data (`09:00`, `11:30`, `14:00` job times, `Rs. 82,400` VAT
+due by a specific date). `ACJob` has no time-of-day field at all (the
+data model is date-only — see Phase 7's own notes on this), so the
+"Time" column was **not** built with fabricated times; it's a job-number
+subtitle under the customer name instead. VAT due date isn't computed
+either — the app has no statutory-deadline logic anywhere, and
+inventing one would be actively wrong compliance advice for a real
+Sri Lankan business; the VAT card shows the real quarter period label
+instead (`bounds.label`, e.g. "Apr 2026 – Jun 2026"), the same value the
+old dashboard already displayed.
+
+**Known limitation, disclosed, not fixed this pass:** clicking a
+Today's Operations row (or its "View →" action) navigates to `/jobs`,
+not into that specific job's detail drawer — `/jobs` has no
+URL-driven way to open a specific job today, and adding one would be a
+real feature change to a different page, outside "refine the dashboard
+only." Also found, and deliberately **not** fixed here since it's a
+different page: the Reports page's (Phase 14) daily trend chart has the
+same class of bug this pass's own first draft had — `Sale.date` is a
+full ISO timestamp (`new Date().toISOString()`), and `Reports.tsx`'s
+`byDay.get(iso)` looks it up with a plain `YYYY-MM-DD` key, which never
+matches; that chart has likely been silently empty since Phase 14
+shipped. Originally flagged for a follow-up fix, not bundled into this
+PR — **now fixed, see follow-up commit below**, once the same root
+cause got flagged again independently via a live screenshot review.
+
+Tests performed:
+- `tsc --noEmit`: clean.
+- `eslint`: 0 errors, same 3 pre-existing warnings, none new.
+- `next build`: succeeds, still 47 routes (no new routes — refined an
+  existing page).
+- Reasoned through all 10 scenarios in the brief's testing section
+  (no data / sales-no-jobs / HVAC-with-jobs / overdue receivables /
+  low stock / no alerts / manager / technician / data_entry / mobile)
+  against the actual conditional logic in the file.
+- No working browser in this sandbox (see Phase 18) — visual QA was a
+  careful code-level re-read against the CSS grid math instead of
+  screenshots, which is how the two grid-empty-track bugs above were
+  caught. Static HTML output checked for the old "Quick Actions" markup
+  being gone.
+
+**Follow-up commit, after a user-provided screenshot** of the deployed
+preview (zero-activity org — no sales/jobs yet) — the first real pixel
+confirmation any UI in this project has had:
+- Layout hierarchy, empty states, the sidebar label fix, and the
+  grid-collapse behavior (bottom low-stock/receivables/payables row
+  correctly absent entirely, not an empty grid) all confirmed rendering
+  as intended.
+- One real nit found: "Today's Profit"'s hint showed "0% margin" with
+  zero sales — mathematically defined (division-by-zero guard already
+  defaulted it to 0) but implies a measured zero rather than "no data
+  yet." Fixed to show an em dash instead when `todaySales === 0`,
+  matching the brief's "show zeros elegantly" requirement.
+- Fixed the Reports page date-matching bug flagged above in the same
+  commit, since it's the identical root cause and fix already proven
+  in this branch's own dashboard chart moments earlier.
+- `tsc`/`eslint`/`build` re-verified clean after both fixes.
+
+Remaining risks: same "no browser" caveat as every UI phase in this
+project — only the zero-activity state has been visually confirmed so
+far; the populated state (real jobs in Today's Operations, real
+alerts, a chart with actual bars) has not been screenshotted yet.
+Three real logic bugs total were caught and fixed across the two
+commits (bank balance shown to non-financial roles; cashier seeing job
+data/buttons it can't use; the Reports date-matching bug) — encouraging
+that the review process is catching real things, but not a substitute
+for someone looking at the populated dashboard too. Add both pages to
+`docs/QA_CHECKLIST.md`'s next revision once that happens.
+
+### Dashboard command center — merge into main, and 4 more real bugs
+
+This branch sat unmerged long enough that `/dashboard` diverged
+significantly on `main` (Phases 14/15 of the HVAC platform work below
+added their own job-profitability and purchase-order-pipeline cards to
+the *old* dashboard structure, unaware this rewrite existed). Merging
+required real reconciliation, not a mechanical conflict resolution:
+kept this branch's whole information architecture (TODAY → OPERATIONS →
+NEEDS ATTENTION → FINANCIAL POSITION → TREND) and folded the HVAC
+work's job-profitability/purchase-order signals in as two new compact
+"Needs Attention" rows (low-margin-jobs-this-month, open-purchase-
+orders) rather than reviving their old bigger card layout — consistent
+with this page's own "one row per alert, never a card per alert"
+density rule.
+
+An automated review (Codex) on this PR also found 4 real, pre-existing
+issues in this branch's own code, confirmed by reading the flagged
+lines directly rather than trusted blind, and fixed in the same merge:
+- **P1 — profit shown to non-financial roles.** The "Business
+  Performance" trend card rendered its gross-profit bar, legend, and
+  stat unconditionally — unlike every other financial widget on this
+  page, it had no `canSeeFinancials` gate at all. Fixed to keep the
+  revenue bar/stat visible to everyone (useful, non-financial context)
+  while gating only the profit-derived bar/legend/stats behind
+  `canSeeFinancials`, matching the reviewer's exact ask ("gate all
+  profit-derived chart content") rather than hiding the whole card.
+- **P2 — jobs KPI shown to cashiers.** The "Jobs today" metric card in
+  the header wasn't gated by `canSeeJobs` at all, unlike its sibling
+  cards. Fixed.
+- **P2 — Teams Today reachable by roles that can't open it.** Gated
+  only by `canSeeJobs`, which is true for `data_entry` (only `cashier`
+  is excluded) — but `DATA_ENTRY_ROUTES` doesn't include `/teams`, so
+  the link would bounce that role straight back to `/dashboard` via
+  `ShopRouteGuard`. Fixed by also requiring
+  `canAccessShopRoute(orgRole, "/teams")`.
+- **P2 — "My Jobs Today" / "Your assigned work" wording.** The
+  technician view's own code comment already explained *why* it can't
+  filter to "my jobs" (no `org_members` → `technicians.id` mapping
+  exists) and says it's "deliberately titled 'Today's Jobs'" — but the
+  actual translation strings still said "My Jobs Today" / "Your
+  assigned work for today" in both languages, contradicting the
+  comment's stated intent and implying a filter that doesn't exist.
+  Fixed the strings to match what the code already claimed.
+
+`tsc`/`eslint`/`next build` re-verified clean after the merge and all
+four fixes.
 ## HVAC operational platform (new spec, separate from the 26-phase dashboard-only work above)
 
 data model (Customer → Site → AC Asset → Complaint → Diagnosis → Work

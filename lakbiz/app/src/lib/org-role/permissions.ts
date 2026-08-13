@@ -68,7 +68,12 @@ const SHOP_STAFF_ROUTES: ShopNavHref[] = [
 /** data_entry: shop floor + AC jobs front desk (create/edit — no company profit/cost fields). */
 const DATA_ENTRY_ROUTES: ShopNavHref[] = [...SHOP_STAFF_ROUTES, "/jobs", "/assets", "/schedule"];
 
-const TECHNICIAN_ROUTES: ShopNavHref[] = ["/jobs", "/schedule", "/workforce", "/assets", "/teams"];
+/** `/dashboard` included deliberately: middleware and ShopRouteGuard both
+ * redirect a disallowed route *to* `/dashboard`, so leaving it out here
+ * created a redirect loop for technicians hitting any blocked route.
+ * The page itself renders a simplified, job-focused view (no financials)
+ * for this role rather than the owner command center — see dashboard/page.tsx. */
+const TECHNICIAN_ROUTES: ShopNavHref[] = ["/dashboard", "/jobs", "/schedule", "/workforce", "/assets", "/teams"];
 
 const MANAGER_PLUS_SETTINGS = ["/settings/shop", "/settings/plans", "/settings/notifications"];
 
