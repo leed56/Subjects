@@ -43,6 +43,13 @@ export interface ACJob {
   /** Annual maintenance contract */
   amcContract?: boolean;
   notes?: string;
+  /** What the customer reported (HVAC platform Phase 9) — distinct from
+   * `description`, which is an auto-generated equipment summary
+   * (brand/BTU/unit type), not an editable "what's wrong" field. */
+  complaint?: string;
+  /** What the technician found on inspection (Phase 9) — distinct from
+   * the complaint, which is the customer's own account before diagnosis. */
+  diagnosis?: string;
 }
 
 export interface ACJobInput {
@@ -77,6 +84,13 @@ export interface ACJobInput {
   /** Annual maintenance contract */
   amcContract?: boolean;
   notes?: string;
+  /** What the customer reported (HVAC platform Phase 9) — distinct from
+   * `description`, which is an auto-generated equipment summary
+   * (brand/BTU/unit type), not an editable "what's wrong" field. */
+  complaint?: string;
+  /** What the technician found on inspection (Phase 9) — distinct from
+   * the complaint, which is the customer's own account before diagnosis. */
+  diagnosis?: string;
 }
 
 export type RecordACServiceInput = {

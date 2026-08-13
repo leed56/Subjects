@@ -648,6 +648,8 @@ export function addACJob(data: AppData, input: ACJobInput): AppData {
     serviceIntervalMonths: Math.max(1, Math.round(intervalDays / 30)),
     amcContract: input.amcContract ?? false,
     notes: input.notes?.trim() || undefined,
+    complaint: input.complaint?.trim() || undefined,
+    diagnosis: input.diagnosis?.trim() || undefined,
   };
 
   const statusEntry: JobStatusEntry = {
@@ -769,6 +771,8 @@ export function updateACJob(
         serviceIntervalMonths: Math.max(1, Math.round(intervalDays / 30)),
         amcContract: input.amcContract ?? j.amcContract ?? false,
         notes: input.notes?.trim() ?? j.notes,
+        complaint: input.complaint?.trim() ?? j.complaint,
+        diagnosis: input.diagnosis?.trim() ?? j.diagnosis,
       };
       nextStatusValue = result.status;
       return result;

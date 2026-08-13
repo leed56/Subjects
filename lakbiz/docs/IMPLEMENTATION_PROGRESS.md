@@ -1838,6 +1838,83 @@ Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
 pre-existing warnings, none new, `next build` succeeds. No browser
 verification — standing sandbox limitation.
 
+### Phase 9 — Job Detail experience redesign
+
+The Job Sheet drawer was one long scroll — KPI row, Equipment, a combined
+parts/labour items table, one add-item form covering every material
+source and labor case at once, then status history — all rendered
+unconditionally at the same visual weight. Restructured into 5 tabs
+(`Overview`, `Parts & Materials`, `Labor & Other Costs`, `Job Economics`,
+`Invoice & Payment`) using the existing `Tabs` primitive (already in the
+design system, unused until now), mapping the spec's 10 named
+sub-sections onto a smaller set of grouped tabs rather than 10
+individual tabs, which would have been excessive:
+
+- **Overview**: Identity (customer/phone/address, in the drawer header)
+  + **Complaint** and **Diagnosis** (both genuinely new fields, see
+  below) + Equipment (existing Phase 4/5 asset link) + Attachments
+  (disclosed unavailable, not fabricated — see below) + Status history.
+- **Parts & Materials**: the existing parts table + add-item form,
+  filtered to `itemType === "part"`, source selector unchanged from
+  Phase 4.
+- **Labor & Other Costs**: the same table/form filtered to
+  `itemType === "labour" || "service"` — a technician picker for
+  labour lines (Phase 6), unchanged.
+- **Job Economics**: full Material/Labor/Other/Total/Revenue/Gross
+  Profit/Margin breakdown via `computeJobProfitability()` (Phase 8) —
+  **now fed a real job-linked-expenses total**, fetched in this drawer
+  for the first time (see below), so these numbers match `/job-costing`
+  exactly instead of omitting Phase 7 costs as before.
+- **Invoice & Payment**: the existing "View invoice" link plus
+  quote/deposit/balance figures pulled out of the old always-visible
+  header into their own tab.
+
+The single add-item form (covering part/labour/service/source
+combinations from Phases 4–6) was **not duplicated** across the Parts
+and Labor tabs — the same form component is reused, with the item-type
+selector's available options and the displayed item list both switching
+on which tab is active, and a tab-change handler that resets the form
+and picks a sensible default `itemType` for the new tab. One form, one
+set of validation/submit logic, two contexts.
+
+**Two genuinely new fields**: `ACJob.complaint` (what the customer
+reported) and `ACJob.diagnosis` (what the technician found). Audited
+first — `description` was assumed to be a "what's wrong" field before
+checking; it's actually an **auto-generated equipment summary**
+(brand/BTU/unit type, built in `addACJob`) with no editable UI input
+anywhere in the app. Complaint and Diagnosis are real, new, editable
+fields added to the job create/edit form, distinct from both
+`description` and the free-text `notes` field that already existed.
+Migration `20250708000001_job_complaint_diagnosis.sql` widens
+`ac_jobs_base` and the masked `ac_jobs` view + its `INSTEAD OF` triggers
+(same append-only `CREATE OR REPLACE VIEW` pattern as every prior
+`ac_jobs` schema change) — both fields are plain text, not financial, so
+no masking `case`/`when` was needed for them specifically.
+
+**Closing a disclosed gap from Phases 7/8**: the Job Sheet drawer now
+fetches job-linked Expenses itself (`fetchOrgExpenses`, filtered to this
+job's id) instead of passing `linkedExpenseTotal = 0` to
+`computeJobProfitability()` — both Phase 7's and Phase 8's docs
+explicitly flagged this as deferred to "Phase 9's Job Detail redesign
+potentially changing that." It has.
+
+**Attachments — disclosed, not fabricated**: the Overview tab has an
+Attachments section with a plain "not available yet" message. No photo/
+document upload architecture exists anywhere in this codebase (confirmed
+in the Phase 1 audit and re-confirmed here) — building real file
+upload/storage is a substantial feature (Supabase Storage bucket, upload
+UI, RLS policies for file access) that the spec's own "do not fabricate"
+instructions rule out inventing as a side effect of a tab reshuffle.
+
+Tests performed: `tsc --noEmit` clean, `eslint` — 0 errors, same 3
+pre-existing warnings, none new, `next build` succeeds. No browser
+verification — standing sandbox limitation, and this phase carries more
+risk than most from that gap since it's a substantial, freeform JSX
+restructure with no visual confirmation; reviewed the full render tree
+manually line-by-line after the edit to check every tab's JSX opens and
+closes correctly, but a real browser pass is the one thing that would
+actually confirm the tabs render and switch as intended.
+
 ## Not started
 
 Deferred items: customer notes field,
