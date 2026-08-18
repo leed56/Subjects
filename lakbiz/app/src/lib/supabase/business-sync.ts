@@ -770,29 +770,28 @@ async function upsertMaskedViewRows(
     if (error) return error.message;
   }
 
-  // Phase 25 perf fix: each row here can carry different column values,
-  // so — unlike toInsert above — this can't be one batched call the way
-  // .insert() can; PostgREST's .update() applies one patch to every row
-  // it matches, and ON CONFLICT-based upsert isn't available against a
+  // Phase 25 follow-up: each row here can carry different column values,
+  // so — unlike toInsert above — this can't be a plain .insert()-style
+  // batched call, and ON CONFLICT-based upsert isn't available against a
   // masked view (no unique constraint of its own — see the technicians/
   // job_items upsert-conflict fix earlier in this project's history).
-  // What was still avoidable: awaiting these one at a time. On a full
-  // sync (pushBusinessData, debounced ~1.5s after any local edit
-  // anywhere in the app) most rows in an established org already exist,
-  // so toUpdate is typically most of the table — sequential awaits here
-  // meant every edit's sync time grew with the org's total row count.
-  // Same end state, same per-row requests, just run concurrently in
-  // bounded batches instead of one connection at a time.
-  for (const rowBatch of chunk(toUpdate, CONCURRENT_UPDATE_BATCH_SIZE)) {
-    const results = await Promise.all(
-      rowBatch.map(async (row) => {
-        const { id, ...patch } = row;
-        const { error } = await supabase.from(table).update(patch).eq("id", id);
-        return error?.message ?? null;
-      }),
-    );
-    const firstError = results.find((e) => e !== null);
-    if (firstError) return firstError;
+  // An earlier pass here ran PostgREST .update() calls concurrently in
+  // bounded batches of 25 — same round-trip *count* as one-at-a-time,
+  // just no longer waited on sequentially. This calls
+  // bulk_update_masked_view_rows (see
+  // 20250713000001_bulk_update_masked_view_rows.sql) instead: one
+  // `UPDATE ... FROM jsonb_array_elements(...)` statement per chunk
+  // updates every row in the chunk in a single round trip. The view's
+  // own INSTEAD OF UPDATE trigger (SECURITY DEFINER, already role/
+  // module-checked — see 20250712000001_role_aware_write_rls.sql) still
+  // fires once per row exactly as it does for a normal .update() call;
+  // only the request count changes, not what gets checked or written.
+  for (const rowBatch of chunk(toUpdate, BULK_UPDATE_BATCH_SIZE)) {
+    const { error } = await supabase.rpc("bulk_update_masked_view_rows", {
+      p_view: table,
+      p_rows: rowBatch,
+    });
+    if (error) return error.message;
   }
 
   return null;
@@ -907,14 +906,17 @@ async function fetchCloudWatermark(organizationId: string): Promise<number> {
  * one shot. */
 const LINE_REPLACE_BATCH_SIZE = 200;
 
-/** Concurrency cap for the per-row masked-view UPDATE batches in
- * upsertMaskedViewRows below — deliberately much smaller than
- * LINE_REPLACE_BATCH_SIZE, which is sized for URL-length limits on a
- * single request, not how many requests to fire at once. 200 concurrent
- * requests from one browser tab risks connection-pool exhaustion or
- * looking like abuse to Supabase's edge; 25 is a large enough win over
- * one-at-a-time without either of those risks. */
-const CONCURRENT_UPDATE_BATCH_SIZE = 25;
+/** How many rows per bulk_update_masked_view_rows RPC call in
+ * upsertMaskedViewRows below (Phase 25 follow-up — see
+ * 20250713000001_bulk_update_masked_view_rows.sql). Each call is already
+ * a single round trip regardless of chunk size, so this isn't sized for
+ * connection concurrency the way the earlier Promise.all-batch constant
+ * was — it bounds the request body size and keeps one very large sync
+ * from becoming a single giant statement/transaction. Reuses
+ * LINE_REPLACE_BATCH_SIZE's value since the same "keep one request
+ * reasonably sized" reasoning applies, just for a JSONB payload instead
+ * of a URL filter. */
+const BULK_UPDATE_BATCH_SIZE = LINE_REPLACE_BATCH_SIZE;
 
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
