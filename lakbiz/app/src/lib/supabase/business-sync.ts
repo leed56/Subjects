@@ -743,9 +743,9 @@ export async function syncCustomersSnapshot(
   );
 }
 
-/** Masked views (sales/products/ac_jobs/contractors/vehicles): avoid upsert — SELECT on *_base is revoked. */
+/** Masked views (sales/products/ac_jobs/contractors/vehicles/technicians/job_items): avoid upsert — SELECT on *_base is revoked, and the view itself has no unique constraint for ON CONFLICT to target. */
 async function upsertMaskedViewRows(
-  table: "sales" | "products" | "ac_jobs" | "contractors" | "vehicles",
+  table: "sales" | "products" | "ac_jobs" | "contractors" | "vehicles" | "technicians" | "job_items",
   organizationId: string,
   rows: Record<string, unknown>[],
 ): Promise<string | null> {
@@ -1652,7 +1652,7 @@ export async function syncJobItemSnapshot(
   const item = data.jobItems.find((row) => row.id === itemId);
   if (!item) return "Job item not found locally";
 
-  return upsertOrgRows("job_items", [jobItemRow(organizationId, item)]);
+  return upsertMaskedViewRows("job_items", organizationId, [jobItemRow(organizationId, item)]);
 }
 
 /** Remove a job line item from Supabase. */
@@ -2107,7 +2107,7 @@ export async function syncTechnicianSnapshot(
   const technician = data.technicians.find((row) => row.id === technicianId);
   if (!technician) return "Technician not found locally";
 
-  return upsertOrgRows("technicians", [technicianRow(organizationId, technician)]);
+  return upsertMaskedViewRows("technicians", organizationId, [technicianRow(organizationId, technician)]);
 }
 
 /** Remove a technician from Supabase. */
@@ -2558,10 +2558,19 @@ export async function pushBusinessData(
       "ac_jobs",
       "contractors",
       "vehicles",
+      "technicians",
+      "job_items",
     ]);
     const err = maskedTables.has(step.table)
       ? await upsertMaskedViewRows(
-          step.table as "sales" | "products" | "ac_jobs" | "contractors" | "vehicles",
+          step.table as
+            | "sales"
+            | "products"
+            | "ac_jobs"
+            | "contractors"
+            | "vehicles"
+            | "technicians"
+            | "job_items",
           organizationId,
           step.rows,
         )
