@@ -3267,3 +3267,94 @@ each flagged individually rather than silently dropped:
   dashboard-only — not reachable via `apply_migration` or any other MCP
   tool from this session, so it stays an explicitly disclosed item this
   session cannot close, not a dropped one.
+
+## Fix-all pass — masked-view bulk-update RPC (true O(1) round trips)
+
+User confirmed proceeding with the schema-level fix flagged above.
+Closes the masked-view N+1 item for real: the concurrent-Promise.all-of-25
+fix (previous section) cut wall-clock time but every full sync still
+issued one HTTP request per updated row. `bulk_update_masked_view_rows`
+(`20250713000001_bulk_update_masked_view_rows.sql`) replaces that with a
+single `UPDATE ... FROM jsonb_array_elements($1) ...` statement per
+chunk — one round trip updates every row in the chunk.
+
+Design questions worked through before writing anything:
+
+- **Why target the view, not the base table, and why SECURITY INVOKER
+  (not DEFINER, unlike this project's other trigger/helper functions)**:
+  sales/products/ac_jobs/contractors/vehicles/technicians/job_items are
+  masked views with INSTEAD OF UPDATE triggers that are already SECURITY
+  DEFINER and already do the real permission check
+  (`org_member_can_write_module` + `org_member_role_in`, from Phase 19).
+  `UPDATE view ... FROM jsonb_array_elements(...)` is standard Postgres:
+  for every row the FROM-join matches, the INSTEAD OF UPDATE trigger
+  fires once — same trigger, same permission check, same tenant-scoping
+  WHERE clause already baked into the view, just issued as one statement
+  instead of N. Making the RPC itself SECURITY INVOKER means it runs as
+  the calling `authenticated` role against the view exactly as
+  PostgREST's `.update()` does today — no new privilege surface, only
+  the request count changes.
+- **SQL-injection safety**: `p_view` is checked against a hardcoded
+  allowlist. Every identifier substituted into the dynamic SQL (view
+  name, column names, column type names) comes only from `pg_catalog`
+  (`format_type()`/`pg_attribute`), never from client input. Row
+  *values* stay inside the single `$1` bind parameter and are only ever
+  extracted via `->>`.
+- **Bug found and fixed before this was applied**: the first draft built
+  the SET list from the view's *entire* column list. Every masked view
+  carries columns the client never sends on an update
+  (`created_at`/`updated_at` are always server-computed; row-builder
+  functions in `business-sync.ts` only populate a fixed subset per
+  table). Setting every column unconditionally would have overwritten
+  those omitted columns with NULL on every bulk update — silent data
+  loss on a table nobody was even editing those columns on. Fixed by
+  taking the column list from the *payload's own JSON keys* instead
+  (verified every row-builder function — `productRowsFromList`,
+  `saleRowFromSale`, `acJobRowFromJob`, `contractorRowsFromList`,
+  `jobItemRow`, `vehicleRow`, `technicianRow` — always sends an
+  identical key set per call, using `field ?? null` rather than omitting
+  keys, so this is safe).
+
+Testing performed (this session has no browser/authenticated-session
+sandbox, so an end-to-end "real technician saves a job" check wasn't
+possible — same standing limitation as every other DB change this
+project has made):
+
+- Validated the dynamic-SQL generation logic directly against real
+  `pg_catalog` metadata for all 7 views (confirmed every column is a
+  plain type — `text`/`uuid`/`numeric`/`numeric(p,s)`/`integer`/
+  `smallint`/`boolean`/`date`/`timestamp with time zone`/`jsonb` — no
+  custom enum types among them, so no additional type-mapping edge case
+  exists here).
+- Ran the actual dynamic-UPDATE logic end to end against a disposable
+  temp table (`like products_base including defaults`, a real sample
+  product row inserted into it) instead of the live view, since this
+  session has no authenticated session to satisfy the view's own
+  trigger-level permission check. Confirmed: (a) every column value
+  round-trips through the JSON→SQL cast correctly, including a `jsonb`
+  object column and a `boolean` column; (b) an explicit JSON `null`
+  correctly clears a column to SQL NULL; (c) `created_at`/`updated_at`
+  (columns not present in the test payload) are left untouched,
+  confirming the payload-keys-only fix above actually prevents the
+  data-loss bug it was written to prevent.
+- `get_advisors(security)` after applying: no new lint entries at all —
+  not even the `authenticated_security_definer_function_executable` WARN
+  every other trigger/helper function in this project carries, since
+  this one is deliberately SECURITY INVOKER, not DEFINER.
+
+App-side change: `upsertMaskedViewRows` in `business-sync.ts` now calls
+`supabase.rpc("bulk_update_masked_view_rows", { p_view: table, p_rows:
+rowBatch })` once per chunk of `toUpdate`, replacing the
+`Promise.all`-of-25 loop. Chunk size reuses `LINE_REPLACE_BATCH_SIZE`
+(200) — renamed the old `CONCURRENT_UPDATE_BATCH_SIZE` constant to
+`BULK_UPDATE_BATCH_SIZE` since its purpose changed from "concurrency cap"
+to "request-body-size cap" (a single RPC call is already one round trip
+regardless of chunk size).
+
+Tests: `tsc --noEmit` clean, `eslint` — 0 errors, same 3 pre-existing
+warnings, `next build` succeeds, same route list.
+
+Remaining from the original "fix all the issues not fixed" list: only
+Supabase Auth's "leaked password protection" setting, which stays
+dashboard-only and unreachable from this session — flagged, not
+silently dropped.
