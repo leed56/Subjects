@@ -2890,3 +2890,84 @@ so far this pass. Next: continue the Phase 19-style role/permission
 audit — this pass's real bugs were all found by re-verifying past
 claims against the live system rather than trusting prior write-ups,
 which is the same method worth applying to the rest of the audit.
+
+## Phase 19 — role/permission audit (started for real)
+
+Systematic, not reactive this time: read `src/lib/org-role/permissions.ts`
+(the app's own documented role matrix) end to end, confirmed real
+server-side route enforcement exists in `middleware.ts` (matches the
+matrix, no drift), then checked whether the *database* enforces the same
+matrix for writes — it did not. Two real findings, both fixed in
+`20250712000001_role_aware_write_rls.sql`, applied live and verified:
+
+**1. CRITICAL — masking bypass on `technicians_base`/`job_items_base`.**
+Both tables kept a direct `SELECT` grant to `authenticated` that the
+other six masked-view base tables (`sales_base`, `sale_lines_base`,
+`products_base`, `ac_jobs_base`, `contractors_base`, `vehicles_base`)
+had revoked back in `20250628000002`/`20250628000003`. These two were
+added later by Phase 6 (`20250706000001_labor_costing.sql`) and simply
+missed that treatment. Any authenticated org member — including a
+technician — could query `technicians_base`/`job_items_base` directly
+and read real `hourly_rate`/`unit_price`/`line_total`/`customer_price`,
+completely bypassing the `technicians`/`job_items` views' column
+masking. Fixed: `revoke select ... from authenticated` on both.
+
+**2. Role-blind writes across 22 tables.** `org_member_can_write_module`
+(used by every write RLS policy and inline inside every masked-view
+trigger function) only checks org membership + plan/module entitlement —
+never the calling member's role. The documented matrix says a cashier
+must never touch Suppliers/Banking and a technician must never touch
+Stock/Sales/Customers, but that was only ever enforced by hidden UI and
+middleware redirects — never by the database. A direct authenticated
+REST call from any staff member's own valid session was never blocked
+for: products, stock_logs, sales, sale_lines, customers,
+customer_payments, customer_product_prices, suppliers, purchases,
+purchase_lines, supplier_payments, bank_accounts, bank_transactions,
+bank_transfers, cheques, vehicles, ac_jobs, job_status_history,
+job_items, technicians, contractors, contractor_payments. Fixed: a new
+`org_member_role_in(org_id, roles)` helper, ANDed into all 66
+insert/update/delete RLS policies across those 22 tables AND into all
+24 masked-view trigger functions (the triggers are `SECURITY DEFINER`
+and bypass the base table's own RLS entirely — fixing only the table
+policies would have left the view-write path, the one the app actually
+uses, unprotected). Role sets mirror the app's own existing permission
+functions (`canOperateAcJobs`/`canUpdateAcJob`,
+`canUseSuppliersModule`, `canUseBankingModule`) as closely as possible —
+shop staff (owner/manager/data_entry/cashier) for stock/sales/customers;
+owner/manager only for suppliers/banking/vehicles/the workforce roster
+(technicians/contractors/contractor_payments — "no financial fields"
+per the matrix, and technicians' own hours-logging goes through
+job_items, not this table, so nothing real breaks); owner/manager/
+data_entry for ac_jobs itself (matches `canOperateAcJobs` — technician
+deliberately excluded, `canUpdateAcJob` already returned false for that
+role on every field); owner/manager/data_entry/technician for
+`job_items` only (the one table Phase 6 explicitly built for
+technicians to log their own labour/parts).
+
+**Bonus find while rewriting the trigger functions**: `job_items_view_delete`
+and `technicians_view_delete` both referenced `new.organization_id`
+inside their permission check — but `NEW` is always `NULL` in a DELETE
+trigger. This meant `org_member_can_write_module(null, ...)` was always
+false, so deleting a job item or a technician via the app
+(`deleteJobItemFromCloud`/`deleteTechnicianFromCloud`) has *always*
+raised "permission denied" and never actually worked, since Phase 6
+shipped. Fixed to `old.organization_id`, the only row data a DELETE
+trigger has. Pre-existing, not introduced this pass — caught only
+because every function was rewritten by hand and compared line-by-line
+against its original rather than pattern-substituted blindly.
+
+Deliberately not attempted this pass (disclosed, not silently left):
+write-time value masking on INSERT for `job_items` — `UPDATE` already
+clamps `unit_price`/`line_total`/`customer_price` to the existing value
+for a non-financial role via `case when can_see_org_financials(...)`;
+`INSERT` has no equivalent clamp, so a non-financial role could still
+set an arbitrary cost on a brand-new job item (though not read it back,
+since SELECT stays masked). Needs its own careful design — flagged for
+a dedicated follow-up, not fixed here.
+
+Verified: `get_advisors(security)` after this migration shows no new
+warning categories — `org_member_role_in` gets flagged with the exact
+same `authenticated_security_definer_function_executable` WARN every
+other internal helper (`can_see_org_financials`, `is_org_member`,
+`org_has_module`, etc.) already carries, which is the accepted,
+by-design class for this codebase's internal SQL helpers.
