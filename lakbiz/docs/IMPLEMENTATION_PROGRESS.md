@@ -2796,3 +2796,66 @@ the spec — what's left is review and merge:
 4. After merging, re-run `npm audit` and the Phase 17 security-advisor
    scan once more against whatever becomes the new `main` — no changes
    are expected, but it's a cheap final confirmation after 13 PRs land.
+
+*(The list above predates the HVAC platform work (Phases 0-18 of the
+original SMB dashboard spec, PRs #31-#43, all long since merged) —
+kept for history, superseded by everything below.)*
+
+## Post-merge fixes — critical live bugs found after all 15 HVAC PRs landed
+
+**Critical: technicians/job_items cloud save broken since Phase 6.**
+User-reported live error: "Cloud save failed — there is no unique or
+exclusion constraint matching the ON CONFLICT specification." Root
+cause: Phase 6 (`labor_costing.sql`) turned `technicians`/`job_items`
+into masked security-barrier views (no unique constraint of their own —
+only the `_base` tables have one), but `business-sync.ts` was never
+fully updated to match. Three call sites (`syncJobItemSnapshot`,
+`syncTechnicianSnapshot`, and `pushBusinessData`'s full-snapshot sync
+step) still wrote through the raw `.upsert(rows, {onConflict: "id"})`
+path (`upsertOrgRows`) instead of the insert/update-split path
+(`upsertMaskedViewRows`) already used correctly for the other masked
+views (`sales`/`products`/`ac_jobs`/`contractors`/`vehicles`). Fixed
+by routing all three through `upsertMaskedViewRows` and extending its
+type union to accept `"technicians" | "job_items"`. No schema change
+needed — pure app-layer bug, introduced when Phase 6 shipped the
+masking migration without a full write-path audit. `tsc`/`eslint`/
+`next build` all clean; same 3 pre-existing unrelated warnings.
+
+**`stock_logs.user_id` now enforced server-side.** Previously disclosed
+(via an automated Codex review comment, not fixed at the time):
+`stock_logs.user_id` — added in `20250704000001_stock_movement_types.sql`,
+documented then as "Nullable — populated by the app layer, not enforced
+by RLS" — was fully client-controlled. `business-sync.ts`'s
+`stockLogRow()` sent whatever `log.userId` the local app state held,
+and the table's INSERT/UPDATE RLS policy only checked `organization_id`
+membership, never `user_id`. Any org member could write a stock
+movement log attributed to a different member. Fixed via
+`20250711000001_stock_logs_user_id_server_stamp.sql`: a `BEFORE INSERT
+OR UPDATE` trigger (`stock_logs_stamp_user_id`) that always overwrites
+`user_id` with `auth.uid()` for authenticated writers, ignoring
+whatever the client sent — keeps the offline-first ergonomics (client
+can still populate it optimistically for local display) while making
+the persisted value trustworthy. Applied live and verified via
+`pg_trigger`; `get_advisors(security)` shows the new function flagged
+with the same `authenticated_security_definer_function_executable` WARN
+every other masked-view trigger function already carries (trigger
+functions returning `trigger` aren't reachable via PostgREST's `/rpc/`
+surface regardless of the grant, so this is the same accepted,
+pre-existing class of warning, not a new one).
+
+**Retracted: contractors financial-masking "gap."** An earlier status
+report and Phase 6 comment both claimed `contractors.rate_amount`/
+`payable_balance` were an unmasked, unfixed gap predating Phase 6. That
+claim was wrong — direct inspection of
+`20250626000001_ac_workforce_financial_masking.sql` and
+`20250628000002_fix_masked_view_cross_tenant_leak.sql` (both predating
+this entire HVAC engagement, both confirmed applied live) shows
+`contractors` was already correctly masked and tenant-scoped. See
+`20250706000001_labor_costing.sql`'s corrected comment for the full
+retraction.
+
+Still open, genuinely disclosed, not yet fixed: nothing else identified
+so far this pass. Next: continue the Phase 19-style role/permission
+audit — this pass's two real bugs were both found by re-verifying past
+claims against the live system rather than trusting prior write-ups,
+which is the same method worth applying to the rest of the audit.
