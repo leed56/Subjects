@@ -15,7 +15,7 @@ import { jobTypeLabel } from "@/lib/ac-job-types";
 import type { ACJobType } from "@/lib/ac-job-types";
 import type { ACJob } from "@/lib/store/types";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
-import { computeJobProfitability, isLowMarginJob, type JobProfitability } from "@/lib/job-profitability";
+import { computeJobProfitability, isLowMarginJob, type JobProfitability, type JobLinkedExpense } from "@/lib/job-profitability";
 
 type CostedJob = {
   job: ACJob;
@@ -41,7 +41,7 @@ export default function JobCostingPage() {
   // Expenses are cloud-only (not part of the local-first store — see
   // expenses-client.ts), so job-linked "other costs" (Phase 7) need
   // their own fetch here, same pattern as /expenses itself.
-  const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<string, number> | null>(null);
+  const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<string, JobLinkedExpense[]> | null>(null);
   useEffect(() => {
     if (!orgId || !canSeeFinancials) {
       setJobLinkedExpenseTotals(new Map());
@@ -50,10 +50,12 @@ export default function JobCostingPage() {
     let cancelled = false;
     void fetchOrgExpenses(orgId).then((result) => {
       if (cancelled) return;
-      const totals = new Map<string, number>();
+      const totals = new Map<string, JobLinkedExpense[]>();
       for (const e of result.data) {
         if (!e.jobId) continue;
-        totals.set(e.jobId, (totals.get(e.jobId) ?? 0) + e.amount);
+        const list = totals.get(e.jobId) ?? [];
+        list.push({ category: e.category, amount: e.amount });
+        totals.set(e.jobId, list);
       }
       setJobLinkedExpenseTotals(totals);
     });
@@ -95,7 +97,7 @@ export default function JobCostingPage() {
     .filter((j) => !search.trim() || j.customerName.toLowerCase().includes(search.trim().toLowerCase()))
     .map((j) => ({
       job: j,
-      profit: computeJobProfitability(j, jobItemsByJob.get(j.id) ?? [], jobLinkedExpenseTotals.get(j.id) ?? 0),
+      profit: computeJobProfitability(j, jobItemsByJob.get(j.id) ?? [], jobLinkedExpenseTotals.get(j.id) ?? []),
     }));
 
   const sorted = [...costed].sort((a, b) => {

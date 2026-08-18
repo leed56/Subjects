@@ -43,7 +43,7 @@ import { getIncomeTaxYearSummary } from "@/lib/income-tax";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { canAccessShopRoute } from "@/lib/org-role/permissions";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
-import { computeJobProfitability, isLowMarginJob } from "@/lib/job-profitability";
+import { computeJobProfitability, isLowMarginJob, type JobLinkedExpense } from "@/lib/job-profitability";
 
 type Locale = "si" | "en";
 type TrendPeriod = "30d" | "3m" | "6m" | "12m";
@@ -175,7 +175,7 @@ export default function DashboardPage() {
   // /job-costing, which already does exactly this. Gated on
   // canSeeFinancials up front: never even request the data a technician
   // isn't allowed to see.
-  const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<string, number> | null>(null);
+  const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<string, JobLinkedExpense[]> | null>(null);
   useEffect(() => {
     if (!showAcJobs || !canSeeFinancials || !org.isAuthenticated || !org.id) {
       setJobLinkedExpenseTotals(new Map());
@@ -184,10 +184,12 @@ export default function DashboardPage() {
     let cancelled = false;
     void fetchOrgExpenses(org.id).then((result) => {
       if (cancelled) return;
-      const totals = new Map<string, number>();
+      const totals = new Map<string, JobLinkedExpense[]>();
       for (const e of result.data) {
         if (!e.jobId) continue;
-        totals.set(e.jobId, (totals.get(e.jobId) ?? 0) + e.amount);
+        const list = totals.get(e.jobId) ?? [];
+        list.push({ category: e.category, amount: e.amount });
+        totals.set(e.jobId, list);
       }
       setJobLinkedExpenseTotals(totals);
     });
@@ -236,7 +238,7 @@ export default function DashboardPage() {
   const monthCosted = jobLinkedExpenseTotals
     ? monthJobs.map((j) => ({
         job: j,
-        profit: computeJobProfitability(j, jobItemsByJob.get(j.id) ?? [], jobLinkedExpenseTotals.get(j.id) ?? 0),
+        profit: computeJobProfitability(j, jobItemsByJob.get(j.id) ?? [], jobLinkedExpenseTotals.get(j.id) ?? []),
       }))
     : [];
   const lowMarginJobs = monthCosted
