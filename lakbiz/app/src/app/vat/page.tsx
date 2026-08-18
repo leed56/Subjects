@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ExportActions } from "@/components/export/export-actions";
 import { AppShell } from "@/components/shell/app-shell";
@@ -19,14 +20,46 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { getVatQuarterSummary } from "@/lib/vat";
 import { getIncomeTaxYearSummary } from "@/lib/income-tax";
+import type { JobLinkedExpense } from "@/lib/job-profitability";
+import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 export default function VatReturnPage() {
   const { data, ready } = useAppStore();
   const { t } = useLocale();
-  const { can } = useSubscription();
+  const { can, org, orgRole } = useSubscription();
 
-  if (!ready || !data) {
+  const canSeeFinancials = orgRole === "owner" || orgRole === "manager";
+  const orgId = org.isAuthenticated ? org.id : null;
+
+  // Job-linked expenses (Phase 7) are cloud-only (not part of the
+  // local-first store — see expenses-client.ts), so the income-tax
+  // AC-job-profit figure below (fix-all pass) needs its own fetch here,
+  // same pattern already used by /job-costing, /jobs and the dashboard.
+  const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<string, JobLinkedExpense[]> | null>(null);
+  useEffect(() => {
+    if (!orgId || !canSeeFinancials) {
+      setJobLinkedExpenseTotals(new Map());
+      return;
+    }
+    let cancelled = false;
+    void fetchOrgExpenses(orgId).then((result) => {
+      if (cancelled) return;
+      const totals = new Map<string, JobLinkedExpense[]>();
+      for (const e of result.data) {
+        if (!e.jobId) continue;
+        const list = totals.get(e.jobId) ?? [];
+        list.push({ category: e.category, amount: e.amount });
+        totals.set(e.jobId, list);
+      }
+      setJobLinkedExpenseTotals(totals);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, canSeeFinancials]);
+
+  if (!ready || !data || !jobLinkedExpenseTotals) {
     return (
       <AppShell>
         <ProMain>
@@ -37,7 +70,7 @@ export default function VatReturnPage() {
   }
 
   const summary = getVatQuarterSummary(data);
-  const incomeTax = getIncomeTaxYearSummary(data);
+  const incomeTax = getIncomeTaxYearSummary(data, new Date(), 0, jobLinkedExpenseTotals);
 
   const incomeTaxSection = (
     <section id="income-tax" className="mt-10">
@@ -93,11 +126,11 @@ export default function VatReturnPage() {
           tone="teal"
         />
         <ProStatCard
-          label={t("tax.subcontract_cost")}
-          value={formatLkr(incomeTax.subcontractExpense)}
+          label={t("tax.ac_job_profit")}
+          value={formatLkr(incomeTax.acJobProfit)}
           hint={t("nav.jobs")}
           icon="🔧"
-          tone="rose"
+          tone={incomeTax.acJobProfit < 0 ? "rose" : "teal"}
         />
         <ProStatCard
           label={t("tax.estimated_profit")}
