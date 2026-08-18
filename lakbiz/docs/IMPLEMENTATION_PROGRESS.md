@@ -2854,8 +2854,39 @@ this entire HVAC engagement, both confirmed applied live) shows
 `20250706000001_labor_costing.sql`'s corrected comment for the full
 retraction.
 
+**Critical: products.active/notes missing live, same class of drift.**
+User-reported live error: "Cloud save failed — Could not find the
+'active' column of 'products' in the schema cache," seen on the
+Customers page (the full-snapshot background sync touches every table
+regardless of which page triggered it, so the banner isn't
+page-specific). Root cause: `20250703000001_products_active_notes.sql`
+(Phase 2) was never applied to the live DB — same failure mode as the
+Phases 3-13 gap fixed earlier, just missed by that earlier sweep.
+Corrected in place (not replayed verbatim) because two later migrations
+changed the live shape since that file was written:
+`20250625000003_masked_view_triggers_security_definer.sql` (insert/
+update triggers are SECURITY DEFINER with an
+`org_member_can_write_module(..., 'stock')` check, not the original's
+SECURITY INVOKER/no-check version) and
+`20250628000003_fix_masked_view_grant_regression.sql` (the view has its
+own tenant WHERE clause and `security_invoker=false`, not the
+`security_invoker=true` + base-table-grant shape the original targeted,
+which that later migration deliberately reverted as a masking-bypass
+risk). Rebuilt against the actual live view/function definitions
+(fetched via `pg_get_viewdef`/`pg_get_functiondef` first) rather than
+assumed. Applied live and verified: `products.active`/`notes` columns
+exist, `get_advisors(security)` shows no new categories beyond the
+already-accepted pre-existing ones.
+
+Prompted a broader live-schema sweep across every Phase 2-15 column/
+table this session had touched (technicians.hourly_rate, job_items
+material-source columns, ac_jobs.complaint/diagnosis/asset_id/crew_id,
+purchase_orders, crews, ac_assets, stock_logs log_type check,
+expenses.job_id) — all confirmed present; `products.active`/`notes`
+was the only remaining gap found.
+
 Still open, genuinely disclosed, not yet fixed: nothing else identified
 so far this pass. Next: continue the Phase 19-style role/permission
-audit — this pass's two real bugs were both found by re-verifying past
+audit — this pass's real bugs were all found by re-verifying past
 claims against the live system rather than trusting prior write-ups,
 which is the same method worth applying to the rest of the audit.
