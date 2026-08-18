@@ -2971,3 +2971,38 @@ same `authenticated_security_definer_function_executable` WARN every
 other internal helper (`can_see_org_financials`, `is_org_member`,
 `org_has_module`, etc.) already carries, which is the accepted,
 by-design class for this codebase's internal SQL helpers.
+
+## Phase 19 — closing the disclosed job_items INSERT gap
+
+Picked up the follow-up flagged in the previous entry:
+`job_items_view_insert` had no financial-masking clamp, unlike
+`job_items_view_update`. First attempt (applied, then corrected within
+the same pass, before it ever reached a merged migration) simply
+clamped `unit_price`/`line_total` to 0 for any non-financial-role
+insert — caught before shipping that this would have been a real
+regression: `data_entry`/`technician` are both designed, frequent users
+of "add a stock part to this job," and stock-sourced parts have a real
+cost (`products_base.buy_price`) that must be recorded for job costing
+to stay accurate. Zeroing it would have silently corrupted every
+non-owner/manager-added stock part's cost — worse than the gap it was
+meant to close.
+
+Corrected fix (`20250712000002_job_items_insert_financial_masking.sql`,
+applied live and verified, `get_advisors` clean, no new categories): for
+`source = 'stock'`, unit price is now always derived server-side from
+`products_base.buy_price` — for every role, including owner/manager —
+rather than trusted from client input at all. Safe for a non-financial
+role to trigger (they never see the resolved value; SELECT stays
+masked) and a stronger form of "do not calculate historical jobs using
+today's part cost" than trusting a client-computed snapshot. For
+`purchased`/`customer_supplied` sources — genuinely free-text,
+user-entered costs — the `can_see_org_financials` clamp (0/null
+fallback) still applies. `line_total` is now always server-computed
+from the resolved unit price so it can never drift from it.
+
+`UPDATE` deliberately left unchanged: re-deriving a stock item's price
+from today's `buy_price` on every edit would itself violate "don't
+recalc historical jobs using today's price," just in the other
+direction (silently repricing an already-frozen snapshot because qty or
+notes changed). Preserving the existing value on a non-financial edit
+and trusting a financial role's explicit correction remains correct.
