@@ -378,7 +378,9 @@ export default function DashboardPage() {
   // Full owner/manager/data_entry/cashier dashboard.
   // ---------------------------------------------------------------------
   const vat = canSeeFinancials ? getVatQuarterSummary(data) : null;
-  const incomeTax = canSeeFinancials ? getIncomeTaxYearSummary(data) : null;
+  const incomeTax = canSeeFinancials
+    ? getIncomeTaxYearSummary(data, new Date(), 0, jobLinkedExpenseTotals ?? new Map())
+    : null;
   const marginPct = stats.todaySales > 0 ? Math.round((stats.todayProfit / stats.todaySales) * 100) : 0;
   const trend = getRevenueTrend(data.sales, trendPeriod, locale);
   const trendMax = Math.max(1, ...trend.map((p) => Math.max(p.revenue, p.profit)));

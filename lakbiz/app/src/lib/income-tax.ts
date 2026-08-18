@@ -1,6 +1,7 @@
 import type { AppData } from "@/lib/store/types";
 import type { BusinessInfo } from "@/lib/invoice";
 import { vehicleTotalCost } from "@/lib/vehicles";
+import { computeJobProfitability, type JobLinkedExpense } from "@/lib/job-profitability";
 
 /** Sri Lanka standard company rate — YoA 2025/2026 (most companies). */
 export const DEFAULT_COMPANY_INCOME_TAX_RATE_PCT = 30;
@@ -71,9 +72,29 @@ export type IncomeTaxYearSummary = {
   revenue: number;
   salesProfit: number;
   vehicleProfit: number;
-  subcontractExpense: number;
+  /**
+   * Net profit (revenue − material/labor/other cost, incl. subcontractCost
+   * and job-linked Expenses) from completed AC jobs in the fiscal year —
+   * computed with the same `computeJobProfitability` used by /job-costing,
+   * /jobs and the dashboard, so this figure means the same thing there.
+   *
+   * CORRECTION (fix-all pass, found while investigating the disclosed
+   * "AC job revenue/cost missing from income tax" gap): this field used to
+   * be `subcontractExpense`, a standalone subtraction of contractor cost
+   * with no corresponding AC job *revenue* ever added anywhere in this
+   * function — i.e. every completed AC job's quotedAmount was invisible to
+   * the tax estimate, and contractor-assigned jobs were double-penalized
+   * (cost counted, revenue never was). AC job invoicing was verified (see
+   * jobs/[id]/invoice/page.tsx) to never create a Sale record, so folding
+   * full job profit in here does not create a new double-count against
+   * `salesProfit`.
+   */
+  acJobProfit: number;
   /** Business expenses (Phase 11) already scoped to the fiscal year by
-   * the caller — see the otherExpenses param below. */
+   * the caller — see the otherExpenses param below. Callers must exclude
+   * job-linked expenses (Expense.jobId set) from this total: those are
+   * already netted into acJobProfit per-job via jobLinkedExpenses below,
+   * and including them again here would double-subtract them. */
   otherExpenses: number;
   /** Rough profit from LakBiz data — not a full IRD taxable profit. */
   estimatedTaxableProfit: number;
@@ -89,17 +110,24 @@ export type IncomeTaxYearSummary = {
  *
  * otherExpenses (Phase 11): expenses now live in a cloud-only table (see
  * expenses-client.ts), not the local-first AppData this function otherwise
- * reads, so it can't be computed in here the way subcontractExpense is —
- * the caller fetches its own fiscal-year total and passes it in. Optional
- * and defaults to 0 so every existing caller (Dashboard, /vat) is
- * unaffected unless it opts in. See docs/IMPLEMENTATION_PROGRESS.md,
- * Phase 11, for why wiring that fetch into Dashboard/VAT wasn't done this
- * phase — /expenses itself is the one place that passes a real value in.
+ * reads, so it can't be computed in here the way acJobProfit is — the
+ * caller fetches its own fiscal-year total and passes it in. Optional and
+ * defaults to 0 so every existing caller is unaffected unless it opts in.
+ * MUST exclude job-linked expenses (Expense.jobId set) — see the type's
+ * doc comment above.
+ *
+ * jobLinkedExpenses (fix-all pass): same cloud-only constraint as
+ * otherExpenses — job-linked Expenses (Phase 7) live outside AppData, so
+ * the caller fetches them and passes a jobId → JobLinkedExpense[] map in,
+ * same pattern already used by /job-costing, /jobs and the dashboard.
+ * Defaults to an empty map so a caller that hasn't wired this up yet still
+ * gets a correct (if expense-incomplete) acJobProfit rather than a crash.
  */
 export function getIncomeTaxYearSummary(
   data: AppData,
   refDate = new Date(),
   otherExpenses = 0,
+  jobLinkedExpenses: Map<string, JobLinkedExpense[]> = new Map(),
 ): IncomeTaxYearSummary {
   const fiscalStart = data.business.quarterStartMonth ?? 4;
   const bounds = getFiscalYearBounds(refDate, fiscalStart);
@@ -127,19 +155,33 @@ export function getIncomeTaxYearSummary(
       0,
     );
 
-  const subcontractExpense = data.acJobs
+  const jobItemsByJob = new Map<string, typeof data.jobItems>();
+  for (const item of data.jobItems) {
+    const list = jobItemsByJob.get(item.jobId) ?? [];
+    list.push(item);
+    jobItemsByJob.set(item.jobId, list);
+  }
+
+  const acJobProfit = data.acJobs
     .filter(
       (j) =>
         j.status === "completed" &&
-        j.assigneeType === "contractor" &&
-        (j.subcontractCost ?? 0) > 0 &&
         isDateInRange(j.installedDate ?? j.date, bounds.start, bounds.end),
     )
-    .reduce((sum, j) => sum + (j.subcontractCost ?? 0), 0);
+    .reduce(
+      (sum, j) =>
+        sum +
+        computeJobProfitability(
+          j,
+          jobItemsByJob.get(j.id) ?? [],
+          jobLinkedExpenses.get(j.id) ?? [],
+        ).grossProfit,
+      0,
+    );
 
   const estimatedTaxableProfit = Math.max(
     0,
-    salesProfit + vehicleProfit - subcontractExpense - otherExpenses,
+    salesProfit + vehicleProfit + acJobProfit - otherExpenses,
   );
   const estimatedTax = Math.round(estimatedTaxableProfit * rate);
 
@@ -149,7 +191,7 @@ export function getIncomeTaxYearSummary(
     salesProfit,
     otherExpenses,
     vehicleProfit,
-    subcontractExpense,
+    acJobProfit,
     estimatedTaxableProfit,
     estimatedTax,
     ratePct,

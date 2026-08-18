@@ -3174,3 +3174,96 @@ round-trip-count reduction with no behavior change to what gets
 written, so the risk profile is different from a logic change, but a
 real before/after timing check on an org with meaningful history is
 still worth doing once someone has a browser on this.
+
+## Fix-all pass — AC job revenue/cost missing from income tax
+
+Requested directly ("fix all the issues not fixed") after a status
+report that disclosed this as a known, unfixed gap: `getIncomeTaxYearSummary`
+(income-tax.ts) never included AC job revenue or job cost anywhere in
+its formula. It only ever subtracted `subcontractCost` for
+contractor-assigned completed jobs as a standalone expense line
+(`subcontractExpense`) — the quoted amount (revenue) for *any* completed
+AC job, contractor or in-house, was invisible to the tax estimate, and
+contractor jobs were actually double-penalized in effect: their cost
+counted, their revenue never did.
+
+Verified before changing anything that this wouldn't create a new
+double-count: AC job invoicing (`jobs/[id]/invoice/page.tsx`) is a pure
+print/view page that reads `job.quotedAmount`/`depositAmount` directly
+off the job record — it never calls `createSale`/`addSale`. The only
+`createSale` call site in the app is the POS checkout flow
+(`createSaleToCloud` in `app-store-provider.tsx`), and that's the
+opposite direction (a retail sale of an AC *unit* can auto-create an
+install job) — not a path that could already be putting AC job revenue
+into `data.sales`. So AC job profit was simply absent, not
+double-counted elsewhere.
+
+Fixed by folding full job profitability into the formula instead of
+just contractor cost, reusing `computeJobProfitability` (Phase 8/20 —
+the one authoritative job-cost function, already correct including the
+Phase 20 outsourced_repair/subcontractCost double-count guard) rather
+than re-deriving a second formula:
+
+- `getIncomeTaxYearSummary` gained a 4th parameter,
+  `jobLinkedExpenses: Map<string, JobLinkedExpense[]> = new Map()` —
+  same cloud-only-Expenses constraint and same map-shape as
+  `otherExpenses` before it; defaults to empty so no caller breaks by
+  omission.
+- Sums `computeJobProfitability(job, jobItems, linkedExpenses).grossProfit`
+  across every `status === "completed"` AC job in the fiscal year
+  (same date filter — `installedDate ?? date` — the old
+  `subcontractExpense` filter already used) into a new `acJobProfit`
+  field, which **replaces** `subcontractExpense` in
+  `IncomeTaxYearSummary` (contractor cost is still in there — it's
+  inside `grossProfit` via `computeJobProfitability`'s `laborCost` —
+  just netted against that job's own revenue instead of standing alone).
+- Formula changed from `salesProfit + vehicleProfit - subcontractExpense
+  - otherExpenses` to `salesProfit + vehicleProfit + acJobProfit -
+  otherExpenses`.
+
+**Double-counting risk found and fixed in the same pass**:
+`expenses/page.tsx`'s `yearTotal` (passed as `otherExpenses`, used for
+its "tax impact of adding expenses" comparison) summed *all* fiscal-year
+org expenses with no filter excluding job-linked ones. Since
+`acJobProfit` now nets job-linked expenses out per-job via
+`computeJobProfitability`, an unfiltered `yearTotal` would have
+double-subtracted those same expenses a second time through
+`otherExpenses`. Fixed by filtering `yearTotal` to `!e.jobId` (general
+expenses only) and building a `jobLinkedExpenseTotals` map from the
+job-linked subset to pass into both `getIncomeTaxYearSummary` calls on
+that page.
+
+Caller-by-caller:
+- `/vat` — previously called `getIncomeTaxYearSummary(data)` with no
+  expense fetch at all and displayed `subcontractExpense` in a
+  `ProStatCard`. Now fetches org expenses on mount (same
+  `fetchOrgExpenses` + jobId-keyed map pattern already used by
+  `/job-costing`/`/jobs`/dashboard, gated on `canSeeFinancials` like
+  those), passes the map in, and displays the new `acJobProfit` field
+  instead (new `tax.ac_job_profit` translation key, EN + Sinhala; tone
+  now flips rose/teal on sign since this is a profit figure, not a flat
+  cost).
+- `/expenses` — already had all org expenses in local state; wired as
+  described above.
+- `/dashboard` — already fetches `jobLinkedExpenseTotals` for its own
+  job-costing "Needs Attention" section (gated `showAcJobs &&
+  canSeeFinancials`); reused directly, no new fetch (falls back to an
+  empty `Map` for the brief window before that fetch resolves, since
+  this page's top-level loading gate doesn't wait on it).
+
+Tests: `tsc --noEmit` clean, `eslint` — 0 errors, same 3 pre-existing
+warnings, `next build` succeeds, same route list.
+
+Still pending from the same "fix all the issues not fixed" instruction,
+each flagged individually rather than silently dropped:
+
+- The masked-view-update N+1 item noted just above — the concurrent-batching
+  fix already shipped is a real, large improvement, but a genuinely
+  O(1)-round-trip fix needs a Postgres RPC (`jsonb_to_recordset` bulk
+  update), which is a schema change with its own risk/testing surface
+  distinct from the app-layer changes made so far. Not attempted in this
+  pass without confirming that scope with the user first.
+- Supabase Auth's "leaked password protection" setting remains
+  dashboard-only — not reachable via `apply_migration` or any other MCP
+  tool from this session, so it stays an explicitly disclosed item this
+  session cannot close, not a dropped one.

@@ -190,12 +190,25 @@ export default function ExpensesPage() {
   const bounds = getFiscalYearBounds(new Date(), fiscalStart);
   const boundsStartIso = bounds.start.toISOString().slice(0, 10);
   const boundsEndIso = bounds.end.toISOString().slice(0, 10);
+  // Job-linked expenses (jobId set) are excluded here: getIncomeTaxYearSummary
+  // already nets those into acJobProfit on a per-job basis (fix-all pass —
+  // see income-tax.ts). Including them again in this general otherExpenses
+  // total would double-subtract them from the tax estimate. Only general
+  // (non-job) expenses belong in yearTotal.
   const yearTotal = expenses
-    .filter((e) => e.expenseDate >= boundsStartIso && e.expenseDate <= boundsEndIso)
+    .filter((e) => !e.jobId && e.expenseDate >= boundsStartIso && e.expenseDate <= boundsEndIso)
     .reduce((s, e) => s + e.amount, 0);
 
-  const withoutExpenses = getIncomeTaxYearSummary(localData, new Date(), 0);
-  const withExpenses = getIncomeTaxYearSummary(localData, new Date(), yearTotal);
+  const jobLinkedExpenseTotals = new Map<string, { category: string; amount: number }[]>();
+  for (const e of expenses) {
+    if (!e.jobId) continue;
+    const list = jobLinkedExpenseTotals.get(e.jobId) ?? [];
+    list.push({ category: e.category, amount: e.amount });
+    jobLinkedExpenseTotals.set(e.jobId, list);
+  }
+
+  const withoutExpenses = getIncomeTaxYearSummary(localData, new Date(), 0, jobLinkedExpenseTotals);
+  const withExpenses = getIncomeTaxYearSummary(localData, new Date(), yearTotal, jobLinkedExpenseTotals);
   const taxImpact = withoutExpenses.estimatedTax - withExpenses.estimatedTax;
 
   const columns: DataTableColumn<Expense>[] = [
