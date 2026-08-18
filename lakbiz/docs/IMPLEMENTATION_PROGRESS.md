@@ -3041,3 +3041,64 @@ bypass the base tables' RLS entirely via their own hardcoded `WHERE`
 clause. An RLS-policy-only edit on the base tables would have been
 unreachable dead code for the real read path. Fixed at the actual
 enforcement point instead — the views' own `WHERE` clauses, same file.
+
+## Phase 20 — accounting double-counting audit
+
+Started by reading every cost-rollup function end to end
+(`job-profitability.ts`, `income-tax.ts`, `vat.ts`) rather than assuming
+the existing "deliberately excludes double-counting" comments were
+still accurate — the same method that's caught every real finding this
+audit. Found one.
+
+**Real bug: "outsourced_repair" expenses double-count against
+subcontractCost.** `expenses-client.ts`'s `ExpenseCategory` comment
+already shows the author was aware of this exact risk — "Deliberately
+no 'subcontractor' category here: that cost is already captured by
+ACJob.subcontractCost... adding one would invite double-counting the
+same cost two ways" — but missed that `outsourced_repair` is the same
+real-world payment under a different name. Nothing in the UI or in
+`computeJobProfitability` stopped a shop from setting
+`ac_jobs.subcontractCost` for a contractor-assigned job **and**
+separately logging an "Outsourced repair" Expense linked to that same
+job — the Expenses form's job-link picker (`app/src/app/expenses/
+page.tsx`) offers every job with no validation against the job's
+assignee type. `job-profitability.ts`'s own header comment even claimed
+the Expenses total "deliberately excludes the subcontractor concept...
+so it isn't counted twice" — true for the category name, false in
+practice, since `outsourced_repair` was never excluded from the sum.
+
+Fixed in `job-profitability.ts` (the one authoritative job-cost
+function, per its own docstring — fixed at the root, not duplicated
+across the three call sites that use it): `computeJobProfitability`'s
+third parameter changed from a pre-summed `linkedExpenseTotal: number`
+to an itemized `linkedExpenses: JobLinkedExpense[]` (`{category,
+amount}[]`), specifically so the function itself can apply the guard —
+summing before calling would defeat it. When a job is
+contractor-assigned with a `subcontractCost` already set,
+`outsourced_repair`-category linked expenses are now excluded from
+`otherCost`. An `outsourced_repair` expense on a *non*-contractor job
+still counts normally — it's a genuine, distinct cost in that case, not
+a duplicate of anything.
+
+Updated all three call sites (`/job-costing`, the Job Sheet drawer in
+`/jobs`, and the dashboard's job-profitability section) to fetch and
+pass itemized expenses instead of a pre-summed total. `/jobs`' "Linked
+expenses" info line (outside the cost table, just "how much you've
+logged against this job") deliberately keeps showing the raw,
+un-excluded total — a different, still-correct question from what
+`profit.otherCost` answers.
+
+Also noted, not fixed this pass (a separate, opposite problem —
+under-counting, not double-counting, so out of scope for Phase 20's
+specific mandate but worth flagging for whoever picks up Reports/
+Phase 24): `income-tax.ts`'s `getIncomeTaxYearSummary` never includes
+AC job revenue or AC job material/labor costs at all — only POS
+`sales`, vehicle sales, and `subcontractCost` feed the estimate. If AC
+job invoicing doesn't separately create a `sales` row (not yet
+verified), a shop doing significant AC installation revenue would see
+an income-tax estimate with none of that business line's revenue or
+cost in it. Distinct issue from this phase's mandate; flagged, not
+touched.
+
+Tests: `tsc --noEmit` clean, `eslint` — 0 errors, same 3 pre-existing
+warnings, `next build` succeeds, same route list.

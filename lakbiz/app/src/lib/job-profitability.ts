@@ -27,9 +27,28 @@
  *              material or a technician/contractor's own labor — e.g. a
  *              diagnostic/inspection fee cost)
  *            + job-linked Expenses total (Phase 7 — parking, equipment
- *              rental, outsourced repair, misc; deliberately excludes
- *              the "subcontractor" concept, which is already the
- *              subcontractCost term above, so it isn't counted twice)
+ *              rental, outsourced repair, misc), EXCLUDING any
+ *              "outsourced_repair"-category expense on a job that is
+ *              already contractor-assigned with a subcontractCost set.
+ *
+ *              CORRECTION (Phase 20 accounting audit, found by re-reading
+ *              this file's own claim against the actual code rather than
+ *              trusting it): this section previously said the Expenses
+ *              total "deliberately excludes the subcontractor concept...
+ *              so it isn't counted twice" — true for the *category*
+ *              named "subcontractor" (deliberately never added to
+ *              ExpenseCategory, see expenses-client.ts), but false in
+ *              practice, because "outsourced_repair" is the same real
+ *              cost under a different name and was never excluded from
+ *              this sum. A shop could set ac_jobs.subcontractCost for a
+ *              contractor-assigned job AND separately log an
+ *              "Outsourced repair" Expense linked to that same job —
+ *              nothing in the UI or this function stopped it — and the
+ *              cost would be counted twice: once here, once in
+ *              subcontractCost above. Fixed by excluding
+ *              "outsourced_repair" from this sum specifically when the
+ *              job already carries a subcontractCost, the one case where
+ *              the two are provably the same underlying payment.
  *
  * Revenue = job.quotedAmount as-is. Audited before writing this (per the
  * spec's "do not accidentally include VAT in profit" instruction):
@@ -54,17 +73,40 @@ export type JobProfitability = {
   grossMarginPct: number | null;
 };
 
+/** The only two Expense fields this function needs — kept minimal
+ * (rather than importing the full Expense type from the cloud-only
+ * expenses-client.ts) so this file stays dependency-light. */
+export type JobLinkedExpense = { category: string; amount: number };
+
 export function computeJobProfitability(
   job: ACJob,
   jobItems: JobItem[],
-  /** Job-linked Expenses total (Phase 7) — the caller fetches this
-   * (Expenses is cloud-only, not part of the local-first store this
-   * function otherwise depends on) and passes the sum in. */
-  linkedExpenseTotal: number,
+  /** Job-linked Expenses (Phase 7) — the caller fetches these (Expenses
+   * is cloud-only, not part of the local-first store this function
+   * otherwise depends on) and passes this job's own linked rows in.
+   * Itemized rather than pre-summed specifically so this function can
+   * apply the outsourced_repair/subcontractCost double-count guard
+   * below — summing before calling would defeat it. */
+  linkedExpenses: JobLinkedExpense[],
 ): JobProfitability {
   let materialCost = 0;
   let laborCost = 0;
-  let otherCost = linkedExpenseTotal;
+
+  // Double-count guard: "outsourced_repair" is the same real payment as
+  // ac_jobs.subcontractCost under a different label once a job is
+  // contractor-assigned with a cost already recorded there — see the
+  // file-header correction above. Only skip it in that specific case;
+  // an outsourced_repair expense on a non-contractor job is a genuine,
+  // distinct cost and still counts normally.
+  const skipOutsourcedRepair =
+    job.assigneeType === "contractor" && (job.subcontractCost ?? 0) > 0;
+  let otherCost = linkedExpenses.reduce(
+    (sum, e) =>
+      skipOutsourcedRepair && e.category === "outsourced_repair"
+        ? sum
+        : sum + e.amount,
+    0,
+  );
 
   for (const item of jobItems) {
     if (item.itemType === "part") materialCost += item.lineTotal;

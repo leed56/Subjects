@@ -54,7 +54,7 @@ import { canManageAcJobs, canOperateAcJobs } from "@/lib/org-role/permissions";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { fetchAsset, fetchCustomerAssets, fetchJobAssetId, linkJobAsset, type AcAsset } from "@/lib/supabase/ac-assets-client";
-import { computeJobProfitability } from "@/lib/job-profitability";
+import { computeJobProfitability, type JobLinkedExpense } from "@/lib/job-profitability";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
 
 const UNIT_TYPES = ["Wall mounted", "Cassette", "Ducted", "Ceiling suspended", "Portable", "Window"];
@@ -692,17 +692,19 @@ function JobSheetDrawer({ job, locale, items, history, products, suppliers, tech
   // Job-linked Expenses (Phase 7) — fetched here now so Job Economics is
   // complete in this view, closing the gap Phases 7/8 explicitly deferred
   // to "Phase 9's Job Detail redesign potentially changing that."
-  const [jobExpenseTotal, setJobExpenseTotal] = useState<number | null>(null);
+  const [jobExpenses, setJobExpenses] = useState<JobLinkedExpense[] | null>(null);
   useEffect(() => {
     if (!orgId || !canSeeFinancials) {
-      setJobExpenseTotal(0);
+      setJobExpenses([]);
       return;
     }
     let cancelled = false;
     void fetchOrgExpenses(orgId).then((result) => {
       if (cancelled) return;
-      const total = result.data.filter((e) => e.jobId === job.id).reduce((s, e) => s + e.amount, 0);
-      setJobExpenseTotal(total);
+      const linked = result.data
+        .filter((e) => e.jobId === job.id)
+        .map((e) => ({ category: e.category, amount: e.amount }));
+      setJobExpenses(linked);
     });
     return () => {
       cancelled = true;
@@ -763,7 +765,13 @@ function JobSheetDrawer({ job, locale, items, history, products, suppliers, tech
   // formula, not a second one duplicated here). Now fed a real
   // linkedExpenseTotal (fetched above), so this drawer's numbers match
   // /job-costing's exactly.
-  const profit = computeJobProfitability(job, items, jobExpenseTotal ?? 0);
+  const profit = computeJobProfitability(job, items, jobExpenses ?? []);
+  // Raw sum for the "Linked expenses" info line below — deliberately not
+  // the same figure profit.otherCost uses: this is "how much you've
+  // logged against this job," profit.otherCost is "how much counts
+  // toward cost without double-counting subcontractCost." Both are
+  // correct; they answer different questions.
+  const jobExpenseTotal = (jobExpenses ?? []).reduce((s, e) => s + e.amount, 0);
   const sortedHistory = [...history].sort((a, b) => (a.date < b.date ? 1 : -1));
   const balance = job.quotedAmount - job.depositAmount;
 
@@ -1179,10 +1187,10 @@ function JobSheetDrawer({ job, locale, items, history, products, suppliers, tech
           </table>
         </div>
 
-        {(jobExpenseTotal ?? 0) > 0 && (
+        {jobExpenseTotal > 0 && (
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.linked_expenses")}</p>
-            <p className="text-sm text-slate-600">{formatLkr(jobExpenseTotal ?? 0)}</p>
+            <p className="text-sm text-slate-600">{formatLkr(jobExpenseTotal)}</p>
           </div>
         )}
       </div>
