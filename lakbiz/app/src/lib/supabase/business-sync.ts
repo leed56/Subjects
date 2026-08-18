@@ -770,10 +770,29 @@ async function upsertMaskedViewRows(
     if (error) return error.message;
   }
 
-  for (const row of toUpdate) {
-    const { id, ...patch } = row;
-    const { error } = await supabase.from(table).update(patch).eq("id", id);
-    if (error) return error.message;
+  // Phase 25 perf fix: each row here can carry different column values,
+  // so — unlike toInsert above — this can't be one batched call the way
+  // .insert() can; PostgREST's .update() applies one patch to every row
+  // it matches, and ON CONFLICT-based upsert isn't available against a
+  // masked view (no unique constraint of its own — see the technicians/
+  // job_items upsert-conflict fix earlier in this project's history).
+  // What was still avoidable: awaiting these one at a time. On a full
+  // sync (pushBusinessData, debounced ~1.5s after any local edit
+  // anywhere in the app) most rows in an established org already exist,
+  // so toUpdate is typically most of the table — sequential awaits here
+  // meant every edit's sync time grew with the org's total row count.
+  // Same end state, same per-row requests, just run concurrently in
+  // bounded batches instead of one connection at a time.
+  for (const rowBatch of chunk(toUpdate, CONCURRENT_UPDATE_BATCH_SIZE)) {
+    const results = await Promise.all(
+      rowBatch.map(async (row) => {
+        const { id, ...patch } = row;
+        const { error } = await supabase.from(table).update(patch).eq("id", id);
+        return error?.message ?? null;
+      }),
+    );
+    const firstError = results.find((e) => e !== null);
+    if (firstError) return firstError;
   }
 
   return null;
@@ -878,6 +897,66 @@ async function fetchCloudWatermark(organizationId: string): Promise<number> {
   ]);
 
   return Math.max(0, ...stamps);
+}
+
+/** How many parent ids/rows per request when batch-replacing line items
+ * for the whole org (Phase 25 perf fix, see pushBusinessData). Delete
+ * filters ride in the URL query string (a real length limit); inserts
+ * ride in the body (much more headroom) but are still chunked for
+ * symmetry and so one bad chunk doesn't fail the entire sync's insert in
+ * one shot. */
+const LINE_REPLACE_BATCH_SIZE = 200;
+
+/** Concurrency cap for the per-row masked-view UPDATE batches in
+ * upsertMaskedViewRows below — deliberately much smaller than
+ * LINE_REPLACE_BATCH_SIZE, which is sized for URL-length limits on a
+ * single request, not how many requests to fire at once. 200 concurrent
+ * requests from one browser tab risks connection-pool exhaustion or
+ * looking like abuse to Supabase's edge; 25 is a large enough win over
+ * one-at-a-time without either of those risks. */
+const CONCURRENT_UPDATE_BATCH_SIZE = 25;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** Org-wide batched replace for a job/sale/purchase line-items table —
+ * the full-sync counterpart to replaceSaleLines/replacePurchaseLines/
+ * replacePurchaseOrderLines below, which stay as they are for the
+ * single-record push paths (syncSaleSnapshot etc.), where one record's
+ * lines really is the right unit of work. Deletes existing lines for
+ * every given parent id, then inserts the full replacement set — same
+ * end state as calling the single-record version once per parent, just
+ * O(records / LINE_REPLACE_BATCH_SIZE) round trips instead of
+ * O(records) × 2. */
+async function replaceLinesBatch(
+  table: "sale_lines" | "purchase_lines" | "purchase_order_lines",
+  organizationId: string,
+  parentIdColumn: "sale_id" | "purchase_id" | "purchase_order_id",
+  parentIds: string[],
+  rows: Record<string, unknown>[],
+): Promise<string | null> {
+  if (parentIds.length === 0) return null;
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  for (const idBatch of chunk(parentIds, LINE_REPLACE_BATCH_SIZE)) {
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq("organization_id", organizationId)
+      .in(parentIdColumn, idBatch);
+    if (error) return error.message;
+  }
+
+  for (const rowBatch of chunk(rows, LINE_REPLACE_BATCH_SIZE)) {
+    const { error } = await supabase.from(table).insert(rowBatch);
+    if (error) return error.message;
+  }
+
+  return null;
 }
 
 async function replaceSaleLines(
@@ -2578,25 +2657,48 @@ export async function pushBusinessData(
     if (err) return { error: err, stale: false, generation: seenGeneration };
   }
 
-  for (const sale of data.sales) {
-    const lines = saleLineRows.filter((row) => row.sale_id === sale.id);
-    const err = await replaceSaleLines(organizationId, sale.id, lines);
-    if (err) return { error: err, stale: false, generation: seenGeneration };
-  }
+  // Phase 25 perf fix: this used to loop per sale/purchase/purchase-order
+  // and call replaceSaleLines/replacePurchaseLines/replacePurchaseOrderLines
+  // once EACH — 2 sequential network round trips (delete + insert) per
+  // record, awaited one at a time. pushBusinessData runs on a 1.5s
+  // debounce after literally any local edit anywhere in the app (see
+  // scheduleCloudPush's ~90 call sites in app-store-provider.tsx), and
+  // pushes the FULL local dataset every time, not a delta — so an org
+  // with, say, 800 historical sales paid roughly 1600 sequential round
+  // trips on every single edit, and that cost only grows as the org's
+  // history grows. saleLineRows/purchaseLineRows/purchaseOrderLineRows
+  // are already the full flattened arrays across every sale/purchase/PO
+  // (built via flatMap above) — there was no reason to filter them back
+  // apart and replace them one parent at a time. Batched below instead:
+  // O(records / BATCH) round trips instead of O(records), chunked (not
+  // one unbounded call) specifically because delete .in() filters ride in
+  // the URL query string, which has a real length limit inserts don't.
+  const saleErr = await replaceLinesBatch(
+    "sale_lines",
+    organizationId,
+    "sale_id",
+    data.sales.map((s) => s.id),
+    saleLineRows,
+  );
+  if (saleErr) return { error: saleErr, stale: false, generation: seenGeneration };
 
-  for (const purchase of data.purchases) {
-    const lines = purchaseLineRows.filter((row) => row.purchase_id === purchase.id);
-    const err = await replacePurchaseLines(organizationId, purchase.id, lines);
-    if (err) return { error: err, stale: false, generation: seenGeneration };
-  }
+  const purchaseErr = await replaceLinesBatch(
+    "purchase_lines",
+    organizationId,
+    "purchase_id",
+    data.purchases.map((p) => p.id),
+    purchaseLineRows,
+  );
+  if (purchaseErr) return { error: purchaseErr, stale: false, generation: seenGeneration };
 
-  for (const po of data.purchaseOrders) {
-    const lines = purchaseOrderLineRows.filter(
-      (row) => row.purchase_order_id === po.id,
-    );
-    const err = await replacePurchaseOrderLines(organizationId, po.id, lines);
-    if (err) return { error: err, stale: false, generation: seenGeneration };
-  }
+  const poErr = await replaceLinesBatch(
+    "purchase_order_lines",
+    organizationId,
+    "purchase_order_id",
+    data.purchaseOrders.map((po) => po.id),
+    purchaseOrderLineRows,
+  );
+  if (poErr) return { error: poErr, stale: false, generation: seenGeneration };
 
   const supabase = createBrowserClient();
   if (!supabase) {

@@ -3102,3 +3102,75 @@ touched.
 
 Tests: `tsc --noEmit` clean, `eslint` — 0 errors, same 3 pre-existing
 warnings, `next build` succeeds, same route list.
+
+## Phase 25 — performance / N+1 review
+
+Found via the highest-signal search for this class of bug: every
+`for (const x of list) { await ... }` loop in the codebase whose body
+makes a network call. One file, `business-sync.ts`, had two real ones,
+and both sit in the same hot path: `pushBusinessData`, the full-snapshot
+cloud sync. It's not an occasional operation — `scheduleCloudPush` (in
+`app-store-provider.tsx`) debounces it just 1.5s and is called from
+roughly 90 places across the app, i.e. after any local edit anywhere.
+Critically, it always pushes the *entire* local dataset, not a delta —
+so both bugs below meant every single edit's sync cost grew with the
+org's total historical row count, not with what actually changed.
+
+**1. Sale/purchase/purchase-order line items — O(records) round trips,
+now O(records / 200).** The full-sync path looped `for (const sale of
+data.sales) { ... await replaceSaleLines(...) }` (same shape for
+purchases and purchase orders) — 2 sequential round trips (delete then
+insert) per record, awaited one at a time. `saleLineRows`/
+`purchaseLineRows`/`purchaseOrderLineRows` were already the full
+flattened arrays across every parent record (built via `flatMap`
+earlier in the function) — there was no reason to filter them back
+apart and replace them one parent at a time. An org with 800 historical
+sales paid ~1600 sequential round trips on every edit, growing without
+bound as history accumulated. Fixed with a new `replaceLinesBatch`
+helper: one batched delete per chunk of parent ids (chunked at 200,
+since `.delete().in(...)` filters ride in the URL query string, which
+has a real length limit `.insert()`'s body-based payload doesn't share)
+and one batched insert per chunk of rows. Same end state, `records/200`
+round trips instead of `records × 2`. The single-record push functions
+(`replaceSaleLines` etc., used by `syncSaleSnapshot` and friends for an
+immediate one-record save) are untouched — one record's lines really is
+the right unit of work there; only the full-sync loop was the bug.
+
+**2. Masked-view row updates — same round-trip count, but now
+concurrent instead of sequential.** `upsertMaskedViewRows` (used for
+`sales`/`products`/`ac_jobs`/`contractors`/`vehicles`/`technicians`/
+`job_items` — every masked-view table, every full sync) already batches
+inserts in one call, but looped `for (const row of toUpdate) { ... await
+... }` for updates — one row at a time, awaited sequentially. This
+couldn't be collapsed into a single batched call the way inserts can:
+each row carries different column values, PostgREST's `.update()`
+applies one patch to every matched row, and `ON CONFLICT`-based upsert
+isn't available against a masked view (no unique constraint of its own —
+the same limitation behind the technicians/job_items upsert-conflict
+fix earlier in this project). On an established org, most rows in a
+full sync already exist, so `toUpdate` is typically most of the table —
+this was often the more expensive of the two bugs, not a minor one.
+Fixed by running the per-row updates concurrently in bounded batches of
+25 (`Promise.all` per batch, not 200 — that constant is sized for
+URL-length limits, not connection concurrency; 200 simultaneous
+requests from one tab risks connection-pool exhaustion or looking like
+abuse to Supabase's edge) instead of one connection at a time. Same
+number of requests, same server load — just no longer waiting for each
+one to finish before starting the next.
+
+Not fixed this pass, flagged for whoever next touches sync
+architecture: a genuinely N+1-proof fix for #2 would need a Postgres RPC
+that accepts a JSONB array and bulk-updates via
+`UPDATE ... FROM jsonb_to_recordset(...)`, one real round trip instead
+of `records/25`. That's a schema change with its own testing surface,
+out of scope for an app-layer perf pass — the concurrent-batching fix
+here is a safe, large, immediately-shippable improvement without it.
+
+Tests: `tsc --noEmit` clean, `eslint` — 0 errors, same 3 pre-existing
+warnings, `next build` succeeds, same route list. No browser
+verification of actual sync timing before/after — standing sandbox
+limitation, same as every phase before it; the fix is a straightforward
+round-trip-count reduction with no behavior change to what gets
+written, so the risk profile is different from a logic change, but a
+real before/after timing check on an org with meaningful history is
+still worth doing once someone has a browser on this.
