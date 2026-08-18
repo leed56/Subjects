@@ -2108,11 +2108,19 @@ pattern already proven for `products`
 This is the actual "do not expose company profit to unauthorized
 technicians" guarantee — the client-side gate alone was never enough.
 
-**Known pre-existing gap, disclosed not fixed here**: `contractors.rate_amount`/
-`payable_balance` have the identical unmasked-at-the-DB-level problem
-and predate this phase — same root cause, different table. Out of scope
-for this migration since Phase 6 didn't touch `contractors`; flagged for
-a dedicated follow-up (this maps to the spec's own later Phase 19/20).
+**CORRECTION (added during the live-DB audit remediation pass, prior to
+Phase 16)**: this section originally claimed `contractors.rate_amount`/
+`payable_balance` were an unmasked, unfixed gap predating this phase, and
+that claim was repeated in status reports to the user. It was wrong.
+Direct inspection of `20250626000001_ac_workforce_financial_masking.sql`
+shows `contractors` already gets a `case when can_see_org_financials(...)
+then c.rate_amount else 0::numeric end` masked view (and the same for
+`payable_balance`), and `20250628000002_fix_masked_view_cross_tenant_leak.sql`
+already fixes `contractors`' tenant-scoping the same way `technicians`/
+`job_items` needed here. Both migrations predate this entire HVAC
+engagement and were confirmed applied on the live DB during the schema-drift
+investigation. There is no contractors masking gap and no follow-up is
+needed — this disclosure is retracted.
 
 - `business-sync.ts`: technician pull/push mappers and both job_items
   push mappers carry `hourlyRate`/`technicianId`.
