@@ -20,11 +20,16 @@
 -- a direct REST call, which is exactly the "expose company profit to
 -- unauthorized technicians" the spec's absolute rules forbid.
 --
--- Known pre-existing gap, NOT fixed here (disclosed, not silently left):
--- `contractors.rate_amount`/`payable_balance` have the same unmasked
--- problem and predate this phase entirely — same root cause, different
--- table, out of scope for this migration since this phase didn't touch
--- contractors. Flagged in the progress doc for a dedicated follow-up.
+-- CORRECTION (see IMPLEMENTATION_PROGRESS.md's DB sync remediation entry):
+-- this comment previously claimed `contractors.rate_amount`/`payable_balance`
+-- were an unfixed masking gap predating this phase. That claim was WRONG.
+-- Re-verified directly against 20250626000001_ac_workforce_financial_masking.sql
+-- (contractors already gets a `case when can_see_org_financials(...)`
+-- masked view there) and 20250628000002_fix_masked_view_cross_tenant_leak.sql
+-- (contractors already gets the security_invoker/base-table-grant tenant fix
+-- there too) — both migrations predate this whole HVAC engagement and were
+-- already confirmed applied on the live DB. No contractors follow-up is
+-- needed; the claim below is retracted.
 --
 -- Live-DB audit fix (found while first actually applying this migration,
 -- months after it was written — see IMPLEMENTATION_PROGRESS.md's DB
