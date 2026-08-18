@@ -3006,3 +3006,38 @@ recalc historical jobs using today's price," just in the other
 direction (silently repricing an already-frozen snapshot because qty or
 notes changed). Preserving the existing value on a non-financial edit
 and trusting a financial role's explicit correction remains correct.
+
+## Phase 19 — role-aware SELECT enforcement (read side)
+
+The write-side fix (20250712000001/2) left SELECT untouched: every
+policy checked was member-only, no role condition, even though the
+matrix says technician has no access to Stock/Sales/Customers at all,
+and cashier/data_entry have none to AC assets/the workforce module.
+Verified safe before writing anything — checked every technician/
+data_entry/cashier-reachable page's actual data usage first: the
+job_items "add a stock part" picker (technician's real workflow) only
+reads `products` (never customers/sales/stock_logs); a job's customer
+info is already denormalized onto `ac_jobs_base` itself, so technician
+never needs the standalone `customers` table; the only UI that reads
+`customers` directly (the New/Edit job form) is already gated behind
+`canOperateAcJobs`, which excludes technician; and no technician/
+data_entry/cashier page references `data.sales`, `data.saleLines`,
+`data.customerPayments`, `data.customerProductPrices`, `data.stockLogs`,
+or `data.crews` at all. `products` itself was deliberately left
+unrestricted — technician genuinely needs to read it, and `buy_price`
+is already correctly column-masked there, which is the right control
+for that table, not a SELECT block.
+
+Fixed in `20250712000003_role_aware_select_rls.sql` (applied live,
+verified, `get_advisors` clean): `customers`, `customer_payments`,
+`customer_product_prices`, `stock_logs` now exclude technician;
+`ac_assets` excludes cashier; `crews` excludes data_entry and cashier.
+
+Caught before shipping: `sales_base`/`sale_lines_base` already have
+direct `SELECT` revoked from `authenticated` (from the earlier
+cross-tenant-leak fix) — the app only ever reads them through the
+`sales`/`sale_lines` views, which run `security_invoker = false` and
+bypass the base tables' RLS entirely via their own hardcoded `WHERE`
+clause. An RLS-policy-only edit on the base tables would have been
+unreachable dead code for the real read path. Fixed at the actual
+enforcement point instead — the views' own `WHERE` clauses, same file.
