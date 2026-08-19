@@ -392,3 +392,172 @@ export function printVatReport(
     `,
   });
 }
+
+/**
+ * Phase 24 follow-up — /reports itself (revenue/profit/top-products/
+ * top-customers, plus the Phase 24 AC job performance section) never
+ * had CSV/print export: the per-domain helpers above (sales/customers/
+ * stock/VAT) don't fit its aggregate, period-summarized shape, and it
+ * was never wired to any of them — a gap this file's own header
+ * comments and IMPLEMENTATION_PROGRESS.md's "Not started" list already
+ * flagged. `acJobs` is optional so orgs without the AC/HVAC module (no
+ * `can("ac_jobs")`) get the same export shape they always would have —
+ * nothing appears for a section they never saw on screen either.
+ */
+export type ReportsExportLabels = {
+  period: string;
+  totalRevenue: string;
+  totalProfit: string;
+  salesCount: string;
+  avgSale: string;
+  topProducts: string;
+  productName: string;
+  qty: string;
+  revenue: string;
+  topCustomers: string;
+  customerName: string;
+  orders: string;
+  total: string;
+  acJobsTitle: string;
+  totalQuoted: string;
+  totalCost: string;
+  totalMargin: string;
+  jobsNeedingAttention: string;
+  jobCustomer: string;
+  jobNo: string;
+  margin: string;
+  marginPct: string;
+};
+
+export type ReportsExportData = {
+  periodLabel: string;
+  totalRevenue: number;
+  totalProfit: number;
+  salesCount: number;
+  avgSale: number;
+  topProducts: { name: string; qty: number; revenue: number }[];
+  topCustomers: { name: string; orders: number; total: number }[];
+  /** Omitted entirely for an org/role that doesn't see the AC job
+   * performance section on screen (see reports/page.tsx's own
+   * can("ac_jobs") gate) — never populated with zeros to imply data
+   * that was never actually computed. */
+  acJobs?: {
+    totalQuoted: number;
+    totalCost: number;
+    totalMargin: number;
+    lowMarginJobs: { customerName: string; jobNo: string; grossProfit: number; grossMarginPct: number }[];
+  };
+};
+
+export function buildReportsCsv(
+  data: ReportsExportData,
+  labels: ReportsExportLabels,
+): string {
+  const sections: (string | number)[][] = [
+    [labels.period, data.periodLabel],
+    [],
+    [labels.totalRevenue, data.totalRevenue],
+    [labels.totalProfit, data.totalProfit],
+    [labels.salesCount, data.salesCount],
+    [labels.avgSale, data.avgSale],
+    [],
+    [labels.topProducts],
+    [labels.productName, labels.qty, labels.revenue],
+    ...data.topProducts.map((p) => [p.name, p.qty, p.revenue]),
+    [],
+    [labels.topCustomers],
+    [labels.customerName, labels.orders, labels.total],
+    ...data.topCustomers.map((c) => [c.name, c.orders, c.total]),
+  ];
+
+  if (data.acJobs) {
+    sections.push(
+      [],
+      [labels.acJobsTitle],
+      [labels.totalQuoted, data.acJobs.totalQuoted],
+      [labels.totalCost, data.acJobs.totalCost],
+      [labels.totalMargin, data.acJobs.totalMargin],
+      [],
+      [labels.jobsNeedingAttention],
+      [labels.jobCustomer, labels.jobNo, labels.margin, labels.marginPct],
+      ...data.acJobs.lowMarginJobs.map((j) => [
+        j.customerName,
+        j.jobNo,
+        j.grossProfit,
+        `${j.grossMarginPct.toFixed(1)}%`,
+      ]),
+    );
+  }
+
+  return rowsToCsv(sections);
+}
+
+export function exportReportsCsv(
+  business: BusinessInfo,
+  data: ReportsExportData,
+  labels: ReportsExportLabels,
+): void {
+  downloadCsv(
+    exportFilename(business.name, "reports"),
+    buildReportsCsv(data, labels),
+  );
+}
+
+export function printReportsSummary(
+  business: BusinessInfo,
+  data: ReportsExportData,
+  labels: ReportsExportLabels,
+  reportTitle: string,
+): void {
+  const productsTable = tableHtml(
+    [labels.productName, labels.qty, labels.revenue],
+    data.topProducts.map((p) => [p.name, p.qty, p.revenue]),
+    [1, 2],
+  );
+  const customersTable = tableHtml(
+    [labels.customerName, labels.orders, labels.total],
+    data.topCustomers.map((c) => [c.name, c.orders, c.total]),
+    [1, 2],
+  );
+
+  const acJobsHtml = data.acJobs
+    ? `
+      <h2 style="font-size:1rem;margin:24px 0 8px">${labels.acJobsTitle}</h2>
+      <p><strong>${labels.totalQuoted}:</strong> ${data.acJobs.totalQuoted.toLocaleString("en-LK")}
+         · <strong>${labels.totalCost}:</strong> ${data.acJobs.totalCost.toLocaleString("en-LK")}
+         · <strong>${labels.totalMargin}:</strong> ${data.acJobs.totalMargin.toLocaleString("en-LK")}</p>
+      ${
+        data.acJobs.lowMarginJobs.length > 0
+          ? `<h3 style="font-size:0.9rem;margin:16px 0 8px">${labels.jobsNeedingAttention}</h3>` +
+            tableHtml(
+              [labels.jobCustomer, labels.jobNo, labels.margin, labels.marginPct],
+              data.acJobs.lowMarginJobs.map((j) => [
+                j.customerName,
+                j.jobNo,
+                j.grossProfit,
+                `${j.grossMarginPct.toFixed(1)}%`,
+              ]),
+              [2, 3],
+            )
+          : ""
+      }
+    `
+    : "";
+
+  printHtmlReport({
+    title: reportTitle,
+    subtitle: data.periodLabel,
+    shopName: business.name,
+    bodyHtml: `
+      <p><strong>${labels.totalRevenue}:</strong> ${data.totalRevenue.toLocaleString("en-LK")}
+         · <strong>${labels.totalProfit}:</strong> ${data.totalProfit.toLocaleString("en-LK")}
+         · <strong>${labels.salesCount}:</strong> ${data.salesCount}
+         · <strong>${labels.avgSale}:</strong> ${data.avgSale.toLocaleString("en-LK")}</p>
+      <h2 style="font-size:1rem;margin:24px 0 8px">${labels.topProducts}</h2>
+      ${productsTable}
+      <h2 style="font-size:1rem;margin:24px 0 8px">${labels.topCustomers}</h2>
+      ${customersTable}
+      ${acJobsHtml}
+    `,
+  });
+}
