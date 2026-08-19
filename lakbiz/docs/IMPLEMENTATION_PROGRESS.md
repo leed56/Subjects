@@ -3627,4 +3627,77 @@ actually resolved — the Dashboard/VAT income-tax wiring, done in the
 fix-all pass — rather than either reproducing that list as if nothing
 had changed, or silently updating it without saying so).
 
+## Test-coverage pass — vat.ts and the role/permission matrix (and a real bug found in the process)
+
+User picked this next: the two items explicitly flagged as "not done"
+when Phase 22 shipped the test infrastructure. Writing the tests found
+a real, live, previously-undiscovered bug — this pass is a bug fix with
+test coverage attached, not just test coverage.
+
+**The bug**: `getVatQuarterBounds` (vat.ts) derived its quarter's
+`startYear`/`endYear` from a handful of independent ad hoc branches
+(`startMonth >= fiscalStartMonth` / `m < fiscalStartMonth` / `endMonth <
+startMonth`), each covering only part of the year-rollover logic.
+Brute-forcing every (fiscalStartMonth, current-month) combination — 144
+cells — found **66 (46%) returned bounds that didn't contain their own
+`refDate`, always off by exactly one year**. For the *default*
+fiscalStartMonth (4, April — what every org gets unless it changes VAT
+settings), this hit January, February, and March every single year:
+`getVatQuarterSummary(data, new Date())` — called with today's date by
+the one real caller, `/vat` — would silently show a VAT-registered
+shop's *previous year's* Jan–Mar sales/purchases instead of the current
+quarter's, for 3 months of every 12. This is VAT compliance data; a shop
+owner filing a return in February would have been looking at last
+year's numbers with no indication anything was wrong.
+
+Sanity-checked the sibling function first, since it has the same shape:
+`getFiscalYearBounds` (income-tax.ts, used by the income-tax estimate)
+was brute-forced the same way — 0/144 failures, genuinely correct. The
+bug is isolated to the quarterly function specifically; the simpler
+whole-year one never had it.
+
+**The fix**: rewrote `getVatQuarterBounds` using absolute-month
+arithmetic (`year*12 + monthIndex`) instead of ad hoc year branches —
+the quarter's start/end is computed once as an offset in absolute-month
+space, then converted back to (year, month) by a single division, which
+cannot fall out of sync with `refDate`'s own year the way multiple
+independent branches could. Verified against all 144 combinations after
+the fix — 0 failures. The fiscalStartMonth===1 (calendar quarter)
+special case the old code branched out separately is now handled by the
+same unified formula (verified identical output), so that branch is
+gone too — one code path instead of two, both proven correct rather than
+one assumed correct because "it's simpler."
+
+Also confirmed no other file reads `VatQuarterBounds`/`getVatQuarterBounds`
+directly — `getVatQuarterSummary` is the only caller, and `/vat/page.tsx`
+already filters its own displayed sales/purchases lists using
+`summary.bounds.start`/`.end` directly, so this fix also corrects what
+those lists show, not just the aggregate output/input VAT totals.
+
+New tests:
+- **`vat.test.ts`** (16 tests) — the exact 144-cell brute-force check
+  that found the bug, kept as a permanent regression guard, plus the
+  concrete originally-failing case (April fiscal start, January
+  refDate) spelled out explicitly so the fix's intent is clear without
+  running the loop; a cross-year-boundary case (a fiscal quarter that
+  itself spans New Year's, viewed from both sides); and
+  `splitInclusiveTotal`/`calcInputVat`/`isVatEnabled`/`isDateInQuarter`/
+  `getVatQuarterSummary` (explicit vs. derived output/input VAT, quarter
+  filtering, `netPayable` can be negative for an input-VAT credit).
+- **`org-role/permissions.test.ts`** (21 tests) — locks the documented
+  role matrix (the same subject as the Phase 19 security audit) down
+  test-by-test: `canAccessShopRoute` for every one of the 5 roles
+  against both allowed and disallowed routes (including prefix-match
+  behavior and the deliberate technician-can-reach-`/dashboard`
+  exception documented inline in permissions.ts), `canUpdateAcJob`'s
+  field-level financial-key rejection (including a mixed payload with
+  one disallowed key among allowed ones), `sanitizeAcJobInputForRole`'s
+  tamper-defense stripping, and `canAccessSettingsPath`'s per-role
+  settings scoping. A future edit that silently loosens a role's access
+  now fails a test instead of shipping as a live security regression.
+
+Tests: 58/58 passing (21 from Phase 22 + 37 new). `tsc --noEmit` clean,
+`eslint src` — 0 errors, same 3 pre-existing warnings, `next build`
+succeeds with the same route list.
+
 Nothing code-level changed; documentation-only.

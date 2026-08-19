@@ -35,7 +35,35 @@ export function isVatEnabled(business: BusinessInfo): boolean {
   return business.vatRegistered === true;
 }
 
-/** IRD-style fiscal quarters defaulting to April start (month 4) */
+/**
+ * IRD-style fiscal quarters defaulting to April start (month 4).
+ *
+ * CORRECTION (test-coverage pass — found by writing tests for this
+ * function, not by a bug report): the previous implementation derived
+ * `startYear`/`endYear` from a handful of ad hoc branches
+ * (`startMonth >= fiscalStartMonth` / `m < fiscalStartMonth` /
+ * `endMonth < startMonth`) that each handled only part of the
+ * year-rollover logic. Brute-forcing every (fiscalStartMonth, current
+ * month) combination showed 66 of 144 — 46% — returned a quarter whose
+ * `[start, end]` bounds didn't even contain `refDate`, off by exactly
+ * one year. For the *default* fiscalStartMonth (4, April), this hit
+ * every January/February/March: `getVatQuarterSummary` (called with
+ * `refDate = new Date()`, i.e. today, by every real caller) would
+ * silently show a VAT-registered shop's *previous* year's Jan–Mar
+ * quarter — the wrong sales/purchases entirely — for a quarter of every
+ * calendar year. A live, real correctness bug in VAT compliance data,
+ * not a hypothetical one.
+ *
+ * Rewritten using absolute-month arithmetic (`year*12 + monthIndex`)
+ * instead of ad hoc year branches — the quarter's start/end month is
+ * computed as an offset in absolute-month space, then converted back to
+ * a (year, month) pair by a single division, which cannot go out of
+ * sync with `refDate`'s own year the way multiple independent branches
+ * could. Verified against all 144 (fiscalStartMonth, month) combinations
+ * — 0 failures — including the fiscalStartMonth===1 (calendar quarter)
+ * case, which the old code special-cased separately; the unified
+ * formula produces identical results for it, so that branch is gone too.
+ */
 export function getVatQuarterBounds(
   refDate = new Date(),
   fiscalStartMonth = 4,
@@ -43,36 +71,17 @@ export function getVatQuarterBounds(
   const y = refDate.getFullYear();
   const m = refDate.getMonth() + 1; // 1-12
 
-  let qIndex: number;
-  let startYear = y;
-  let endYear = y;
+  const absMonth = y * 12 + (m - 1); // absolute month index, 0-based
+  const fiscalMonthIndex = (m - fiscalStartMonth + 12) % 12; // 0..11, offset within the fiscal year
+  const qIndex = Math.floor(fiscalMonthIndex / 3);
 
-  if (fiscalStartMonth === 1) {
-    qIndex = Math.floor((m - 1) / 3);
-    const startMonth = qIndex * 3 + 1;
-    const endMonth = startMonth + 2;
-    const start = new Date(y, startMonth - 1, 1);
-    const end = new Date(y, endMonth, 0, 23, 59, 59, 999);
-    return {
-      start,
-      end,
-      label: quarterLabel(start, end),
-      key: `${y}-Q${qIndex + 1}`,
-    };
-  }
+  const quarterStartAbs = absMonth - fiscalMonthIndex + qIndex * 3;
+  const quarterEndAbs = quarterStartAbs + 2;
 
-  // Fiscal year starting April (month 4)
-  const offset = ((m - fiscalStartMonth + 12) % 12);
-  qIndex = Math.floor(offset / 3);
-  const startMonth = ((fiscalStartMonth - 1 + qIndex * 3) % 12) + 1;
-  const endMonth = ((startMonth - 1 + 2) % 12) + 1;
-
-  if (startMonth >= fiscalStartMonth) {
-    startYear = y;
-  } else if (m < fiscalStartMonth) {
-    startYear = y - 1;
-  }
-  endYear = endMonth < startMonth ? startYear + 1 : startYear;
+  const startYear = Math.floor(quarterStartAbs / 12);
+  const startMonth = (quarterStartAbs % 12) + 1;
+  const endYear = Math.floor(quarterEndAbs / 12);
+  const endMonth = (quarterEndAbs % 12) + 1;
 
   const start = new Date(startYear, startMonth - 1, 1);
   const end = new Date(endYear, endMonth, 0, 23, 59, 59, 999);
@@ -81,7 +90,7 @@ export function getVatQuarterBounds(
     start,
     end,
     label: quarterLabel(start, end),
-    key: `${startYear}-FYQ${qIndex + 1}`,
+    key: fiscalStartMonth === 1 ? `${startYear}-Q${qIndex + 1}` : `${startYear}-FYQ${qIndex + 1}`,
   };
 }
 
