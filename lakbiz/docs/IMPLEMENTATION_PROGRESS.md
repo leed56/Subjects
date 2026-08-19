@@ -1377,8 +1377,12 @@ credentials this session doesn't have). Cross-tenant user
 - **Flagged, not fixed:** "leaked password protection" (HaveIBeenPwned
   check) is disabled in Supabase Auth — a dashboard-only project setting,
   not a SQL/migration change, and no tool in this session's toolset can
-  flip it. Needs the repo owner: Authentication → Providers → Email →
-  Password → enable it manually.
+  flip it. UPDATE (fix-all pass): the repo owner tried enabling it via
+  Authentication → Attack Protection and got "Configuring leaked
+  password protection via HaveIBeenPwned.org is available on Pro Plans
+  and up" — this project's Supabase org is on the Free plan, so the
+  toggle is plan-gated, not just a click away. Confirmed skippable for
+  now; revisit only if/when the org upgrades to Pro.
 
 Files changed:
 - `supabase/migrations/20250702000001_schema_migrations_rls.sql` (new)
@@ -3358,3 +3362,21 @@ Remaining from the original "fix all the issues not fixed" list: only
 Supabase Auth's "leaked password protection" setting, which stays
 dashboard-only and unreachable from this session — flagged, not
 silently dropped.
+
+## Fix-all pass — leaked password protection: confirmed plan-gated, not actionable
+
+Closing this out. The repo owner tried enabling it directly in the
+Supabase dashboard (Authentication → Attack Protection) and got:
+"Failed to update auth configuration: Configuring leaked password
+protection via HaveIBeenPwned.org is available on Pro Plans and up."
+This project's Supabase org is on the **Free plan** — the setting isn't
+just dashboard-only, it's plan-gated, and no amount of dashboard access
+changes that without upgrading the org first. Confirmed with the repo
+owner to skip for now; revisit only if/when the org upgrades to Pro
+(pure billing decision, not an engineering one).
+
+This closes out the entire "fix all the issues not fixed" list from
+2026-08-18 — every code/schema-level item is merged and confirmed live
+in production; this is the one item genuinely outside engineering
+scope, disclosed and explicitly deferred with the owner's agreement
+rather than silently dropped.
