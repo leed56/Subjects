@@ -3560,3 +3560,50 @@ matrix in `org-role/permissions.ts`, or any of the RLS-layer SQL added
 in Phases 19-20 (would need a real Postgres connection — e.g. Supabase's
 local CLI stack — this session doesn't have one). Two files is a real
 start, not a complete suite.
+
+## Phase 24 — Reports page integration (AC job performance)
+
+User picked this next from the standing backlog. Before this phase,
+`/reports` was entirely retail/sales-focused (revenue, profit, top
+products, top customers) — an owner wanting "how did my AC jobs do
+this period" had no single place for it; that data lived scattered
+across `/job-costing` (all-time, not period-filtered), `/dashboard`
+(this-month only, buried in a compact "Needs Attention" row), and
+`/vat` (a single lifetime-to-date `acJobProfit` figure, not
+period-selectable).
+
+Scope, deliberately narrow: added one new "AC job performance" section
+to the existing Reports page — metrics (total quoted, total cost,
+total margin) plus a "jobs needing attention" list (the period's
+low-margin jobs, worst-margin first) — using the *same* period selector
+(7d/30d/month/all) already on the page, filtered on `job.date` the same
+way sales are already filtered on `s.date`. Did **not** attempt to fold
+VAT or income-tax into this page in the same pass — those are already
+full standalone sections on `/vat` with their own UI decisions (rate
+selection, disclaimers), and merging them in here would have meant
+redesigning that page too, a materially bigger and riskier change than
+one well-scoped PR. Flagging this as a deliberate scope cut, not an
+oversight — a natural next step for whoever picks up Phase 24 further.
+
+Correctness, not a new formula: reuses `computeJobProfitability`
+(now under test — Phase 22) exactly as `/job-costing`, `/dashboard`,
+and `/vat` already do, and `isLowMarginJob`'s one explicit low-margin
+rule (15% threshold) for the attention list — no new job-cost or
+"low margin" logic invented for this page. Cancelled jobs are excluded
+(a cancelled job never happened; no real revenue/cost to report),
+matching the dashboard's own "this month's job profitability" filter
+exactly. Job-linked expenses (Phase 7, cloud-only) are fetched with the
+identical `fetchOrgExpenses`-on-mount pattern already used by
+`/job-costing`/`/dashboard`/`/vat`, gated behind `can("ac_jobs") &&
+canSeeFinancials` so the fetch is never even attempted for an org/role
+that can't see this section.
+
+Section is entirely gated behind `can("ac_jobs")` (the same plan-feature
+check every other AC-jobs-aware page uses) — sectors without the AC/HVAC
+module (grocery, electronics, etc.) see the Reports page exactly as it
+looked before this change, nothing new rendered.
+
+Tests: `tsc --noEmit` clean, `eslint src` — 0 errors, same 3
+pre-existing warnings, `npm test` — 21/21 still passing (this page
+doesn't touch either tested module's logic, only calls into it),
+`next build` succeeds with the same route list.
