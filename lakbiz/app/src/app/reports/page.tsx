@@ -5,6 +5,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
 import { PageHeader, MetricCard, EmptyState, SectionHeader } from "@/components/ui/primitives";
 import { SelectInput } from "@/components/ui/form";
+import { ExportActions } from "@/components/export/export-actions";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -12,6 +13,7 @@ import { formatLkr } from "@/lib/format";
 import type { Sale } from "@/lib/store/types";
 import { computeJobProfitability, isLowMarginJob, type JobLinkedExpense } from "@/lib/job-profitability";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
+import { exportReportsCsv, printReportsSummary, type ReportsExportData } from "@/lib/export";
 
 type Period = "7d" | "30d" | "month" | "all";
 
@@ -42,6 +44,7 @@ export default function ReportsPage() {
   // (not every sector has ac_jobs at all) same as /job-costing,
   // /dashboard, and /vat.
   const showAcJobs = can("ac_jobs");
+  const canExport = can("export");
 
   // Job-linked expenses (Phase 7) are cloud-only (not part of the
   // local-first store), same fetch-on-mount pattern already used by
@@ -173,6 +176,67 @@ export default function ReportsPage() {
     .sort((a, b) => a.profit.grossMarginPct! - b.profit.grossMarginPct!)
     .slice(0, 10);
 
+  const periodLabel = t(
+    period === "7d" ? "reports.period_7d"
+      : period === "30d" ? "reports.period_30d"
+      : period === "month" ? "reports.period_month"
+      : "reports.period_all",
+  );
+
+  // Phase 24 follow-up — CSV/print export, the item explicitly flagged
+  // as not-started when the AC job performance section shipped: the
+  // per-domain export helpers (sales/customers/stock/VAT) don't fit
+  // this page's aggregate shape, so it never had export at all. Mirrors
+  // exactly what's rendered above — including omitting `acJobs`
+  // entirely when this role/org doesn't see that section, never
+  // exporting zeros for data that was never actually computed.
+  const reportsExportData: ReportsExportData = {
+    periodLabel,
+    totalRevenue,
+    totalProfit,
+    salesCount: sales.length,
+    avgSale,
+    topProducts,
+    topCustomers,
+    ...(showAcJobs && {
+      acJobs: {
+        totalQuoted,
+        totalCost: totalJobCost,
+        totalMargin: totalJobMargin,
+        lowMarginJobs: lowMarginJobs.map(({ job, profit }) => ({
+          customerName: job.customerName,
+          jobNo: job.jobNo,
+          grossProfit: profit.grossProfit,
+          grossMarginPct: profit.grossMarginPct ?? 0,
+        })),
+      },
+    }),
+  };
+  const reportsExportLabels = {
+    period: t("reports.period"),
+    totalRevenue: t("reports.total_revenue"),
+    totalProfit: t("reports.total_profit"),
+    salesCount: t("reports.sales_count"),
+    avgSale: t("reports.avg_sale"),
+    topProducts: t("reports.top_products"),
+    productName: t("common.name"),
+    qty: t("common.qty"),
+    revenue: t("reports.revenue"),
+    topCustomers: t("reports.top_customers"),
+    customerName: t("common.name"),
+    orders: t("reports.orders"),
+    total: t("common.total"),
+    acJobsTitle: t("reports.ac_jobs_title"),
+    totalQuoted: t("costing.total_quoted"),
+    totalCost: t("costing.total_cost"),
+    totalMargin: t("costing.total_margin"),
+    jobsNeedingAttention: t("reports.jobs_needing_attention"),
+    jobCustomer: t("common.customer"),
+    jobNo: t("reports.job_no"),
+    margin: t("costing.total_margin"),
+    marginPct: t("reports.margin_pct"),
+  };
+
   return (
     <AppShell>
       <ProMain>
@@ -180,17 +244,28 @@ export default function ReportsPage() {
           title={t("reports.title")}
           description={t("reports.subtitle")}
           actions={
-            <SelectInput
-              value={period}
-              onChange={(v) => setPeriod(v as Period)}
-              options={[
-                { value: "7d", label: t("reports.period_7d") },
-                { value: "30d", label: t("reports.period_30d") },
-                { value: "month", label: t("reports.period_month") },
-                { value: "all", label: t("reports.period_all") },
-              ]}
-              className="w-40"
-            />
+            <>
+              <SelectInput
+                value={period}
+                onChange={(v) => setPeriod(v as Period)}
+                options={[
+                  { value: "7d", label: t("reports.period_7d") },
+                  { value: "30d", label: t("reports.period_30d") },
+                  { value: "month", label: t("reports.period_month") },
+                  { value: "all", label: t("reports.period_all") },
+                ]}
+                className="w-40"
+              />
+              {canExport && (
+                <ExportActions
+                  disabled={sales.length === 0 && costedJobs.length === 0}
+                  onExportCsv={() => exportReportsCsv(localData.business, reportsExportData, reportsExportLabels)}
+                  onPrintPdf={() =>
+                    printReportsSummary(localData.business, reportsExportData, reportsExportLabels, t("reports.title"))
+                  }
+                />
+              )}
+            </>
           }
           metrics={
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

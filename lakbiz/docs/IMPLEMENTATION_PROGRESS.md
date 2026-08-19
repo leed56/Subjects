@@ -3627,6 +3627,8 @@ actually resolved — the Dashboard/VAT income-tax wiring, done in the
 fix-all pass — rather than either reproducing that list as if nothing
 had changed, or silently updating it without saying so).
 
+Nothing code-level changed; documentation-only.
+
 ## Test-coverage pass — vat.ts and the role/permission matrix (and a real bug found in the process)
 
 User picked this next: the two items explicitly flagged as "not done"
@@ -3700,4 +3702,58 @@ Tests: 58/58 passing (21 from Phase 22 + 37 new). `tsc --noEmit` clean,
 `eslint src` — 0 errors, same 3 pre-existing warnings, `next build`
 succeeds with the same route list.
 
-Nothing code-level changed; documentation-only.
+## Phase 14 follow-up — CSV/print export for /reports
+
+User picked this next: after the vat.ts fix, ran a quick sweep for
+other instances of the same *bug shape* (manual `startYear`/`endYear`
+branching) across the codebase — none found; `addDaysToDate`/
+`addMonths` in `ac-service.ts` and everything else touching dates uses
+JS's native `setDate`/`setMonth` overflow handling, which doesn't have
+this failure mode. That confirms the VAT bug was isolated, not
+systemic — a useful negative result, not a new fix. Moved on to the
+next reasonably-scoped item from the standing "Not started" list:
+"(Phase 14) exporting the in-app report view as CSV/print directly from
+`/reports` (the existing `src/lib/export/*` CSV/print helpers are
+per-domain — sales, VAT, customers — and were not wired into this new
+aggregate view)."
+
+Added `buildReportsCsv`/`exportReportsCsv`/`printReportsSummary` to
+`export/reports.ts`, matching the existing per-domain helpers'
+conventions (a `*Labels` type populated by the caller from `t()`, a
+build function returning a string for testing, a thin `export*`/
+`print*` wrapper around it). Mirrors exactly what `/reports` renders —
+period metrics, top products, top customers, and (Phase 24's) AC job
+performance section including its low-margin-jobs list — rather than
+re-deriving a simplified export shape.
+
+`acJobs` is optional on `ReportsExportData` and is only populated when
+the page itself would render that section (`can("ac_jobs")` true) — an
+org without the AC/HVAC module gets exactly the export shape it always
+would have, never a section with zeros implying data that was never
+actually computed. Export is further gated behind `can("export")`,
+matching `/vat`'s existing pattern — a plan without the export
+entitlement doesn't get the CSV/PDF buttons at all, not just a disabled
+click.
+
+New test file `export/reports.test.ts` covers the one pure, DOM-free
+piece (`buildReportsCsv`) — `exportReportsCsv`/`printReportsSummary`
+touch `window`/`Blob` and are out of scope for the Node test
+environment, same reasoning as every other DOM-touching function this
+project has left untested. Confirms the AC-jobs section is fully
+present when provided and fully absent (not zero-filled) when it
+isn't — the exact behavior the "never export data that wasn't actually
+computed" design decision above depends on.
+
+Also found and fixed a real, small doc-ordering mistake made earlier in
+this same working session: the Phase 26 section's own "documentation-
+only" closing line had been accidentally left attached to the *end* of
+this file rather than to the end of the Phase 26 section itself (an
+artifact of how the vat.ts section was appended immediately after Phase
+26's last paragraph, without noticing the closing line trailed after
+where the insertion point needed to be). Corrected — caught by reading
+the file's actual section boundaries via `grep -n "^## "` rather than
+trusting where a fix had "obviously" gone.
+
+Tests: 61/61 passing (58 before + 3 new). `tsc --noEmit` clean,
+`eslint src` — 0 errors, same 3 pre-existing warnings, `next build`
+succeeds with the same route list.
