@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
 import { PageHeader, MetricCard, EmptyState, SectionHeader } from "@/components/ui/primitives";
@@ -10,6 +10,8 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { formatLkr } from "@/lib/format";
 import type { Sale } from "@/lib/store/types";
+import { computeJobProfitability, isLowMarginJob, type JobLinkedExpense } from "@/lib/job-profitability";
+import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
 
 type Period = "7d" | "30d" | "month" | "all";
 
@@ -30,14 +32,44 @@ function dayLabel(iso: string, locale: "si" | "en"): string {
 
 export default function ReportsPage() {
   const { t, locale } = useLocale();
-  const { org, orgRole } = useSubscription();
+  const { org, orgRole, can } = useSubscription();
   const { data: localData, ready: localReady } = useAppStore();
 
   const [period, setPeriod] = useState<Period>("30d");
 
   const canSeeFinancials = orgRole === "owner" || orgRole === "manager";
+  // Phase 24 — AC job performance section, gated on the plan feature
+  // (not every sector has ac_jobs at all) same as /job-costing,
+  // /dashboard, and /vat.
+  const showAcJobs = can("ac_jobs");
 
-  if (!org.isAuthenticated || !localReady || !localData) {
+  // Job-linked expenses (Phase 7) are cloud-only (not part of the
+  // local-first store), same fetch-on-mount pattern already used by
+  // /job-costing, /dashboard, and /vat — see those for the precedent.
+  const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<string, JobLinkedExpense[]> | null>(null);
+  useEffect(() => {
+    if (!showAcJobs || !canSeeFinancials || !org.isAuthenticated || !org.id) {
+      setJobLinkedExpenseTotals(new Map());
+      return;
+    }
+    let cancelled = false;
+    void fetchOrgExpenses(org.id).then((result) => {
+      if (cancelled) return;
+      const totals = new Map<string, JobLinkedExpense[]>();
+      for (const e of result.data) {
+        if (!e.jobId) continue;
+        const list = totals.get(e.jobId) ?? [];
+        list.push({ category: e.category, amount: e.amount });
+        totals.set(e.jobId, list);
+      }
+      setJobLinkedExpenseTotals(totals);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [showAcJobs, canSeeFinancials, org.isAuthenticated, org.id]);
+
+  if (!org.isAuthenticated || !localReady || !localData || !jobLinkedExpenseTotals) {
     return (
       <AppShell>
         <ProMain>
@@ -109,6 +141,36 @@ export default function ReportsPage() {
   }
   const topCustomers = Array.from(customerTotals.values())
     .sort((a, b) => b.total - a.total)
+    .slice(0, 10);
+
+  // AC job performance (Phase 24 — Reports/job-costing integration).
+  // Reuses computeJobProfitability, the one authoritative job-cost
+  // calculation (Phase 8), exactly as /job-costing, /dashboard, and
+  // /vat already do — no re-derived formula. Period-filtered on
+  // job.date the same way sales above are filtered on s.date, and
+  // excludes cancelled jobs the same way dashboard's own "this month's
+  // job profitability" section does — a cancelled job never happened
+  // and has no real revenue/cost to report.
+  const jobItemsByJob = new Map<string, typeof localData.jobItems>();
+  for (const item of localData.jobItems) {
+    const list = jobItemsByJob.get(item.jobId) ?? [];
+    list.push(item);
+    jobItemsByJob.set(item.jobId, list);
+  }
+  const periodJobs = showAcJobs
+    ? localData.acJobs.filter((j) => (!startIso || j.date >= startIso) && j.status !== "cancelled")
+    : [];
+  const costedJobs = periodJobs.map((j) => ({
+    job: j,
+    profit: computeJobProfitability(j, jobItemsByJob.get(j.id) ?? [], jobLinkedExpenseTotals.get(j.id) ?? []),
+  }));
+
+  const totalQuoted = costedJobs.reduce((s, c) => s + c.job.quotedAmount, 0);
+  const totalJobCost = costedJobs.reduce((s, c) => s + c.profit.totalCost, 0);
+  const totalJobMargin = totalQuoted - totalJobCost;
+  const lowMarginJobs = costedJobs
+    .filter((c) => isLowMarginJob(c.profit))
+    .sort((a, b) => a.profit.grossMarginPct! - b.profit.grossMarginPct!)
     .slice(0, 10);
 
   return (
@@ -199,6 +261,45 @@ export default function ReportsPage() {
             )}
           </div>
         </div>
+
+        {showAcJobs && (
+          <div className="mt-4">
+            <SectionHeader title={t("reports.ac_jobs_title")} />
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <MetricCard label={t("costing.total_quoted")} value={formatLkr(totalQuoted)} />
+              <MetricCard label={t("costing.total_cost")} value={formatLkr(totalJobCost)} />
+              <MetricCard
+                label={t("costing.total_margin")}
+                value={formatLkr(totalJobMargin)}
+                tone={totalJobMargin < 0 ? "danger" : "positive"}
+              />
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-5">
+              <SectionHeader title={t("reports.jobs_needing_attention")} />
+              {costedJobs.length === 0 ? (
+                <EmptyState title={t("reports.no_ac_jobs")} description={t("reports.no_ac_jobs_hint")} />
+              ) : lowMarginJobs.length === 0 ? (
+                <EmptyState title={t("reports.no_low_margin_jobs")} description={t("reports.no_low_margin_jobs_hint")} />
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {lowMarginJobs.map(({ job, profit }) => (
+                    <li key={job.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-slate-900">{job.customerName}</p>
+                        <p className="text-xs text-slate-500">{job.jobNo}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="font-mono font-semibold text-rose-700">{formatLkr(profit.grossProfit)}</p>
+                        <p className="text-xs text-rose-600">{profit.grossMarginPct!.toFixed(1)}%</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
       </ProMain>
     </AppShell>
   );
