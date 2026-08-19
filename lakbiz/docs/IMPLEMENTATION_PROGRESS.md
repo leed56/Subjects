@@ -3607,3 +3607,24 @@ Tests: `tsc --noEmit` clean, `eslint src` — 0 errors, same 3
 pre-existing warnings, `npm test` — 21/21 still passing (this page
 doesn't touch either tested module's logic, only calls into it),
 `next build` succeeds with the same route list.
+
+## Phase 26 — final consolidated deliverable report
+
+User picked this next from the standing backlog. Added
+`docs/FINAL_ENGAGEMENT_REPORT.md` — a summary and index over this whole
+engagement (both dashboard-rebuild eras, the HVAC platform rebuild, and
+every fix made this session), not a replacement for this file, which
+stays the detailed source of truth. Built from this file's own section
+headers and content rather than from memory, so every claim in it traces
+back to a real section here, a merged PR, or a live database check.
+
+Includes an explicit "known limitations" section covering what's still
+genuinely blocked (no browser in this sandbox — Phase 23; leaked
+password protection — Supabase Free-plan-gated) versus what was
+deliberately scoped out of individual phases (documented the one
+confirmed case where an item on the old "Not started" list was later
+actually resolved — the Dashboard/VAT income-tax wiring, done in the
+fix-all pass — rather than either reproducing that list as if nothing
+had changed, or silently updating it without saying so).
+
+Nothing code-level changed; documentation-only.
