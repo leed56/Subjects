@@ -3380,3 +3380,108 @@ This closes out the entire "fix all the issues not fixed" list from
 in production; this is the one item genuinely outside engineering
 scope, disclosed and explicitly deferred with the owner's agreement
 rather than silently dropped.
+
+## Phase 21 — data migration safety review
+
+User picked this next from the standing backlog ("yes pick and move
+forward"). Systematic pass over all 64 tracked migration files in
+`supabase/migrations/`, specifically hunting for anything that could
+have destroyed real production data — not a re-read of what each
+migration *adds* (already covered phase by phase throughout this
+project), but a dedicated sweep for the destructive-operation shapes
+the spec's "do not delete existing production data just to simplify
+migration" rule is about: `DROP TABLE`, `DROP COLUMN`, `TRUNCATE`,
+`ALTER COLUMN ... TYPE` (narrowing casts can silently truncate/reject
+data), `SET NOT NULL` without a backfill, unscoped `DELETE`/`UPDATE`,
+and `ON CONFLICT DO NOTHING` backfills that can silently skip rows.
+
+Findings:
+
+- **No `TRUNCATE`, no `ALTER COLUMN ... TYPE`, no `SET NOT NULL`**
+  anywhere in the 64 files. The only `ALTER COLUMN` in the whole history
+  is a `SET DEFAULT` on `notifications.notification_settings`
+  (20250619000001) — changes the default for future inserts only, never
+  touches existing rows.
+- **Three genuine `DROP TABLE`/`DROP COLUMN` operations**, all verified
+  safe:
+  - `20250620000009_drop_org_app_data.sql` — drops `org_app_data`
+    entirely. This table never appears in a `CREATE TABLE` anywhere in
+    the tracked migration history, and the very first tracked migration
+    (`20250614000001_subscription_schema.sql`, 6 days earlier) is what
+    first creates `organizations` — the tenant/org concept this whole
+    schema is built around. A table that predates the tenant model by
+    definition could never have held a real multi-tenant org's data
+    under the current architecture; it was pre-migration-history
+    dev/prototype scaffolding, exactly as its own comment says ("Remove
+    unused JSON snapshot table — business-sync uses normalized
+    tables"). Grepped the current app source for `org_app_data`: zero
+    references, confirming nothing was ever silently left depending on
+    it.
+  - `20250621000006_remove_payment_provider.sql` — drops
+    `subscriptions.payment_provider`/`external_customer_id`. Grepped the
+    app source: zero references to either column name anywhere. Matches
+    the migration's own comment ("LakBiz uses manual plan management via
+    platform admin — no in-app SaaS checkout").
+  - `20250620000013_pure_sector_modules.sql` — drops
+    `business_templates.features` as its last step, after replacing it
+    with the new authoritative `sector_modules` table. Grepped the two
+    files that reference `business_templates` at all
+    (`lib/admin/templates.ts`, `api/admin/templates/route.ts`): neither
+    reads or writes a `features` column. Matches the migration's own
+    comment ("the dead, unused features copy — never read by the app").
+  - All three drops' own migration-file comments turned out to be
+    accurate, not just asserted — this review verified the underlying
+    claim in each case rather than trusting the comment.
+- **Every `DELETE FROM public.*_base`** in the migration history lives
+  inside a masked-view's `INSTEAD OF DELETE` trigger function body, and
+  every one is scoped `where id = old.id and organization_id =
+  old.organization_id` in the current (20250712000001) version of each
+  function — including `job_items_view_delete`/`technicians_view_delete`,
+  where Phase 19 already found and fixed the `new.organization_id`-in-a-
+  DELETE-trigger bug that had silently broken deletes since Phase 6.
+  Nothing new here; this review is what confirmed that fix is the
+  current, live version of every one of the 8 masked-view delete
+  triggers, not just the two originally reported.
+- **Only two standalone `UPDATE`s touch real (non-reference) data**
+  outside a trigger body:
+  - `20250620000004_service_interval_days.sql`:
+    `update public.ac_jobs set service_interval_days = ... where
+    service_interval_days is null or service_interval_days = 180` — a
+    backfill for a new column, scoped to only rows still at the
+    just-added default, computed from each row's own existing
+    `service_interval_months` (`coalesce(..., 6) * 30`). Idempotent and
+    non-destructive: a job that already had a real, different value is
+    never touched.
+  - `try_advance_org_sync_generation`'s `update public.organizations set
+    sync_generation = sync_generation + 1 where id = p_org_id` — inside
+    a function body, parameterized, single-row.
+  - The `ON CONFLICT DO NOTHING` inserts (`plans`,
+    `platform_message_templates`-style seed tables) are pure reference/
+    config data, not user data, and idempotent by design.
+- **Idempotency**: every `CREATE TABLE`/`DROP TABLE`/`DROP COLUMN`/`DROP
+  CONSTRAINT` in the history uses `if exists`/`if not exists`, so a
+  migration that's re-applied (or a earlier one skipped and caught up
+  later) can't fail partway and leave the schema in an inconsistent
+  state.
+- **`supabase_migrations.schema_migrations` is not a reliable ledger of
+  which of the 64 repo files are actually applied** — its recorded
+  `version` timestamps don't correspond to the migration files' own
+  `YYYYMMDDNNNNNN` naming at all (e.g. entries like `20260818123003`
+  cluster suspiciously close to this session's own `apply_migration`
+  call times rather than any file's name). This was already known
+  going into this review (`list_migrations` was flagged unreliable
+  earlier in this project) — restated here as a data-safety-relevant
+  fact, not a new finding: **direct schema introspection is the only
+  trustworthy way to confirm what's actually live**, which is the
+  practice this project has followed for every migration this session,
+  and is why this review cross-checked findings against live
+  `pg_catalog`/`information_schema` state rather than the migration
+  files' claims alone.
+
+**Conclusion: no data-safety issues found.** No migration in the
+tracked history destroyed real production data without verifying first
+that what it removed was genuinely dead. No open items from this
+review — this is a clean audit, not a list of fixes still needed.
+
+Nothing code-level changed; this is a documentation-only PR recording
+the review and its findings for the record.
