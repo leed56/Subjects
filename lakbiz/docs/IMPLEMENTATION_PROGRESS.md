@@ -3485,3 +3485,78 @@ review — this is a clean audit, not a list of fixes still needed.
 
 Nothing code-level changed; this is a documentation-only PR recording
 the review and its findings for the record.
+
+## Phase 22 — automated tests (first test infrastructure this project has had)
+
+User picked this next from the standing backlog. Until now every fix in
+this entire engagement was verified manually — `tsc --noEmit`/`eslint`/
+`next build` plus live DB introspection, never an automated assertion
+that a calculation still produces the right number. That gap mattered
+in practice: two of the real bugs found and fixed this project
+(Phase 20's outsourced_repair/subcontractCost double-count, the
+fix-all pass's missing-AC-job-revenue gap in income-tax.ts) were
+exactly the kind of thing a unit test would have caught immediately —
+and would prevent from silently regressing now that they're fixed.
+
+Added `vitest` (`^4.1.11`) as the test runner — chosen over Jest for
+zero-config ESM/TS support (this app has no Babel config and Jest's
+TS/ESM setup is more moving parts for no benefit here) and because it
+needs no browser: this sandbox has never had one (Phase 23 is still
+blocked on that), and the highest-value first test targets are plain
+TypeScript functions with zero DOM/React dependency anyway.
+`vitest.config.mts` sets `environment: "node"` (no jsdom) and mirrors
+tsconfig.json's `"@/*"` path alias so test files import app modules the
+same way the app itself does. New `npm test`/`npm run test:watch`
+scripts; `npm run verify` now runs tests before `next build`.
+
+First two test files, chosen because they're this project's own two
+most bug-prone functions and this session's most recent real fixes:
+
+- **`job-profitability.test.ts`** (13 tests) — locks down
+  `computeJobProfitability`'s documented formula (material + labor +
+  other = totalCost, revenue − totalCost = grossProfit, null margin —
+  never 0%/Infinity% — when revenue is 0), that `subcontractCost` is
+  only added to labor for a contractor-assigned job, and specifically
+  the Phase 20 outsourced_repair/subcontractCost double-count guard:
+  one test proves the guard fires (expense excluded when the job
+  already carries a matching subcontractCost), two more prove it does
+  NOT fire when it shouldn't (non-contractor job; contractor job with
+  no subcontractCost set) — a guard that only has a test for the case
+  it should suppress isn't proof it targets the right case. Also covers
+  `isLowMarginJob`'s three states (below/at-threshold/unassessable-null)
+  per the spec's "do not label a job low margin without an explicit
+  defensible rule."
+- **`income-tax.test.ts`** (8 tests) — covers `getFiscalYearBounds`'s
+  month-boundary logic (a date the day before the fiscal start month
+  belongs to the prior year, on-the-day belongs to the new one) and
+  `getIncomeTaxYearSummary`'s fiscal-year date filtering for sales/
+  vehicles/AC jobs independently, then specifically the fix-all pass's
+  own fix: that `acJobProfit` is computed via the real
+  `computeJobProfitability` (not a re-derived formula), that job-linked
+  expenses passed through the `jobLinkedExpenses` map actually reduce
+  it, and that the top-level formula (`salesProfit + vehicleProfit +
+  acJobProfit − otherExpenses`, floored at 0) and tax-rate rounding are
+  correct.
+
+Deliberately did NOT import `storage.ts`'s `emptyAppData()` or
+`invoice.ts`'s `defaultBusiness()` for test fixtures, even though both
+would have saved a few lines — `storage.ts` pulls in a chain of
+client-side modules (offline sync-conflict, ac-service, vat) with
+module-scope behavior not vetted for a plain Node test environment.
+Fixtures are built as plain object literals against the `AppData`/
+`ACJob`/`JobItem`/`Sale`/`VehicleRecord` types instead (type-only
+imports, zero runtime dependency beyond the two modules under test).
+
+Tests: 21/21 passing. `tsc --noEmit` clean (test files type-check
+against the same real interfaces the app uses), `eslint src` — 0
+errors, same 3 pre-existing warnings (eslint doesn't flag the new test
+files at all), `next build` succeeds with the same route list (`*.test.ts`
+files live under `src/lib/`, never under `app/`, so they can't be
+mistaken for pages).
+
+Not done in this pass, left for whoever picks up test coverage next:
+tests for `vat.ts` (`getVatQuarterSummary`), the role/permission
+matrix in `org-role/permissions.ts`, or any of the RLS-layer SQL added
+in Phases 19-20 (would need a real Postgres connection — e.g. Supabase's
+local CLI stack — this session doesn't have one). Two files is a real
+start, not a complete suite.
