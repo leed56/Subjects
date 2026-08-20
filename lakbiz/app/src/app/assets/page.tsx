@@ -13,6 +13,7 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { formatLkr } from "@/lib/format";
+import { daysUntilDate } from "@/lib/ac-service";
 import { computeRepeatRepairSignal } from "@/lib/repeat-repair";
 import {
   createAsset,
@@ -600,6 +601,48 @@ export default function AssetsPage() {
                           </ul>
                         </div>
                       ) : null;
+                    })()}
+
+                    {(() => {
+                      // Part 14/15, docs/JOB_PARTS_ARCHITECTURE.md §2.7 —
+                      // a read-time computation over stored dates, not a
+                      // scheduled notification; no cron. Only warranties
+                      // that haven't expired yet, soonest-expiring first —
+                      // an already-expired one belongs in history, not a
+                      // follow-up list.
+                      const active = profileJobItems
+                        .filter((i) => i.isReplacement && i.warrantyExpiryDate && daysUntilDate(i.warrantyExpiryDate) >= 0)
+                        .sort((a, b) => (a.warrantyExpiryDate as string).localeCompare(b.warrantyExpiryDate as string));
+                      if (active.length === 0) return null;
+                      return (
+                        <div>
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("assets.active_warranties")}</p>
+                          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                            {active.map((i) => {
+                              const supplierName = i.supplierId ? localData.suppliers.find((s) => s.id === i.supplierId)?.name : undefined;
+                              const days = daysUntilDate(i.warrantyExpiryDate as string);
+                              return (
+                                <li key={`${i.jobId}-${i.name}`} className="px-3.5 py-2 text-sm">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="font-medium text-slate-900">
+                                      {i.oldComponentName ? `${i.oldComponentName} → ${i.name}` : i.name}
+                                    </span>
+                                    <span className={`text-xs font-semibold ${days <= 30 ? "text-amber-700" : "text-slate-500"}`}>
+                                      {t("assets.warranty_expires_in").replace("{days}", String(days))}
+                                    </span>
+                                  </div>
+                                  <p className="mt-0.5 text-xs text-slate-500">
+                                    {i.warrantyType && i.warrantyType !== "none" ? t(`jobs.warranty_type.${i.warrantyType}`) : ""}
+                                    {i.warrantyType && i.warrantyType !== "none" && supplierName ? " · " : ""}
+                                    {supplierName ?? ""}
+                                    {i.warrantyStartDate ? ` · ${t("assets.installed_on").replace("{date}", new Date(i.warrantyStartDate).toLocaleDateString("en-LK"))}` : ""}
+                                  </p>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      );
                     })()}
 
                     <div>
