@@ -11,6 +11,9 @@ import {
   ProPageHeader,
   ProStatCard,
 } from "@/components/ui/pro-shell";
+import { Dialog, DrawerFooter } from "@/components/ui/overlay";
+import { Button } from "@/components/ui/primitives";
+import { BankingIcon, BillsIcon, InboxIcon, CostingIcon } from "@/components/ui/icons";
 import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -150,6 +153,11 @@ export default function BankingPage() {
       removable: null as string | null,
     })),
   ].sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  // Part 8: when there is truly nothing yet, one compact onboarding block
+  // replaces the 3 full-size empty states (accounts/transactions/cheques)
+  // that used to render stacked on top of each other.
+  const hasAnyBankingData = data.bankAccounts.length > 0 || ledger.length > 0 || data.cheques.length > 0;
 
   const closeAllModals = () => {
     setShowBankModal(false);
@@ -296,17 +304,38 @@ export default function BankingPage() {
           </p>
         )}
 
+        {!hasAnyBankingData ? (
+          <ProCard>
+            <ProEmptyState
+              icon={<BankingIcon className="h-5 w-5" />}
+              title={t("bank.onboarding_title")}
+              description={t("bank.onboarding_desc")}
+              action={
+                canWrite ? (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button variant="primary" onClick={openBankModal}>{t("bank.add_account")}</Button>
+                    <Button variant="secondary" onClick={openTxnModal}>{t("bank.record_txn")}</Button>
+                    <Button variant="secondary" onClick={openChequeModal}>{t("bank.add_cheque")}</Button>
+                  </div>
+                ) : undefined
+              }
+            />
+          </ProCard>
+        ) : (
+        <>
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("bank.total_balance")} value={formatLkr(totalBank)} hint={`${data.bankAccounts.length} accounts`} icon="🏦" tone="teal" />
-          <ProStatCard label={t("bank.pending")} value={String(pending.length)} hint={t("bank.cheque_register")} icon="🧾" tone="amber" />
-          <ProStatCard label={t("bank.status.deposited")} value={String(deposited.length)} hint="Awaiting clearance" icon="📥" tone="blue" />
-          <ProStatCard label="Cheque value" value={formatLkr(chequeValue)} hint="Received minus paid" icon="💸" tone="emerald" />
+          <ProStatCard label={t("bank.total_balance")} value={formatLkr(totalBank)} hint={`${data.bankAccounts.length} accounts`} icon={<BankingIcon className="h-5 w-5" />} tone="teal" />
+          <ProStatCard label={t("bank.pending")} value={String(pending.length)} hint={t("bank.cheque_register")} icon={<BillsIcon className="h-5 w-5" />} tone="amber" />
+          <ProStatCard label={t("bank.status.deposited")} value={String(deposited.length)} hint="Awaiting clearance" icon={<InboxIcon className="h-5 w-5" />} tone="blue" />
+          <ProStatCard label="Cheque value" value={formatLkr(chequeValue)} hint="Received minus paid" icon={<CostingIcon className="h-5 w-5" />} tone="emerald" />
         </section>
 
         <section className="mt-6">
           <ProCard title={t("bank.total_balance")} eyebrow="Accounts" action={<ProBadge tone="teal">{data.bankAccounts.length} accounts</ProBadge>}>
             {data.bankAccounts.length === 0 ? (
               <ProEmptyState
+                size="compact"
+                icon={<BankingIcon className="h-5 w-5" />}
                 title={t("bank.no_accounts")}
                 description="Add a bank account to track deposits, cleared cheques and balances."
                 action={
@@ -477,340 +506,331 @@ export default function BankingPage() {
             )}
           </ProCard>
         </section>
-
-        {showBankModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">Bank account</p>
-                  <h3 className="mt-2 text-xl font-black text-slate-950">{t("bank.add_account_title")}</h3>
-                </div>
-                <button type="button" onClick={() => setShowBankModal(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
-              </div>
-              <form
-                className="mt-5"
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (savingBank) return;
-                  setSavingBank(true);
-                  setFormMessage("");
-                  const result = await addBankAccountToCloud({
-                    bankName,
-                    branch,
-                    accountName,
-                    accountNumber,
-                    balance,
-                  });
-                  setSavingBank(false);
-                  if (!result.ok) {
-                    setFormMessage(result.error ?? t("common.save_failed"));
-                    return;
-                  }
-                  setShowBankModal(false);
-                  resetBankForm();
-                }}
-              >
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <select value={bankName} onChange={(e) => setBankName(e.target.value)} className={inputClass}>
-                    {LK_BANKS.map((b) => <option key={b}>{b}</option>)}
-                  </select>
-                  <input placeholder={t("bank.branch")} value={branch} onChange={(e) => setBranch(e.target.value)} className={inputClass} />
-                  <input required placeholder={t("bank.account_name")} value={accountName} onChange={(e) => setAccountName(e.target.value)} className={inputClass} />
-                  <input required placeholder={t("bank.account_no")} value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className={inputClass} />
-                  <input type="number" placeholder={t("bank.opening_balance")} value={balance || ""} onChange={(e) => setBalance(Number(e.target.value))} className={inputClass} />
-                </div>
-                {formMessage && showBankModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button type="submit" disabled={savingBank} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingBank ? t("common.saving") : t("bank.save_account")}</button>
-                  <button type="button" onClick={() => setShowBankModal(false)} disabled={savingBank} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
-                </div>
-              </form>
-            </div>
-          </div>
+        </>
         )}
 
-        {showTxnModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">Ledger</p>
-                  <h3 className="mt-2 text-xl font-black text-slate-950">{t("bank.txn_title")}</h3>
-                </div>
-                <button type="button" onClick={() => setShowTxnModal(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
-              </div>
-              {data.bankAccounts.length === 0 ? (
-                <div className="mt-5">
-                  <ProEmptyState
-                    title={t("bank.no_accounts")}
-                    description={t("bank.txn_need_account")}
-                    action={
-                      canWrite ? (
-                        <button type="button" onClick={() => { setShowTxnModal(false); openBankModal(); }} className="rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-black text-white hover:bg-teal-700">
-                          {t("bank.add_account")}
-                        </button>
-                      ) : undefined
-                    }
-                  />
-                </div>
-              ) : (
-                <form
-                  className="mt-5"
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (savingTxn) return;
-                    setSavingTxn(true);
-                    setFormMessage("");
-                    const result = await addBankTransactionToCloud({
-                      accountId: txnAccountId,
-                      type: txnType,
-                      amount: txnAmount,
-                      description: txnDesc,
-                      date: txnDate,
-                    });
-                    setSavingTxn(false);
-                    if (!result.ok) {
-                      setFormMessage(result.error ?? t("common.save_failed"));
-                      return;
-                    }
-                    setShowTxnModal(false);
-                    resetTxnForm();
-                  }}
-                >
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    <select value={txnAccountId} onChange={(e) => setTxnAccountId(e.target.value)} className={inputClass}>
-                      {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
-                    </select>
-                    <select value={txnType} onChange={(e) => setTxnType(e.target.value as BankTransactionType)} className={inputClass}>
-                      {TXN_TYPES.map((ty) => <option key={ty} value={ty}>{txnTypeLabels[ty]}</option>)}
-                    </select>
-                    <input type="number" required placeholder={t("bank.amount")} value={txnAmount || ""} onChange={(e) => setTxnAmount(Number(e.target.value))} className={inputClass} />
-                    <input type="date" required value={txnDate} onChange={(e) => setTxnDate(e.target.value)} className={inputClass} />
-                    <input placeholder={t("bank.description")} value={txnDesc} onChange={(e) => setTxnDesc(e.target.value)} className={`${inputClass} sm:col-span-2`} />
-                  </div>
-                  <p className="mt-2 text-xs font-semibold text-slate-500">{t("bank.adjustment_hint")}</p>
-                  {formMessage && showTxnModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
-                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                    <button type="submit" disabled={savingTxn} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingTxn ? t("common.saving") : t("bank.save_txn")}</button>
-                    <button type="button" onClick={() => setShowTxnModal(false)} disabled={savingTxn} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
-                  </div>
-                </form>
-              )}
+        <Dialog
+          open={showBankModal}
+          onClose={() => setShowBankModal(false)}
+          title={t("bank.add_account_title")}
+          description="Bank account"
+          size="lg"
+          footer={
+            <DrawerFooter
+              onCancel={() => setShowBankModal(false)}
+              primaryLabel={savingBank ? t("common.saving") : t("bank.save_account")}
+              primaryType="submit"
+              primaryForm="bank-account-form"
+              primaryDisabled={savingBank}
+              primaryLoading={savingBank}
+            />
+          }
+        >
+          <form
+            id="bank-account-form"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (savingBank) return;
+              setSavingBank(true);
+              setFormMessage("");
+              const result = await addBankAccountToCloud({
+                bankName,
+                branch,
+                accountName,
+                accountNumber,
+                balance,
+              });
+              setSavingBank(false);
+              if (!result.ok) {
+                setFormMessage(result.error ?? t("common.save_failed"));
+                return;
+              }
+              setShowBankModal(false);
+              resetBankForm();
+            }}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <select value={bankName} onChange={(e) => setBankName(e.target.value)} className={inputClass}>
+                {LK_BANKS.map((b) => <option key={b}>{b}</option>)}
+              </select>
+              <input placeholder={t("bank.branch")} value={branch} onChange={(e) => setBranch(e.target.value)} className={inputClass} />
+              <input required placeholder={t("bank.account_name")} value={accountName} onChange={(e) => setAccountName(e.target.value)} className={inputClass} />
+              <input required placeholder={t("bank.account_no")} value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className={inputClass} />
+              <input type="number" placeholder={t("bank.opening_balance")} value={balance || ""} onChange={(e) => setBalance(Number(e.target.value))} className={inputClass} />
             </div>
-          </div>
-        )}
+            {formMessage && showBankModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
+          </form>
+        </Dialog>
 
-        {showTransferModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">Ledger</p>
-                  <h3 className="mt-2 text-xl font-black text-slate-950">{t("bank.transfer_title")}</h3>
-                </div>
-                <button type="button" onClick={() => setShowTransferModal(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
-              </div>
-              {data.bankAccounts.length < 2 ? (
-                <div className="mt-5">
-                  <ProEmptyState
-                    title={t("bank.transfer_need_accounts")}
-                    description={t("bank.transfer_need_accounts_desc")}
-                    action={
-                      canWrite ? (
-                        <button type="button" onClick={() => { setShowTransferModal(false); openBankModal(); }} className="rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-black text-white hover:bg-teal-700">
-                          {t("bank.add_account")}
-                        </button>
-                      ) : undefined
-                    }
-                  />
-                </div>
-              ) : (
-                <form
-                  className="mt-5"
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (savingTransfer) return;
-                    setSavingTransfer(true);
-                    setFormMessage("");
-                    const result = await addBankTransferToCloud({
-                      fromAccountId: trFrom,
-                      toAccountId: trTo,
-                      amount: trAmount,
-                      description: trDesc,
-                      date: trDate,
-                    });
-                    setSavingTransfer(false);
-                    if (!result.ok) {
-                      setFormMessage(result.error ?? t("common.save_failed"));
-                      return;
-                    }
-                    setShowTransferModal(false);
-                    resetTransferForm();
-                  }}
-                >
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    <select value={trFrom} onChange={(e) => setTrFrom(e.target.value)} className={inputClass}>
-                      {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
-                    </select>
-                    <select value={trTo} onChange={(e) => setTrTo(e.target.value)} className={inputClass}>
-                      {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
-                    </select>
-                    <input type="number" required placeholder={t("bank.amount")} value={trAmount || ""} onChange={(e) => setTrAmount(Number(e.target.value))} className={inputClass} />
-                    <input type="date" required value={trDate} onChange={(e) => setTrDate(e.target.value)} className={inputClass} />
-                    <input placeholder={t("bank.description")} value={trDesc} onChange={(e) => setTrDesc(e.target.value)} className={`${inputClass} sm:col-span-2`} />
-                  </div>
-                  {trFrom === trTo && <p className="mt-2 text-xs font-bold text-rose-600">{t("bank.transfer_same")}</p>}
-                  {formMessage && showTransferModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
-                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                    <button type="submit" disabled={savingTransfer || trFrom === trTo} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingTransfer ? t("common.saving") : t("bank.save_transfer")}</button>
-                    <button type="button" onClick={() => setShowTransferModal(false)} disabled={savingTransfer} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
-                  </div>
-                </form>
-              )}
-            </div>
-          </div>
-        )}
-
-        {showChequeModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">Cheque register</p>
-                  <h3 className="mt-2 text-xl font-black text-slate-950">{t("bank.add_cheque_title")}</h3>
-                </div>
-                <button type="button" onClick={() => setShowChequeModal(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
-              </div>
-              <form
-                className="mt-5"
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (savingCheque) return;
-                  setSavingCheque(true);
-                  setFormMessage("");
-                  const result = await addChequeToCloud({
-                    direction: chDirection,
-                    chequeNo: chNo,
-                    bankName: chBank,
-                    partyName: chParty,
-                    amount: chAmount,
-                    chequeDate: chDate,
-                    postDated: chPostDated,
-                  });
-                  setSavingCheque(false);
-                  if (!result.ok) {
-                    setFormMessage(result.error ?? t("common.save_failed"));
-                    return;
-                  }
-                  setShowChequeModal(false);
-                  resetChequeForm();
-                }}
-              >
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <select value={chDirection} onChange={(e) => setChDirection(e.target.value as "received" | "paid")} className={inputClass}>
-                    <option value="received">{t("bank.received")}</option>
-                    <option value="paid">{t("bank.paid")}</option>
-                  </select>
-                  <input required placeholder={t("bank.cheque_no")} value={chNo} onChange={(e) => setChNo(e.target.value)} className={inputClass} />
-                  <select value={chBank} onChange={(e) => setChBank(e.target.value)} className={inputClass}>
-                    {LK_BANKS.map((b) => <option key={b}>{b}</option>)}
-                  </select>
-                  <input required placeholder={t("bank.party_name")} value={chParty} onChange={(e) => setChParty(e.target.value)} className={inputClass} />
-                  <input type="number" required placeholder={t("bank.amount")} value={chAmount || ""} onChange={(e) => setChAmount(Number(e.target.value))} className={inputClass} />
-                  <input type="date" required value={chDate} onChange={(e) => setChDate(e.target.value)} className={inputClass} />
-                  <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 sm:col-span-2">
-                    <input type="checkbox" checked={chPostDated} onChange={(e) => setChPostDated(e.target.checked)} />
-                    {t("bank.pdc")}
-                  </label>
-                </div>
-                {formMessage && showChequeModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button type="submit" disabled={savingCheque} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingCheque ? t("common.saving") : t("bank.save_cheque")}</button>
-                  <button type="button" onClick={() => setShowChequeModal(false)} disabled={savingCheque} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {statusCheque && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">{t("bank.update_status")}</p>
-                  <h3 className="mt-2 text-xl font-black text-slate-950">{statusCheque.partyName}</h3>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">{statusCheque.chequeNo} — {formatLkr(statusCheque.amount)}</p>
-                </div>
-                <button onClick={() => setStatusCheque(null)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
-              </div>
-
-              <label className="mt-5 block text-sm font-black text-slate-700">
-                {t("bank.status_col")}
-                <select
-                  className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
-                  value={selectedChequeStatus}
-                  onChange={(e) => {
-                    const status = e.target.value as ChequeStatus;
-                    if (status === "cleared" && data.bankAccounts.length === 0) {
-                      alert(t("bank.need_account"));
-                      return;
-                    }
-                    setSelectedChequeStatus(status);
-                    if (status === "cleared") setDepositAccountId(data.bankAccounts[0]?.id ?? "");
-                  }}
-                >
-                  <option value="pending">{t("bank.status.pending")}</option>
-                  <option value="deposited">{t("bank.status.deposited")}</option>
-                  <option value="cleared">{t("bank.status.cleared")}</option>
-                  <option value="bounced">{t("bank.status.bounced")}</option>
+        <Dialog
+          open={showTxnModal}
+          onClose={() => setShowTxnModal(false)}
+          title={t("bank.txn_title")}
+          description="Ledger"
+          size="lg"
+          footer={
+            data.bankAccounts.length === 0 ? (
+              canWrite ? (
+                <DrawerFooter
+                  onCancel={() => setShowTxnModal(false)}
+                  primaryLabel={t("bank.add_account")}
+                  onPrimary={() => { setShowTxnModal(false); openBankModal(); }}
+                />
+              ) : undefined
+            ) : (
+              <DrawerFooter
+                onCancel={() => setShowTxnModal(false)}
+                primaryLabel={savingTxn ? t("common.saving") : t("bank.save_txn")}
+                primaryType="submit"
+                primaryForm="bank-txn-form"
+                primaryDisabled={savingTxn}
+                primaryLoading={savingTxn}
+              />
+            )
+          }
+        >
+          {data.bankAccounts.length === 0 ? (
+            <ProEmptyState size="compact" title={t("bank.no_accounts")} description={t("bank.txn_need_account")} />
+          ) : (
+            <form
+              id="bank-txn-form"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (savingTxn) return;
+                setSavingTxn(true);
+                setFormMessage("");
+                const result = await addBankTransactionToCloud({
+                  accountId: txnAccountId,
+                  type: txnType,
+                  amount: txnAmount,
+                  description: txnDesc,
+                  date: txnDate,
+                });
+                setSavingTxn(false);
+                if (!result.ok) {
+                  setFormMessage(result.error ?? t("common.save_failed"));
+                  return;
+                }
+                setShowTxnModal(false);
+                resetTxnForm();
+              }}
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                <select value={txnAccountId} onChange={(e) => setTxnAccountId(e.target.value)} className={inputClass}>
+                  {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
                 </select>
-              </label>
-
-              {data.bankAccounts.length > 0 && (
-                <label className="mt-4 block text-sm font-black text-slate-700">
-                  {t("bank.total_balance")}
-                  <select
-                    className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
-                    value={depositAccountId || data.bankAccounts[0].id}
-                    onChange={(e) => setDepositAccountId(e.target.value)}
-                  >
-                    {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
-                  </select>
-                </label>
-              )}
-
-              <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                <button
-                  onClick={async () => {
-                    if (!statusCheque || savingChequeStatus) return;
-                    setSavingChequeStatus(true);
-                    setFormMessage("");
-                    const result = await updateChequeStatusToCloud(
-                      statusCheque.id,
-                      selectedChequeStatus,
-                      depositAccountId || data.bankAccounts[0]?.id,
-                    );
-                    setSavingChequeStatus(false);
-                    if (!result.ok) {
-                      setFormMessage(result.error ?? t("common.save_failed"));
-                      return;
-                    }
-                    setStatusCheque(null);
-                  }}
-                  disabled={savingChequeStatus}
-                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {savingChequeStatus ? t("common.saving") : t("common.save")}
-                </button>
-                <button onClick={() => setStatusCheque(null)} disabled={savingChequeStatus} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                  {t("common.cancel")}
-                </button>
+                <select value={txnType} onChange={(e) => setTxnType(e.target.value as BankTransactionType)} className={inputClass}>
+                  {TXN_TYPES.map((ty) => <option key={ty} value={ty}>{txnTypeLabels[ty]}</option>)}
+                </select>
+                <input type="number" required placeholder={t("bank.amount")} value={txnAmount || ""} onChange={(e) => setTxnAmount(Number(e.target.value))} className={inputClass} />
+                <input type="date" required value={txnDate} onChange={(e) => setTxnDate(e.target.value)} className={inputClass} />
+                <input placeholder={t("bank.description")} value={txnDesc} onChange={(e) => setTxnDesc(e.target.value)} className={`${inputClass} sm:col-span-2`} />
               </div>
+              <p className="mt-2 text-xs font-semibold text-slate-500">{t("bank.adjustment_hint")}</p>
+              {formMessage && showTxnModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
+            </form>
+          )}
+        </Dialog>
+
+        <Dialog
+          open={showTransferModal}
+          onClose={() => setShowTransferModal(false)}
+          title={t("bank.transfer_title")}
+          description="Ledger"
+          size="lg"
+          footer={
+            data.bankAccounts.length < 2 ? (
+              canWrite ? (
+                <DrawerFooter
+                  onCancel={() => setShowTransferModal(false)}
+                  primaryLabel={t("bank.add_account")}
+                  onPrimary={() => { setShowTransferModal(false); openBankModal(); }}
+                />
+              ) : undefined
+            ) : (
+              <DrawerFooter
+                onCancel={() => setShowTransferModal(false)}
+                primaryLabel={savingTransfer ? t("common.saving") : t("bank.save_transfer")}
+                primaryType="submit"
+                primaryForm="bank-transfer-form"
+                primaryDisabled={savingTransfer || trFrom === trTo}
+                primaryLoading={savingTransfer}
+              />
+            )
+          }
+        >
+          {data.bankAccounts.length < 2 ? (
+            <ProEmptyState size="compact" title={t("bank.transfer_need_accounts")} description={t("bank.transfer_need_accounts_desc")} />
+          ) : (
+            <form
+              id="bank-transfer-form"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (savingTransfer) return;
+                setSavingTransfer(true);
+                setFormMessage("");
+                const result = await addBankTransferToCloud({
+                  fromAccountId: trFrom,
+                  toAccountId: trTo,
+                  amount: trAmount,
+                  description: trDesc,
+                  date: trDate,
+                });
+                setSavingTransfer(false);
+                if (!result.ok) {
+                  setFormMessage(result.error ?? t("common.save_failed"));
+                  return;
+                }
+                setShowTransferModal(false);
+                resetTransferForm();
+              }}
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                <select value={trFrom} onChange={(e) => setTrFrom(e.target.value)} className={inputClass}>
+                  {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
+                </select>
+                <select value={trTo} onChange={(e) => setTrTo(e.target.value)} className={inputClass}>
+                  {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
+                </select>
+                <input type="number" required placeholder={t("bank.amount")} value={trAmount || ""} onChange={(e) => setTrAmount(Number(e.target.value))} className={inputClass} />
+                <input type="date" required value={trDate} onChange={(e) => setTrDate(e.target.value)} className={inputClass} />
+                <input placeholder={t("bank.description")} value={trDesc} onChange={(e) => setTrDesc(e.target.value)} className={`${inputClass} sm:col-span-2`} />
+              </div>
+              {trFrom === trTo && <p className="mt-2 text-xs font-bold text-rose-600">{t("bank.transfer_same")}</p>}
+              {formMessage && showTransferModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
+            </form>
+          )}
+        </Dialog>
+
+        <Dialog
+          open={showChequeModal}
+          onClose={() => setShowChequeModal(false)}
+          title={t("bank.add_cheque_title")}
+          description="Cheque register"
+          size="lg"
+          footer={
+            <DrawerFooter
+              onCancel={() => setShowChequeModal(false)}
+              primaryLabel={savingCheque ? t("common.saving") : t("bank.save_cheque")}
+              primaryType="submit"
+              primaryForm="bank-cheque-form"
+              primaryDisabled={savingCheque}
+              primaryLoading={savingCheque}
+            />
+          }
+        >
+          <form
+            id="bank-cheque-form"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (savingCheque) return;
+              setSavingCheque(true);
+              setFormMessage("");
+              const result = await addChequeToCloud({
+                direction: chDirection,
+                chequeNo: chNo,
+                bankName: chBank,
+                partyName: chParty,
+                amount: chAmount,
+                chequeDate: chDate,
+                postDated: chPostDated,
+              });
+              setSavingCheque(false);
+              if (!result.ok) {
+                setFormMessage(result.error ?? t("common.save_failed"));
+                return;
+              }
+              setShowChequeModal(false);
+              resetChequeForm();
+            }}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <select value={chDirection} onChange={(e) => setChDirection(e.target.value as "received" | "paid")} className={inputClass}>
+                <option value="received">{t("bank.received")}</option>
+                <option value="paid">{t("bank.paid")}</option>
+              </select>
+              <input required placeholder={t("bank.cheque_no")} value={chNo} onChange={(e) => setChNo(e.target.value)} className={inputClass} />
+              <select value={chBank} onChange={(e) => setChBank(e.target.value)} className={inputClass}>
+                {LK_BANKS.map((b) => <option key={b}>{b}</option>)}
+              </select>
+              <input required placeholder={t("bank.party_name")} value={chParty} onChange={(e) => setChParty(e.target.value)} className={inputClass} />
+              <input type="number" required placeholder={t("bank.amount")} value={chAmount || ""} onChange={(e) => setChAmount(Number(e.target.value))} className={inputClass} />
+              <input type="date" required value={chDate} onChange={(e) => setChDate(e.target.value)} className={inputClass} />
+              <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 sm:col-span-2">
+                <input type="checkbox" checked={chPostDated} onChange={(e) => setChPostDated(e.target.checked)} />
+                {t("bank.pdc")}
+              </label>
             </div>
-          </div>
-        )}
+            {formMessage && showChequeModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
+          </form>
+        </Dialog>
+
+        <Dialog
+          open={!!statusCheque}
+          onClose={() => setStatusCheque(null)}
+          title={statusCheque?.partyName ?? ""}
+          description={statusCheque ? `${statusCheque.chequeNo} — ${formatLkr(statusCheque.amount)}` : undefined}
+          footer={
+            <DrawerFooter
+              onCancel={() => setStatusCheque(null)}
+              primaryLabel={savingChequeStatus ? t("common.saving") : t("common.save")}
+              primaryDisabled={savingChequeStatus}
+              primaryLoading={savingChequeStatus}
+              onPrimary={async () => {
+                if (!statusCheque || savingChequeStatus) return;
+                setSavingChequeStatus(true);
+                setFormMessage("");
+                const result = await updateChequeStatusToCloud(
+                  statusCheque.id,
+                  selectedChequeStatus,
+                  depositAccountId || data.bankAccounts[0]?.id,
+                );
+                setSavingChequeStatus(false);
+                if (!result.ok) {
+                  setFormMessage(result.error ?? t("common.save_failed"));
+                  return;
+                }
+                setStatusCheque(null);
+              }}
+            />
+          }
+        >
+          <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("bank.update_status")}</p>
+          <label className="block text-sm font-black text-slate-700">
+            {t("bank.status_col")}
+            <select
+              className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+              value={selectedChequeStatus}
+              onChange={(e) => {
+                const status = e.target.value as ChequeStatus;
+                if (status === "cleared" && data.bankAccounts.length === 0) {
+                  alert(t("bank.need_account"));
+                  return;
+                }
+                setSelectedChequeStatus(status);
+                if (status === "cleared") setDepositAccountId(data.bankAccounts[0]?.id ?? "");
+              }}
+            >
+              <option value="pending">{t("bank.status.pending")}</option>
+              <option value="deposited">{t("bank.status.deposited")}</option>
+              <option value="cleared">{t("bank.status.cleared")}</option>
+              <option value="bounced">{t("bank.status.bounced")}</option>
+            </select>
+          </label>
+
+          {data.bankAccounts.length > 0 && (
+            <label className="mt-4 block text-sm font-black text-slate-700">
+              {t("bank.total_balance")}
+              <select
+                className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                value={depositAccountId || data.bankAccounts[0].id}
+                onChange={(e) => setDepositAccountId(e.target.value)}
+              >
+                {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
+              </select>
+            </label>
+          )}
+        </Dialog>
       </ProMain>
     </AppShell>
   );
