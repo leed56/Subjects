@@ -1237,6 +1237,9 @@ const si: Dict = {
   "ac_alerts.toggle_upcoming_hint": "දින කිහිපයකින් due — early warning.",
   "ac_alerts.days_before": "Due දිනට පෙර:",
   "jobs.delete_confirm": "රැකියාව මකන්නද",
+  "jobs.no_costs_recorded": "රැකියාවේ වියදම් වාර්තා කර නැත",
+  "jobs.no_costs_recorded_hint": "මෙම රැකියාවට කොටස්, ද්‍රව්‍ය හෝ කම්කරු වියදම් එකතු කර නැත. එසේම සම්පූර්ණ කරන්නද?",
+  "jobs.complete_anyway": "එසේම සම්පූර්ණ කරන්න",
 
   // Vehicles
   "veh.title": "වාහන",
@@ -2865,6 +2868,9 @@ const en: Dict = {
   "ac_alerts.toggle_upcoming_hint": "Due soon — optional early warning.",
   "ac_alerts.days_before": "Days before due:",
   "jobs.delete_confirm": "Delete job",
+  "jobs.no_costs_recorded": "No job costs have been recorded",
+  "jobs.no_costs_recorded_hint": "This job has no parts, material, or labor lines. Complete anyway?",
+  "jobs.complete_anyway": "Complete anyway",
 
   "veh.title": "Vehicles",
   "veh.subtitle": "per-vehicle profit tracking",

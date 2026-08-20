@@ -100,6 +100,11 @@ export default function JobsPage() {
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [serviceDoneJob, setServiceDoneJob] = useState<ACJob | null>(null);
   const [sheetJob, setSheetJob] = useState<ACJob | null>(null);
+  // Part 13 — non-blocking cost-completeness check: never prevent
+  // completion, just make sure it wasn't an oversight. Holds the exact
+  // status-update call so confirming re-issues the same input, not a
+  // hardcoded one.
+  const [pendingComplete, setPendingComplete] = useState<{ jobId: string; input: Partial<ACJobInput> } | null>(null);
   const [customerId, setCustomerId] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
@@ -258,14 +263,34 @@ export default function JobsPage() {
     resetForm();
   };
 
-  const handleJobStatusUpdate = async (jobId: string, input: Partial<ACJobInput>) => {
-    if (updatingJobId) return;
+  const applyJobStatusUpdate = async (jobId: string, input: Partial<ACJobInput>) => {
     setUpdatingJobId(jobId);
     const result = await updateACJobToCloud(jobId, input);
     setUpdatingJobId(null);
     if (!result.ok) {
       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
     }
+  };
+
+  // Part 13, docs/JOB_PARTS_ARCHITECTURE.md — "do not completely block
+  // completion... warning: 'No job costs have been recorded. Complete
+  // anyway?' Authorized user can continue." Only intercepts the
+  // transition to "completed"; every other status change (schedule,
+  // installed) goes straight through, unchanged.
+  const handleJobStatusUpdate = async (jobId: string, input: Partial<ACJobInput>) => {
+    if (updatingJobId) return;
+    if (input.status === "completed" && !data.jobItems.some((i) => i.jobId === jobId)) {
+      setPendingComplete({ jobId, input });
+      return;
+    }
+    await applyJobStatusUpdate(jobId, input);
+  };
+
+  const confirmCompleteWithoutCosts = async () => {
+    if (!pendingComplete) return;
+    const { jobId, input } = pendingComplete;
+    setPendingComplete(null);
+    await applyJobStatusUpdate(jobId, input);
   };
 
   const confirmDeleteJob = async () => {
@@ -826,6 +851,17 @@ export default function JobsPage() {
         loading={!!deletingJobId}
         onConfirm={() => void confirmDeleteJob()}
         onClose={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={!!pendingComplete}
+        title={t("jobs.no_costs_recorded")}
+        description={t("jobs.no_costs_recorded_hint")}
+        confirmLabel={t("jobs.complete_anyway")}
+        cancelLabel={t("common.cancel")}
+        loading={!!updatingJobId}
+        onConfirm={() => void confirmCompleteWithoutCosts()}
+        onClose={() => setPendingComplete(null)}
       />
     </AppShell>
   );
