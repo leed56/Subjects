@@ -301,6 +301,38 @@ export const PhoneIcon = (p: IconProps) =>
     p,
   );
 
+/** A globe with a meridian — the "bilingual / language" glyph, replacing
+ * the 🇱🇰 flag emoji previously used for the "Sinhala first" landing
+ * feature (a flag reads as "country", not "language switch"). */
+export const LanguageIcon = (p: IconProps) =>
+  base(
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3c2.5 2.6 3.8 5.8 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.8-3.8-9S9.5 5.6 12 3Z" />
+    </>,
+    p,
+  );
+
+/** A rounded chat-bubble outline — replaces the "💬" emoji previously used
+ * as MessageSendButton's icon-variant glyph. */
+export const ChatIcon = (p: IconProps) =>
+  base(
+    <path d="M4 5.5h16a1 1 0 0 1 1 1V15a1 1 0 0 1-1 1H9l-4.4 3.3a.5.5 0 0 1-.8-.4V16H4a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1Z" />,
+    p,
+  );
+
+/** An open tray/inbox shape — the generic "nothing here yet" empty-state
+ * icon, replacing the emoji previously used as ProEmptyState's default. */
+export const InboxIcon = (p: IconProps) =>
+  base(
+    <>
+      <path d="M3.5 12.5h4.6l1.4 2.2h5l1.4-2.2h4.6" />
+      <path d="M5.3 5.5h13.4l2.3 7v6a1.2 1.2 0 0 1-1.2 1.2H4.2A1.2 1.2 0 0 1 3 18.5v-6z" />
+    </>,
+    p,
+  );
+
 /** A location pin with a directional arrow through it — reads as
  * "navigate here", distinct from a plain map-pin marker. */
 export const NavigateIcon = (p: IconProps) =>

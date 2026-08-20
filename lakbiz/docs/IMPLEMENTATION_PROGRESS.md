@@ -3757,3 +3757,86 @@ trusting where a fix had "obviously" gone.
 Tests: 61/61 passing (58 before + 3 new). `tsc --noEmit` clean,
 `eslint src` — 0 errors, same 3 pre-existing warnings, `next build`
 succeeds with the same route list.
+
+## UI/UX premium-polish pass (branch `claude/ui-premium-polish`)
+
+Scope: a focused visual/interaction polish pass, explicitly not a
+rebuild and not carrying any new business modules. Audited first —
+see `docs/UI_POLISH_AUDIT.md` for the full write-up — before any code
+changed, per the brief's "audit before implementing" requirement.
+
+Root cause behind most of the "heavy/inconsistent" complaints: two
+competing design systems, `pro-shell.tsx` (older, heavier — `font-
+black` everywhere, gradient stat tiles, emoji empty-state icon) on 22
+pages vs. `primitives.tsx` (newer, calmer) on 10, several pages mixing
+both. Fixed the worst of `pro-shell.tsx`'s issues at the component
+level (benefits all 22 pages at once) rather than migrating every page
+this pass, then gave full treatment to the flagship pages named in the
+brief: AC Jobs (list, New/Edit drawer, Job Detail drawer), Banking,
+Login, and a light pass on the landing page and sidebar.
+
+Shared primitives: `overlay.tsx`'s Drawer/Dialog gained size variants
+(sm/md/lg/xl), a real Tab focus trap, an unsaved-changes close guard,
+a status-badge header slot, and a `DrawerFooter` convention (Cancel /
+[Save draft] / Primary, Primary always outside the scrollable body).
+New `Button`/`IconButton`/`FormSection` in `primitives.tsx`. `EmptyState`
+and `ProEmptyState` gained compact/standard sizing; `ProEmptyState`'s
+default icon was a literal emoji (`✨`) — replaced with a real SVG icon,
+fixing that violation on every page that uses it without touching
+those pages individually.
+
+AC Jobs: the New/Edit drawer's ~20 flat fields are now grouped into
+named sections (Job Type / Customer & Site / Equipment / Commercial /
+Schedule / Work Details / Advanced-collapsible). Job cards went from a
+heavy dark header and up to 7-8 equal-weight buttons down to a light
+card, one primary action, Call, and a More menu. The filter toolbar
+went from ~13 pill buttons to 4 dropdowns + a mobile "Filters" sheet.
+Added a Cards|List view toggle (reusing the existing `DataTable`,
+which already degrades to mobile cards for free), remembered in
+`localStorage`. The Job Detail drawer gained a status badge, a More
+menu, Collected/Balance in its summary row, and a real two-column
+Overview layout (previously Customer/Team/Schedule data wasn't shown
+in the drawer body at all, only compressed into the header's
+description string).
+
+Banking: all 5 hand-rolled `fixed inset-0` modals — which put
+header+form+footer in one shared scroll container, the actual
+mechanism behind "buttons scroll out of view on short viewports" —
+now use the shared `Dialog` (footer outside the scroll area, plus
+Escape/focus-trap/aria-modal for free). The 3 stacked full-size empty
+states (accounts/transactions/cheques) collapse into 1 compact
+onboarding block when there's no banking data at all. `ProStatCard`
+icons were literal emoji (🏦🧾📥💸) — the clearest instance of the
+emoji finding in the whole codebase — replaced with the SVG icon set.
+
+Real bug found while auditing Part 12 (no full app nav for
+unauthenticated visitors): `SiteHeader` computed nav visibility from
+`canAccessShopRoute(role, href)` alone, without checking whether
+anyone was signed in. The pre-auth default org role is `"owner"`, and
+owners get every route — so the full internal nav (Dashboard through
+Banking) plus Notifications/Plans/Team links rendered on `/login` and
+the public `/sectors` pages for any visitor. Fixed by gating on `user`
+being present, in both the desktop bar and the mobile sheet.
+
+Login page wrapped in a proper card instead of floating on the page
+background; sign-in/sign-up toggle restyled as a deliberate segmented
+control. Landing page's 6 feature-card icons (including a country
+flag standing in for "Sinhala first") replaced with the SVG icon set.
+Sidebar was audited and found already sound — consistent spacing,
+truncation already applied, labels already match the brief's suggested
+names (e.g. "Field Teams") — no changes made there.
+
+No browser exists in this sandbox (a standing constraint for this
+whole engagement) — visual/responsive/accessibility verification was
+done via rigorous code-level review (computed classnames, layout
+structure, breakpoints), disclosed as such rather than claimed as
+rendered screenshots.
+
+Tests: 61/61 passing throughout (no new tests added — this is a UI/
+layout pass with no new pure logic to unit-test; the one behavior
+change with test-worthy logic, the SiteHeader auth-gating fix, is a
+component-render concern outside this project's Node-only Vitest
+setup, same reasoning applied to every other DOM-touching function
+left untested elsewhere in this codebase). `tsc --noEmit` clean,
+`eslint src` clean, `next build` succeeds with the same route list
+throughout every commit on this branch.

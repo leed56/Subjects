@@ -8,8 +8,8 @@
  * rounded-[2rem]/heavy-shadow "dashboard card demo" look page by page as
  * each page is migrated (see docs/IMPLEMENTATION_PROGRESS.md).
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { MoreIcon, SearchIcon, FilterIcon } from "@/components/ui/icons";
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { ChevronDownIcon, MoreIcon, SearchIcon, FilterIcon } from "@/components/ui/icons";
 
 type PageHeaderProps = {
   title: string;
@@ -36,15 +36,75 @@ export function PageHeader({ title, description, actions, metrics }: PageHeaderP
 export function SectionHeader({
   title,
   action,
+  uppercase = true,
 }: {
   title: string;
   action?: ReactNode;
+  /** Reserve uppercase for short eyebrow/metadata-style labels — set false
+   * for a section title that should read as normal-case hierarchy. */
+  uppercase?: boolean;
 }) {
   return (
     <div className="mb-3 flex items-center justify-between gap-3">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
+      <h2
+        className={
+          uppercase
+            ? "text-sm font-semibold uppercase tracking-wide text-slate-500"
+            : "text-sm font-semibold text-slate-700"
+        }
+      >
+        {title}
+      </h2>
       {action}
     </div>
+  );
+}
+
+/** A titled group of form fields with optional helper text — the "group
+ * long forms into sections" primitive. Use `collapsible` for advanced/
+ * optional groups that shouldn't compete with the required fields above
+ * the fold. */
+export function FormSection({
+  title,
+  hint,
+  collapsible = false,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const showBody = !collapsible || open;
+
+  return (
+    <section className="border-t border-slate-100 pt-4 first:border-t-0 first:pt-0">
+      {collapsible ? (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex w-full items-center justify-between gap-3 text-left"
+        >
+          <span>
+            <span className="block text-sm font-semibold text-slate-800">{title}</span>
+            {hint && <span className="mt-0.5 block text-xs text-slate-500">{hint}</span>}
+          </span>
+          <ChevronDownIcon
+            className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      ) : (
+        <div className="mb-1">
+          <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+          {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}
+        </div>
+      )}
+      {showBody && <div className="mt-3 space-y-3">{children}</div>}
+    </section>
   );
 }
 
@@ -81,15 +141,25 @@ export function EmptyState({
   description,
   action,
   icon,
+  size = "standard",
 }: {
   title: string;
   description?: string;
   action?: ReactNode;
   icon?: ReactNode;
+  /** "compact" for a state nested inside a card/section that already has
+   * its own heading (avoids two headings + a tall dashed box stacked on
+   * top of real content elsewhere on the page); "standard" (default) for
+   * a page-level empty state. */
+  size?: "compact" | "standard";
 }) {
+  const padding = size === "compact" ? "px-4 py-6" : "px-6 py-10";
+  const iconBox = size === "compact" ? "h-8 w-8" : "h-10 w-10";
   return (
-    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 px-6 py-10 text-center">
-      {icon && <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center text-slate-400">{icon}</div>}
+    <div className={`rounded-xl border border-dashed border-slate-300 bg-slate-50/60 text-center ${padding}`}>
+      {icon && (
+        <div className={`mx-auto mb-2.5 flex items-center justify-center text-slate-400 ${iconBox}`}>{icon}</div>
+      )}
       <p className="text-sm font-semibold text-slate-900">{title}</p>
       {description && <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
@@ -180,6 +250,88 @@ export function Tabs({
         );
       })}
     </div>
+  );
+}
+
+type ButtonVariant = "primary" | "secondary" | "ghost" | "destructive" | "text";
+type ButtonSize = "sm" | "md";
+
+const BUTTON_VARIANT_CLASS: Record<ButtonVariant, string> = {
+  primary: "bg-teal-600 text-white hover:bg-teal-700",
+  secondary: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
+  ghost: "text-slate-600 hover:bg-slate-100",
+  destructive: "bg-rose-50 text-rose-700 hover:bg-rose-100",
+  text: "text-teal-700 hover:text-teal-800 hover:underline underline-offset-2",
+};
+
+const BUTTON_SIZE_CLASS: Record<ButtonSize, string> = {
+  sm: "px-2.5 py-1.5 text-xs",
+  md: "px-4 py-2 text-sm",
+};
+
+/** Standard action-button variants — one primary per context, everything
+ * else secondary/ghost/text, destructive kept visually separate. Use
+ * `IconButton` below for icon-only controls (always needs `label`). */
+export function Button({
+  variant = "secondary",
+  size = "md",
+  icon,
+  loading = false,
+  disabled = false,
+  className = "",
+  children,
+  type = "button",
+  ...rest
+}: {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  icon?: ReactNode;
+  loading?: boolean;
+  className?: string;
+  children?: ReactNode;
+} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className" | "children">) {
+  const shape = variant === "text" ? "" : "rounded-lg font-semibold";
+  return (
+    <button
+      type={type}
+      disabled={disabled || loading}
+      className={`inline-flex items-center justify-center gap-1.5 transition disabled:cursor-not-allowed disabled:opacity-50 ${shape} ${
+        variant === "text" ? "text-sm font-medium" : BUTTON_SIZE_CLASS[size]
+      } ${BUTTON_VARIANT_CLASS[variant]} ${className}`}
+      {...rest}
+    >
+      {icon}
+      {loading ? "…" : children}
+    </button>
+  );
+}
+
+/** Icon-only control — always requires an accessible `label` (rendered as
+ * both `aria-label` and a native tooltip via `title`). */
+export function IconButton({
+  icon,
+  label,
+  onClick,
+  className = "",
+  disabled,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick?: () => void;
+  className?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+    >
+      {icon}
+    </button>
   );
 }
 
