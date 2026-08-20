@@ -376,6 +376,38 @@ behaves).
   available or not safe in this session, this is disclosed rather than
   claimed as verified.
 
+### Verification actually performed (job-parts-materials phase)
+
+- **Static re-audit, done**: re-read both new migration files in full
+  against the checklist above. Confirmed: (a) every `alter table`/`add
+  constraint`/`create or replace` is additive — no existing column,
+  constraint, grant, or RLS policy is dropped without an equivalent
+  replacement in the same statement; (b) `job_items`' rebuilt view keeps
+  `security_barrier = true` + `security_invoker = false` and the same
+  `organization_id in (select ... from org_members where user_id =
+  auth.uid())` clause, unchanged; (c) all three rebuilt trigger functions
+  keep the exact `org_member_can_write_module(...,'ac_jobs') AND
+  org_member_role_in(...,['owner','manager','data_entry','technician'])`
+  gate, character-for-character, and no new function is created — only
+  three existing ones are replaced; (d) the financial-masking `case when
+  can_see_org_financials(...)` treatment is applied to every new money
+  column (`discount`) and correctly *not* applied to every new
+  operational column (component names/serials/disposition, warranty
+  dates/type, `unit`, `invoiceable`, `purchased_for_job`) — matching Part
+  20's technician-visibility rule exactly.
+- **Live DB check (advisor / empirical cross-tenant test), not
+  performed**: this session's available Supabase MCP connection lists
+  only two projects ("Class" and "nexus-erp"), neither of which is this
+  repository's project — there is no live LakBiz Supabase project
+  reachable from this session to safely apply these migrations to or run
+  `get_advisors` against. Applying them to either listed project would
+  mean writing this schema into an unrelated live database, which was
+  not done. This is a genuine gap, not a skipped step: whoever deploys
+  this phase should apply `20250714000001`/`20250714000002` through
+  their normal migration flow against the real LakBiz project and run
+  `get_advisors` immediately after, per the checklist above, before
+  considering this phase's RLS posture confirmed in production.
+
 ## 6. Migration plan (additive files, in dependency order)
 
 1. `job_items` — widen `item_type`/`source` CHECKs, add all new columns
