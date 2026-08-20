@@ -301,6 +301,14 @@ export const PhoneIcon = (p: IconProps) =>
     p,
   );
 
+/** A rounded chat-bubble outline — replaces the "💬" emoji previously used
+ * as MessageSendButton's icon-variant glyph. */
+export const ChatIcon = (p: IconProps) =>
+  base(
+    <path d="M4 5.5h16a1 1 0 0 1 1 1V15a1 1 0 0 1-1 1H9l-4.4 3.3a.5.5 0 0 1-.8-.4V16H4a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1Z" />,
+    p,
+  );
+
 /** An open tray/inbox shape — the generic "nothing here yet" empty-state
  * icon, replacing the emoji previously used as ProEmptyState's default. */
 export const InboxIcon = (p: IconProps) =>

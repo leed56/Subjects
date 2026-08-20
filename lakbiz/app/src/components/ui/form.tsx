@@ -109,17 +109,22 @@ export function SelectInput({
   options,
   disabled,
   className = "",
+  ariaLabel,
 }: {
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
   disabled?: boolean;
   className?: string;
+  /** Set this when the select is used outside a FormField wrapper (e.g. a
+   * standalone filter-bar control) so it still has an accessible name. */
+  ariaLabel?: string;
 }) {
   return (
     <select
       value={value}
       disabled={disabled}
+      aria-label={ariaLabel}
       onChange={(e) => onChange(e.target.value)}
       className={`${inputClass} ${className}`}
     >
