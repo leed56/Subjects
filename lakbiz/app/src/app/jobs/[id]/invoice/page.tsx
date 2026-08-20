@@ -15,6 +15,7 @@ import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { jobStatusLabel } from "@/lib/ac-jobs";
 import { useAppStore } from "@/lib/store/use-app-store";
+import { invoiceableLinesTotal, type InvoiceLineItem } from "@/lib/job-invoice";
 
 /** Printable AC job invoice — mirrors /bills/[id]'s structure exactly,
  * adapted for ACJob instead of Sale. Reachable only via a link from the
@@ -54,7 +55,15 @@ export default function JobInvoicePage() {
   }
 
   const customer = job.customerId ? data.customers.find((c) => c.id === job.customerId) : undefined;
-  const balance = job.quotedAmount - job.depositAmount;
+  // job-parts-materials phase — the narrow, internal-cost-free
+  // projection JobInvoiceView/job-invoice.ts require (see their own
+  // header comments): only what a customer-facing document may ever see.
+  const invoiceItems: InvoiceLineItem[] = data.jobItems
+    .filter((i) => i.jobId === job.id)
+    .map((i) => ({ id: i.id, name: i.name, qty: i.qty, unit: i.unit, customerPrice: i.customerPrice, discount: i.discount, invoiceable: i.invoiceable }));
+  const invoiceableItems = invoiceItems.filter((i) => i.invoiceable && i.customerPrice != null);
+  const invoiceTotal = invoiceableItems.length > 0 ? invoiceableLinesTotal(invoiceableItems) : job.quotedAmount;
+  const balance = invoiceTotal - job.depositAmount;
 
   return (
     <AppShell>
@@ -81,7 +90,7 @@ export default function JobInvoicePage() {
           <section className="mb-6 grid gap-4 sm:grid-cols-3">
             <ProCard>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{t("common.total")}</p>
-              <p className="mt-2 font-mono text-2xl font-black text-slate-950">{formatLkr(job.quotedAmount)}</p>
+              <p className="mt-2 font-mono text-2xl font-black text-slate-950">{formatLkr(invoiceTotal)}</p>
             </ProCard>
             <ProCard>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{t("jobs.deposit_label")}</p>
@@ -97,7 +106,7 @@ export default function JobInvoicePage() {
         </div>
 
         <div className="mx-auto max-w-3xl">
-          <JobInvoiceView job={job} business={data.business} customerAddress={customer?.address} />
+          <JobInvoiceView job={job} business={data.business} customerAddress={customer?.address} items={invoiceItems} />
         </div>
       </ProMain>
     </AppShell>
