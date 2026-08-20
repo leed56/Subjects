@@ -301,6 +301,17 @@ export const PhoneIcon = (p: IconProps) =>
     p,
   );
 
+/** An open tray/inbox shape — the generic "nothing here yet" empty-state
+ * icon, replacing the emoji previously used as ProEmptyState's default. */
+export const InboxIcon = (p: IconProps) =>
+  base(
+    <>
+      <path d="M3.5 12.5h4.6l1.4 2.2h5l1.4-2.2h4.6" />
+      <path d="M5.3 5.5h13.4l2.3 7v6a1.2 1.2 0 0 1-1.2 1.2H4.2A1.2 1.2 0 0 1 3 18.5v-6z" />
+    </>,
+    p,
+  );
+
 /** A location pin with a directional arrow through it — reads as
  * "navigate here", distinct from a plain map-pin marker. */
 export const NavigateIcon = (p: IconProps) =>

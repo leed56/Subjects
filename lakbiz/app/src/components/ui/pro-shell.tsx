@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { InboxIcon } from "@/components/ui/icons";
 
 export function ProPageShell({ children }: { children: ReactNode }) {
   return (
@@ -138,11 +139,30 @@ export function ProCard({ title, eyebrow, action, children, className = "" }: Pr
   );
 }
 
-export function ProEmptyState({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
+export function ProEmptyState({
+  title,
+  description,
+  action,
+  icon,
+  size = "standard",
+}: {
+  title: string;
+  description?: string;
+  action?: ReactNode;
+  icon?: ReactNode;
+  /** "compact" for a state nested inside a card that already has its own
+   * heading — avoids stacking a second heading + a tall dashed box on top
+   * of real content elsewhere on the page. */
+  size?: "compact" | "standard";
+}) {
+  const padding = size === "compact" ? "p-4" : "p-6";
+  const iconBox = size === "compact" ? "h-9 w-9" : "h-12 w-12";
   return (
-    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-xl shadow-sm">✨</div>
-      <p className="mt-3 font-black text-slate-900">{title}</p>
+    <div className={`rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-center ${padding}`}>
+      <div className={`mx-auto flex items-center justify-center rounded-2xl bg-white text-teal-600 shadow-sm ${iconBox}`}>
+        {icon ?? <InboxIcon className="h-5 w-5" />}
+      </div>
+      <p className="mt-3 font-semibold text-slate-900">{title}</p>
       {description && <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-slate-500">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
