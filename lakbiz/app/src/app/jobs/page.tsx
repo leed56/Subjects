@@ -793,6 +793,7 @@ export default function JobsPage() {
         <JobSheetDrawer
           job={sheetJob}
           locale={locale}
+          business={data.business}
           items={data.jobItems.filter((i) => i.jobId === sheetJob.id)}
           history={data.jobStatusHistory.filter((h) => h.jobId === sheetJob.id)}
           products={data.products}
@@ -801,9 +802,12 @@ export default function JobsPage() {
           orgId={org.isAuthenticated ? org.id : null}
           canSeeFinancials={canSeeFinancials}
           canOperateJobs={canOperateJobs}
+          canManageJobs={canManageJobs}
           canWrite={canWrite}
           onAddItem={addJobItemToCloud}
           onDeleteItem={deleteJobItemToCloud}
+          onEdit={() => { setSheetJob(null); loadJob(sheetJob); }}
+          onDelete={() => { setSheetJob(null); setDeleteTarget(sheetJob); }}
           onClose={() => setSheetJob(null)}
         />
       )}
@@ -977,9 +981,10 @@ type JobDetailTab = "overview" | "parts" | "labor" | "economics" | "invoice";
  * long scroll of every section at once; now tabbed so Parts/Labor entry
  * (the frequent, quick actions) don't compete for space with Job
  * Economics or Invoice & Payment (checked rarely, in one sitting). */
-function JobSheetDrawer({ job, locale, items, history, products, suppliers, technicians, orgId, canSeeFinancials, canOperateJobs, canWrite, onAddItem, onDeleteItem, onClose }: { job: ACJob; locale: Locale; items: JobItem[]; history: JobStatusEntry[]; products: Product[]; suppliers: Supplier[]; technicians: Technician[]; orgId: string | null; canSeeFinancials: boolean; canOperateJobs: boolean; canWrite: boolean; onAddItem: (input: JobItemInput) => Promise<{ ok: boolean; error?: string }>; onDeleteItem: (id: string) => Promise<{ ok: boolean; error?: string }>; onClose: () => void }) {
+function JobSheetDrawer({ job, locale, business, items, history, products, suppliers, technicians, orgId, canSeeFinancials, canOperateJobs, canManageJobs, canWrite, onAddItem, onDeleteItem, onEdit, onDelete, onClose }: { job: ACJob; locale: Locale; business: BusinessInfo; items: JobItem[]; history: JobStatusEntry[]; products: Product[]; suppliers: Supplier[]; technicians: Technician[]; orgId: string | null; canSeeFinancials: boolean; canOperateJobs: boolean; canManageJobs: boolean; canWrite: boolean; onAddItem: (input: JobItemInput) => Promise<{ ok: boolean; error?: string }>; onDeleteItem: (id: string) => Promise<{ ok: boolean; error?: string }>; onEdit: () => void; onDelete: () => void; onClose: () => void }) {
   const { t } = useLocale();
   const { toast } = useToast();
+  const [messageOpen, setMessageOpen] = useState(false);
   const [tab, setTab] = useState<JobDetailTab>("overview");
   const [itemType, setItemType] = useState<JobItemType>("part");
   // Material source (HVAC platform Phase 4) — only meaningful when
@@ -1100,13 +1105,27 @@ function JobSheetDrawer({ job, locale, items, history, products, suppliers, tech
   const sortedHistory = [...history].sort((a, b) => (a.date < b.date ? 1 : -1));
   const balance = job.quotedAmount - job.depositAmount;
 
+  const menuItems: ActionMenuItem[] = [
+    ...(job.phone ? [{ label: t("msg.send_message"), onSelect: () => setMessageOpen(true) }] : []),
+    ...(canOperateJobs ? [{ label: t("common.edit"), onSelect: onEdit, disabled: !canWrite }] : []),
+    ...(canManageJobs
+      ? [{ label: t("common.delete"), onSelect: onDelete, tone: "danger" as const, disabled: !canWrite }]
+      : []),
+  ];
+
   return (
     <Drawer
       open
       onClose={onClose}
       title={job.customerName}
       description={`${job.jobNo} · ${jobTypeLabel(job.jobType ?? "installation", locale)} · ${job.address}`}
-      widthClassName="max-w-2xl"
+      size="xl"
+      statusBadge={
+        <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${jobStatusClass(job.status)}`}>
+          {jobStatusLabel(job.status, locale)}
+          {job.amcContract && " · AMC"}
+        </span>
+      }
     >
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Link
@@ -1117,14 +1136,33 @@ function JobSheetDrawer({ job, locale, items, history, products, suppliers, tech
         </Link>
         {job.phone && <CallLink phone={job.phone} label={t("common.call")} />}
         <NavigateLink address={job.address} label={t("common.navigate")} />
+        {menuItems.length > 0 && (
+          <div className="ml-auto">
+            <ActionMenu items={menuItems} label={t("jobs.more_actions")} />
+          </div>
+        )}
       </div>
 
+      {job.phone && (
+        <MessageSendButton
+          renderTrigger={false}
+          open={messageOpen}
+          onOpenChange={setMessageOpen}
+          phone={job.phone}
+          recipientName={job.customerName}
+          context={{ type: "ac_job", job, business }}
+          defaultTemplate={defaultTemplateForJob(job.status)}
+          contextId={job.id}
+        />
+      )}
+
       {canSeeFinancials && (
-        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
           <Metric label={t("jobs.quote_label")} value={formatLkr(job.quotedAmount)} />
-          <Metric label={t("jobs.material_cost")} value={formatLkr(profit.materialCost)} />
-          <Metric label={t("jobs.labor_cost")} value={formatLkr(profit.laborCost)} />
+          <Metric label={t("jobs.collected_label")} value={formatLkr(job.depositAmount)} />
+          <Metric label={t("jobs.cost_label")} value={formatLkr(profit.totalCost)} />
           <Metric label={t("jobs.net_profit")} value={formatLkr(profit.grossProfit)} />
+          <Metric label={t("jobs.balance_label")} value={formatLkr(balance)} />
         </div>
       )}
 
@@ -1147,94 +1185,120 @@ function JobSheetDrawer({ job, locale, items, history, products, suppliers, tech
       />
 
       {tab === "overview" && (
-      <div className="mt-4 space-y-5">
-      {(job.complaint || job.diagnosis) && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {job.complaint && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.complaint")}</p>
-              <p className="mt-1 text-sm text-slate-800">{job.complaint}</p>
-            </div>
-          )}
-          {job.diagnosis && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.diagnosis")}</p>
-              <p className="mt-1 text-sm text-slate-800">{job.diagnosis}</p>
-            </div>
-          )}
+      <div className="mt-4 grid gap-5 lg:grid-cols-2">
+      {/* Left column: who/where/when + the complaint/diagnosis narrative. */}
+      <div className="space-y-5">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.section_customer_site")}</p>
+          <dl className="space-y-1.5 text-sm">
+            <div className="flex justify-between gap-3"><dt className="text-slate-500">{t("jobs.customer_name")}</dt><dd className="text-right font-medium text-slate-900">{job.customerName}</dd></div>
+            {job.phone && <div className="flex justify-between gap-3"><dt className="text-slate-500">{t("common.phone")}</dt><dd className="text-right font-medium text-slate-900">{job.phone}</dd></div>}
+            <div className="flex justify-between gap-3"><dt className="shrink-0 text-slate-500">{t("jobs.site_address")}</dt><dd className="text-right font-medium text-slate-900">{job.address}</dd></div>
+            {job.assignedTechnician && <div className="flex justify-between gap-3"><dt className="text-slate-500">{t("jobs.assignee")}</dt><dd className="text-right font-medium text-slate-900">{job.assignedTechnician}</dd></div>}
+            {job.scheduledDate && <div className="flex justify-between gap-3"><dt className="text-slate-500">{t("jobs.install_label")}</dt><dd className="text-right font-medium text-slate-900">{job.scheduledDate}</dd></div>}
+            {job.serviceDueDate && <div className="flex justify-between gap-3"><dt className="text-slate-500">{t("jobs.service_due_label")}</dt><dd className="text-right font-medium text-slate-900">{job.serviceDueDate}</dd></div>}
+          </dl>
         </div>
-      )}
 
-      {/* Equipment (Phase 4/5) */}
-      <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("assets.title")}</p>
-        {asset === undefined ? (
-          <ProLoadingState label={t("common.loading")} />
-        ) : asset ? (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="flex items-center gap-2">
-              <AssetIcon className="h-4 w-4 text-slate-400" />
-              <div>
-                <p className="text-sm font-semibold text-slate-900">{[asset.brand, asset.model].filter(Boolean).join(" ") || t("assets.untitled")}</p>
-                <p className="text-xs text-slate-500">{asset.serialNo ?? "—"}</p>
+        {(job.complaint || job.diagnosis) && (
+          <div className="space-y-3">
+            {job.complaint && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.complaint")}</p>
+                <p className="mt-1 text-sm text-slate-800">{job.complaint}</p>
               </div>
-            </div>
-            {canOperateJobs && (
-              <button type="button" onClick={() => void handleLinkAsset(null)} disabled={linking} className="text-xs font-medium text-rose-600 hover:underline disabled:opacity-50">
-                {t("common.cancel")}
-              </button>
             )}
-          </div>
-        ) : (
-          <div>
-            {customerAssets === null ? (
-              canOperateJobs && job.customerId ? (
-                <button type="button" onClick={loadCustomerAssets} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-                  {t("assets.add")}
-                </button>
-              ) : (
-                <p className="text-sm text-slate-400">{t("assets.no_assets")}</p>
-              )
-            ) : customerAssets.length === 0 ? (
-              <p className="text-sm text-slate-400">{t("assets.no_assets")}</p>
-            ) : (
-              <div className="space-y-1.5">
-                {customerAssets.map((a) => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    disabled={linking}
-                    onClick={() => void handleLinkAsset(a.id)}
-                    className="flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-left text-sm hover:border-teal-300 hover:bg-teal-50 disabled:opacity-50"
-                  >
-                    <span className="font-medium text-slate-900">{[a.brand, a.model].filter(Boolean).join(" ") || t("assets.untitled")}</span>
-                    <span className="text-xs text-slate-500">{a.serialNo ?? "—"}</span>
-                  </button>
-                ))}
+            {job.diagnosis && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.diagnosis")}</p>
+                <p className="mt-1 text-sm text-slate-800">{job.diagnosis}</p>
               </div>
             )}
           </div>
         )}
+        {job.notes && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.job_notes")}</p>
+            <p className="mt-1 text-sm text-slate-800">{job.notes}</p>
+          </div>
+        )}
       </div>
 
-      {/* Attachments — disclosed, not fabricated: no photo/document
-          architecture exists anywhere in this codebase yet (confirmed in
-          the Phase 1 audit). */}
-      <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.attachments")}</p>
-        <p className="text-sm text-slate-400">{t("jobs.attachments_unavailable")}</p>
-      </div>
+      {/* Right column: equipment, attachments (disclosed as unavailable —
+          no photo/document architecture exists anywhere in this codebase
+          yet, confirmed in the Phase 1 audit), status history. */}
+      <div className="space-y-5">
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("assets.title")}</p>
+          {asset === undefined ? (
+            <ProLoadingState label={t("common.loading")} />
+          ) : asset ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center gap-2">
+                <AssetIcon className="h-4 w-4 text-slate-400" />
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">{[asset.brand, asset.model].filter(Boolean).join(" ") || t("assets.untitled")}</p>
+                  <p className="text-xs text-slate-500">{asset.serialNo ?? "—"}</p>
+                </div>
+              </div>
+              {canOperateJobs && (
+                <button type="button" onClick={() => void handleLinkAsset(null)} disabled={linking} className="text-xs font-medium text-rose-600 hover:underline disabled:opacity-50">
+                  {t("common.cancel")}
+                </button>
+              )}
+            </div>
+          ) : (
+            <div>
+              {customerAssets === null ? (
+                canOperateJobs && job.customerId ? (
+                  <button type="button" onClick={loadCustomerAssets} className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                    {t("assets.add")}
+                  </button>
+                ) : (
+                  <p className="text-sm text-slate-400">{t("assets.no_assets")}</p>
+                )
+              ) : customerAssets.length === 0 ? (
+                <p className="text-sm text-slate-400">{t("assets.no_assets")}</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {customerAssets.map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      disabled={linking}
+                      onClick={() => void handleLinkAsset(a.id)}
+                      className="flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-left text-sm hover:border-teal-300 hover:bg-teal-50 disabled:opacity-50"
+                    >
+                      <span className="font-medium text-slate-900">{[a.brand, a.model].filter(Boolean).join(" ") || t("assets.untitled")}</span>
+                      <span className="text-xs text-slate-500">{a.serialNo ?? "—"}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.status_history")}</p>
-        <ol className="mt-2 space-y-1.5">
-          {sortedHistory.map((h) => (
-            <li key={h.id} className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm">
-              <span className="font-mono text-xs text-slate-500">{h.date.slice(0, 10)}</span>
-              <span className="font-medium text-slate-900">{h.oldStatus ? `${jobStatusLabel(h.oldStatus as ACJobStatus, locale)} → ` : ""}{jobStatusLabel(h.newStatus as ACJobStatus, locale)}</span>
-            </li>
-          ))}
-        </ol>
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.attachments")}</p>
+          <p className="text-sm text-slate-400">{t("jobs.attachments_unavailable")}</p>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("jobs.status_history")}</p>
+          {sortedHistory.length === 0 ? (
+            <p className="text-sm text-slate-400">—</p>
+          ) : (
+            <ol className="space-y-1.5">
+              {sortedHistory.map((h) => (
+                <li key={h.id} className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                  <span className="font-mono text-xs text-slate-500">{h.date.slice(0, 10)}</span>
+                  <span className="font-medium text-slate-900">{h.oldStatus ? `${jobStatusLabel(h.oldStatus as ACJobStatus, locale)} → ` : ""}{jobStatusLabel(h.newStatus as ACJobStatus, locale)}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       </div>
       </div>
       )}
