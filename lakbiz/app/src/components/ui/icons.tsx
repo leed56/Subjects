@@ -301,6 +301,19 @@ export const PhoneIcon = (p: IconProps) =>
     p,
   );
 
+/** A globe with a meridian — the "bilingual / language" glyph, replacing
+ * the 🇱🇰 flag emoji previously used for the "Sinhala first" landing
+ * feature (a flag reads as "country", not "language switch"). */
+export const LanguageIcon = (p: IconProps) =>
+  base(
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3c2.5 2.6 3.8 5.8 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.8-3.8-9S9.5 5.6 12 3Z" />
+    </>,
+    p,
+  );
+
 /** A rounded chat-bubble outline — replaces the "💬" emoji previously used
  * as MessageSendButton's icon-variant glyph. */
 export const ChatIcon = (p: IconProps) =>

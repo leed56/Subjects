@@ -13,6 +13,7 @@ import { useAppStore } from "@/lib/store/use-app-store";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { ROUTE_FEATURES } from "@/lib/subscription/can";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { CloseIcon } from "@/components/ui/icons";
 
 const navKeys = [
   { href: "/dashboard", key: "nav.dashboard" },
@@ -48,12 +49,21 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
     window.location.href = "/login";
   };
 
-  const visibleNav = navKeys.filter((item) => {
-    if (!canAccessShopRoute(item.href)) return false;
-    const feature = ROUTE_FEATURES[item.href];
-    if (!feature) return true;
-    return can(feature);
-  });
+  // Guarded on `user`, not just canAccessShopRoute: the default/unauthenticated
+  // org state defaults role to "owner" (so onboarding flows aren't blocked
+  // before a real org loads), and canAccessShopRoute grants owners every
+  // route unconditionally — without this guard the full internal app nav
+  // (Dashboard/Sales/VAT/Stock/.../Banking) rendered on /login for anyone,
+  // signed in or not (docs/UI_POLISH_AUDIT.md Part 12: "no full app nav
+  // shown to unauthenticated users").
+  const visibleNav = user
+    ? navKeys.filter((item) => {
+        if (!canAccessShopRoute(item.href)) return false;
+        const feature = ROUTE_FEATURES[item.href];
+        if (!feature) return true;
+        return can(feature);
+      })
+    : [];
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -112,7 +122,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
                 pathname === "/settings/notifications"
                   ? "text-teal-800"
                   : "text-slate-600 hover:text-teal-700"
-              } ${canAccessSettingsPath("/settings/notifications") ? "" : "hidden"}`}
+              } ${user && canAccessSettingsPath("/settings/notifications") ? "" : "hidden"}`}
             >
               {t("nav.notifications")}
             </Link>
@@ -122,11 +132,11 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
                 pathname === "/settings/plans" || pathname === "/settings/billing"
                   ? "text-teal-800"
                   : "text-slate-600 hover:text-teal-700"
-              } ${canAccessSettingsPath("/settings/plans") ? "" : "hidden"}`}
+              } ${user && canAccessSettingsPath("/settings/plans") ? "" : "hidden"}`}
             >
               {t("nav.plans")}
             </Link>
-            {canManageTeam && (
+            {user && canManageTeam && (
               <Link
                 href="/settings/team"
                 className={`rounded-lg px-2 py-1 text-sm font-medium ${
@@ -194,6 +204,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
           </div>
         </div>
 
+        {visibleNav.length > 0 && (
         <nav className="hidden border-t border-slate-100 md:block">
           <div className="mx-auto flex max-w-6xl flex-wrap gap-1 px-4 py-2">
             {visibleNav.map((item) => {
@@ -214,6 +225,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
             })}
           </div>
         </nav>
+        )}
       </header>
 
       <div
@@ -238,10 +250,11 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
             <span className="font-bold text-slate-900">LakBiz</span>
             <button
               type="button"
+              aria-label="Close menu"
               onClick={() => setOpen(false)}
               className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600"
             >
-              ✕
+              <CloseIcon className="h-5 w-5" />
             </button>
           </div>
 
@@ -266,7 +279,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
           </nav>
 
           <div className="border-t border-slate-100 p-4 space-y-2">
-            {canAccessSettingsPath("/settings/notifications") && (
+            {user && canAccessSettingsPath("/settings/notifications") && (
               <Link
                 href="/settings/notifications"
                 onClick={() => setOpen(false)}
@@ -275,7 +288,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
                 {t("nav.notifications")}
               </Link>
             )}
-            {canAccessSettingsPath("/settings/plans") && (
+            {user && canAccessSettingsPath("/settings/plans") && (
               <Link
                 href="/settings/plans"
                 onClick={() => setOpen(false)}
@@ -284,7 +297,7 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
                 {t("nav.plans")}
               </Link>
             )}
-            {canManageTeam && (
+            {user && canManageTeam && (
               <Link
                 href="/settings/team"
                 onClick={() => setOpen(false)}

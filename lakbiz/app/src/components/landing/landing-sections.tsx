@@ -2,14 +2,22 @@
 
 import Link from "next/link";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import {
+  StockIcon,
+  SalesIcon,
+  BankingIcon,
+  ChatIcon,
+  PlansIcon,
+  LanguageIcon,
+} from "@/components/ui/icons";
 
 const FEATURE_KEYS = [
-  { icon: "📦", titleKey: "home.feat_stock", descKey: "home.feat_stock_d" },
-  { icon: "🧾", titleKey: "home.feat_sales", descKey: "home.feat_sales_d" },
-  { icon: "🏦", titleKey: "home.feat_bank", descKey: "home.feat_bank_d" },
-  { icon: "📱", titleKey: "home.feat_wa", descKey: "home.feat_wa_d" },
-  { icon: "👥", titleKey: "home.feat_roles", descKey: "home.feat_roles_d" },
-  { icon: "🇱🇰", titleKey: "home.feat_si", descKey: "home.feat_si_d" },
+  { Icon: StockIcon, titleKey: "home.feat_stock", descKey: "home.feat_stock_d" },
+  { Icon: SalesIcon, titleKey: "home.feat_sales", descKey: "home.feat_sales_d" },
+  { Icon: BankingIcon, titleKey: "home.feat_bank", descKey: "home.feat_bank_d" },
+  { Icon: ChatIcon, titleKey: "home.feat_wa", descKey: "home.feat_wa_d" },
+  { Icon: PlansIcon, titleKey: "home.feat_roles", descKey: "home.feat_roles_d" },
+  { Icon: LanguageIcon, titleKey: "home.feat_si", descKey: "home.feat_si_d" },
 ] as const;
 
 export function LandingFeatures() {
@@ -36,8 +44,8 @@ export function LandingFeatures() {
               key={f.titleKey}
               className="group rounded-2xl border border-slate-100 bg-slate-50/50 p-6 transition hover:border-teal-200 hover:bg-white hover:shadow-lg hover:shadow-teal-900/5"
             >
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-xl shadow-sm ring-1 ring-slate-100 transition group-hover:scale-105">
-                {f.icon}
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-teal-600 shadow-sm ring-1 ring-slate-100 transition group-hover:scale-105">
+                <f.Icon className="h-5 w-5" />
               </span>
               <h3 className="mt-4 text-base font-semibold text-slate-900">
                 {t(f.titleKey)}

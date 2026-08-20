@@ -151,150 +151,165 @@ export default function LoginPage() {
         <SiteHeader sticky={false} />
       )}
       <main className={`mx-auto flex flex-col px-4 py-10 sm:py-16 ${mode === "signup" && !adminLogin ? "max-w-2xl" : "max-w-md"}`}>
-        {!adminLogin && (
-          <>
-            <h1 className="text-2xl font-bold text-slate-900">{t("sub.login_title")}</h1>
-            <p className="mt-2 text-slate-600">
-              {configured ? t("sub.login_email_hint") : t("sub.login_subtitle")}
-            </p>
-          </>
-        )}
+        <div className="text-center">
+          {!adminLogin && (
+            <>
+              <h1 className="text-2xl font-bold text-slate-900">{t("sub.login_title")}</h1>
+              <p className="mt-2 text-slate-600">
+                {configured ? t("sub.login_email_hint") : t("sub.login_subtitle")}
+              </p>
+            </>
+          )}
 
-        {adminLogin && (
-          <>
-            <h1 className="text-2xl font-bold text-white">{t("admin.login_title")}</h1>
-            <p className="mt-2 text-slate-400">{t("admin.login_hint")}</p>
-          </>
-        )}
+          {adminLogin && (
+            <>
+              <h1 className="text-2xl font-bold text-white">{t("admin.login_title")}</h1>
+              <p className="mt-2 text-slate-400">{t("admin.login_hint")}</p>
+            </>
+          )}
+        </div>
 
         {adminLogin && user && !authLoading && (
-          <SignedInBanner adminMode redirectAfterSignOut="/login?next=/admin" />
+          <div className="mt-6"><SignedInBanner adminMode redirectAfterSignOut="/login?next=/admin" /></div>
         )}
 
         {!adminLogin && user && !authLoading && (
-          <SignedInBanner redirectAfterSignOut="/login" />
+          <div className="mt-6"><SignedInBanner redirectAfterSignOut="/login" /></div>
         )}
 
-        {message && (
-          <div className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            {message}
-            {needsEmailConfirm && (
+        {/* Centered auth card — the login form no longer floats directly on
+            the page background, matching the rest of the redesigned
+            surfaces (docs/UI_POLISH_AUDIT.md Part 12). */}
+        <div
+          className={`mt-6 rounded-xl border p-6 shadow-sm sm:p-7 ${
+            adminLogin ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
+          }`}
+        >
+          {message && (
+            <div className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              {message}
+              {needsEmailConfirm && (
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={loading || !email.trim()}
+                  className="mt-3 block w-full rounded-lg border border-amber-300 bg-white py-2 text-sm font-medium text-amber-900 hover:bg-amber-50 disabled:opacity-50"
+                >
+                  {t("sub.resend_email")}
+                </button>
+              )}
+            </div>
+          )}
+
+          {adminOnly && (
+            <p className="mb-4 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">
+              Shops are created by the platform admin. Sign in with the credentials you
+              received.
+            </p>
+          )}
+
+          {!(adminOnly || adminLogin) && (
+            <div className="mb-6 flex rounded-lg bg-slate-100 p-1">
               <button
                 type="button"
-                onClick={handleResend}
-                disabled={loading || !email.trim()}
-                className="mt-3 block w-full rounded-lg border border-amber-300 bg-white py-2 text-sm font-medium text-amber-900 hover:bg-amber-50 disabled:opacity-50"
+                onClick={() => setMode("signin")}
+                className={`flex-1 rounded-md py-2 text-sm font-medium transition ${
+                  mode === "signin" ? "bg-white text-teal-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                }`}
               >
-                {t("sub.resend_email")}
+                {t("sub.sign_in")}
               </button>
+              <button
+                type="button"
+                onClick={() => setMode("signup")}
+                className={`flex-1 rounded-md py-2 text-sm font-medium transition ${
+                  mode === "signup" ? "bg-white text-teal-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {t("sub.create_shop")}
+              </button>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === "signup" && (
+              <>
+                <SectorPicker value={sector} onChange={setSector} />
+                <label className="block text-sm">
+                  {t("sub.shop_name")} *
+                  <input
+                    required
+                    value={shopName}
+                    onChange={(e) => setShopName(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                  />
+                </label>
+                <label className="block text-sm">
+                  {t("sub.phone")}
+                  <input
+                    type="tel"
+                    placeholder="07X XXX XXXX"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                  />
+                </label>
+              </>
             )}
-          </div>
-        )}
+            <label className={`block text-sm ${adminLogin ? "text-slate-300" : ""}`}>
+              {t("sub.email")} *
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={`mt-1 w-full rounded-lg border px-3 py-2 ${
+                  adminLogin
+                    ? "border-slate-700 bg-slate-950 text-white placeholder:text-slate-500"
+                    : "border-slate-300"
+                }`}
+                placeholder={adminLogin ? "admin@lakbiz.lk" : undefined}
+              />
+            </label>
+            <label className={`block text-sm ${adminLogin ? "text-slate-300" : ""}`}>
+              {t("sub.password")} *
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={`mt-1 w-full rounded-lg border px-3 py-2 ${
+                  adminLogin
+                    ? "border-slate-700 bg-slate-950 text-white"
+                    : "border-slate-300"
+                }`}
+              />
+            </label>
 
-        {adminOnly && (
-          <p className="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">
-            Shops are created by the platform admin. Sign in with the credentials you
-            received.
-          </p>
-        )}
-
-        <div className={`mt-6 flex rounded-lg border border-slate-200 p-1 ${adminOnly || adminLogin ? "hidden" : ""}`}>
-          <button
-            type="button"
-            onClick={() => setMode("signin")}
-            className={`flex-1 rounded-md py-2 text-sm ${
-              mode === "signin" ? "bg-teal-700 text-white" : "text-slate-600"
-            }`}
-          >
-            {t("sub.sign_in")}
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("signup")}
-            className={`flex-1 rounded-md py-2 text-sm ${
-              mode === "signup" ? "bg-teal-700 text-white" : "text-slate-600"
-            }`}
-          >
-            {t("sub.create_shop")}
-          </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full rounded-lg py-2.5 text-sm font-semibold text-white disabled:opacity-50 ${
+                adminLogin
+                  ? "bg-teal-600 hover:bg-teal-500"
+                  : "bg-teal-700 hover:bg-teal-800"
+              }`}
+            >
+              {loading
+                ? "..."
+                : mode === "signup"
+                  ? t("sub.create_account")
+                  : t("sub.sign_in")}
+            </button>
+          </form>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          {mode === "signup" && (
-            <>
-              <SectorPicker value={sector} onChange={setSector} />
-              <label className="block text-sm">
-                {t("sub.shop_name")} *
-                <input
-                  required
-                  value={shopName}
-                  onChange={(e) => setShopName(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                />
-              </label>
-              <label className="block text-sm">
-                {t("sub.phone")}
-                <input
-                  type="tel"
-                  placeholder="07X XXX XXXX"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                />
-              </label>
-            </>
-          )}
-          <label className="block text-sm">
-            {t("sub.email")} *
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={`mt-1 w-full rounded-lg border px-3 py-2 ${
-                adminLogin
-                  ? "border-slate-700 bg-slate-900 text-white placeholder:text-slate-500"
-                  : "border-slate-300"
-              }`}
-              placeholder={adminLogin ? "admin@lakbiz.lk" : undefined}
-            />
-          </label>
-          <label className="block text-sm">
-            {t("sub.password")} *
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={`mt-1 w-full rounded-lg border px-3 py-2 ${
-                adminLogin
-                  ? "border-slate-700 bg-slate-900 text-white"
-                  : "border-slate-300"
-              }`}
-            />
-          </label>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full rounded-lg py-2.5 text-sm font-medium text-white disabled:opacity-50 ${
-              adminLogin
-                ? "bg-teal-600 hover:bg-teal-500"
-                : "bg-teal-700 hover:bg-teal-800"
-            }`}
-          >
-            {loading
-              ? "..."
-              : mode === "signup"
-                ? t("sub.create_account")
-                : t("sub.sign_in")}
-          </button>
-        </form>
-
-        <p className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm text-slate-600">
-          Need access? Contact LakBiz to receive your login details.
-        </p>
+        {!adminLogin && (
+          <p className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm text-slate-600">
+            Need access? Contact LakBiz to receive your login details.
+          </p>
+        )}
 
         <p className="mt-6 text-center text-xs text-slate-500">
           {!adminLogin ? (
