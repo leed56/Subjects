@@ -27,7 +27,12 @@ export type ExpenseCategory =
   // rental, outsourced repair) that had no existing home.
   | "parking"
   | "equipment_rental"
-  | "outsourced_repair";
+  | "outsourced_repair"
+  // job-parts-materials phase — "External purchase, Expense only" (a
+  // part bought specifically for one job, not added to inventory).
+  // Distinct from outsourced_repair (paying a subcontractor to do work)
+  // and from equipment_rental — this is materials, not labor or tools.
+  | "parts_purchase";
 
 export type ExpensePaymentMethod = "cash" | "bank_transfer" | "card" | "cheque";
 

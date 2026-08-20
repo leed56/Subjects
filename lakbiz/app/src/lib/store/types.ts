@@ -98,15 +98,43 @@ export type RecordACServiceInput = {
   visitNotes?: string;
 };
 
-export type JobItemType = "part" | "labour" | "service";
+/** "transport"/"other" added in the job-parts-materials phase — Part/
+ * charge concepts that don't belong in "service" (call-out/inspection/
+ * cleaning) any more than they belong in "part"/"labour". Everything
+ * that isn't "part"/"labour" already falls into computeJobProfitability's
+ * Other bucket, so widening this enum needed no change to that function. */
+export type JobItemType = "part" | "labour" | "service" | "transport" | "other";
 
-/** Only meaningful when itemType === "part" (HVAC platform Phase 4/5).
+/** Only meaningful when itemType === "part" (HVAC platform Phase 4/5;
+ * "manual" added in the job-parts-materials phase).
  * - stock: decremented from real inventory, unitPrice frozen from the
- *   product's buyPrice at the moment this item is created.
- * - purchased: bought specifically for this job, not from warehouse stock.
+ *   product's buyPrice at the moment this item is created. Also used for
+ *   an external purchase received into inventory (see `purchasedForJob`)
+ *   — the historical-cost guarantee applies identically either way.
+ * - purchased: "External Purchase" in the UI — bought specifically for
+ *   this job via the Expense-only path, not from warehouse stock.
+ * - manual: a quick ad-hoc material entry with no product record and no
+ *   purchase tracking (e.g. "copper pipe, 4m" from a bulk supply the
+ *   shop doesn't track by SKU) — distinct from "purchased", which always
+ *   implies a tracked external-purchase transaction.
  * - customer_supplied: the customer provided the part; no inventory
  *   decrement, unitPrice defaults to 0. */
-export type JobItemSource = "stock" | "purchased" | "customer_supplied";
+export type JobItemSource = "stock" | "purchased" | "manual" | "customer_supplied";
+
+/** What happened to the part this line replaced (job-parts-materials
+ * phase, Part 6). Only meaningful when `isReplacement` is true. */
+export type JobItemDisposition =
+  | "returned_to_customer"
+  | "retained_by_company"
+  | "sent_for_warranty"
+  | "disposed"
+  | "repairable_core_return"
+  | "unknown";
+
+/** Who stands behind the warranty on a replaced/installed component
+ * (job-parts-materials phase, Part 6). Distinct from `ac_assets.
+ * warrantyExpiry`, which covers the whole installed unit, not one part. */
+export type JobItemWarrantyType = "none" | "company" | "supplier" | "manufacturer";
 
 export interface JobItem {
   id: string;
@@ -129,12 +157,10 @@ export interface JobItem {
   purchaseRef?: string;
   purchaseDate?: string;
   /** What the customer is being charged for this specific item, when the
-   * owner wants to track it per-line. Does not feed the job invoice,
-   * which still shows one flat `quotedAmount` — itemizing the invoice
-   * itself is a Job Detail redesign concern, not this phase's. Applies to
-   * "part" and "labour" lines (HVAC platform Phase 6 extended this from
-   * parts-only, to support the internal-cost-vs-customer-charge split
-   * the spec asks for on labor specifically). */
+   * owner wants to track it per-line. Applies to "part" and "labour"
+   * lines (HVAC platform Phase 6 extended this from parts-only) plus
+   * "transport"/"other"/"service" (job-parts-materials phase). Feeds the
+   * itemized invoice (see `invoiceable`) when present. */
   customerPrice?: number;
   /** itemType === "labour" only (HVAC platform Phase 6) — which roster
    * technician performed this line. Multiple technicians on one job are
@@ -143,6 +169,41 @@ export interface JobItem {
    * assigneeId — a job already has many job_items, so this needed no new
    * join table. */
   technicianId?: string;
+  /** Free-text unit ("pcs", "m", "hrs") — a suggestion list in the UI,
+   * never a rigid enum; manual free text must always remain possible. */
+  unit?: string;
+  /** Flat LKR amount subtracted from qty × customerPrice on the itemized
+   * invoice. Never affects the internal cost figures — a customer
+   * discount doesn't change what the shop actually spent. */
+  discount?: number;
+  /** Whether this line may appear on the customer-facing invoice.
+   * Defaults true for customer-facing lines; the internal purchase-cost
+   * side of a "purchased" line is never itself invoiceable. */
+  invoiceable: boolean;
+  /** True when a source==="stock" line's stock was received specifically
+   * for this job via the External-Purchase-to-Inventory path, even
+   * though its `source` is correctly "stock" once received — powers the
+   * Purchased-for-Job filter without conflating "already in the
+   * warehouse" with "we just bought this for you." */
+  purchasedForJob?: boolean;
+  /** Part 6 — replacement/warranty tracking, all optional. */
+  isReplacement?: boolean;
+  oldComponentName?: string;
+  oldComponentSerial?: string;
+  oldComponentDisposition?: JobItemDisposition;
+  newComponentSerial?: string;
+  warrantyType?: JobItemWarrantyType;
+  /** Stored in days, matching the existing serviceIntervalDays/
+   * computeServiceDueFromDays convention (ac-service.ts) — the UI offers
+   * day and month presets and converts. */
+  warrantyDays?: number;
+  warrantyStartDate?: string;
+  /** Computed client-side at save time (warrantyStartDate + warrantyDays)
+   * and stored — same "store the derived date" pattern service_due_date
+   * already uses, for cheap sorting/querying later. */
+  warrantyExpiryDate?: string;
+  /** Free-text notes for this line, distinct from the job's own notes. */
+  notes?: string;
 }
 
 export type JobItemInput = {
@@ -158,6 +219,30 @@ export type JobItemInput = {
   purchaseDate?: string;
   customerPrice?: number;
   technicianId?: string;
+  unit?: string;
+  discount?: number;
+  invoiceable?: boolean;
+  isReplacement?: boolean;
+  oldComponentName?: string;
+  oldComponentSerial?: string;
+  oldComponentDisposition?: JobItemDisposition;
+  newComponentSerial?: string;
+  warrantyType?: JobItemWarrantyType;
+  warrantyDays?: number;
+  warrantyStartDate?: string;
+  warrantyExpiryDate?: string;
+  notes?: string;
+  /** External-Purchase-to-Inventory only (job-parts-materials phase):
+   * quantity actually received into stock, which may exceed `qty` (the
+   * quantity used on this job) — the surplus stays as real spare stock.
+   * Only meaningful together with source === "stock" and a purchase
+   * reference; see addJobItem's handling in actions.ts. */
+  receiveQty?: number;
+  /** Set alongside `receiveQty` when no existing product matches — the
+   * name for a brand-new Product to create before receiving stock into
+   * it. Ignored when `productId` is already set. */
+  newProductName?: string;
+  newProductCategory?: string;
 };
 
 export interface JobStatusEntry {

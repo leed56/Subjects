@@ -562,6 +562,25 @@ export async function pullBusinessData(
       purchaseDate: row.purchase_date ?? undefined,
       customerPrice: row.customer_price != null ? num(row.customer_price) : undefined,
       technicianId: row.technician_id ?? undefined,
+      unit: row.unit ?? undefined,
+      discount: row.discount != null ? num(row.discount) : undefined,
+      // Older rows synced before this column existed have no value at
+      // all — default true (every pre-existing line already behaves as
+      // invoiceable today, since the invoice was always the flat
+      // quotedAmount regardless of job_items).
+      invoiceable: row.invoiceable ?? true,
+      purchasedForJob: row.purchased_for_job ?? undefined,
+      isReplacement: row.is_replacement ?? undefined,
+      oldComponentName: row.old_component_name ?? undefined,
+      oldComponentSerial: row.old_component_serial ?? undefined,
+      oldComponentDisposition:
+        (row.old_component_disposition as AppData["jobItems"][number]["oldComponentDisposition"]) ?? undefined,
+      newComponentSerial: row.new_component_serial ?? undefined,
+      warrantyType: (row.warranty_type as AppData["jobItems"][number]["warrantyType"]) ?? undefined,
+      warrantyDays: row.warranty_days ?? undefined,
+      warrantyStartDate: row.warranty_start_date ?? undefined,
+      warrantyExpiryDate: row.warranty_expiry_date ?? undefined,
+      notes: row.notes ?? undefined,
     })),
     jobStatusHistory: jobStatusHistory.map((row) => ({
       id: row.id,
@@ -1721,6 +1740,20 @@ function jobItemRow(
     purchase_date: item.purchaseDate ?? null,
     customer_price: item.customerPrice ?? null,
     technician_id: item.technicianId ?? null,
+    unit: item.unit ?? null,
+    discount: item.discount ?? null,
+    invoiceable: item.invoiceable,
+    purchased_for_job: item.purchasedForJob ?? false,
+    is_replacement: item.isReplacement ?? false,
+    old_component_name: item.oldComponentName ?? null,
+    old_component_serial: item.oldComponentSerial ?? null,
+    old_component_disposition: item.oldComponentDisposition ?? null,
+    new_component_serial: item.newComponentSerial ?? null,
+    warranty_type: item.warrantyType ?? null,
+    warranty_days: item.warrantyDays ?? null,
+    warranty_start_date: item.warrantyStartDate ?? null,
+    warranty_expiry_date: item.warrantyExpiryDate ?? null,
+    notes: item.notes ?? null,
   };
 }
 
@@ -2488,23 +2521,11 @@ export async function pushBusinessData(
     diagnosis: job.diagnosis ?? null,
   }));
 
-  const jobItemRows = data.jobItems.map((i) => ({
-    id: i.id,
-    organization_id: organizationId,
-    job_id: i.jobId,
-    item_type: i.itemType,
-    name: i.name,
-    qty: i.qty,
-    unit_price: i.unitPrice,
-    line_total: i.lineTotal,
-    source: i.source ?? null,
-    product_id: i.productId ?? null,
-    supplier_id: i.supplierId ?? null,
-    purchase_ref: i.purchaseRef ?? null,
-    purchase_date: i.purchaseDate ?? null,
-    customer_price: i.customerPrice ?? null,
-    technician_id: i.technicianId ?? null,
-  }));
+  // Reuses jobItemRow() (the eager per-action push's field list) instead
+  // of a second inline copy — this mapper had drifted from that one
+  // before (see the log.type "in"/"purchase" fix elsewhere in this file's
+  // history); keeping one source of the column list prevents a repeat.
+  const jobItemRows = data.jobItems.map((i) => jobItemRow(organizationId, i));
 
   const jobStatusHistoryRows = data.jobStatusHistory.map((h) => ({
     id: h.id,

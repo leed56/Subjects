@@ -44,6 +44,7 @@ function makeItem(overrides: Partial<JobItem> = {}): JobItem {
     qty: 1,
     unitPrice: 0,
     lineTotal: 0,
+    invoiceable: true,
     ...overrides,
   };
 }
