@@ -70,6 +70,7 @@ import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { fetchAsset, fetchCustomerAssets, fetchJobAssetId, linkJobAsset, type AcAsset } from "@/lib/supabase/ac-assets-client";
 import { computeJobProfitability, type JobLinkedExpense } from "@/lib/job-profitability";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
+import { invoiceableLinesTotal } from "@/lib/job-invoice";
 
 const UNIT_TYPES = ["Wall mounted", "Cassette", "Ducted", "Ceiling suspended", "Portable", "Window"];
 
@@ -1610,7 +1611,21 @@ function JobSheetDrawer({ job, locale, business, items, history, products, suppl
   // correct; they answer different questions.
   const jobExpenseTotal = (jobExpenses ?? []).reduce((s, e) => s + e.amount, 0);
   const sortedHistory = [...history].sort((a, b) => (a.date < b.date ? 1 : -1));
-  const balance = job.quotedAmount - job.depositAmount;
+
+  // job-parts-materials phase, docs/JOB_PARTS_ARCHITECTURE.md §2.5 — same
+  // itemized-vs-flat rule as the printable invoice (job-invoice.ts),
+  // reused rather than re-derived: Quote is an estimate, this is what's
+  // actually billed once parts/labor are itemized on the invoice. `items`
+  // (JobItem[]) structurally satisfies InvoiceLineItem[] — it carries
+  // every field that projection needs and then some, so no re-mapping is
+  // needed for this internal, canSeeFinancials-gated view (unlike the
+  // customer-facing invoice page, which narrows on purpose).
+  const invoiceableJobItems = items.filter((i) => i.invoiceable && i.customerPrice != null);
+  const hasItemizedInvoice = invoiceableJobItems.length > 0;
+  const invoiceActual = hasItemizedInvoice ? invoiceableLinesTotal(items) : job.quotedAmount;
+  // Balance is against what's actually billed, not the original quote —
+  // the real, small correction the architecture doc calls out (§2.5).
+  const balance = invoiceActual - job.depositAmount;
 
   // job-parts-materials phase — Part 5's "External Purchase, Expense
   // only" bridge (docs/JOB_PARTS_ARCHITECTURE.md §2.2): after the
@@ -1924,6 +1939,18 @@ function JobSheetDrawer({ job, locale, business, items, history, products, suppl
 
       {tab === "economics" && canSeeFinancials && (
       <div className="mt-4 space-y-4">
+        <div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Metric label={t("jobs.quote_label")} value={formatLkr(job.quotedAmount)} />
+            <Metric label={t("jobs.economics_invoice_actual")} value={formatLkr(invoiceActual)} />
+            <Metric label={t("jobs.collected_label")} value={formatLkr(job.depositAmount)} />
+            <Metric label={t("jobs.balance_label")} value={formatLkr(balance)} />
+          </div>
+          {!hasItemizedInvoice && (
+            <p className="mt-1.5 text-xs text-slate-400">{t("jobs.economics_projected_badge")}</p>
+          )}
+        </div>
+
         <div className="overflow-hidden rounded-lg border border-slate-200">
           <table className="w-full text-left text-sm">
             <tbody className="divide-y divide-slate-100">
