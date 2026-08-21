@@ -9,6 +9,7 @@ import {
   sectorFormFields,
 } from "@/lib/sector-fields";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { SectorIcon } from "@/components/sector-icon";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { ProductInput } from "@/lib/store/types";
 
@@ -183,7 +184,7 @@ export function ProductForm({
           <span className="text-sm text-slate-600">{t("stock.sector")}</span>
           {lockedSectorId && lockedSector ? (
             <div className="mt-1 flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800">
-              <span className="mr-2">{lockedSector.icon}</span>
+              <SectorIcon sectorId={lockedSector.id} className="mr-2 h-4 w-4 text-slate-600" />
               {locale === "si" ? lockedSector.nameSi : lockedSector.nameEn}
             </div>
           ) : (

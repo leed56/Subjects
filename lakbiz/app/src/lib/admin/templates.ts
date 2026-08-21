@@ -1,15 +1,18 @@
 import type { PlanId } from "@/lib/subscription/types";
 import type { SectorId } from "@/lib/types";
-import { sectorById } from "@/lib/sectors";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+// Global premium UI phase, Part 28 — `icon` (a raw emoji) dropped from
+// this type entirely: every template already carries `sectorId`, and
+// `sectorId` is all a render site needs to look up the real SVG icon via
+// <SectorIcon> (see sector-icon.tsx) — a second, redundant icon field
+// that could drift from the sector's own icon was never necessary.
 export type BusinessTemplate = {
   id: string;
   nameEn: string;
   nameSi: string;
   sectorId: SectorId;
   defaultPlanId: PlanId;
-  icon: string;
 };
 
 /** Fallback templates when DB row unavailable (matches migration seed). */
@@ -20,7 +23,6 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     nameSi: "සිල්ලර සහ සුපිරි වෙළඳසැල්",
     sectorId: "grocery",
     defaultPlanId: "business",
-    icon: "🛒",
   },
   {
     id: "electronics",
@@ -28,7 +30,6 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     nameSi: "ඉලෙක්ට්‍රොනික උපකරණ",
     sectorId: "electronics",
     defaultPlanId: "business",
-    icon: "📱",
   },
   {
     id: "electricals",
@@ -36,7 +37,6 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     nameSi: "විදුලි උපකරණ",
     sectorId: "electricals",
     defaultPlanId: "business",
-    icon: "⚡",
   },
   {
     id: "spare_parts",
@@ -44,7 +44,6 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     nameSi: "අමතර කොටස්",
     sectorId: "spare_parts",
     defaultPlanId: "business",
-    icon: "🔧",
   },
   {
     id: "ac_hvac",
@@ -52,7 +51,6 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     nameSi: "වායු සමනය",
     sectorId: "ac_hvac",
     defaultPlanId: "pro",
-    icon: "❄️",
   },
   {
     id: "car_sales",
@@ -60,17 +58,11 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     nameSi: "මෝටර් රථ වෙළඳාම",
     sectorId: "car_sales",
     defaultPlanId: "pro",
-    icon: "🚗",
   },
 ];
 
 export function getTemplate(id: string): BusinessTemplate | undefined {
-  const local = BUSINESS_TEMPLATES.find((t) => t.id === id);
-  if (local) {
-    const sector = sectorById(local.sectorId);
-    return { ...local, icon: sector?.icon ?? local.icon };
-  }
-  return undefined;
+  return BUSINESS_TEMPLATES.find((t) => t.id === id);
 }
 
 /** Same source as GET /api/admin/templates: DB first, local fallback. */
@@ -99,14 +91,11 @@ export function templateFromDbRow(row: {
   sector_id: string;
   default_plan_id: string;
 }): BusinessTemplate {
-  const sectorId = row.sector_id as SectorId;
-  const sector = sectorById(sectorId);
   return {
     id: row.id,
     nameEn: row.name_en,
     nameSi: row.name_si,
-    sectorId,
+    sectorId: row.sector_id as SectorId,
     defaultPlanId: row.default_plan_id as PlanId,
-    icon: sector?.icon ?? "🏪",
   };
 }

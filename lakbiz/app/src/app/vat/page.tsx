@@ -23,6 +23,7 @@ import { getIncomeTaxYearSummary } from "@/lib/income-tax";
 import type { JobLinkedExpense } from "@/lib/job-profitability";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { SalesIcon, ReportsIcon, VehiclesIcon, JobsIcon, CostingIcon, BillsIcon, InboxIcon, SuppliersIcon } from "@/components/ui/icons";
 
 export default function VatReturnPage() {
   const { data, ready } = useAppStore();
@@ -108,35 +109,35 @@ export default function VatReturnPage() {
           label={t("tax.revenue")}
           value={formatLkr(incomeTax.revenue)}
           hint={`${incomeTax.salesCount} ${t("vat.sales_in_period")}`}
-          icon="💰"
+          icon={<SalesIcon className="h-5 w-5" />}
           tone="blue"
         />
         <ProStatCard
           label={t("tax.sales_profit")}
           value={formatLkr(incomeTax.salesProfit)}
           hint={t("tax.estimated_profit")}
-          icon="📈"
+          icon={<ReportsIcon className="h-5 w-5" />}
           tone="emerald"
         />
         <ProStatCard
           label={t("tax.vehicle_profit")}
           value={formatLkr(incomeTax.vehicleProfit)}
           hint={t("nav.vehicles")}
-          icon="🚗"
+          icon={<VehiclesIcon className="h-5 w-5" />}
           tone="teal"
         />
         <ProStatCard
           label={t("tax.ac_job_profit")}
           value={formatLkr(incomeTax.acJobProfit)}
           hint={t("nav.jobs")}
-          icon="🔧"
+          icon={<JobsIcon className="h-5 w-5" />}
           tone={incomeTax.acJobProfit < 0 ? "rose" : "teal"}
         />
         <ProStatCard
           label={t("tax.estimated_profit")}
           value={formatLkr(incomeTax.estimatedTaxableProfit)}
           hint={t("tax.income_meter")}
-          icon="🏛️"
+          icon={<CostingIcon className="h-5 w-5" />}
           tone="amber"
         />
       </section>
@@ -248,10 +249,10 @@ export default function VatReturnPage() {
         </section>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("vat.output_vat")} value={formatLkr(summary.outputVat)} hint={`${summary.salesCount} ${t("vat.sales_in_period")}`} icon="🧾" tone="amber" />
-          <ProStatCard label={t("vat.input_vat")} value={formatLkr(summary.inputVat)} hint={`${summary.purchasesCount} ${t("vat.purchases_in_period")}`} icon="📥" tone="teal" />
-          <ProStatCard label={t("vat.sales_list")} value={String(quarterSales.length)} hint="Invoices in quarter" icon="💸" tone="blue" />
-          <ProStatCard label={t("vat.purchases_list")} value={String(quarterPurchases.length)} hint="Purchase records" icon="📦" tone="emerald" />
+          <ProStatCard label={t("vat.output_vat")} value={formatLkr(summary.outputVat)} hint={`${summary.salesCount} ${t("vat.sales_in_period")}`} icon={<BillsIcon className="h-5 w-5" />} tone="amber" />
+          <ProStatCard label={t("vat.input_vat")} value={formatLkr(summary.inputVat)} hint={`${summary.purchasesCount} ${t("vat.purchases_in_period")}`} icon={<InboxIcon className="h-5 w-5" />} tone="teal" />
+          <ProStatCard label={t("vat.sales_list")} value={String(quarterSales.length)} hint="Invoices in quarter" icon={<SalesIcon className="h-5 w-5" />} tone="blue" />
+          <ProStatCard label={t("vat.purchases_list")} value={String(quarterPurchases.length)} hint="Purchase records" icon={<SuppliersIcon className="h-5 w-5" />} tone="emerald" />
         </section>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-2">

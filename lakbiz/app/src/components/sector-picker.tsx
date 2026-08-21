@@ -2,6 +2,7 @@
 
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { sectors } from "@/lib/sectors";
+import { SectorIcon } from "@/components/sector-icon";
 import type { SectorId } from "@/lib/types";
 
 const ACCENTS: Record<string, string> = {
@@ -44,7 +45,7 @@ export function SectorPicker({ value, onChange }: SectorPickerProps) {
                   : "border-slate-200 bg-white hover:border-slate-300"
               }`}
             >
-              <span className="text-xl">{sector.icon}</span>
+              <SectorIcon sectorId={sector.id} className="h-5 w-5 text-slate-600" />
               <span className="mt-1 block text-xs font-semibold leading-snug text-slate-900">
                 {name}
               </span>

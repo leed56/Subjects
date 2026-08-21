@@ -12,6 +12,7 @@ import {
   ProPageHeader,
   ProStatCard,
 } from "@/components/ui/pro-shell";
+import { VehiclesIcon, CostingIcon, ReportsIcon, AlertTriangleIcon } from "@/components/ui/icons";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
@@ -188,10 +189,10 @@ export default function VehiclesPage() {
         )}
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("veh.for_sale")} value={String(forSale.length)} hint={t("veh.for_sale_count")} icon="🚗" tone="teal" />
-          <ProStatCard label={t("common.cost")} value={formatLkr(stockCost)} hint="Current showroom stock" icon="🏷️" tone="blue" />
-          <ProStatCard label={t("common.profit")} value={formatLkr(potentialProfit)} hint="Potential on asking price" icon="📈" tone="emerald" />
-          <ProStatCard label={t("veh.aging")} value={String(agingCount)} hint="60+ days in yard" icon="⚠️" tone={agingCount ? "amber" : "slate"} />
+          <ProStatCard label={t("veh.for_sale")} value={String(forSale.length)} hint={t("veh.for_sale_count")} icon={<VehiclesIcon className="h-5 w-5" />} tone="teal" />
+          <ProStatCard label={t("common.cost")} value={formatLkr(stockCost)} hint="Current showroom stock" icon={<CostingIcon className="h-5 w-5" />} tone="blue" />
+          <ProStatCard label={t("common.profit")} value={formatLkr(potentialProfit)} hint="Potential on asking price" icon={<ReportsIcon className="h-5 w-5" />} tone="emerald" />
+          <ProStatCard label={t("veh.aging")} value={String(agingCount)} hint="60+ days in yard" icon={<AlertTriangleIcon className="h-5 w-5" />} tone={agingCount ? "amber" : "slate"} />
         </section>
 
         {showForm && (

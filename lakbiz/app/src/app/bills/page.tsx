@@ -15,6 +15,7 @@ import {
   ProPageHeader,
   ProStatCard,
 } from "@/components/ui/pro-shell";
+import { BillsIcon, CostingIcon, ReportsIcon, CustomersIcon } from "@/components/ui/icons";
 import { formatLkr } from "@/lib/format";
 import { buildInvoiceText, buildQuoteText, whatsappShareUrl } from "@/lib/invoice";
 import { exportSalesCsv, printSalesReport } from "@/lib/export";
@@ -136,13 +137,13 @@ export default function BillsPage() {
         />
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("bills.count")} value={String(data.sales.length)} hint={t("bills.invoices_issued")} icon="🧾" tone="teal" />
-          <ProStatCard label={t("common.total")} value={formatLkr(salesTotal)} hint={t("bills.total_billed")} icon="💸" tone="emerald" />
+          <ProStatCard label={t("bills.count")} value={String(data.sales.length)} hint={t("bills.invoices_issued")} icon={<BillsIcon className="h-5 w-5" />} tone="teal" />
+          <ProStatCard label={t("common.total")} value={formatLkr(salesTotal)} hint={t("bills.total_billed")} icon={<CostingIcon className="h-5 w-5" />} tone="emerald" />
           {canSeeFinancials && (
-            <ProStatCard label={t("common.profit")} value={formatLkr(profitTotal)} hint={t("bills.recorded_profit")} icon="📈" tone="blue" />
+            <ProStatCard label={t("common.profit")} value={formatLkr(profitTotal)} hint={t("bills.recorded_profit")} icon={<ReportsIcon className="h-5 w-5" />} tone="blue" />
           )}
           {canSeeFinancials && (
-            <ProStatCard label={t("bills.credit_bills")} value={formatLkr(creditTotal)} hint={t("bills.credit_sales")} icon="🤝" tone="amber" />
+            <ProStatCard label={t("bills.credit_bills")} value={formatLkr(creditTotal)} hint={t("bills.credit_sales")} icon={<CustomersIcon className="h-5 w-5" />} tone="amber" />
           )}
         </section>
 

@@ -17,6 +17,7 @@ import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
+import { WorkforceIcon, SuppliersIcon, ExpenseIcon, ReportsIcon } from "@/components/ui/icons";
 import type {
   Contractor,
   ContractorRateType,
@@ -222,12 +223,12 @@ export default function WorkforcePage() {
         )}
 
         <section className={`grid gap-4 sm:grid-cols-2 ${canSeeFinancials ? "xl:grid-cols-4" : ""}`}>
-          <ProStatCard label={t("work.team")} value={String(data.technicians.length)} hint={t("work.in_house")} icon="🧑‍🔧" tone="teal" />
-          <ProStatCard label={t("work.contractors")} value={String(data.contractors.length)} hint={`${activeContractors.length} ${t("work.active")}`} icon="🤝" tone="blue" />
+          <ProStatCard label={t("work.team")} value={String(data.technicians.length)} hint={t("work.in_house")} icon={<WorkforceIcon className="h-5 w-5" />} tone="teal" />
+          <ProStatCard label={t("work.contractors")} value={String(data.contractors.length)} hint={`${activeContractors.length} ${t("work.active")}`} icon={<SuppliersIcon className="h-5 w-5" />} tone="blue" />
           {canSeeFinancials && (
             <>
-              <ProStatCard label={t("work.outstanding_payout")} value={formatLkr(outstandingPayout)} hint={t("work.owed_contractors")} icon="💸" tone="amber" />
-              <ProStatCard label={t("work.total_margin")} value={formatLkr(totalMargin)} hint={t("work.margin_hint")} icon="📈" tone="emerald" />
+              <ProStatCard label={t("work.outstanding_payout")} value={formatLkr(outstandingPayout)} hint={t("work.owed_contractors")} icon={<ExpenseIcon className="h-5 w-5" />} tone="amber" />
+              <ProStatCard label={t("work.total_margin")} value={formatLkr(totalMargin)} hint={t("work.margin_hint")} icon={<ReportsIcon className="h-5 w-5" />} tone="emerald" />
             </>
           )}
         </section>

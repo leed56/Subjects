@@ -13,6 +13,7 @@ import {
   ProPageHeader,
   ProStatCard,
 } from "@/components/ui/pro-shell";
+import { SuppliersIcon, InboxIcon, BillsIcon, VatIcon } from "@/components/ui/icons";
 import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -393,10 +394,10 @@ export default function SuppliersPage() {
         )}
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("nav.suppliers")} value={String(data.suppliers.length)} hint="Saved supplier profiles" icon="🏭" tone="teal" />
-          <ProStatCard label={t("sup.you_owe_col")} value={formatLkr(totalPayable)} hint={`${payableSuppliers} suppliers payable`} icon="📥" tone="amber" />
-          <ProStatCard label={t("sup.vat_number")} value={String(vatSuppliers)} hint="VAT-ready supplier records" icon="VAT" tone="blue" />
-          <ProStatCard label={t("sup.recent_grn")} value={formatLkr(recentPurchaseValue)} hint="Latest 10 purchases" icon="🧾" tone="emerald" />
+          <ProStatCard label={t("nav.suppliers")} value={String(data.suppliers.length)} hint="Saved supplier profiles" icon={<SuppliersIcon className="h-5 w-5" />} tone="teal" />
+          <ProStatCard label={t("sup.you_owe_col")} value={formatLkr(totalPayable)} hint={`${payableSuppliers} suppliers payable`} icon={<InboxIcon className="h-5 w-5" />} tone="amber" />
+          <ProStatCard label={t("sup.vat_number")} value={String(vatSuppliers)} hint="VAT-ready supplier records" icon={<VatIcon className="h-5 w-5" />} tone="blue" />
+          <ProStatCard label={t("sup.recent_grn")} value={formatLkr(recentPurchaseValue)} hint="Latest 10 purchases" icon={<BillsIcon className="h-5 w-5" />} tone="emerald" />
         </section>
 
         <section className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">

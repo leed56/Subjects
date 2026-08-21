@@ -7,7 +7,6 @@ export const sectors: SectorTemplate[] = [
     nameEn: "Grocery & Supermarket",
     nameSi: "සිල්ලර සහ සුපිරි වෙළඳසැල්",
     description: "Fast billing, weighted items, expiry tracking, credit customers.",
-    icon: "🛒",
     extraFields: ["weightKg", "expiryDate", "barcode", "unitVariant"],
     reports: ["Daily sales", "Expiry alert", "Top sellers"],
   },
@@ -16,7 +15,6 @@ export const sectors: SectorTemplate[] = [
     nameEn: "Electronics",
     nameSi: "ඉලෙක්ට්‍රොනික උපකරණ",
     description: "Serial/IMEI, warranty, brand and model tracking.",
-    icon: "📱",
     extraFields: ["serialNo", "imei", "warrantyMonths", "brand", "model"],
     reports: ["Warranty expiring", "Sales by brand"],
   },
@@ -25,7 +23,6 @@ export const sectors: SectorTemplate[] = [
     nameEn: "Electricals",
     nameSi: "විදුලි උපකරණ",
     description: "Wire meters, job billing, contractor pricing.",
-    icon: "⚡",
     extraFields: ["unitType", "lengthMeters", "jobTag", "bulkPrice"],
     reports: ["Sales by project", "Stock by unit"],
   },
@@ -34,7 +31,6 @@ export const sectors: SectorTemplate[] = [
     nameEn: "Spare Parts",
     nameSi: "අමතර කොටස්",
     description: "Part numbers, vehicle fitment, dead stock aging.",
-    icon: "🔧",
     extraFields: ["partNo", "oemNo", "fitment", "binLocation"],
     reports: ["Slow movers", "Fast movers", "Reorder list"],
   },
@@ -43,7 +39,6 @@ export const sectors: SectorTemplate[] = [
     nameEn: "Air Conditioning",
     nameSi: "වායු සමනය",
     description: "BTU/HP units, serial pairs, installation jobs, service AMC.",
-    icon: "❄️",
     // Covers both whole AC units (brand/btu/hp/serials) and the parts &
     // materials catalogue (partNo/compatibleModels/binLocation/etc.) — the
     // product form shows one field set per sector, not per category, so a
@@ -76,7 +71,6 @@ export const sectors: SectorTemplate[] = [
     nameEn: "Car Sales",
     nameSi: "මෝටර් රථ වෙළඳාම",
     description: "Per-vehicle stock, landed cost, aging, finance commission.",
-    icon: "🚗",
     extraFields: [
       "chassisNo",
       "engineNo",

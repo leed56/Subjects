@@ -15,6 +15,7 @@ import {
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { LK_BANKS } from "@/lib/banks";
+import { SalesIcon, BillsIcon, CostingIcon } from "@/components/ui/icons";
 import { formatLkr } from "@/lib/format";
 import { buildQuoteTextFromLines, whatsappShareUrl } from "@/lib/invoice";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -288,9 +289,9 @@ export default function SalesPage() {
         )}
 
         <section className="grid gap-4 sm:grid-cols-3">
-          <ProStatCard label={t("sales.cart_items")} value={String(cartCount)} hint={lines.length ? `${lines.length} ${t("sales.product_lines")}` : t("sales.no_selected")} icon="🛒" tone="teal" />
-          <ProStatCard label={t("sales.gross")} value={formatLkr(gross)} hint={discountClamped > 0 ? `${t("sales.discount")} ${formatLkr(discountClamped)}` : t("sales.before_discount")} icon="🧾" tone="slate" />
-          <ProStatCard label={t("common.total")} value={formatLkr(netTotal)} hint={paymentLabel(t, payment)} icon="💸" tone="emerald" />
+          <ProStatCard label={t("sales.cart_items")} value={String(cartCount)} hint={lines.length ? `${lines.length} ${t("sales.product_lines")}` : t("sales.no_selected")} icon={<SalesIcon className="h-5 w-5" />} tone="teal" />
+          <ProStatCard label={t("sales.gross")} value={formatLkr(gross)} hint={discountClamped > 0 ? `${t("sales.discount")} ${formatLkr(discountClamped)}` : t("sales.before_discount")} icon={<BillsIcon className="h-5 w-5" />} tone="slate" />
+          <ProStatCard label={t("common.total")} value={formatLkr(netTotal)} hint={paymentLabel(t, payment)} icon={<CostingIcon className="h-5 w-5" />} tone="emerald" />
         </section>
 
         {inStock.length === 0 ? (

@@ -33,7 +33,6 @@ export interface SectorTemplate {
   nameEn: string;
   nameSi: string;
   description: string;
-  icon: string;
   extraFields: string[];
   reports: string[];
 }

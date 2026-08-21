@@ -373,3 +373,61 @@ Job→Parts→+Add Part→From Stock/Manual/Purchased→Qty/Cost/Charge→
 Replacing?→Disposition/Warranty→Save, all under the ~15-20s target — see
 that phase's own commits). Re-verified present and unchanged, not
 re-built.
+
+---
+
+## 9. Stage 4 findings — remaining emoji icon removal (Part 28)
+
+Confirmed via direct unicode-range search (not re-asserting Phase A's
+list from memory): the same 6 pages Phase A flagged still carried a raw
+emoji `ProStatCard` icon — `vat`, `workforce`, `sales`, `suppliers`,
+`vehicles`, `bills`. Every one replaced with a real SVG icon from
+`icons.tsx`, matched to what the stat actually represents (e.g.
+`AlertTriangleIcon` for vehicles' "60+ days in yard" aging stat,
+`InboxIcon` for suppliers' outstanding-payable stat) — not a generic
+placeholder glyph reused everywhere.
+
+Broader sweep also found — and fixed, since it's the same underlying
+issue — a second, larger emoji source: `SectorTemplate.icon` (grocery
+🛒, electronics 📱, electricals ⚡, spare_parts 🔧, ac_hvac ❄️, car_sales
+🚗), rendered in 6 places across the app: the sector picker (shop
+signup), the public `/sectors/[id]` page, the landing page's
+`SectorCard`, the platform-admin shop-creation template picker, the
+platform-admin shops list, and `product-form.tsx`'s locked-sector
+display.
+
+- Added 3 new icons to `icons.tsx` (`CartIcon`, `DeviceIcon`,
+  `BoltIcon`) for grocery/electronics/electricals — the other three
+  sectors already had an exact-shape match: `AssetIcon` (wall-mount AC
+  unit) for `ac_hvac`, `JobsIcon` (wrench) for `spare_parts`,
+  `VehiclesIcon` for `car_sales`.
+- New `sector-icon.tsx`: a `SECTOR_ICON_BY_ID` lookup (same convention
+  as `NAV_ICON_BY_HREF`) behind a `<SectorIcon sectorId />` component,
+  used at all 6 render sites.
+- `SectorTemplate.icon` (a raw emoji string) removed from the type and
+  every entry in `sectors.ts` — icon choice now lives in one place
+  (`sector-icon.tsx`) instead of being data the sector list carried
+  around.
+- Found in passing while fixing this: `BusinessTemplate.icon`
+  (`lib/admin/templates.ts`) was a *second*, independently-hardcoded
+  emoji per template — redundant with the `sectorId` every template
+  already carries, and could in principle drift from the sector's own
+  icon (they happened to always match, but nothing enforced that).
+  Removed the field entirely from the type, the 6 seed entries, and
+  both places that backfilled it (`getTemplate`,
+  `templateFromDbRow`) — the one remaining UI consumer (the
+  platform-admin shop-creation template picker) now derives its icon
+  from `template.sectorId` via `<SectorIcon>`, the same single source
+  of truth as everywhere else.
+- `admin/shops/page.tsx`'s shop list had an `sector?.icon ?? "🏪"`
+  fallback for an unresolvable/legacy sector id — kept the same
+  fallback *behavior* (a generic icon when the sector can't be
+  resolved) but swapped the emoji for `ShopIcon`.
+
+Verified zero remaining emoji `icon=` props anywhere in `src` (unicode-
+range search), and zero emoji characters in the built static HTML for
+every page touched this stage.
+
+Verification: tsc clean, eslint clean, 89/89 tests passing, production
+build succeeds (all 6 `/sectors/[id]` static params still generate),
+same 41-route list.

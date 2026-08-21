@@ -343,3 +343,34 @@ export const NavigateIcon = (p: IconProps) =>
     </>,
     p,
   );
+
+/** Global premium UI phase, Part 28 — three new icons for the business-
+ * sector picker/cards (SectorTemplate.icon was still a raw emoji; see
+ * sector-icon.tsx). The other three sectors already had a real-shape
+ * match: AssetIcon (wall-mount AC unit) for ac_hvac, JobsIcon (wrench)
+ * for spare_parts, VehiclesIcon for car_sales — no new icon needed there. */
+
+/** A shopping cart in profile — grocery/retail. */
+export const CartIcon = (p: IconProps) =>
+  base(
+    <>
+      <path d="M3 4h2l2.4 11.5a1.5 1.5 0 0 0 1.47 1.2h8.36a1.5 1.5 0 0 0 1.46-1.16L20.5 8.5H6.1" />
+      <circle cx="9.5" cy="20" r="1.25" fill="currentColor" stroke="none" />
+      <circle cx="17" cy="20" r="1.25" fill="currentColor" stroke="none" />
+    </>,
+    p,
+  );
+
+/** A phone/device silhouette with a home indicator — electronics. */
+export const DeviceIcon = (p: IconProps) =>
+  base(
+    <>
+      <rect x="6.5" y="2.5" width="11" height="19" rx="2" />
+      <path d="M10.5 18.5h3" />
+    </>,
+    p,
+  );
+
+/** A lightning bolt — electricals. */
+export const BoltIcon = (p: IconProps) =>
+  base(<path d="M12.5 2.5 5 13.5h5.5L11 21.5l7.5-11H13l-.5-8Z" />, p);
