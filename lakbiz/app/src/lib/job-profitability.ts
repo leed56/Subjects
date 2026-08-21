@@ -50,6 +50,16 @@
  *              job already carries a subcontractCost, the one case where
  *              the two are provably the same underlying payment.
  *
+ *              job-parts-materials phase: "parts_purchase"-category
+ *              Expenses are ALWAYS excluded here, unconditionally — that
+ *              category is only ever created programmatically alongside
+ *              an "External Purchase, Expense only" job_items line (see
+ *              actions.ts / docs/JOB_PARTS_ARCHITECTURE.md §2.2), whose
+ *              own lineTotal already counts as Material cost above. The
+ *              linked Expense record exists purely so the purchase shows
+ *              up in shop-wide expense totals and VAT input-tax figures
+ *              — it is never a second, independent cost to this job.
+ *
  * Revenue = job.quotedAmount as-is. Audited before writing this (per the
  * spec's "do not accidentally include VAT in profit" instruction):
  * ACJob/ACJobInput has no VAT field anywhere — AC jobs are a flat
@@ -100,13 +110,14 @@ export function computeJobProfitability(
   // distinct cost and still counts normally.
   const skipOutsourcedRepair =
     job.assigneeType === "contractor" && (job.subcontractCost ?? 0) > 0;
-  let otherCost = linkedExpenses.reduce(
-    (sum, e) =>
-      skipOutsourcedRepair && e.category === "outsourced_repair"
-        ? sum
-        : sum + e.amount,
-    0,
-  );
+  let otherCost = linkedExpenses.reduce((sum, e) => {
+    if (skipOutsourcedRepair && e.category === "outsourced_repair") return sum;
+    // Always excluded — see the file-header note above. This category
+    // exists solely to mirror an already-counted job_items line into
+    // shop-wide expense/VAT reporting, never to add a second cost here.
+    if (e.category === "parts_purchase") return sum;
+    return sum + e.amount;
+  }, 0);
 
   for (const item of jobItems) {
     if (item.itemType === "part") materialCost += item.lineTotal;

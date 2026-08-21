@@ -257,6 +257,17 @@ export type AssetJobItem = {
   /** Masked to 0 for non-financial roles by the job_items view itself
    * (Phase 6) — trusted as-is. */
   lineTotal: number;
+  /** job-parts-materials phase (Part 14/15, docs/JOB_PARTS_ARCHITECTURE.md
+   * §2.7) — replacement/warranty columns the job_items view already
+   * exposes (§2.1); added here for free, no new query shape needed. */
+  isReplacement: boolean;
+  oldComponentName: string | null;
+  oldComponentDisposition: string | null;
+  newComponentSerial: string | null;
+  warrantyType: string | null;
+  warrantyStartDate: string | null;
+  warrantyExpiryDate: string | null;
+  supplierId: string | null;
 };
 
 /** Parts/labour/service lines across every job linked to this asset — the
@@ -270,7 +281,9 @@ export async function fetchAssetJobItems(jobIds: string[]): Promise<{ data: Asse
 
   const { data, error } = await supabase
     .from("job_items")
-    .select("job_id, item_type, name, qty, line_total")
+    .select(
+      "job_id, item_type, name, qty, line_total, is_replacement, old_component_name, old_component_disposition, new_component_serial, warranty_type, warranty_start_date, warranty_expiry_date, supplier_id",
+    )
     .in("job_id", jobIds);
 
   if (error) return { data: [], error: error.message };
@@ -281,6 +294,14 @@ export async function fetchAssetJobItems(jobIds: string[]): Promise<{ data: Asse
       name: r.name as string,
       qty: Number(r.qty ?? 0),
       lineTotal: Number(r.line_total ?? 0),
+      isReplacement: Boolean(r.is_replacement),
+      oldComponentName: (r.old_component_name as string | null) ?? null,
+      oldComponentDisposition: (r.old_component_disposition as string | null) ?? null,
+      newComponentSerial: (r.new_component_serial as string | null) ?? null,
+      warrantyType: (r.warranty_type as string | null) ?? null,
+      warrantyStartDate: (r.warranty_start_date as string | null) ?? null,
+      warrantyExpiryDate: (r.warranty_expiry_date as string | null) ?? null,
+      supplierId: (r.supplier_id as string | null) ?? null,
     })),
     error: null,
   };

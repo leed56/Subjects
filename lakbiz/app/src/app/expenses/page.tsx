@@ -28,7 +28,7 @@ import {
 
 const CATEGORIES: ExpenseCategory[] = [
   "rent", "utilities", "salaries", "fuel", "transport", "supplies", "maintenance", "insurance", "marketing",
-  "parking", "equipment_rental", "outsourced_repair", "other",
+  "parking", "equipment_rental", "outsourced_repair", "parts_purchase", "other",
 ];
 const PAY_METHODS: ExpensePaymentMethod[] = ["cash", "bank_transfer", "card", "cheque"];
 

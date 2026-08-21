@@ -16,7 +16,8 @@ import {
   generateVehicleStockId,
   vehicleTotalCost,
 } from "@/lib/vehicles";
-import { sanitizeCustomFields } from "@/lib/sector-fields";
+import { emptyCustomFieldsForSector, sanitizeCustomFields } from "@/lib/sector-fields";
+import { addDaysToDate } from "@/lib/ac-service";
 import { parseProductCondition } from "@/lib/product-condition";
 import { parseContactType } from "@/lib/contact-type";
 import type { PaymentMethod, Product } from "@/lib/types";
@@ -1006,16 +1007,69 @@ export function addJobItem(data: AppData, input: JobItemInput, userId?: string):
   let stockLogs = data.stockLogs;
   let productId = input.productId;
   let source = input.source;
+  let purchasedForJob = false;
 
-  if (input.itemType === "part" && input.source === "stock") {
-    const product = productId ? data.products.find((p) => p.id === productId) : undefined;
+  const isPart = input.itemType === "part";
+
+  if (isPart && source === "stock") {
+    // job-parts-materials phase: External-Purchase-to-Inventory. Receive
+    // `receiveQty` into a (possibly brand-new) product first — this may
+    // exceed `qty` (the amount actually used on this job), so surplus
+    // stays as real spare stock — then fall through to the ordinary
+    // stock-consumption branch below, which applies the exact same
+    // historical-cost snapshot guarantee to it as any other stock line.
+    if (input.receiveQty && input.receiveQty > 0) {
+      let product = productId ? data.products.find((p) => p.id === productId) : undefined;
+      if (!product && input.newProductName?.trim()) {
+        product = {
+          id: newId(),
+          name: input.newProductName.trim(),
+          category: input.newProductCategory?.trim() || "other",
+          sectorId: "ac_hvac",
+          condition: "new",
+          buyPrice: unitPrice,
+          sellPrice: unitPrice,
+          stockQty: 0,
+          reorderLevel: 0,
+          active: true,
+          customFields: emptyCustomFieldsForSector("ac_hvac"),
+        };
+        products = [product, ...products];
+      }
+      if (product) {
+        const receivedProduct = product;
+        productId = receivedProduct.id;
+        const receiveQty = input.receiveQty;
+        products = products.map((p) =>
+          p.id === receivedProduct.id ? { ...p, stockQty: p.stockQty + receiveQty, buyPrice: unitPrice } : p,
+        );
+        stockLogs = [
+          {
+            id: newId(),
+            productId: receivedProduct.id,
+            productName: receivedProduct.name,
+            type: "purchase",
+            qty: receiveQty,
+            note: input.purchaseRef ? `Purchased for job — ${input.purchaseRef}` : "Purchased for job",
+            date: new Date().toISOString(),
+            relatedJobId: input.jobId,
+            relatedSupplierId: input.supplierId,
+            userId,
+          },
+          ...stockLogs,
+        ];
+        purchasedForJob = true;
+      }
+    }
+
+    const product = productId ? products.find((p) => p.id === productId) : undefined;
     // Not checking product.active here: that field lands in a separate,
     // not-yet-merged PR (#45). Follow-up once it lands: also reject
     // consuming a deactivated/discontinued product.
     if (!product || qty > product.stockQty) return data;
     unitPrice = product.buyPrice;
     const nextQty = Math.max(0, product.stockQty - qty);
-    products = data.products.map((p) => (p.id === product.id ? { ...p, stockQty: nextQty } : p));
+    products = products.map((p) => (p.id === product.id ? { ...p, stockQty: nextQty } : p));
     stockLogs = [
       {
         id: newId(),
@@ -1028,18 +1082,29 @@ export function addJobItem(data: AppData, input: JobItemInput, userId?: string):
         relatedJobId: input.jobId,
         userId,
       },
-      ...data.stockLogs,
+      ...stockLogs,
     ];
-  } else if (input.itemType !== "part") {
-    // Labour/service items never carry material-source fields.
+  } else if (!isPart) {
+    // Labour/service/transport/other items never carry material-source
+    // fields.
     productId = undefined;
     source = undefined;
   } else {
-    // "purchased" / "customer_supplied" — never decrement real stock, and
-    // never carry a productId even if one was stray-passed in, since
-    // nothing here actually links to that product's inventory.
+    // "purchased" / "manual" / "customer_supplied" — never decrement real
+    // stock, and never carry a productId even if one was stray-passed in,
+    // since nothing here actually links to that product's inventory.
     productId = undefined;
   }
+
+  // Supplier/reference/date tracking is available for any part line, not
+  // just "purchased" ones — a "manual" line the spec's own field list
+  // still wants an optional Supplier/receipt-reference on (e.g. a bulk
+  // material bought loosely, not tracked as a catalogued external
+  // purchase). "customer_supplied" parts never have a shop-side supplier.
+  const isPurchaseTracked = isPart && source !== "customer_supplied";
+  const isReplacement = isPart && Boolean(input.isReplacement);
+  const warrantyStartDate = isReplacement ? input.warrantyStartDate?.trim() || undefined : undefined;
+  const warrantyDays = isReplacement && input.warrantyDays && input.warrantyDays > 0 ? input.warrantyDays : undefined;
 
   const item: JobItem = {
     id: newId(),
@@ -1051,16 +1116,34 @@ export function addJobItem(data: AppData, input: JobItemInput, userId?: string):
     lineTotal: Math.round(qty * unitPrice * 100) / 100,
     source,
     productId,
-    supplierId: input.itemType === "part" && input.source === "purchased" ? input.supplierId : undefined,
-    purchaseRef: input.itemType === "part" && input.source === "purchased" ? input.purchaseRef?.trim() || undefined : undefined,
-    purchaseDate: input.itemType === "part" && input.source === "purchased" ? input.purchaseDate : undefined,
-    // Part and labour lines both support a customer-charge figure
-    // distinct from internal cost — labour's is the Phase 6 addition.
-    customerPrice: input.itemType === "part" || input.itemType === "labour" ? input.customerPrice : undefined,
+    supplierId: isPurchaseTracked ? input.supplierId : undefined,
+    purchaseRef: isPurchaseTracked ? input.purchaseRef?.trim() || undefined : undefined,
+    purchaseDate: isPurchaseTracked ? input.purchaseDate : undefined,
+    // Every line — part, labour, service, transport, other — may carry a
+    // customer-charge figure distinct from internal cost (job-parts-
+    // materials phase widened this from the original part/labour-only
+    // gate; Part 9 of the brief explicitly asks for customer charges on
+    // transport/other/service lines too).
+    customerPrice: input.customerPrice,
     technicianId:
       input.itemType === "labour" && input.technicianId && data.technicians.some((tc) => tc.id === input.technicianId)
         ? input.technicianId
         : undefined,
+    unit: input.unit?.trim() || undefined,
+    discount: input.discount && input.discount > 0 ? input.discount : undefined,
+    invoiceable: input.invoiceable ?? true,
+    purchasedForJob: purchasedForJob || undefined,
+    isReplacement: isReplacement || undefined,
+    oldComponentName: isReplacement ? input.oldComponentName?.trim() || undefined : undefined,
+    oldComponentSerial: isReplacement ? input.oldComponentSerial?.trim() || undefined : undefined,
+    oldComponentDisposition: isReplacement ? input.oldComponentDisposition : undefined,
+    newComponentSerial: isReplacement ? input.newComponentSerial?.trim() || undefined : undefined,
+    warrantyType: isReplacement ? input.warrantyType : undefined,
+    warrantyDays,
+    warrantyStartDate,
+    warrantyExpiryDate:
+      isReplacement && warrantyStartDate && warrantyDays ? addDaysToDate(warrantyStartDate, warrantyDays) : undefined,
+    notes: input.notes?.trim() || undefined,
   };
 
   return { ...data, products, stockLogs, jobItems: [item, ...data.jobItems] };

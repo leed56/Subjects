@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
 import { PageHeader, MetricCard, EmptyState, SearchInput, FilterBar } from "@/components/ui/primitives";
-import { SelectInput } from "@/components/ui/form";
+import { SelectInput, DateInput } from "@/components/ui/form";
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
@@ -34,6 +34,12 @@ export default function JobCostingPage() {
   const [typeFilter, setTypeFilter] = useState<"all" | ACJobType>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
   const [sortKey, setSortKey] = useState<SortKey>("date");
+  // Part 23 — date range, team/technician, and an "unrecorded costs"
+  // quick filter, on top of the existing customer/status/type/sort ones.
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [technicianFilter, setTechnicianFilter] = useState("all");
+  const [onlyUnrecorded, setOnlyUnrecorded] = useState(false);
 
   const canSeeFinancials = orgRole === "owner" || orgRole === "manager";
   const orgId = org.isAuthenticated ? org.id : null;
@@ -95,6 +101,10 @@ export default function JobCostingPage() {
     .filter((j) => statusFilter === "all" || (statusFilter === "completed" ? j.status === "completed" : j.status !== "cancelled" && j.status !== "completed"))
     .filter((j) => typeFilter === "all" || j.jobType === typeFilter)
     .filter((j) => !search.trim() || j.customerName.toLowerCase().includes(search.trim().toLowerCase()))
+    .filter((j) => !dateFrom || j.date >= dateFrom)
+    .filter((j) => !dateTo || j.date <= dateTo)
+    .filter((j) => technicianFilter === "all" || (j.assigneeType === "team" && j.assigneeId === technicianFilter))
+    .filter((j) => !onlyUnrecorded || (jobItemsByJob.get(j.id) ?? []).length === 0)
     .map((j) => ({
       job: j,
       profit: computeJobProfitability(j, jobItemsByJob.get(j.id) ?? [], jobLinkedExpenseTotals.get(j.id) ?? []),
@@ -111,6 +121,44 @@ export default function JobCostingPage() {
   const totalCost = costed.reduce((s, c) => s + c.profit.totalCost, 0);
   const totalMargin = totalQuoted - totalCost;
   const avgMarginPct = totalQuoted > 0 ? (totalMargin / totalQuoted) * 100 : null;
+  const totalMaterial = costed.reduce((s, c) => s + c.profit.materialCost, 0);
+  const totalLabor = costed.reduce((s, c) => s + c.profit.laborCost, 0);
+  const totalOther = costed.reduce((s, c) => s + c.profit.otherCost, 0);
+  const unrecordedCount = costed.filter((c) => (jobItemsByJob.get(c.job.id) ?? []).length === 0).length;
+
+  // Part 23 — "most profitable"/"lowest margin" as bounded, real lists
+  // over the currently-filtered set (respects every filter above), not a
+  // separate unfiltered global ranking — same defensible-rule discipline
+  // as isLowMarginJob/LOW_MARGIN_THRESHOLD_PCT (job-profitability.ts).
+  // Margin-assessable only: a job with revenue 0 has no percentage to
+  // rank by (grossMarginPct is null), so it's excluded from both lists
+  // rather than sorted as if 0% — same rule isLowMarginJob already uses.
+  const assessable = costed.filter((c) => c.profit.grossMarginPct !== null);
+  const mostProfitable = [...assessable].sort((a, b) => b.profit.grossProfit - a.profit.grossProfit).slice(0, 5);
+  const lowestMargin = [...assessable].sort((a, b) => (a.profit.grossMarginPct ?? 0) - (b.profit.grossMarginPct ?? 0)).slice(0, 5);
+
+  // External purchases by supplier (Part 23) — over the same filtered
+  // job set's job_items, source === "purchased" (or flagged
+  // purchasedForJob for a from-stock line that itself started as an
+  // external purchase — see docs/JOB_PARTS_ARCHITECTURE.md §2.2).
+  const purchasesBySupplier = new Map<string, { supplierName: string; total: number; count: number }>();
+  for (const c of costed) {
+    for (const item of jobItemsByJob.get(c.job.id) ?? []) {
+      if (item.source !== "purchased" && !item.purchasedForJob) continue;
+      const key = item.supplierId ?? "__unspecified";
+      const supplierName = item.supplierId
+        ? localData.suppliers.find((s) => s.id === item.supplierId)?.name ?? t("costing.unspecified_supplier")
+        : t("costing.unspecified_supplier");
+      const existing = purchasesBySupplier.get(key);
+      if (existing) {
+        existing.total += item.lineTotal;
+        existing.count += 1;
+      } else {
+        purchasesBySupplier.set(key, { supplierName, total: item.lineTotal, count: 1 });
+      }
+    }
+  }
+  const supplierRows = [...purchasesBySupplier.values()].sort((a, b) => b.total - a.total);
 
   const marginTone = (margin: number) => (margin < 0 ? "text-rose-700" : margin === 0 ? "text-slate-600" : "text-emerald-700");
 
@@ -178,7 +226,11 @@ export default function JobCostingPage() {
           metrics={
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard label={t("costing.total_quoted")} value={formatLkr(totalQuoted)} />
-              <MetricCard label={t("costing.total_cost")} value={formatLkr(totalCost)} />
+              <MetricCard
+                label={t("costing.total_cost")}
+                value={formatLkr(totalCost)}
+                hint={`${t("jobs.economics_material")} ${formatLkr(totalMaterial)} · ${t("jobs.economics_labor")} ${formatLkr(totalLabor)} · ${t("jobs.economics_other")} ${formatLkr(totalOther)}`}
+              />
               <MetricCard label={t("costing.total_margin")} value={formatLkr(totalMargin)} tone={totalMargin < 0 ? "danger" : "positive"} />
               <MetricCard label={t("costing.avg_margin_pct")} value={avgMarginPct !== null ? `${avgMarginPct.toFixed(1)}%` : "—"} tone={avgMarginPct !== null && avgMarginPct < 0 ? "danger" : "default"} />
             </div>
@@ -210,6 +262,25 @@ export default function JobCostingPage() {
             ]}
           />
           <SelectInput
+            value={technicianFilter}
+            onChange={setTechnicianFilter}
+            options={[
+              { value: "all", label: t("costing.technician_all") },
+              ...localData.technicians.map((tech) => ({ value: tech.id, label: tech.name })),
+            ]}
+          />
+          <DateInput value={dateFrom} onChange={setDateFrom} max={dateTo || undefined} className="w-36" />
+          <DateInput value={dateTo} onChange={setDateTo} min={dateFrom || undefined} className="w-36" />
+          <button
+            type="button"
+            onClick={() => setOnlyUnrecorded((v) => !v)}
+            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+              onlyUnrecorded ? "border-amber-300 bg-amber-50 text-amber-800" : "border-slate-300 text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            {t("costing.unrecorded_toggle")}{unrecordedCount > 0 ? ` (${unrecordedCount})` : ""}
+          </button>
+          <SelectInput
             value={sortKey}
             onChange={(v) => setSortKey(v as SortKey)}
             options={[
@@ -220,6 +291,52 @@ export default function JobCostingPage() {
             ]}
           />
         </FilterBar>
+
+        {costed.length > 0 && (mostProfitable.length > 0 || lowestMargin.length > 0 || supplierRows.length > 0) && (
+          <div className="mb-4 grid gap-4 lg:grid-cols-3">
+            {mostProfitable.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("costing.most_profitable")}</p>
+                <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+                  {mostProfitable.map((c) => (
+                    <li key={c.job.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                      <span className="truncate text-slate-900">{c.job.customerName}</span>
+                      <span className="shrink-0 font-mono text-xs font-semibold text-emerald-700">{formatLkr(c.profit.grossProfit)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {lowestMargin.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("costing.lowest_margin")}</p>
+                <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+                  {lowestMargin.map((c) => (
+                    <li key={c.job.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                      <span className="truncate text-slate-900">{c.job.customerName}</span>
+                      <span className={`shrink-0 font-mono text-xs font-semibold ${marginTone(c.profit.grossProfit)}`}>
+                        {c.profit.grossMarginPct?.toFixed(1)}%
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {supplierRows.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("costing.purchases_by_supplier")}</p>
+                <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+                  {supplierRows.map((s) => (
+                    <li key={s.supplierName} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                      <span className="truncate text-slate-900">{s.supplierName}</span>
+                      <span className="shrink-0 font-mono text-xs font-semibold text-slate-700">{formatLkr(s.total)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
 
         {sorted.length === 0 ? (
           <EmptyState title={t("costing.no_jobs")} description={t("costing.no_jobs_hint")} />

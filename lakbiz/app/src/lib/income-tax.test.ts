@@ -173,6 +173,7 @@ describe("getIncomeTaxYearSummary", () => {
         qty: 1,
         unitPrice: 20000,
         lineTotal: 20000,
+        invoiceable: true,
       },
     ];
     const data = makeAppData({
