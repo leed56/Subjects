@@ -1,9 +1,5 @@
 "use client";
 
-/** Phase 1 DataTable — desktop table that degrades to stacked cards on
- * mobile (no wide desktop tables getting squeezed onto phones; see the
- * "Avoid" list in the design spec).
- */
 import type { ReactNode } from "react";
 
 export type DataTableColumn<T> = {
@@ -11,7 +7,6 @@ export type DataTableColumn<T> = {
   header: string;
   render: (row: T) => ReactNode;
   align?: "left" | "right" | "center";
-  /** Hide this column on mobile card view — for secondary/dense fields. */
   hideOnMobile?: boolean;
 };
 
@@ -29,16 +24,15 @@ export function DataTable<T extends { id: string | number }>({
   if (rows.length === 0 && emptyState) return <>{emptyState}</>;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-      {/* Desktop / tablet table */}
+    <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.035)]">
       <div className="hidden overflow-x-auto sm:block">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50">
+            <tr className="border-b border-slate-200/80 bg-slate-50/80">
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500 ${
+                  className={`px-5 py-3.5 text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 ${
                     col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : "text-left"
                   }`}
                 >
@@ -65,14 +59,14 @@ export function DataTable<T extends { id: string | number }>({
                 tabIndex={onRowClick ? 0 : undefined}
                 className={
                   onRowClick
-                    ? "cursor-pointer hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500"
-                    : undefined
+                    ? "cursor-pointer transition hover:bg-teal-50/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500"
+                    : "transition hover:bg-slate-50/50"
                 }
               >
                 {columns.map((col) => (
                   <td
                     key={col.key}
-                    className={`px-4 py-3 text-slate-800 ${
+                    className={`px-5 py-4 text-slate-700 ${
                       col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : "text-left"
                     }`}
                   >
@@ -85,7 +79,6 @@ export function DataTable<T extends { id: string | number }>({
         </table>
       </div>
 
-      {/* Mobile stacked cards */}
       <div className="divide-y divide-slate-100 sm:hidden">
         {rows.map((row) => (
           <div
@@ -103,14 +96,14 @@ export function DataTable<T extends { id: string | number }>({
             }
             role={onRowClick ? "button" : undefined}
             tabIndex={onRowClick ? 0 : undefined}
-            className={`px-4 py-3 ${onRowClick ? "cursor-pointer active:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500" : ""}`}
+            className={`px-4 py-4 ${onRowClick ? "cursor-pointer active:bg-teal-50/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500" : ""}`}
           >
             {columns
               .filter((col) => !col.hideOnMobile)
               .map((col, i) => (
-                <div key={col.key} className={`flex items-center justify-between gap-3 ${i > 0 ? "mt-1.5" : ""}`}>
-                  {i > 0 && <span className="text-xs font-medium text-slate-500">{col.header}</span>}
-                  <span className={i === 0 ? "text-sm font-semibold text-slate-900" : "text-sm text-slate-700"}>
+                <div key={col.key} className={`flex items-center justify-between gap-4 ${i > 0 ? "mt-2" : ""}`}>
+                  {i > 0 && <span className="text-xs font-medium text-slate-400">{col.header}</span>}
+                  <span className={i === 0 ? "text-sm font-semibold text-slate-950" : "text-sm text-slate-700"}>
                     {col.render(row)}
                   </span>
                 </div>
