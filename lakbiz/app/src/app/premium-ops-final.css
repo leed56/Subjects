@@ -1,0 +1,144 @@
+/*
+ * Final authenticated-workspace precision pass.
+ * This file intentionally contains only scoped overrides for the live app.
+ * The public marketing page is unaffected.
+ */
+
+/* --------------------------------------------------------------------------
+ * Stock
+ * ----------------------------------------------------------------------- */
+
+/* The drawer header already says “Add item”; the small ADD NEW ITEM badge in
+   the first form section repeats the same information and adds visual noise. */
+body:has(aside a[href="/stock"][aria-current="page"])
+  [data-product-form="true"] > section:first-child > div:first-child > span:last-child {
+  display: none;
+}
+
+/* Low stock should earn more attention only when the metric is actually in a
+   warning state. Keep the rest of the KPI row quiet. */
+body:has(aside a[href="/stock"][aria-current="page"])
+  main > div:first-child > .mt-5 > .grid > div:nth-child(2):has(> p.text-amber-700) {
+  border-color: #f4cf87 !important;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(245, 158, 11, 0.10), transparent 55%),
+    linear-gradient(180deg, #fffdf8 0%, #fffaf0 100%) !important;
+  box-shadow:
+    0 1px 2px rgba(120, 53, 15, 0.03),
+    0 12px 30px rgba(120, 53, 15, 0.06) !important;
+}
+
+/* Disabled stock-out remains visibly a real control rather than fading into
+   the table background. */
+body:has(aside a[href="/stock"][aria-current="page"])
+  main table button:disabled[class*="bg-amber-50"] {
+  opacity: 1 !important;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc !important;
+  color: #94a3b8 !important;
+  box-shadow: none !important;
+}
+
+body:has(aside a[href="/stock"][aria-current="page"])
+  main table td:last-child button[aria-haspopup="menu"] {
+  border: 1px solid transparent;
+}
+
+body:has(aside a[href="/stock"][aria-current="page"])
+  main table td:last-child button[aria-haspopup="menu"]:hover {
+  border-color: #dbe5ed;
+  background: #f8fafc;
+}
+
+/* --------------------------------------------------------------------------
+ * Sales / POS
+ * ----------------------------------------------------------------------- */
+
+/* When there is no sellable stock, the central empty state is the one primary
+   action. Remove the duplicate Add stock button from the page header. */
+body:has(aside a[href="/sales"][aria-current="page"])
+  main:has(> section.mt-6 > section > div[class*="border-dashed"])
+  > div:first-child a[href="/stock"] {
+  display: none;
+}
+
+/* Empty inventory is a next-step message, not a feature-sized canvas. */
+body:has(aside a[href="/sales"][aria-current="page"])
+  main > section.mt-6 > section:has(> div[class*="border-dashed"]) {
+  padding: 1rem !important;
+}
+
+body:has(aside a[href="/sales"][aria-current="page"])
+  main > section.mt-6 > section > div[class*="border-dashed"] {
+  min-height: 0;
+  padding: 2rem 1.5rem !important;
+  border-color: #d8e4ec;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(20, 184, 166, 0.075), transparent 48%),
+    linear-gradient(180deg, #fbfdff 0%, #f7fafc 100%);
+}
+
+/* --------------------------------------------------------------------------
+ * Owner dashboard
+ * ----------------------------------------------------------------------- */
+
+/* Zero-data sections contract instead of stacking large empty architecture. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main div[class*="border-dashed"] {
+  min-height: 0 !important;
+  padding: 1rem 1.25rem !important;
+}
+
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main div[class*="border-dashed"] p[class*="max-w-sm"] {
+  margin-top: 0.25rem;
+  line-height: 1.45;
+}
+
+/* Needs-attention rows should read as the actionable command-center layer. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main section:has(h2, [class*="uppercase"]) div[class*="border-amber"] {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+/* The reset/sync row is system maintenance, not dashboard content. Make it a
+   quiet utility footer while keeping the action accessible. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div.mt-8.flex.flex-col.items-center.justify-between {
+  margin-top: 1.5rem;
+  border: 0;
+  background: transparent;
+  padding: 0.35rem 0.25rem;
+  box-shadow: none;
+  color: #94a3b8;
+}
+
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div.mt-8.flex.flex-col.items-center.justify-between button {
+  border: 1px solid transparent;
+  color: #94a3b8;
+}
+
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div.mt-8.flex.flex-col.items-center.justify-between button:hover {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+/* Slightly reduce vertical rhythm between dashboard operational sections when
+   they contain only empty-state content. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > section:has(div[class*="border-dashed"]),
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div > section:has(div[class*="border-dashed"]) {
+  padding-top: 1.1rem;
+  padding-bottom: 1.1rem;
+}
+
+@media (max-width: 639px) {
+  body:has(aside a[href="/sales"][aria-current="page"])
+    main > section.mt-6 > section > div[class*="border-dashed"] {
+    padding: 1.5rem 1rem !important;
+  }
+}
