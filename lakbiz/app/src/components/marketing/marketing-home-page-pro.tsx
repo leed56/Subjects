@@ -48,7 +48,7 @@ const PAGE_COPY = {
     featuresEyebrow: "Core features",
     featuresTitle: "Your daily business, in one connected system",
     featuresDesc:
-      "The important workflows get more space. Supporting tools stay close, without turning the screen into a wall of cards.",
+      "Sales, stock, billing and finance stay connected, so your team works faster with less duplication.",
     features: [
       ["Sales & POS", "Process sales, POS, quotations, credit sales and returns from one fast counter workflow."],
       ["Stock Management", "Track inventory in real time, find products quickly and catch low stock before it becomes a problem."],
@@ -82,13 +82,11 @@ const PAGE_COPY = {
     mostPopular: "Most popular",
     includes: "Includes",
     planCta: "Book a demo",
-    planUsers: "users",
-    planBranches: "branches",
     planFootnote: "Plans are assigned manually by LakBiz admin after payment and verification.",
     proofEyebrow: "Built for real operations",
-    proofTitle: "The controls a serious business actually needs",
+    proofTitle: "Built for the way serious businesses operate",
     proofDesc:
-      "No fake complexity. No public self-signup. LakBiz is configured around the way your business is meant to operate.",
+      "Clear controls, no public self-signup and no unnecessary complexity. LakBiz is configured around the way your business works.",
     proofItems: [
       ["Admin-managed onboarding", "Your shop, plan and access are configured before your team starts."],
       ["LKR-first workflows", "Pricing and daily operations are designed around Sri Lankan businesses."],
@@ -126,74 +124,72 @@ const PAGE_COPY = {
       "විකුණුම්, තොග, බිල්පත්, VAT, බැංකු සහ ගනුදෙනුකරු කළමනාකරණය — ඔබේ ව්‍යාපාරයට ගැළපෙන ලෙස අපේ කණ්ඩායම සකසයි.",
     primaryCta: "ඩෙමෝවක් වෙන්කරගන්න",
     secondaryCta: "පිවිසෙන්න",
-    heroTrust: ["Admin විසින් සකසන setup", "Role-based ආරක්ෂිත access", "ශ්‍රී ලංකා VAT ready"],
+    heroTrust: ["Admin විසින් සකසන පද්ධතිය", "භූමිකාව අනුව ආරක්ෂිත ප්‍රවේශය", "ශ්‍රී ලංකා VAT සඳහා සූදානම්"],
     capabilities: [
-      ["ශ්‍රී ලංකා ව්‍යාපාර සඳහා", "දේශීය workflows, LKR pricing සහ VAT-ready operations"],
-      ["ශ්‍රී ලංකා VAT-ready", "Input සහ output VAT පැහැදිලි summaries සමඟ පාලනය කරන්න"],
-      ["Multi-user role-based access", "එක් එක් සේවකයාට අවශ්‍ය access පමණක් දෙන්න"],
-      ["තොග, බිල්පත් සහ ගනුදෙනුකරුවන්", "දිනපතා operations එකම workspace එකකින් කරන්න"],
-      ["බැංකු සහ චෙක් කළමනාකරණය", "Deposits, cheques සහ reconciliation පාලනය කරන්න"],
+      ["ශ්‍රී ලංකා ව්‍යාපාර සඳහා", "දේශීය ක්‍රියාපටිපාටි, LKR මිලකරණය සහ VAT-ready මෙහෙයුම්"],
+      ["ශ්‍රී ලංකා VAT-ready", "Input සහ output VAT පැහැදිලි සාරාංශ සමඟ පාලනය කරන්න"],
+      ["භූමිකාව අනුව බහු-පරිශීලක ප්‍රවේශය", "එක් එක් සේවකයාට අවශ්‍ය ප්‍රවේශය පමණක් ලබා දෙන්න"],
+      ["තොග, බිල්පත් සහ ගනුදෙනුකරුවන්", "දිනපතා මෙහෙයුම් එකම පද්ධතියකින් කරන්න"],
+      ["බැංකු සහ චෙක් කළමනාකරණය", "තැන්පතු, චෙක්පත් සහ ගිණුම් සැසඳීම පාලනය කරන්න"],
     ],
     featuresEyebrow: "ප්‍රධාන විශේෂාංග",
-    featuresTitle: "ඔබේ දිනපතා ව්‍යාපාර කටයුතු එකම connected system එකකින්",
+    featuresTitle: "ඔබේ දිනපතා ව්‍යාපාර කටයුතු එකම පද්ධතියකින්",
     featuresDesc:
-      "වැදගත් workflows සඳහා වැඩි අවධානයක්. අනෙකුත් tools අවශ්‍ය තැන පමණක් — clutter නැතිව.",
+      "විකුණුම්, තොග, බිල්පත් සහ මූල්‍ය කටයුතු එකිනෙකට සම්බන්ධ නිසා වැඩ වේගවත් වන අතර නැවත නැවත දත්ත ඇතුළත් කිරීම අඩු වේ.",
     features: [
-      ["විකුණුම් සහ POS", "විකුණුම්, POS, quotations, credit sales සහ returns එකම වේගවත් workflow එකකින් කරන්න."],
-      ["තොග කළමනාකරණය", "Real-time stock බලන්න, products ඉක්මනින් සොයන්න සහ low-stock alerts ලබා ගන්න."],
+      ["විකුණුම් සහ POS", "විකුණුම්, POS, quotations, credit sales සහ returns එකම වේගවත් ක්‍රියාපටිපාටියකින් කරන්න."],
+      ["තොග කළමනාකරණය", "Real-time තොග බලන්න, භාණ්ඩ ඉක්මනින් සොයන්න සහ අඩු තොග දැනුම්දීම් ලබා ගන්න."],
       ["බිල්පත් සහ Invoicing", "Invoices සහ bills සාදන්න, credit customers සහ balances පැහැදිලිව පාලනය කරන්න."],
-      ["VAT Ready", "Input/output VAT එකම system එකෙන් track කර return-ready summaries සකසන්න."],
-      ["බැංකු සහ චෙක්", "Bank accounts, received/issued cheques, deposits සහ reconciliation පාලනය කරන්න."],
+      ["VAT Ready", "Input සහ output VAT එකම පද්ධතියෙන් track කර return-ready summaries සකසන්න."],
+      ["බැංකු සහ චෙක්", "Bank accounts, ලැබුණු සහ නිකුත් කළ චෙක්, deposits සහ reconciliation පාලනය කරන්න."],
       ["ගනුදෙනුකරුවන් සහ සැපයුම්කරුවන්", "Contacts, balances, purchase history සහ outstanding amounts එකම තැනක තබන්න."],
-      ["Sector Modules", "AC service, vehicle සහ sector-specific workflows අවශ්‍ය විට පමණක් සක්‍රිය කරන්න."],
+      ["Sector Modules", "AC service, vehicle සහ sector-specific ක්‍රියාපටිපාටි අවශ්‍ය විට පමණක් සක්‍රිය කරන්න."],
     ],
     industriesEyebrow: "ඔබේ ව්‍යාපාර වර්ගය සඳහා",
-    industriesTitle: "එකම platform එක. ව්‍යාපාර වර්ගයට ගැළපෙන වෙනස් workflows.",
+    industriesTitle: "එකම පද්ධතියක්. ව්‍යාපාර වර්ගයට ගැළපෙන වෙනස් ක්‍රියාපටිපාටි.",
     industriesDesc:
-      "ඔබේ sector එකට අවශ්‍ය fields, reports සහ workflows අනුව LakBiz configure වේ.",
+      "ඔබේ sector එකට අවශ්‍ය fields, reports සහ ක්‍රියාපටිපාටි අනුව LakBiz සකස් වේ.",
     industryDescriptions: {
       grocery: "වේගවත් billing, weighted items, expiry tracking සහ credit customers.",
       electronics: "Serial/IMEI tracking, warranty, brand සහ model control.",
-      electricals: "Meters, project billing සහ contractor pricing workflows.",
+      electricals: "Meters, project billing සහ contractor pricing ක්‍රියාපටිපාටි.",
       spare_parts: "Part numbers, vehicle fitment සහ slow-moving stock visibility.",
       ac_hvac: "Installation jobs, service schedules, parts සහ warranty workflows.",
       car_sales: "Vehicle stock, landed cost, aging සහ profitability tracking.",
     },
     pricingEyebrow: "සරල සහ පැහැදිලි මිල ගණන්",
-    pricingTitle: "ඔබේ ව්‍යාපාරයට ගැළපෙන plan එක තෝරන්න",
+    pricingTitle: "ඔබේ ව්‍යාපාරයට ගැළපෙන සැලැස්ම තෝරන්න",
     pricingDesc:
-      "ගෙවීම සහ verification පසු LakBiz plan එක activate කරයි. වැඩි features අවශ්‍ය විට පමණක් upgrade කරන්න.",
+      "ගෙවීම සහ verification පසු LakBiz plan එක activate කරයි. වැඩි පහසුකම් අවශ්‍ය විට පමණක් upgrade කරන්න.",
     planDescriptions: {
       starter: "කුඩා වෙළඳසැල් සඳහා",
       business: "වර්ධනය වන ව්‍යාපාර සඳහා",
-      pro: "උසස් operations සඳහා",
+      pro: "උසස් මෙහෙයුම් සඳහා",
     },
     mostPopular: "වැඩිම ජනප්‍රිය",
     includes: "ඇතුළත්",
     planCta: "ඩෙමෝවක් වෙන්කරගන්න",
-    planUsers: "users",
-    planBranches: "branches",
-    planFootnote: "ගෙවීම සහ verification පසු LakBiz admin විසින් plan assign කරයි.",
-    proofEyebrow: "සැබෑ ව්‍යාපාර operations සඳහා",
-    proofTitle: "Professional business එකකට සැබවින්ම අවශ්‍ය controls",
+    planFootnote: "ගෙවීම සහ verification පසු LakBiz admin විසින් සැලැස්ම assign කරයි.",
+    proofEyebrow: "සැබෑ ව්‍යාපාර මෙහෙයුම් සඳහා",
+    proofTitle: "සාර්ථක ව්‍යාපාරයක් ක්‍රියාත්මක වන ආකාරයට නිර්මාණය කළ පද්ධතිය",
     proofDesc:
-      "අනවශ්‍ය complexity නැහැ. Public self-signup නැහැ. LakBiz ඔබේ business workflow එකට ගැළපෙන ලෙස configure වේ.",
+      "අනවශ්‍ය සංකීර්ණතාවක් නැහැ. පොදු self-signup නැහැ. LakBiz ඔබේ ව්‍යාපාරය ක්‍රියා කරන ආකාරයට සකස් කරයි.",
     proofItems: [
-      ["Admin-managed onboarding", "ඔබේ shop, plan සහ user access අපි මුලින්ම configure කරමු."],
-      ["LKR-first workflows", "Pricing සහ දිනපතා operations ශ්‍රී ලංකා ව්‍යාපාර සඳහා සකසා ඇත."],
-      ["VAT-ready operations", "Input VAT, output VAT සහ summaries real transactions සමඟ සම්බන්ධයි."],
-      ["Role-based access", "Staff member කෙනෙකුට ඔහුට අවශ්‍ය tools සහ data පමණක් පෙන්වයි."],
-      ["Multi-branch ready", "එක branch එකකින් branches කිහිපයකට system වෙනස් නොකර වර්ධනය වන්න."],
-      ["Pro සඳහා offline billing", "Internet connection දුර්වල වුවත් අත්‍යවශ්‍ය billing workflows දිගටම භාවිතා කරන්න."],
+      ["Admin-managed onboarding", "ඔබේ shop, plan සහ user access කණ්ඩායම වැඩ ආරම්භ කිරීමට පෙර අපි සකසමු."],
+      ["LKR-first මෙහෙයුම්", "මිලකරණය සහ දිනපතා කටයුතු ශ්‍රී ලංකා ව්‍යාපාර සඳහා සකසා ඇත."],
+      ["VAT-ready මෙහෙයුම්", "Input VAT, output VAT සහ summaries සැබෑ ගනුදෙනු සමඟ සම්බන්ධයි."],
+      ["භූමිකාව අනුව ප්‍රවේශය", "සේවකයාට ඔහුගේ කාර්යයට අවශ්‍ය tools සහ data පමණක් පෙන්වයි."],
+      ["ශාඛා කිහිපයකට සූදානම්", "පද්ධතිය මාරු නොකර එක ස්ථානයකින් ශාඛා කිහිපයකට වර්ධනය වන්න."],
+      ["Pro සඳහා offline billing", "Internet connection දුර්වල වුවත් අත්‍යවශ්‍ය billing කටයුතු දිගටම කරන්න."],
     ],
     ctaEyebrow: "ඔබේ LakBiz account එක ලබා ගන්න",
-    ctaTitle: "System එක අපි configure කරමු. ඔබේ team එක වැඩ ආරම්භ කරයි.",
+    ctaTitle: "පද්ධතිය අපි සකස් කරමු. ඔබේ කණ්ඩායම වැඩ ආරම්භ කරයි.",
     ctaDesc:
-      "ඩෙමෝවක් වෙන්කරගන්න, නිවැරදි plan එක තෝරන්න, shop සහ user access අපේ team එක setup කරයි.",
+      "ඩෙමෝවක් වෙන්කරගෙන නිවැරදි සැලැස්ම තෝරන්න. ඔබේ shop සහ user access අපේ කණ්ඩායම සකස් කරයි.",
     ctaPrimary: "ඩෙමෝවක් වෙන්කරගන්න",
     ctaSecondary: "පිවිසෙන්න",
-    footerTagline: "ශ්‍රී ලංකා SMEs සඳහා admin-managed business software.",
-    footerProduct: "Product",
+    footerTagline: "ශ්‍රී ලංකා SMEs සඳහා admin-managed ව්‍යාපාර මෘදුකාංගය.",
+    footerProduct: "LakBiz",
     footerStart: "ආරම්භ කරන්න",
     rights: "සියලු හිමිකම් ඇවිරිණි.",
     region: "ශ්‍රී ලංකාව",
@@ -209,11 +205,11 @@ const PLAN_FEATURE_ROWS: { flag: FeatureFlag; en: string; si: string }[] = [
   { flag: "customers", en: "Customers", si: "ගනුදෙනුකරුවන්" },
   { flag: "suppliers", en: "Suppliers", si: "සැපයුම්කරුවන්" },
   { flag: "banking", en: "Banking", si: "බැංකු" },
-  { flag: "ac_jobs", en: "AC Jobs", si: "AC රැකියා" },
+  { flag: "ac_jobs", en: "AC Jobs", si: "AC සේවා" },
   { flag: "vehicles", en: "Vehicles", si: "වාහන" },
-  { flag: "export", en: "Data export", si: "Data export" },
+  { flag: "export", en: "Data export", si: "දත්ත export" },
   { flag: "offline", en: "Offline billing", si: "Offline billing" },
-  { flag: "bulk_messaging", en: "Bulk customer messages", si: "Bulk customer messages" },
+  { flag: "bulk_messaging", en: "Bulk customer messages", si: "සමූහ customer messages" },
 ];
 
 const FEATURE_ICONS = [SalesIcon, StockIcon, BillsIcon, VatIcon, BankingIcon, CustomersIcon, JobsIcon];
@@ -228,13 +224,47 @@ const INDUSTRY_ACCENTS = [
   "from-sky-200/20 via-teal-200/10 to-transparent",
 ];
 
+const INDUSTRY_REPORT_SI: Record<string, string> = {
+  "Daily sales": "දිනපතා විකුණුම්",
+  "Expiry alert": "කල් ඉකුත් දැනුම්දීම්",
+  "Top sellers": "වැඩිම විකිණෙන භාණ්ඩ",
+  "Warranty expiring": "Warranty අවසන් වන භාණ්ඩ",
+  "Sales by brand": "Brand අනුව විකුණුම්",
+  "Sales by project": "Project අනුව විකුණුම්",
+  "Stock by unit": "Unit අනුව තොග",
+  "Slow movers": "මන්දගාමී භාණ්ඩ",
+  "Fast movers": "වේගයෙන් විකිණෙන භාණ්ඩ",
+  "Reorder list": "නැවත ඇණවුම් ලැයිස්තුව",
+  "Installations pending": "අවසන් නොකළ installations",
+  "Warranty registrations": "Warranty ලියාපදිංචි",
+  "Pipe & accessory usage": "Pipe සහ accessories භාවිතය",
+  "Stock aging 30/60/90 days": "තොග වයස 30/60/90 දින",
+  "Profit per vehicle": "වාහනයකට ලාභය",
+  "Cash vs leasing mix": "Cash සහ leasing මිශ්‍රණය",
+};
+
+function industryReportLabel(report: string, locale: string) {
+  return locale === "si" ? INDUSTRY_REPORT_SI[report] ?? report : report;
+}
+
 export function MarketingHomePage() {
   const { locale, setLocale } = useLocale();
-  const c = locale === "si" ? PAGE_COPY.si : PAGE_COPY.en;
+  const isSinhala = locale === "si";
+  const c = isSinhala ? PAGE_COPY.si : PAGE_COPY.en;
   const year = new Date().getFullYear();
 
+  const salesStoryItems = isSinhala
+    ? ["වේගවත් counter flow", "Credit sales", "Returns සහ quotations"]
+    : ["Fast counter flow", "Credit sales", "Returns & quotations"];
+  const stockMetrics = isSinhala
+    ? [["තොගයේ", "1,248"], ["අඩු තොග", "18"], ["වර්ග", "42"]]
+    : [["In stock", "1,248"], ["Low stock", "18"], ["Categories", "42"]];
+  const billingRows = isSinhala
+    ? [["Invoice #INV-2048", "Rs. 18,500"], ["Credit balance", "Rs. 7,200"], ["ලැබුණු ගෙවීම", "Rs. 11,300"]]
+    : [["Invoice #INV-2048", "Rs. 18,500"], ["Credit balance", "Rs. 7,200"], ["Payment received", "Rs. 11,300"]];
+
   return (
-    <div className="min-h-screen overflow-hidden bg-white text-slate-950">
+    <div lang={locale} className="min-h-screen overflow-hidden bg-white text-slate-950">
       <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-200/70 bg-white/88 backdrop-blur-xl">
         <div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
           <Link href="/" className="flex items-center gap-3">
@@ -253,11 +283,11 @@ export function MarketingHomePage() {
           <div className="flex items-center gap-2 sm:gap-3">
             <button
               type="button"
-              onClick={() => setLocale(locale === "si" ? "en" : "si")}
+              onClick={() => setLocale(isSinhala ? "en" : "si")}
               className="min-h-10 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-950"
               aria-label="Toggle language"
             >
-              {locale === "si" ? "English" : "සිංහල"}
+              {isSinhala ? "English" : "සිංහල"}
             </button>
             <Link href="/login" className="hidden min-h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 sm:inline-flex">
               {c.nav.signIn}
@@ -277,17 +307,17 @@ export function MarketingHomePage() {
 
           <div className="relative mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-10">
             <div className="grid items-center gap-10 lg:grid-cols-[0.82fr_1.18fr] lg:gap-12 xl:gap-16">
-              <div className="max-w-[620px] text-center lg:text-left">
+              <div className={`text-center lg:text-left ${isSinhala ? "max-w-[670px]" : "max-w-[620px]"}`}>
                 <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-50/80 px-4 py-2 text-[11px] font-bold text-teal-800 lg:mx-0">
                   <span className="flex h-4 w-4 items-center justify-center rounded-full bg-teal-600 text-[9px] text-white">✓</span>
                   {c.badge}
                 </div>
 
-                <h1 className="mt-6 text-[2.8rem] font-bold leading-[0.98] tracking-[-0.052em] text-slate-950 sm:text-[3.7rem] lg:text-[4.45rem]">
+                <h1 className={`mt-6 font-bold tracking-[-0.052em] text-slate-950 ${isSinhala ? "text-[2.35rem] leading-[1.08] sm:text-[2.95rem] lg:text-[3.7rem]" : "text-[2.8rem] leading-[0.98] sm:text-[3.7rem] lg:text-[4.45rem]"}`}>
                   {c.heroTitle}{" "}
                   <span className="text-teal-600">{c.heroAccent}</span>
                 </h1>
-                <p className="mx-auto mt-6 max-w-[560px] text-base leading-7 text-slate-500 sm:text-lg sm:leading-8 lg:mx-0">
+                <p className={`mx-auto mt-6 max-w-[560px] text-base text-slate-500 sm:text-lg lg:mx-0 ${isSinhala ? "leading-8" : "leading-7 sm:leading-8"}`}>
                   {c.heroDesc}
                 </p>
 
@@ -310,7 +340,7 @@ export function MarketingHomePage() {
                 </div>
               </div>
 
-              <ProductShowcase />
+              <ProductShowcase locale={locale} />
             </div>
           </div>
         </section>
@@ -336,7 +366,7 @@ export function MarketingHomePage() {
 
         <section id="features" className="scroll-mt-24 bg-[#f4f7fa] py-16 lg:py-20">
           <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-10">
-            <SectionHeading eyebrow={c.featuresEyebrow} title={c.featuresTitle} description={c.featuresDesc} />
+            <SectionHeading eyebrow={c.featuresEyebrow} title={c.featuresTitle} description={c.featuresDesc} compact={isSinhala} />
 
             <div className="mt-10 grid gap-4 lg:grid-cols-12">
               <FeatureStory
@@ -349,11 +379,11 @@ export function MarketingHomePage() {
                 <div className="mt-8 grid gap-3 sm:grid-cols-[1.25fr_0.75fr]">
                   <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-400">Today</span>
-                      <span className="rounded-full bg-teal-300/10 px-2.5 py-1 text-[10px] font-bold text-teal-300">LIVE</span>
+                      <span className="text-xs font-semibold text-slate-400">{isSinhala ? "අද" : "Today"}</span>
+                      <span className="rounded-full bg-teal-300/10 px-2.5 py-1 text-[10px] font-bold text-teal-300">{isSinhala ? "සජීවී" : "LIVE"}</span>
                     </div>
                     <div className="mt-4 grid grid-cols-3 gap-2">
-                      {["Rs. 45,680", "32 bills", "Rs. 12,340"].map((value) => (
+                      {["Rs. 45,680", isSinhala ? "බිල් 32" : "32 bills", "Rs. 12,340"].map((value) => (
                         <div key={value} className="rounded-xl bg-white/[0.045] px-3 py-3 text-sm font-bold text-white">{value}</div>
                       ))}
                     </div>
@@ -364,7 +394,7 @@ export function MarketingHomePage() {
                     </div>
                   </div>
                   <div className="grid gap-3">
-                    {["Fast counter flow", "Credit sales", "Returns & quotations"].map((item) => (
+                    {salesStoryItems.map((item) => (
                       <div key={item} className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.035] px-4 py-3 text-sm font-semibold text-slate-300">
                         <span className="h-2 w-2 rounded-full bg-teal-300" />{item}
                       </div>
@@ -380,7 +410,7 @@ export function MarketingHomePage() {
                 className="lg:col-span-5"
               >
                 <div className="mt-6 grid grid-cols-3 gap-2">
-                  {[["In stock", "1,248"], ["Low stock", "18"], ["Categories", "42"]].map(([label, value]) => (
+                  {stockMetrics.map(([label, value]) => (
                     <div key={label} className="rounded-xl bg-slate-50 px-3 py-3 ring-1 ring-inset ring-slate-100">
                       <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
                       <p className="mt-1 text-lg font-bold text-slate-950">{value}</p>
@@ -396,10 +426,10 @@ export function MarketingHomePage() {
                 className="lg:col-span-5"
               >
                 <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                  {["Invoice #INV-2048", "Credit balance", "Payment received"].map((item, index) => (
-                    <div key={item} className={`flex items-center justify-between py-2 text-sm ${index > 0 ? "border-t border-slate-200/70" : ""}`}>
-                      <span className="font-medium text-slate-600">{item}</span>
-                      <span className="font-bold text-slate-950">{["Rs. 18,500", "Rs. 7,200", "Rs. 11,300"][index]}</span>
+                  {billingRows.map(([label, value], index) => (
+                    <div key={label} className={`flex items-center justify-between py-2 text-sm ${index > 0 ? "border-t border-slate-200/70" : ""}`}>
+                      <span className="font-medium text-slate-600">{label}</span>
+                      <span className="font-bold text-slate-950">{value}</span>
                     </div>
                   ))}
                 </div>
@@ -426,7 +456,7 @@ export function MarketingHomePage() {
             <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
               <div className="max-w-3xl">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-300">{c.industriesEyebrow}</p>
-                <h2 className="mt-3 text-3xl font-bold tracking-[-0.045em] text-white sm:text-4xl lg:text-[3rem]">{c.industriesTitle}</h2>
+                <h2 className={`mt-3 font-bold tracking-[-0.045em] text-white ${isSinhala ? "text-[2rem] leading-[1.12] sm:text-[2.55rem] lg:text-[2.75rem]" : "text-3xl sm:text-4xl lg:text-[3rem]"}`}>{c.industriesTitle}</h2>
               </div>
               <p className="max-w-xl text-sm leading-6 text-slate-400 lg:justify-self-end">{c.industriesDesc}</p>
             </div>
@@ -441,11 +471,11 @@ export function MarketingHomePage() {
                       <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/[0.07] text-teal-300 ring-1 ring-inset ring-white/[0.08]"><SectorIcon sectorId={sector.id} className="h-6 w-6" /></span>
                       <span className="text-sm text-slate-600 transition group-hover:text-teal-300">↗</span>
                     </div>
-                    <h3 className="relative mt-7 text-xl font-bold tracking-tight text-white">{locale === "si" ? sector.nameSi : sector.nameEn}</h3>
+                    <h3 className="relative mt-7 text-xl font-bold tracking-tight text-white">{isSinhala ? sector.nameSi : sector.nameEn}</h3>
                     <p className="relative mt-2 max-w-md text-sm leading-6 text-slate-400">{desc}</p>
                     <div className="relative mt-5 flex flex-wrap gap-2">
                       {sector.reports.slice(0, 2).map((report) => (
-                        <span key={report} className="rounded-full border border-white/[0.08] bg-white/[0.025] px-2.5 py-1 text-[10px] font-semibold text-slate-500">{report}</span>
+                        <span key={report} className="rounded-full border border-white/[0.08] bg-white/[0.025] px-2.5 py-1 text-[10px] font-semibold text-slate-500">{industryReportLabel(report, locale)}</span>
                       ))}
                     </div>
                   </article>
@@ -457,13 +487,13 @@ export function MarketingHomePage() {
 
         <section id="plans" className="scroll-mt-24 bg-[#eef3f6] py-16 lg:py-20">
           <div className="mx-auto max-w-[1240px] px-4 sm:px-6 lg:px-10">
-            <SectionHeading eyebrow={c.pricingEyebrow} title={c.pricingTitle} description={c.pricingDesc} />
+            <SectionHeading eyebrow={c.pricingEyebrow} title={c.pricingTitle} description={c.pricingDesc} compact={isSinhala} />
 
             <div className="mt-12 grid items-stretch gap-5 lg:grid-cols-3 lg:gap-6">
               {PLANS.map((plan) => {
                 const highlight = plan.highlight;
                 const enabledRows = PLAN_FEATURE_ROWS.filter((row) => plan.features[row.flag]);
-                const planName = locale === "si" ? plan.nameSi : plan.nameEn;
+                const planName = isSinhala ? plan.nameSi : plan.nameEn;
                 const planDesc = c.planDescriptions[plan.id as keyof typeof c.planDescriptions] ?? "";
                 return (
                   <article key={plan.id} className={`relative flex flex-col overflow-hidden rounded-[1.45rem] border bg-white ${highlight ? "border-teal-400 shadow-[0_26px_70px_rgba(13,148,136,0.16)] ring-1 ring-teal-200 lg:-translate-y-3" : "border-slate-200 shadow-[0_10px_34px_rgba(15,23,42,0.05)]"}`}>
@@ -477,8 +507,12 @@ export function MarketingHomePage() {
                           <span className="ml-1 text-sm font-semibold tracking-normal text-slate-400">/month</span>
                         </p>
                         <div className="mt-4 flex flex-wrap gap-2">
-                          <span className="rounded-full bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-500 ring-1 ring-inset ring-slate-100">Up to {plan.maxUsers} {c.planUsers}</span>
-                          <span className="rounded-full bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-500 ring-1 ring-inset ring-slate-100">{plan.maxBranches} {c.planBranches}</span>
+                          <span className="rounded-full bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-500 ring-1 ring-inset ring-slate-100">
+                            {isSinhala ? `පරිශීලකයින් ${plan.maxUsers} දක්වා` : `Up to ${plan.maxUsers} ${plan.maxUsers === 1 ? "user" : "users"}`}
+                          </span>
+                          <span className="rounded-full bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-500 ring-1 ring-inset ring-slate-100">
+                            {isSinhala ? `ශාඛා ${plan.maxBranches}` : `${plan.maxBranches} ${plan.maxBranches === 1 ? "branch" : "branches"}`}
+                          </span>
                         </div>
                       </div>
 
@@ -488,7 +522,7 @@ export function MarketingHomePage() {
                           {enabledRows.slice(0, highlight ? 8 : 7).map((row) => (
                             <li key={row.flag} className="flex items-center gap-2.5 text-sm text-slate-600">
                               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-teal-50 text-[9px] font-bold text-teal-700">✓</span>
-                              {locale === "si" ? row.si : row.en}
+                              {isSinhala ? row.si : row.en}
                             </li>
                           ))}
                         </ul>
@@ -513,7 +547,7 @@ export function MarketingHomePage() {
               <div className="grid gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-start">
                 <div className="max-w-xl">
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-300">{c.proofEyebrow}</p>
-                  <h2 className="mt-3 text-3xl font-bold tracking-[-0.045em] text-white sm:text-4xl">{c.proofTitle}</h2>
+                  <h2 className={`mt-3 font-bold tracking-[-0.045em] text-white ${isSinhala ? "text-[2rem] leading-[1.12] sm:text-[2.5rem]" : "text-3xl sm:text-4xl"}`}>{c.proofTitle}</h2>
                   <p className="mt-4 text-sm leading-6 text-slate-400">{c.proofDesc}</p>
                 </div>
                 <div className="grid gap-x-7 gap-y-6 sm:grid-cols-2">
@@ -542,7 +576,7 @@ export function MarketingHomePage() {
               <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
                 <div className="max-w-3xl">
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-teal-100">{c.ctaEyebrow}</p>
-                  <h2 className="mt-3 text-3xl font-bold tracking-[-0.045em] sm:text-4xl">{c.ctaTitle}</h2>
+                  <h2 className={`mt-3 font-bold tracking-[-0.045em] ${isSinhala ? "text-[2rem] leading-[1.12] sm:text-[2.6rem]" : "text-3xl sm:text-4xl"}`}>{c.ctaTitle}</h2>
                   <p className="mt-3 max-w-2xl text-sm leading-6 text-teal-50/80">{c.ctaDesc}</p>
                 </div>
                 <div className="flex shrink-0 flex-col gap-2.5 sm:flex-row">
@@ -592,11 +626,11 @@ export function MarketingHomePage() {
   );
 }
 
-function SectionHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description?: string }) {
+function SectionHeading({ eyebrow, title, description, compact = false }: { eyebrow: string; title: string; description?: string; compact?: boolean }) {
   return (
     <div className="mx-auto max-w-3xl text-center">
       <p className="text-[10px] font-black uppercase tracking-[0.19em] text-teal-700">{eyebrow}</p>
-      <h2 className="mt-3 text-3xl font-bold tracking-[-0.045em] text-slate-950 sm:text-4xl lg:text-[2.8rem]">{title}</h2>
+      <h2 className={`mt-3 font-bold tracking-[-0.045em] text-slate-950 ${compact ? "text-[2rem] leading-[1.12] sm:text-[2.5rem] lg:text-[2.65rem]" : "text-3xl sm:text-4xl lg:text-[2.8rem]"}`}>{title}</h2>
       {description && <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-500">{description}</p>}
     </div>
   );
@@ -630,13 +664,27 @@ function FeatureStory({
   );
 }
 
-function ProductShowcase() {
-  const stats = [
-    ["Today sales", "Rs. 45,680", "Live"],
-    ["Profit", "Rs. 12,340", "Tracked"],
-    ["Bills", "32", "Ready"],
-    ["Cash", "Rs. 128,750", "Available"],
-  ];
+function ProductShowcase({ locale }: { locale: string }) {
+  const isSinhala = locale === "si";
+  const stats = isSinhala
+    ? [
+        ["අද විකුණුම්", "Rs. 45,680", "සජීවී"],
+        ["ලාභය", "Rs. 12,340", "Track කර ඇත"],
+        ["බිල්", "32", "සූදානම්"],
+        ["මුදල්", "Rs. 128,750", "ලබා ගත හැක"],
+      ]
+    : [
+        ["Today sales", "Rs. 45,680", "Live"],
+        ["Profit", "Rs. 12,340", "Tracked"],
+        ["Bills", "32", "Ready"],
+        ["Cash", "Rs. 128,750", "Available"],
+      ];
+  const navItems = isSinhala
+    ? ["මුල් පුවරුව", "විකුණුම්", "තොග", "ගනුදෙනුකරුවන්", "බිල්", "VAT වාර්තාව"]
+    : ["Dashboard", "Sales", "Stock", "Customers", "Bills", "VAT return"];
+  const sideCards = isSinhala
+    ? [["අඩු තොග", "Cooking Oil 5L", "ඒකක 2 ඉතිරි"], ["ලැබිය යුතු", "Rs. 85,420", "Credit customers"], ["ගෙවිය යුතු VAT", "Rs. 9,500", "මෙම කාර්තුව"]]
+    : [["LOW STOCK", "Cooking Oil 5L", "2 units left"], ["RECEIVABLES", "Rs. 85,420", "Credit customers"], ["VAT PAYABLE", "Rs. 9,500", "This quarter"]];
 
   return (
     <div className="relative mx-auto w-full max-w-[840px] pb-12" aria-hidden="true">
@@ -653,17 +701,17 @@ function ProductShowcase() {
           <div className="grid min-h-[31rem] grid-cols-[5.5rem_1fr] bg-[#f6f8fb] sm:grid-cols-[10rem_1fr]">
             <aside className="bg-[#07111f] px-2.5 py-5 sm:px-4">
               <p className="mb-5 px-2 text-xs font-bold text-teal-300 sm:text-base">LakBiz</p>
-              {["Dashboard", "Sales", "Stock", "Customers", "Bills", "VAT return"].map((item, index) => (
+              {navItems.map((item, index) => (
                 <div key={item} className={`mb-1.5 rounded-lg px-2 py-2 text-[8px] font-semibold sm:px-2.5 sm:text-[10px] ${index === 0 ? "bg-teal-400/15 text-white" : "text-slate-600"}`}>{item}</div>
               ))}
             </aside>
 
             <div className="min-w-0 p-3 sm:p-5 lg:p-6">
               <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="hidden h-9 flex-1 items-center rounded-xl border border-slate-200 bg-white px-3 text-[10px] text-slate-400 shadow-sm sm:flex">Search transactions, products, customers…</div>
+                <div className="hidden h-9 flex-1 items-center rounded-xl border border-slate-200 bg-white px-3 text-[10px] text-slate-400 shadow-sm sm:flex">{isSinhala ? "ගනුදෙනු, භාණ්ඩ සහ ගනුදෙනුකරුවන් සොයන්න…" : "Search transactions, products, customers…"}</div>
                 <div className="ml-auto flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm">
                   <span className="h-6 w-6 rounded-full bg-teal-100" />
-                  <span className="hidden text-[10px] font-semibold text-slate-700 md:block">Customer Shop</span>
+                  <span className="hidden text-[10px] font-semibold text-slate-700 md:block">{isSinhala ? "වෙළඳසැල" : "Customer Shop"}</span>
                 </div>
               </div>
 
@@ -680,8 +728,8 @@ function ProductShowcase() {
               <div className="mt-3 grid gap-3 md:grid-cols-[1.5fr_0.7fr]">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-bold text-slate-800 sm:text-xs">Sales analytics</p>
-                    <span className="rounded-full bg-slate-50 px-2 py-1 text-[8px] font-semibold text-slate-400">This week</span>
+                    <p className="text-[10px] font-bold text-slate-800 sm:text-xs">{isSinhala ? "විකුණුම් විශ්ලේෂණය" : "Sales analytics"}</p>
+                    <span className="rounded-full bg-slate-50 px-2 py-1 text-[8px] font-semibold text-slate-400">{isSinhala ? "මේ සතිය" : "This week"}</span>
                   </div>
                   <div className="mt-5 h-44 sm:h-52">
                     <svg viewBox="0 0 500 190" className="h-full w-full" preserveAspectRatio="none">
@@ -694,7 +742,7 @@ function ProductShowcase() {
                 </div>
 
                 <div className="hidden space-y-3 md:block">
-                  {[["LOW STOCK", "Cooking Oil 5L", "2 units left"], ["RECEIVABLES", "Rs. 85,420", "Credit customers"], ["VAT PAYABLE", "Rs. 9,500", "This quarter"]].map(([label, value, hint]) => (
+                  {sideCards.map(([label, value, hint]) => (
                     <div key={label} className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
                       <p className="text-[8px] font-bold uppercase tracking-[0.12em] text-slate-400">{label}</p>
                       <p className="mt-1.5 text-xs font-bold text-slate-900">{value}</p>
@@ -722,7 +770,7 @@ function ProductShowcase() {
             </div>
           ))}
         </div>
-        <div className="mt-2 rounded-lg bg-teal-600 px-2 py-2 text-center text-[6px] font-bold text-white">Quick sale</div>
+        <div className="mt-2 rounded-lg bg-teal-600 px-2 py-2 text-center text-[6px] font-bold text-white">{isSinhala ? "ඉක්මන් විකිණීම" : "Quick sale"}</div>
       </div>
     </div>
   );
