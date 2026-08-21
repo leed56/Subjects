@@ -110,12 +110,22 @@ export type OverlaySize = "sm" | "md" | "lg" | "xl";
 
 /** Drawer widths — sm for a short confirmation-style panel, md (default)
  * for a single-column form, lg for a sectioned form, xl for a tabbed
- * detail workspace (e.g. Job Detail). */
+ * detail workspace (e.g. Job Detail).
+ *
+ * `xl` — global premium UI phase, Part 14: "recommended large desktop
+ * width: approximately 48-55% viewport." The old flat `sm:max-w-4xl`
+ * (896px) was a *fixed* pixel cap, not viewport-relative — on a 1440px
+ * screen that's already 62%, and on a common 1366px laptop it's 66%, both
+ * well past the target. `clamp(520px, 52vw, 896px)` makes it track the
+ * viewport (52% on anything in between), keeps the same 896px ceiling for
+ * ultra-wide monitors (unchanged from before), and floors at 520px so the
+ * tabbed layout stays usable on a narrower `sm:`-range viewport (tablets
+ * in landscape) instead of getting squeezed by a pure percentage. */
 const DRAWER_SIZE_CLASS: Record<OverlaySize, string> = {
   sm: "sm:max-w-sm",
   md: "sm:max-w-md",
   lg: "sm:max-w-2xl",
-  xl: "sm:max-w-4xl",
+  xl: "sm:w-[clamp(520px,52vw,896px)]",
 };
 
 type DrawerProps = PropsWithChildren<{

@@ -289,3 +289,87 @@ Read in full before changing anything, per this phase's own discipline:
   "no bouncy/large-scale animation." Flagged here for Stage 6 (landing
   redesign) to resolve, not touched now since Stage 2 is shared shop-app
   chrome, not the public landing page.
+
+---
+
+## 8. Stage 3 findings — Dashboard + AC Jobs + Job Detail Drawer
+
+Read `dashboard/page.tsx` (928 lines) and `jobs/page.tsx` (2150+ lines)
+in full before changing anything. Both were already close to Part 9-16's
+target — this stage is real, verified refinement, not a rebuild:
+
+**Dashboard (Part 9-10)** — already matched almost exactly: header with
+shop name/date/cloud-sync indicator, +New Sale/+New Job primary actions
+with everything else under "…", exactly 4 KPI metrics, a dominant Today's
+Operations table, a genuinely compact "Needs Attention" list that only
+ever shows active alerts (never a zero), a collapsible Financial
+Snapshot, a real dual-series trend chart, and an onboarding empty state
+with the 1-2-3 numbered-steps pattern the brief describes almost
+verbatim. Changes made:
+- Today's Operations table gains an Amount column (financial-gated) —
+  the one genuinely missing field from Part 9's column list. A "Due"
+  column was deliberately not added: `stats.todayJobs` is already
+  filtered to `scheduledDate === today`, so a due-date column on an
+  already-today-only list would repeat "today" on every row.
+- Teams Today cards gain an avatar-initials badge (Part 9's "initials or
+  uploaded staff avatars, don't require photography"), reusing Stage 2's
+  `initialsFor()`.
+- Onboarding copy aligned to the brief's suggested wording ("Welcome to
+  LakBiz" / "Complete these steps to activate your business workspace.")
+  in both locales.
+- Not changed, deliberately: trend arrows on the KPI cards ("when
+  historical comparison exists, show a small trend"). Real day-over-day
+  comparison needs a new calculation in `getDashboardStats()`, not a UI
+  change — noted as a scoped follow-up rather than rushed in as a
+  UI-only stat that risks being wrong.
+
+**AC Jobs (Part 11-13)** — the KPI strip (Pending/Scheduled/Service
+Due/Quoted Value), the search+dropdown filter toolbar with a mobile
+sheet, and the Cards|List toggle already matched Part 11 precisely. The
+JobCard (Part 12) already carried every field the brief lists and a
+sound primary/secondary/overflow button hierarchy. Changes made:
+- `AcRemindersBanner` rewritten around the new `AlertRow` primitive:
+  was a 3-line bordered box when SMS reminders were off and rendered
+  *nothing* when on; now always shows one honest compact line ("SMS
+  reminders off" + Enable, or "SMS reminders on" + Manage) — matching
+  Part 11's explicit example almost verbatim.
+- `AcInAppAlertSettings` (3 checkboxes + a day-count select) was
+  permanently inline on the main page whenever the in-app-alerts feature
+  was on — exactly the "detailed reminder configuration" Part 11 says to
+  move out of the main page. Now opens from a small "Alert settings"
+  trigger button into a Dialog; the component itself is unchanged
+  content, only where it mounts changed. (Also found and fixed in
+  passing: this component still had Phase-A-era `rounded-2xl`/
+  `font-black` styling that Stage 1's pro-shell.tsx sweep couldn't have
+  caught, since it isn't part of pro-shell.tsx or primitives.tsx — a
+  reminder that Part 27's later per-page audit needs to look at
+  standalone feature components too, not just the page files themselves.)
+- Both JobCard's overflow menu and the list view's row actions gained an
+  "Invoice" item (Part 12/13 both list it) — previously the only path to
+  a job's invoice was opening the Job Sheet drawer first.
+- List view gained an Equipment column (Part 13's explicit column list)
+  showing description + BTU, `hideOnMobile` like Scheduled/Team.
+
+**Job Detail Drawer (Part 14)** — tabs (Overview/Parts & Materials/
+Labor & Other Costs/Job Economics/Invoice & Payment) and the
+canSeeFinancials-gated financial summary row already matched. History is
+folded into the Overview tab rather than split into its own tab — a
+deliberate, pre-existing choice (a short status-change timeline reads
+naturally as part of "overview"), not changed this pass. One real,
+measured fix: the shared `xl` Drawer size (`overlay.tsx`, used only by
+this drawer) was a *fixed* `sm:max-w-4xl` (896px) — not viewport-relative
+despite reading as one. On a 1440px screen that's 62% of the viewport;
+on a common 1366px laptop, 66% — both well past Part 14's 48-55% target.
+Changed to `sm:w-[clamp(520px,52vw,896px)]`: 52% on any viewport in
+between, the same 896px ceiling for ultra-wide monitors, floored at
+520px so a narrower `sm:`-range viewport (tablet landscape) doesn't get
+squeezed by a pure percentage.
+
+**Parts & Materials / fast part-entry (Part 15-16)** — not touched this
+stage: already rebuilt in the job-parts-materials phase (PR #78) against
+column and fast-entry requirements nearly identical to this brief's
+(Item/Source/Qty/Cost/Sell/Total/Warranty/Actions;
+Job→Parts→+Add Part→From Stock/Manual/Purchased→Qty/Cost/Charge→
+Replacing?→Disposition/Warranty→Save, all under the ~15-20s target — see
+that phase's own commits). Re-verified present and unchanged, not
+re-built.

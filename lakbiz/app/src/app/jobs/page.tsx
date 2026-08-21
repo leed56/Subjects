@@ -2,6 +2,7 @@
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AcJobReminderTimeline } from "@/components/ac-job-reminder-timeline";
 import { AcRemindersBanner } from "@/components/ac-reminders-banner";
 import { AcInAppAlertSettings } from "@/components/ac-in-app-alert-settings";
@@ -75,6 +76,7 @@ import { invoiceableLinesTotal } from "@/lib/job-invoice";
 const UNIT_TYPES = ["Wall mounted", "Cassette", "Ducted", "Ceiling suspended", "Portable", "Window"];
 
 export default function JobsPage() {
+  const router = useRouter();
   const { data, ready, saveACJobToCloud, updateACJobToCloud, deleteACJobToCloud, recordACServiceToCloud, addJobItemToCloud, deleteJobItemToCloud } = useAppStore();
   const { t, locale } = useLocale();
   const { org, orgRole, canSeeFinancials } = useSubscription();
@@ -82,7 +84,11 @@ export default function JobsPage() {
   const canOperateJobs = canOperateAcJobs(orgRole);
   const { canWrite, disabledHint } = useWriteAccess();
   const notificationLogs = useNotificationLogs(org.id);
-  const { markAllSeen } = useAcInAppAlerts();
+  const { markAllSeen, enabled: alertsFeatureEnabled } = useAcInAppAlerts();
+  // Part 11 — detailed reminder config lives behind a compact trigger,
+  // not permanently inline on the main page (see AcInAppAlertSettings's
+  // own header comment).
+  const [alertSettingsOpen, setAlertSettingsOpen] = useState(false);
   const notifySettings = loadNotificationSettings();
   const { toast } = useToast();
 
@@ -362,6 +368,16 @@ export default function JobsPage() {
       render: (job) => <span className="font-medium text-slate-900">{job.customerName}</span>,
     },
     {
+      key: "equipment",
+      header: t("jobs.col_equipment"),
+      hideOnMobile: true,
+      render: (job) => (
+        <span className="truncate text-slate-600">
+          {[job.description, job.btu ? `${job.btu} BTU` : null].filter(Boolean).join(" · ") || "—"}
+        </span>
+      ),
+    },
+    {
       key: "scheduled",
       header: t("jobs.install_label"),
       hideOnMobile: true,
@@ -410,6 +426,7 @@ export default function JobsPage() {
             <ActionMenu
               label={t("jobs.more_actions")}
               items={[
+                { label: t("jinv.view_invoice"), onSelect: () => router.push(`/jobs/${job.id}/invoice`) },
                 { label: t("common.edit"), onSelect: () => loadJob(job), disabled: !canWrite },
                 ...(canManageJobs
                   ? [{ label: t("common.delete"), onSelect: () => setDeleteTarget(job), tone: "danger" as const, disabled: !canWrite }]
@@ -453,8 +470,24 @@ export default function JobsPage() {
         />
         <WriteDisabledHint className="mb-4" />
 
-        {canOperateJobs && <div className="mb-4"><AcRemindersBanner /></div>}
-        <div className="mb-4"><AcInAppAlertSettings /></div>
+        {canOperateJobs && (
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex-1"><AcRemindersBanner /></div>
+            {alertsFeatureEnabled && (
+              <button
+                type="button"
+                onClick={() => setAlertSettingsOpen(true)}
+                className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 sm:self-auto"
+              >
+                {t("ac_alerts.settings_title")}
+              </button>
+            )}
+          </div>
+        )}
+
+        <Dialog open={alertSettingsOpen} onClose={() => setAlertSettingsOpen(false)} title={t("ac_alerts.settings_title")} size="sm">
+          <AcInAppAlertSettings />
+        </Dialog>
 
         {/* Simplified toolbar (Part 5): search + one dropdown per filter
             instead of ~13 individual pill buttons. Dropdowns collapse into
@@ -876,6 +909,7 @@ export default function JobsPage() {
  * is promoted to primary so the card never has zero primary actions. */
 function JobCard({ job, assigneePhone, locale, business, notificationLogs, notifySettings, canManageJobs, canOperateJobs, canSeeFinancials, canWrite, disabledHint, onServiceDone, onJobSheet, onEdit, onSchedule, onInstalled, onComplete, onDelete, deleting }: { job: ACJob; assigneePhone?: string; locale: Locale; business: BusinessInfo; notificationLogs: ReturnType<typeof useNotificationLogs>; notifySettings: ReturnType<typeof loadNotificationSettings>; canManageJobs: boolean; canOperateJobs: boolean; canSeeFinancials: boolean; canWrite: boolean; disabledHint: string | null; onServiceDone: () => void; onJobSheet: () => void; onEdit: () => void; onSchedule: () => void; onInstalled: () => void; onComplete: () => void; onDelete: () => void; deleting?: boolean }) {
   const { t } = useLocale();
+  const router = useRouter();
   const balance = job.quotedAmount - job.depositAmount;
   const isContractor = job.assigneeType === "contractor";
   const margin =
@@ -902,6 +936,9 @@ function JobCard({ job, assigneePhone, locale, business, notificationLogs, notif
       ? [{ label: t("jobs.service_done"), onSelect: onServiceDone, disabled: !canWrite }]
       : []),
     ...(statusAction ? [{ label: t("jobs.open"), onSelect: onJobSheet }] : []),
+    // Part 12's overflow list includes Invoice directly from the card —
+    // previously only reachable by first opening the Job Sheet drawer.
+    { label: t("jinv.view_invoice"), onSelect: () => router.push(`/jobs/${job.id}/invoice`) },
     ...(canOperateJobs ? [{ label: t("common.edit"), onSelect: onEdit, disabled: !canWrite }] : []),
     ...(canManageJobs
       ? [{ label: deleting ? t("common.saving") : t("common.delete"), onSelect: onDelete, tone: "danger" as const, disabled: !canWrite || deleting }]

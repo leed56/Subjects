@@ -30,7 +30,7 @@ import { ConfirmDialog } from "@/components/ui/overlay";
 import { CallLink, NavigateLink } from "@/components/ui/field-links";
 import { jobStatusLabel } from "@/lib/ac-jobs";
 import { jobTypeLabel } from "@/lib/ac-job-types";
-import { formatLkr } from "@/lib/format";
+import { formatLkr, initialsFor } from "@/lib/format";
 import { exportAccountantPack } from "@/lib/export";
 import { contactTypeI18nKey } from "@/lib/contact-type";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -508,6 +508,22 @@ export default function DashboardPage() {
       header: t("common.status"),
       render: (job) => <StatusBadge tone={job.status === "completed" || job.status === "installed" ? "positive" : job.status === "service_due" ? "warning" : "info"}>{jobStatusLabel(job.status, locale)}</StatusBadge>,
     },
+    // Part 9's explicit column list — Amount, financial-gated same as
+    // every other money figure on this page. "Due" is deliberately not a
+    // column here: stats.todayJobs is already filtered to
+    // scheduledDate === today (actions.ts), so a due-date column on a
+    // today-only list would just repeat "today" on every row.
+    ...(canSeeFinancials
+      ? [
+          {
+            key: "amount",
+            header: t("common.total"),
+            align: "right" as const,
+            hideOnMobile: true,
+            render: (job: ACJob) => <span className="font-mono tabular-nums text-slate-900">{formatLkr(job.quotedAmount)}</span>,
+          },
+        ]
+      : []),
     {
       key: "action",
       header: t("dash.col_action"),
@@ -830,13 +846,27 @@ export default function DashboardPage() {
                   const remaining = g.jobs.length - completed;
                   const nextJob = g.jobs.find((j) => j.status !== "completed" && j.status !== "installed");
                   return (
-                    <div key={g.key} className="rounded-lg border border-slate-200 p-3">
-                      <p className={`truncate text-sm font-semibold ${g.key === "unassigned" ? "text-amber-700" : "text-slate-900"}`}>{g.name}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">{t("dash.team_jobs_count").replace("{count}", String(g.jobs.length))}</p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {t("dash.team_completed_remaining").replace("{completed}", String(completed)).replace("{remaining}", String(remaining))}
-                      </p>
-                      {nextJob && <p className="mt-1 truncate text-xs text-teal-700">{t("dash.team_next").replace("{customer}", nextJob.customerName)}</p>}
+                    <div key={g.key} className="flex items-start gap-2.5 rounded-lg border border-slate-200 p-3">
+                      {/* Part 9's "use initials or uploaded staff avatars,
+                       * don't require profile photography" — this app has
+                       * no staff photo field, so initials (from the real
+                       * assignee name, "?" only for the unassigned bucket)
+                       * are the honest choice, not a placeholder photo. */}
+                      <span
+                        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                          g.key === "unassigned" ? "bg-amber-100 text-amber-800" : "bg-teal-100 text-teal-800"
+                        }`}
+                      >
+                        {g.key === "unassigned" ? "?" : initialsFor(g.name)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className={`truncate text-sm font-semibold ${g.key === "unassigned" ? "text-amber-700" : "text-slate-900"}`}>{g.name}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">{t("dash.team_jobs_count").replace("{count}", String(g.jobs.length))}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {t("dash.team_completed_remaining").replace("{completed}", String(completed)).replace("{remaining}", String(remaining))}
+                        </p>
+                        {nextJob && <p className="mt-1 truncate text-xs text-teal-700">{t("dash.team_next").replace("{customer}", nextJob.customerName)}</p>}
+                      </div>
                     </div>
                   );
                 })}
