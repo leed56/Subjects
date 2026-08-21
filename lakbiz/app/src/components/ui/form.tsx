@@ -1,6 +1,5 @@
 "use client";
 
-/** Phase 1 form primitives: FormField, MoneyInput, DateInput. */
 import type { InputHTMLAttributes, ReactNode } from "react";
 
 export function FormField({
@@ -18,34 +17,28 @@ export function FormField({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm font-medium text-slate-700">
+      <span className="mb-1.5 block text-sm font-medium text-slate-700">
         {label}
         {required && <span className="text-rose-500"> *</span>}
       </span>
       {children}
       {error ? (
-        <span className="mt-1 block text-xs text-rose-600">{error}</span>
+        <span className="mt-1.5 block text-xs font-medium text-rose-600">{error}</span>
       ) : hint ? (
-        <span className="mt-1 block text-xs text-slate-500">{hint}</span>
+        <span className="mt-1.5 block text-xs leading-5 text-slate-500">{hint}</span>
       ) : null}
     </label>
   );
 }
 
-// Global premium UI phase, Part 30 — desktop control height target
-// 40-44px. py-2 (8px) put this at ~38px; py-2.5 (10px) lands at 42px
-// with text-sm's 20px line-height + the 1px border either side, inside
-// the target range and close to the 44px+ mobile touch-target guidance
-// without a separate responsive variant.
 const inputClass =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50 disabled:text-slate-400";
+  "min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.03)] placeholder:text-slate-400 transition focus:border-teal-400 focus:outline-none focus:ring-4 focus:ring-teal-100/70 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
 
 export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   const { className = "", ...rest } = props;
   return <input {...rest} className={`${inputClass} ${className}`} />;
 }
 
-/** LKR amount input — Rs. prefix, numeric keypad on mobile, blocks non-numeric keys. */
 export function MoneyInput({
   value,
   onChange,
@@ -61,7 +54,7 @@ export function MoneyInput({
 }) {
   return (
     <div className={`relative ${className}`}>
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400">
+      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-medium text-slate-400">
         Rs.
       </span>
       <input
@@ -74,7 +67,7 @@ export function MoneyInput({
           const next = e.target.value;
           if (next === "" || /^\d*\.?\d{0,2}$/.test(next)) onChange(next);
         }}
-        className={`${inputClass} pl-9 text-right tabular-nums`}
+        className={`${inputClass} pl-10 text-right tabular-nums`}
       />
     </div>
   );
@@ -121,8 +114,6 @@ export function SelectInput({
   options: { value: string; label: string }[];
   disabled?: boolean;
   className?: string;
-  /** Set this when the select is used outside a FormField wrapper (e.g. a
-   * standalone filter-bar control) so it still has an accessible name. */
   ariaLabel?: string;
 }) {
   return (
