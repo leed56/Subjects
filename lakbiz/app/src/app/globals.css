@@ -98,6 +98,51 @@ body {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
+/*
+ * Landing-page precision pass. The first feature story intentionally owns
+ * more visual weight than the supporting cards, but it should not read as a
+ * large empty navy box. On desktop the embedded product demo now stretches
+ * to use the available story-card height, and pricing CTAs resolve to one
+ * clean baseline across uneven feature lists.
+ */
+@media (min-width: 1024px) {
+  #features article.lg\:row-span-2 > .relative {
+    display: flex;
+    height: 100%;
+    flex-direction: column;
+  }
+
+  #features article.lg\:row-span-2 > .relative > .mt-8.grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  #features article.lg\:row-span-2 > .relative > .mt-8.grid > div:first-child {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  #features article.lg\:row-span-2 > .relative > .mt-8.grid > div:first-child > .h-20 {
+    height: auto;
+    min-height: 7.5rem;
+    flex: 1 1 auto;
+  }
+
+  #features article.lg\:row-span-2 > .relative > .mt-8.grid > div:last-child {
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+  }
+
+  #plans article > .flex.flex-1.flex-col > .mt-6.border-t {
+    margin-bottom: 1.75rem;
+  }
+
+  #plans article > .flex.flex-1.flex-col > a:last-child {
+    margin-top: auto;
+  }
+}
+
 /* Hide native tab scrollbars while preserving horizontal touch/trackpad scroll. */
 [role="tablist"] {
   scrollbar-width: none;
