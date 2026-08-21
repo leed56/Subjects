@@ -10,6 +10,7 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useShopNav } from "@/components/shell/use-shop-nav";
 import { NAV_ICON_BY_HREF } from "@/components/shell/nav-icons";
 import { MenuIcon, CloseIcon, SettingsIcon, SignOutIcon } from "@/components/ui/icons";
+import { initialsFor } from "@/lib/format";
 import type { NavItem } from "@/lib/nav-sections";
 
 /** Mobile top bar + slide-out nav drawer — compact header, no horizontal
@@ -47,7 +48,7 @@ export function MobileNav() {
         href={item.href}
         onClick={() => setOpen(false)}
         aria-current={active ? "page" : undefined}
-        className={`flex items-center gap-3 rounded-xl px-3.5 py-3 text-base font-medium ${
+        className={`flex items-center gap-3 rounded-lg px-3.5 py-3 text-base font-medium ${
           active ? "bg-teal-50 text-teal-800" : "text-slate-700 hover:bg-slate-50"
         }`}
       >
@@ -137,7 +138,7 @@ export function MobileNav() {
               <Link
                 href="/admin"
                 onClick={() => setOpen(false)}
-                className="mt-4 flex items-center gap-3 rounded-xl bg-slate-900 px-3.5 py-3 text-base font-medium text-teal-300"
+                className="mt-4 flex items-center gap-3 rounded-lg bg-slate-900 px-3.5 py-3 text-base font-medium text-teal-300"
               >
                 {t("admin.nav")}
               </Link>
@@ -145,9 +146,14 @@ export function MobileNav() {
           </nav>
 
           <div className="border-t border-slate-200 p-3">
-            <div className="rounded-xl bg-slate-50 px-3.5 py-2.5">
-              <p className="truncate text-sm font-semibold text-slate-900">{org.name}</p>
-              <p className="truncate text-xs text-slate-500">{user?.email}</p>
+            <div className="flex items-center gap-2.5 rounded-lg bg-slate-50 px-3.5 py-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-800">
+                {initialsFor(org.name, user?.email)}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-900">{org.name}</p>
+                <p className="truncate text-xs text-slate-500">{user?.email}</p>
+              </div>
             </div>
             {user && (
               <button
@@ -156,7 +162,7 @@ export function MobileNav() {
                   setOpen(false);
                   void handleLogout();
                 }}
-                className="mt-2 flex w-full items-center gap-2 rounded-xl px-3.5 py-3 text-sm font-medium text-rose-600 hover:bg-rose-50"
+                className="mt-2 flex w-full items-center gap-2 rounded-lg px-3.5 py-3 text-sm font-medium text-rose-600 hover:bg-rose-50"
               >
                 <SignOutIcon className="h-4.5 w-4.5" />
                 {t("sub.sign_out")}

@@ -32,8 +32,13 @@ export function FormField({
   );
 }
 
+// Global premium UI phase, Part 30 — desktop control height target
+// 40-44px. py-2 (8px) put this at ~38px; py-2.5 (10px) lands at 42px
+// with text-sm's 20px line-height + the 1px border either side, inside
+// the target range and close to the 44px+ mobile touch-target guidance
+// without a separate responsive variant.
 const inputClass =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50 disabled:text-slate-400";
+  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50 disabled:text-slate-400";
 
 export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   const { className = "", ...rest } = props;

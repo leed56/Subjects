@@ -8,6 +8,7 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useShopNav } from "@/components/shell/use-shop-nav";
 import { NAV_ICON_BY_HREF } from "@/components/shell/nav-icons";
 import { SettingsIcon, SignOutIcon } from "@/components/ui/icons";
+import { initialsFor } from "@/lib/format";
 import type { NavItem } from "@/lib/nav-sections";
 
 function NavLink({ item, active, t }: { item: NavItem; active: boolean; t: (key: string) => string }) {
@@ -98,10 +99,20 @@ export function Sidebar() {
       </nav>
 
       <div className="border-t border-slate-200 p-3">
-        <div className="rounded-lg bg-slate-50 px-2.5 py-2">
-          <p className="truncate text-sm font-semibold text-slate-900">{org.name}</p>
-          <p className="truncate text-xs text-slate-500">{user?.email}</p>
-          <p className="mt-0.5 text-xs font-medium capitalize text-teal-700">{org.role.replace("_", " ")}</p>
+        {/* Part 4's "organization/avatar initials, user name, role, email"
+         * — this app has no separate user display-name field (checked:
+         * auth-provider only carries `email`), so the org name is the
+         * identity shown next to the avatar, same as before; email/role
+         * fill the rest. Real data only, no fabricated name field. */}
+        <div className="flex items-center gap-2.5 rounded-lg bg-slate-50 px-2.5 py-2">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-800">
+            {initialsFor(org.name, user?.email)}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-900">{org.name}</p>
+            <p className="truncate text-xs text-slate-500">{user?.email}</p>
+            <p className="text-xs font-medium capitalize text-teal-700">{org.role.replace("_", " ")}</p>
+          </div>
         </div>
         {user && (
           <button

@@ -229,3 +229,63 @@ half is correct today. Stage 5 fix: replace the "already signed in" render
 branch with the compact `Continue to Dashboard` / `Sign out and use
 another account` card Part 19 specifies, and hide the form entirely in
 that state.
+
+---
+
+## 7. Stage 2 findings — sidebar/nav/table/form/badge audit
+
+Read in full before changing anything, per this phase's own discipline:
+
+- **`icons.tsx`** — already fully consistent (Part 4's "icons consistent
+  in stroke/size"): every icon composes through one shared `base()`
+  factory (24x24 viewBox, 1.75 stroke weight, `currentColor`). No change
+  needed or made.
+- **`table.tsx` (`DataTable`)** — already satisfies most of Part 29:
+  consistent header height, row hover, keyboard-accessible clickable rows
+  with a real focus-visible ring, right/center/left column alignment,
+  `emptyState` support, responsive mobile card fallback, minimal grid
+  lines (row dividers only, no vertical rules). **Deliberately not
+  changed:** generic header-click-to-sort with a visual indicator.
+  Retrofitting that onto the shared component would change behavior for
+  every existing consumer; the pages that need sorting today already use
+  a consistent dropdown-based sort selector (job-costing, etc.), which
+  already satisfies "sortable where supported" without a structural
+  change. Documented as a conscious deferral, not an oversight.
+- **`jobStatusClass`/`jobStatusLabel` (`ac-jobs.ts`)** — already exactly
+  the semantic grouping Part 31 asks for (neutral=slate, informational=
+  blue, positive-operational=teal, needs-attention=amber, success=
+  emerald, destructive=red) — not a unique color per status. No change
+  needed.
+- **`form.tsx` control height** — measured: `py-2` (8px) + `text-sm`'s
+  20px line-height + 2px border ≈ 38px, under the 40-44px target.
+  Changed to `py-2.5` (10px) ≈ 42px, inside the target range and close to
+  the 44px+ mobile touch-target guidance, applied once to the shared
+  `inputClass` so every `TextInput`/`MoneyInput`/`DateInput`/
+  `SelectInput` gets it at once.
+- **`sidebar.tsx` / `mobile-nav.tsx` account block** — added an avatar-
+  initials badge (new `initialsFor()` helper, `src/lib/format.ts`,
+  tested) per Part 4's "organization/avatar initials." No separate user
+  display-name field exists anywhere in this app's auth model (checked
+  `auth-provider.tsx` — only `email` is carried) — org name stays the
+  shown identity, initials derive from it with an email-initial fallback,
+  never a fabricated name. Also fixed `mobile-nav.tsx`'s nav-item/account-
+  card radius (`rounded-xl` → `rounded-lg`), which had drifted from
+  `sidebar.tsx`'s own `rounded-lg` — same control, two different radii,
+  exactly the token-inconsistency this phase converges away.
+- **Global `:focus-visible` styling** — considered and **deliberately not
+  changed** this stage. No `outline` reset exists anywhere in
+  `globals.css`, so native browser focus-visible outlines are intact
+  everywhere (a real, working baseline, not a gap) — several components
+  (`table.tsx`'s row focus ring, `form.tsx`'s `focus:ring-2`) already
+  layer their own on top. A blanket global override risks colliding with
+  those existing per-component styles in ways that need a careful,
+  individual look, not a one-line global change — deferred to Stage 7
+  (accessibility cleanup) where that audit actually happens.
+- **`globals.css` landing utilities** (`.lak-glass`, `.lak-mesh`,
+  `.lak-shine`, `.lak-float`) — found during this pass, explicitly
+  **out of scope for Stage 2**: translucent-blur/gradient/floating-
+  animation utilities used only by the landing page, which directly
+  match Part 48's "avoid excessive glassmorphism/gradients" and Part 32's
+  "no bouncy/large-scale animation." Flagged here for Stage 6 (landing
+  redesign) to resolve, not touched now since Stage 2 is shared shop-app
+  chrome, not the public landing page.
