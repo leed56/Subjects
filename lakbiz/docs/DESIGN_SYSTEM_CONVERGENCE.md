@@ -515,3 +515,76 @@ build succeeds, same 41-route list. No browser exists in this sandbox
 (disclosed consistently throughout this engagement) — this is code-level
 verification of the render-gating logic, not a captured screenshot of
 the interaction.
+
+---
+
+## 12. Stage 6 — Landing page premium pass (Part 21-26)
+
+**Important discovery, disclosed rather than assumed:** the actual live
+landing page (`/`, `src/app/page.tsx`) renders
+`MarketingHomePage` (`src/components/marketing/marketing-home-page.tsx`)
+— a completely separate, self-contained component. The files under
+`src/components/landing/` (`landing-hero.tsx`, `landing-sections.tsx`,
+`landing-sectors.tsx`, `marketing-header.tsx`) — the ones Phase A's own
+audit described editing ("landing page's 6 feature-card icons...
+replaced with SVG icons") — are **never imported anywhere** (confirmed
+by grep across `src`). Phase A's landing-page fix was real code, but it
+landed in a file the live site never renders; the actual public landing
+page kept every emoji-free-but-still-heavy pattern this stage found.
+Left the dead files in place (deleting exported components is out of
+scope for a visual-convergence pass) but this is now on record so a
+future pass doesn't repeat the mistake of editing the unused copy.
+
+Fixed in `marketing-home-page.tsx` (the real, live file):
+
+- **Token convergence** — same pattern as Stage 4: `font-black` (26
+  occurrences) → `font-bold`; every `rounded-[2rem]`/`rounded-[1.75rem]`/
+  `rounded-[1.5rem]`/`rounded-[2.5rem]` → `rounded-2xl`/`rounded-xl`;
+  `shadow-2xl`/`shadow-xl` → removed or `shadow-sm`. Header lost its
+  `backdrop-blur-2xl` (glassmorphism); the product-preview mockup lost
+  its glow-blob + `backdrop-blur-xl` frame entirely.
+- **One deliberate boldness spend, not six** — this page previously had
+  a gradient on the header logo, the hero background blob, the primary
+  CTA's shadow, the preview card's backdrop, the avatar circle, and the
+  chart bars simultaneously. Flattened all but the hero's own ambient
+  glow (now smaller/lower-opacity) and the final CTA section's gradient
+  — matching the "spend your boldness in one place" principle instead of
+  scattering it.
+- **Plans section now sources real data** (Part 24's explicit
+  instruction: "do not hardcode conflicting marketing prices"). It
+  previously had its own independent `home.mkt.plan_*_price`/`_name`
+  translation strings — today they happened to match `PLANS`
+  (`lib/subscription/plans.ts`, the same source `/settings/plans` reads),
+  but nothing enforced that; a future pricing change could have silently
+  left the landing page wrong. Now imports `PLANS` directly and renders
+  `formatLkrPrice(plan.priceMonthlyLkr)` + the locale-aware name — only
+  the short marketing blurb per plan stays as translated copy (genuine
+  copy, not data). Also now visually highlights the Business plan
+  (`highlight: true` in the real config) as recommended, which the
+  previous version ignored entirely, plus a max-users line and a
+  footnote disclosing prices come from the live plan configuration.
+- **Screenshot honesty (Part 21) — explicitly disclosed, not solved**:
+  no browser exists in this sandbox (the standing constraint disclosed
+  throughout this whole engagement), so the product-preview mockup
+  remains a hand-built approximation, not an actual screenshot. Left a
+  comment in the code saying so, and toned it down from a glassmorphism
+  panel to a clean flat frame so it at least doesn't read as an
+  "obviously fake generic illustration" — the one Part 21 requirement
+  that's achievable without real screenshot capability.
+
+**Not attempted this pass, disclosed as remaining work**: the deeper
+structural asks in Part 22-23 (a distinct capability-row + industry-chip
+section separate from the existing dark "solutions" block; splitting
+the 4 generic feature cards into 3-4 named "feature story" sections with
+real screenshots) and Part 26's full responsive-viewport verification
+(covered instead in Stage 7). The existing structure already covers
+the same ground reasonably (capability cards, a sector list, a plans
+grid, a final CTA) — a full section-by-section rebuild is real,
+separate work from token convergence, and rushing it risked a worse
+result than being honest about what's done.
+
+Verification: tsc clean, eslint clean, 89/89 tests passing, production
+build succeeds (same 41-route list); confirmed in the built static HTML
+that the real plan prices (Rs. 1,490 / 2,990 / 4,990) render and zero
+`rounded-[`/`shadow-2xl`/`font-black`/`backdrop-blur` occurrences remain
+on the landing page.

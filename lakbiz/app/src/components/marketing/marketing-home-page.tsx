@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { PLANS, formatLkrPrice } from "@/lib/subscription/plans";
 
 const featureIcons = ["POS", "VAT", "BANK", "PRO"] as const;
 const featureKeys = [
@@ -29,23 +30,17 @@ const stepKeys = [
   "home.mkt.step_4",
 ] as const;
 
-const planKeys = [
-  {
-    name: "home.mkt.plan_starter_name",
-    price: "home.mkt.plan_starter_price",
-    detail: "home.mkt.plan_starter_detail",
-  },
-  {
-    name: "home.mkt.plan_business_name",
-    price: "home.mkt.plan_business_price",
-    detail: "home.mkt.plan_business_detail",
-  },
-  {
-    name: "home.mkt.plan_pro_name",
-    price: "home.mkt.plan_pro_price",
-    detail: "home.mkt.plan_pro_detail",
-  },
-] as const;
+// Global premium UI phase, Part 24 — "reuse actual plan data... do not
+// hardcode conflicting marketing prices." Name/price now come straight
+// from PLANS (lib/subscription/plans.ts, the same source /settings/plans
+// uses) instead of a second, independently-hardcoded copy that could
+// silently drift from the real configuration. Only the short marketing
+// blurb per plan — genuine copy, not data — stays as translated text.
+const PLAN_DETAIL_KEY: Record<string, string> = {
+  starter: "home.mkt.plan_starter_detail",
+  business: "home.mkt.plan_business_detail",
+  pro: "home.mkt.plan_pro_detail",
+};
 
 const previewNavKeys = [
   "nav.dashboard",
@@ -61,14 +56,14 @@ export function MarketingHomePage() {
 
   return (
     <div className="min-h-screen overflow-hidden bg-slate-50 text-slate-950">
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/70 bg-white/85 backdrop-blur-2xl">
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-200 bg-white/95">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-700 text-sm font-black text-white shadow-lg shadow-teal-700/20">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-600 text-sm font-bold text-white">
               L
             </span>
             <div className="leading-tight">
-              <span className="block text-xl font-black tracking-tight text-teal-700">LakBiz</span>
+              <span className="block text-xl font-bold tracking-tight text-teal-700">LakBiz</span>
               <span className="hidden text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400 sm:block">
                 {t("home.mkt.region")}
               </span>
@@ -105,7 +100,7 @@ export function MarketingHomePage() {
             </Link>
             <a
               href="#contact"
-              className="inline-flex items-center justify-center rounded-full bg-teal-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 sm:px-5 sm:text-sm"
+              className="inline-flex items-center justify-center rounded-full bg-teal-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-teal-700 sm:px-5 sm:text-sm"
             >
               {t("home.mkt.nav.request_access")}
             </a>
@@ -114,15 +109,21 @@ export function MarketingHomePage() {
       </header>
 
       <main>
+        {/* Global premium UI phase, Part 26/48 — one restrained ambient
+         * glow, not the five separate gradient/blur/glassmorphism moments
+         * this section used to layer (header logo, this blob, both CTA
+         * buttons' heavy shadows, the preview card's own glow+blur). This
+         * is the one place this page spends its "boldness" (see the
+         * hero-is-a-thesis guidance) — everywhere else stays flat. */}
         <section className="relative pt-28 sm:pt-32 lg:pt-36">
-          <div className="pointer-events-none absolute left-1/2 top-0 h-[34rem] w-[58rem] -translate-x-1/2 rounded-full bg-teal-200/40 blur-3xl" />
+          <div className="pointer-events-none absolute left-1/2 top-0 h-96 w-[40rem] -translate-x-1/2 rounded-full bg-teal-200/25 blur-3xl" />
           <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="grid items-center gap-10 lg:grid-cols-[1.02fr_0.98fr] lg:gap-16">
               <div className="text-center lg:text-left">
-                <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-teal-200 bg-white/80 px-4 py-2 text-xs font-black text-teal-800 shadow-sm lg:mx-0">
+                <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-teal-200 bg-white/80 px-4 py-2 text-xs font-bold text-teal-800 shadow-sm lg:mx-0">
                   {t("home.mkt.badge")}
                 </div>
-                <h1 className="mt-6 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl lg:text-6xl lg:leading-[1.02]">
+                <h1 className="mt-6 text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl lg:text-6xl lg:leading-[1.02]">
                   {t("home.mkt.hero_title")}
                 </h1>
                 <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg lg:mx-0">
@@ -131,13 +132,13 @@ export function MarketingHomePage() {
                 <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start">
                   <Link
                     href="/login"
-                    className="inline-flex items-center justify-center rounded-2xl bg-teal-600 px-7 py-4 text-sm font-black text-white shadow-xl shadow-teal-700/20 transition hover:-translate-y-0.5 hover:bg-teal-700"
+                    className="inline-flex items-center justify-center rounded-lg bg-teal-600 px-7 py-4 text-sm font-bold text-white transition hover:bg-teal-700"
                   >
                     {t("home.mkt.cta_sign_in")} <span className="ml-2">→</span>
                   </Link>
                   <a
                     href="#contact"
-                    className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-7 py-4 text-sm font-bold text-slate-800 shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:text-teal-800"
+                    className="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-7 py-4 text-sm font-bold text-slate-800 transition hover:border-teal-300 hover:text-teal-800"
                   >
                     {t("home.mkt.cta_request_access")}
                   </a>
@@ -158,12 +159,12 @@ export function MarketingHomePage() {
             {stepKeys.map((key, index) => (
               <div
                 key={key}
-                className="rounded-[1.5rem] border border-white bg-white p-5 shadow-lg shadow-slate-950/5 ring-1 ring-slate-200/60"
+                className="rounded-xl border border-white bg-white p-5"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-teal-50 text-sm font-black text-teal-700">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-teal-50 text-sm font-bold text-teal-700">
                   {index + 1}
                 </div>
-                <p className="mt-4 text-sm font-black text-slate-900">{t(key)}</p>
+                <p className="mt-4 text-sm font-bold text-slate-900">{t(key)}</p>
               </div>
             ))}
           </div>
@@ -171,10 +172,10 @@ export function MarketingHomePage() {
 
         <section id="features" className="mx-auto mt-20 max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
-            <p className="text-sm font-black uppercase tracking-[0.2em] text-teal-700">
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-teal-700">
               {t("home.mkt.features_eyebrow")}
             </p>
-            <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
               {t("home.mkt.features_title")}
             </h2>
           </div>
@@ -182,12 +183,12 @@ export function MarketingHomePage() {
             {featureKeys.map((feature, index) => (
               <div
                 key={feature.title}
-                className="rounded-[1.75rem] border border-white bg-white p-6 shadow-lg shadow-slate-950/5 ring-1 ring-slate-200/60"
+                className="rounded-xl border border-white bg-white p-6"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-xs font-black text-teal-300">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-xs font-bold text-teal-300">
                   {featureIcons[index]}
                 </div>
-                <h3 className="mt-5 text-lg font-black text-slate-950">{t(feature.title)}</h3>
+                <h3 className="mt-5 text-lg font-bold text-slate-950">{t(feature.title)}</h3>
                 <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">{t(feature.desc)}</p>
               </div>
             ))}
@@ -195,11 +196,11 @@ export function MarketingHomePage() {
         </section>
 
         <section id="solutions" className="mx-auto mt-20 max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="rounded-[2rem] bg-slate-950 p-6 text-white shadow-2xl shadow-slate-950/20 sm:p-10">
-            <p className="text-sm font-black uppercase tracking-[0.2em] text-teal-300">
+          <div className="rounded-2xl bg-slate-950 p-6 text-white shadow-sm shadow-slate-950/20 sm:p-10">
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-teal-300">
               {t("home.mkt.sectors_eyebrow")}
             </p>
-            <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
+            <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
               {t("home.mkt.sectors_title")}
             </h2>
             <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -217,10 +218,10 @@ export function MarketingHomePage() {
 
         <section id="plans" className="mx-auto mt-20 max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
-            <p className="text-sm font-black uppercase tracking-[0.2em] text-teal-700">
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-teal-700">
               {t("home.mkt.plans_eyebrow")}
             </p>
-            <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
               {t("home.mkt.plans_title")}
             </h2>
             <p className="mt-4 text-sm font-semibold leading-6 text-slate-500">
@@ -228,26 +229,44 @@ export function MarketingHomePage() {
             </p>
           </div>
           <div className="mt-8 grid gap-5 md:grid-cols-3">
-            {planKeys.map((plan) => (
+            {PLANS.map((plan) => (
               <div
-                key={plan.name}
-                className="rounded-[1.75rem] border border-white bg-white p-6 shadow-lg shadow-slate-950/5 ring-1 ring-slate-200/60"
+                key={plan.id}
+                className={`relative rounded-xl border bg-white p-6 ${
+                  plan.highlight ? "border-teal-300 ring-2 ring-teal-100" : "border-slate-200"
+                }`}
               >
-                <h3 className="text-xl font-black text-slate-950">{t(plan.name)}</h3>
-                <p className="mt-3 text-2xl font-black text-teal-700">{t(plan.price)}</p>
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">{t(plan.detail)}</p>
+                {plan.highlight && (
+                  <span className="absolute -top-3 left-6 rounded-full bg-teal-600 px-3 py-1 text-xs font-bold text-white">
+                    {t("home.mkt.plan_recommended")}
+                  </span>
+                )}
+                <h3 className="text-xl font-bold text-slate-950">
+                  {locale === "si" ? plan.nameSi : plan.nameEn}
+                </h3>
+                <p className="mt-3 text-2xl font-bold text-teal-700">
+                  {formatLkrPrice(plan.priceMonthlyLkr)}
+                  <span className="text-sm font-semibold text-slate-400">/{t("sub.month")}</span>
+                </p>
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
+                  {t(PLAN_DETAIL_KEY[plan.id] ?? "")}
+                </p>
+                <p className="mt-3 text-xs font-medium text-slate-400">
+                  {t("home.mkt.plan_users").replace("{n}", String(plan.maxUsers))}
+                </p>
               </div>
             ))}
           </div>
+          <p className="mt-6 text-xs text-slate-400">{t("home.mkt.plans_footnote")}</p>
         </section>
 
         <section id="contact" className="mx-auto my-20 max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="rounded-[2rem] bg-gradient-to-br from-teal-600 to-emerald-700 p-8 text-white shadow-2xl shadow-teal-900/20 sm:p-12">
+          <div className="rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-700 p-8 text-white shadow-sm shadow-teal-900/20 sm:p-12">
             <div className="max-w-3xl">
-              <p className="text-sm font-black uppercase tracking-[0.2em] text-teal-100">
+              <p className="text-sm font-bold uppercase tracking-[0.2em] text-teal-100">
                 {t("home.mkt.contact_eyebrow")}
               </p>
-              <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">
+              <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-5xl">
                 {t("home.mkt.contact_title")}
               </h2>
               <p className="mt-4 text-base font-semibold leading-7 text-teal-50">
@@ -257,13 +276,13 @@ export function MarketingHomePage() {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/login"
-                className="inline-flex items-center justify-center rounded-2xl bg-white px-7 py-4 text-sm font-black text-teal-800 shadow-xl shadow-teal-950/10"
+                className="inline-flex items-center justify-center rounded-2xl bg-white px-7 py-4 text-sm font-bold text-teal-800 shadow-sm shadow-teal-950/10"
               >
                 {t("home.mkt.contact_sign_in")}
               </Link>
               <Link
                 href="/login?next=/admin"
-                className="inline-flex items-center justify-center rounded-2xl border border-white/30 px-7 py-4 text-sm font-black text-white hover:bg-white/10"
+                className="inline-flex items-center justify-center rounded-2xl border border-white/30 px-7 py-4 text-sm font-bold text-white hover:bg-white/10"
               >
                 {t("home.mkt.contact_admin")}
               </Link>
@@ -301,9 +320,14 @@ function ProductPreview({ t }: { t: (key: string) => string }) {
 
   return (
     <div className="relative mx-auto w-full max-w-2xl lg:max-w-none">
-      <div className="absolute -inset-4 rounded-[2.5rem] bg-gradient-to-br from-teal-400/20 via-white to-amber-300/20 blur-2xl" />
-      <div className="relative rounded-[2rem] border border-white bg-white/80 p-3 shadow-2xl shadow-slate-950/10 backdrop-blur-xl">
-        <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-950">
+      {/* Global premium UI phase, Part 21/48 — was a glassmorphism stack
+       * (glow blob + backdrop-blur-xl translucent frame). Disclosed
+       * limitation, unchanged by this phase: no browser exists in this
+       * sandbox, so this stays a hand-built approximation of the real
+       * dashboard rather than an actual screenshot — but it should read
+       * as a clean product frame, not a decorative glass panel. */}
+      <div className="relative rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-950">
           <div className="flex items-center gap-2 border-b border-white/10 bg-slate-900 px-4 py-3">
             <span className="h-3 w-3 rounded-full bg-red-400" />
             <span className="h-3 w-3 rounded-full bg-amber-400" />
@@ -314,7 +338,7 @@ function ProductPreview({ t }: { t: (key: string) => string }) {
           </div>
           <div className="grid min-h-[25rem] grid-cols-[5.5rem_1fr] bg-slate-50 sm:grid-cols-[10rem_1fr]">
             <aside className="bg-slate-950 p-3 text-white sm:p-4">
-              <p className="mb-5 text-sm font-black text-teal-300 sm:text-lg">LakBiz</p>
+              <p className="mb-5 text-sm font-bold text-teal-300 sm:text-lg">LakBiz</p>
               {previewNavKeys.map((key, index) => (
                 <div
                   key={key}
@@ -332,7 +356,7 @@ function ProductPreview({ t }: { t: (key: string) => string }) {
                   {t("home.mkt.preview_search")}
                 </div>
                 <div className="ml-auto flex items-center gap-2 rounded-full bg-white px-2 py-1 shadow-sm">
-                  <span className="h-7 w-7 rounded-full bg-gradient-to-br from-teal-100 to-emerald-100" />
+                  <span className="h-7 w-7 rounded-full bg-teal-100" />
                   <span className="hidden text-xs font-bold sm:block">{t("home.mkt.preview_shop")}</span>
                 </div>
               </div>
@@ -340,7 +364,7 @@ function ProductPreview({ t }: { t: (key: string) => string }) {
                 {statCards.map((card) => (
                   <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
                     <p className="text-[10px] font-bold text-slate-500">{card.label}</p>
-                    <p className="mt-1 text-sm font-black text-slate-950 sm:text-base">{card.value}</p>
+                    <p className="mt-1 text-sm font-bold text-slate-950 sm:text-base">{card.value}</p>
                     <p className="mt-1 text-[9px] font-semibold text-teal-600">{card.hint}</p>
                   </div>
                 ))}
@@ -348,7 +372,7 @@ function ProductPreview({ t }: { t: (key: string) => string }) {
               <div className="mt-3 grid gap-3 lg:grid-cols-[1.35fr_0.8fr]">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-black text-slate-900">{t("home.mkt.preview_analytics")}</p>
+                    <p className="text-xs font-bold text-slate-900">{t("home.mkt.preview_analytics")}</p>
                     <span className="rounded-full border border-slate-200 px-2 py-1 text-[9px] font-bold text-slate-500">
                       {t("home.mkt.preview_this_week")}
                     </span>
@@ -357,7 +381,7 @@ function ProductPreview({ t }: { t: (key: string) => string }) {
                     {[35, 58, 46, 50, 66, 92, 52].map((height, index) => (
                       <div key={index} className="flex flex-1 flex-col items-center gap-2">
                         <div
-                          className="w-full rounded-t-xl bg-gradient-to-t from-teal-100 to-teal-500"
+                          className="w-full rounded-t-lg bg-teal-500"
                           style={{ height: `${height}%` }}
                         />
                         <span className="text-[8px] font-semibold text-slate-400">
@@ -396,8 +420,8 @@ function ProductPreview({ t }: { t: (key: string) => string }) {
 function MiniPanel({ title, value, hint }: { title: string; value: string; hint: string }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{title}</p>
-      <p className="mt-2 text-sm font-black text-slate-950">{value}</p>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{title}</p>
+      <p className="mt-2 text-sm font-bold text-slate-950">{value}</p>
       <p className="mt-1 text-[10px] font-semibold text-slate-500">{hint}</p>
     </div>
   );
