@@ -1091,7 +1091,10 @@ function AddJobItemDialog({
   const [disposition, setDisposition] = useState<JobItemDisposition>("unknown");
   const [newComponentSerial, setNewComponentSerial] = useState("");
   const [warrantyType, setWarrantyType] = useState<JobItemWarrantyType>("none");
-  const [warrantyDays, setWarrantyDays] = useState(365);
+  // 0 = "no warranty" chip active by default, kept in lockstep with
+  // warrantyType by the quick-chip picker below (see the replacement
+  // block) so a single tap sets both at once in the fast path.
+  const [warrantyDays, setWarrantyDays] = useState(0);
   const [warrantyStartDate, setWarrantyStartDate] = useState(new Date().toISOString().slice(0, 10));
 
   const titleKey =
@@ -1201,13 +1204,18 @@ function AddJobItemDialog({
               )}
             </div>
             {selectedProduct && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <FormField label={t("jobs.qty")}>
                   <TextInput type="number" min={1} max={selectedProduct.stockQty} value={String(qty)} onChange={(e) => setQty(Number(e.target.value))} />
                 </FormField>
                 {canSeeFinancials && (
                   <FormField label={t("jobs.unit_cost")} hint={t("jobs.stock_cost_hint")}>
                     <MoneyInput value={String(selectedProduct.buyPrice)} onChange={() => {}} disabled />
+                  </FormField>
+                )}
+                {canSeeFinancials && (
+                  <FormField label={t("jobs.field.customer_price")}>
+                    <MoneyInput value={customerPrice} onChange={setCustomerPrice} />
                   </FormField>
                 )}
               </div>
@@ -1218,16 +1226,28 @@ function AddJobItemDialog({
             <FormField label={t("jobs.item_name")} required>
               <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder={mode === "manual" ? t("jobs.manual_name_ph") : undefined} />
             </FormField>
+            {/* Fast-entry requirement: Part → Qty → Cost → Charge customer
+             * in one row, no more. Unit ("pcs"/"hrs"/"m") only matters
+             * immediately for a labor/charge line (mode "charge") — for a
+             * part it defaults silently and lives in "More details"
+             * below, not competing for attention here. */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <FormField label={t("jobs.qty")}>
                 <TextInput type="number" min={1} value={String(qty)} onChange={(e) => setQty(Number(e.target.value))} />
               </FormField>
-              <FormField label={t("jobs.field.unit")}>
-                <TextInput value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="pcs, m, hrs…" />
-              </FormField>
+              {mode === "charge" && (
+                <FormField label={t("jobs.field.unit")}>
+                  <TextInput value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="pcs, m, hrs…" />
+                </FormField>
+              )}
               {canSeeFinancials && (
                 <FormField label={t("jobs.field.internal_cost")}>
                   <MoneyInput value={unitPrice} onChange={setUnitPrice} />
+                </FormField>
+              )}
+              {canSeeFinancials && isPart && (
+                <FormField label={t("jobs.field.customer_price")}>
+                  <MoneyInput value={customerPrice} onChange={setCustomerPrice} />
                 </FormField>
               )}
             </div>
@@ -1248,15 +1268,14 @@ function AddJobItemDialog({
           </FormField>
         )}
 
-        {canSeeFinancials && (
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label={t("jobs.field.customer_price")}>
-              <MoneyInput value={customerPrice} onChange={setCustomerPrice} />
-            </FormField>
-            <FormField label={t("jobs.field.discount")}>
-              <MoneyInput value={discount} onChange={setDiscount} />
-            </FormField>
-          </div>
+        {/* Part modes already got their Customer price field inline above
+         * (stock/manual/purchased) — this is the "charge" (labour/
+         * service/transport/other) fallback only. Discount lives in
+         * "More details" below for every mode, part or charge alike. */}
+        {canSeeFinancials && !isPart && (
+          <FormField label={t("jobs.field.customer_price")}>
+            <MoneyInput value={customerPrice} onChange={setCustomerPrice} />
+          </FormField>
         )}
 
         {isPart && mode !== "stock" && (
@@ -1317,22 +1336,35 @@ function AddJobItemDialog({
           </FormSection>
         )}
 
+        {/* Fast-entry requirement: "Replacing old component?" must be a
+         * direct, always-visible Yes/No — not a question hidden behind a
+         * collapsible section the user has to discover and open first.
+         * Picking Yes reveals only the two fields a technician actually
+         * needs on the spot (Disposition, Warranty) — everything else
+         * about the old/new component lives in "More details" below. */}
         {isPart && (
-          <FormSection title={t("jobs.is_replacement")} collapsible defaultOpen={false}>
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-              <input type="checkbox" checked={isReplacement} onChange={(e) => setIsReplacement(e.target.checked)} />
-              {t("jobs.is_replacement")}
-            </label>
+          <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">{t("jobs.is_replacement")}</p>
+              <div className="mt-1.5 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsReplacement(false)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold ${!isReplacement ? "bg-slate-700 text-white" : "border border-slate-300 bg-white text-slate-600"}`}
+                >
+                  {t("common.no")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsReplacement(true)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold ${isReplacement ? "bg-teal-600 text-white" : "border border-slate-300 bg-white text-slate-600"}`}
+                >
+                  {t("common.yes")}
+                </button>
+              </div>
+            </div>
             {isReplacement && (
               <>
-                <div className="grid grid-cols-2 gap-3">
-                  <FormField label={t("jobs.old_component")}>
-                    <TextInput list="hvac-component-types" value={oldComponentName} onChange={(e) => setOldComponentName(e.target.value)} />
-                  </FormField>
-                  <FormField label={t("jobs.old_component_serial")}>
-                    <TextInput value={oldComponentSerial} onChange={(e) => setOldComponentSerial(e.target.value)} />
-                  </FormField>
-                </div>
                 <FormField label={t("jobs.disposition")}>
                   <SelectInput
                     value={disposition}
@@ -1343,45 +1375,76 @@ function AddJobItemDialog({
                     }))}
                   />
                 </FormField>
-                <FormField label={t("jobs.new_component_serial")}>
-                  <TextInput value={newComponentSerial} onChange={(e) => setNewComponentSerial(e.target.value)} />
-                </FormField>
-                <FormField label={t("jobs.warranty_type")}>
-                  <SelectInput
-                    value={warrantyType}
-                    onChange={(v) => setWarrantyType(v as JobItemWarrantyType)}
-                    options={(["none", "company", "supplier", "manufacturer"] as JobItemWarrantyType[]).map((w) => ({ value: w, label: t(`jobs.warranty_type.${w}`) }))}
-                  />
-                </FormField>
-                {warrantyType !== "none" && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <FormField label={t("jobs.warranty_duration")}>
-                      <div className="flex flex-wrap gap-1.5">
-                        {[30, 90, 180, 365, 730].map((d) => (
-                          <button
-                            key={d}
-                            type="button"
-                            onClick={() => setWarrantyDays(d)}
-                            className={`rounded-md px-2.5 py-1 text-xs font-semibold ${warrantyDays === d ? "bg-teal-600 text-white" : "border border-slate-300 bg-white text-slate-600"}`}
-                          >
-                            {d < 365 ? `${d} ${t("jobs.days")}` : `${Math.round(d / 365)} ${t("jobs.years")}`}
-                          </button>
-                        ))}
-                      </div>
-                    </FormField>
-                    <FormField label={t("jobs.warranty_start")}>
-                      <DateInput value={warrantyStartDate} onChange={setWarrantyStartDate} />
-                    </FormField>
+                <FormField label={t("jobs.warranty_duration")}>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[0, 30, 90, 180, 365, 730].map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => {
+                          setWarrantyDays(d);
+                          // A duration pick implies a warranty type in one
+                          // tap — defaults to "company" (this shop's own),
+                          // the common case; Advanced can override to
+                          // supplier/manufacturer without losing the days.
+                          setWarrantyType(d === 0 ? "none" : warrantyType === "none" ? "company" : warrantyType);
+                        }}
+                        className={`rounded-md px-2.5 py-1 text-xs font-semibold ${warrantyDays === d ? "bg-teal-600 text-white" : "border border-slate-300 bg-white text-slate-600"}`}
+                      >
+                        {d === 0 ? t("jobs.no_warranty") : d < 365 ? `${d} ${t("jobs.days")}` : `${Math.round(d / 365)} ${t("jobs.years")}`}
+                      </button>
+                    ))}
                   </div>
-                )}
+                </FormField>
               </>
             )}
-          </FormSection>
+          </div>
         )}
 
-        <FormField label={t("jobs.field.notes")}>
-          <TextInput value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </FormField>
+        {/* Everything below is secondary for a fast field-service entry —
+         * collapsed by default, always reachable. */}
+        <FormSection title={t("jobs.more_details")} collapsible defaultOpen={false}>
+          {mode !== "charge" && (
+            <FormField label={t("jobs.field.unit")}>
+              <TextInput value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="pcs, m, hrs…" />
+            </FormField>
+          )}
+          {canSeeFinancials && (
+            <FormField label={t("jobs.field.discount")}>
+              <MoneyInput value={discount} onChange={setDiscount} />
+            </FormField>
+          )}
+          {isReplacement && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label={t("jobs.old_component")}>
+                  <TextInput list="hvac-component-types" value={oldComponentName} onChange={(e) => setOldComponentName(e.target.value)} />
+                </FormField>
+                <FormField label={t("jobs.old_component_serial")}>
+                  <TextInput value={oldComponentSerial} onChange={(e) => setOldComponentSerial(e.target.value)} />
+                </FormField>
+              </div>
+              <FormField label={t("jobs.new_component_serial")}>
+                <TextInput value={newComponentSerial} onChange={(e) => setNewComponentSerial(e.target.value)} />
+              </FormField>
+              <FormField label={t("jobs.warranty_type")}>
+                <SelectInput
+                  value={warrantyType}
+                  onChange={(v) => setWarrantyType(v as JobItemWarrantyType)}
+                  options={(["none", "company", "supplier", "manufacturer"] as JobItemWarrantyType[]).map((w) => ({ value: w, label: t(`jobs.warranty_type.${w}`) }))}
+                />
+              </FormField>
+              {warrantyType !== "none" && (
+                <FormField label={t("jobs.warranty_start")}>
+                  <DateInput value={warrantyStartDate} onChange={setWarrantyStartDate} />
+                </FormField>
+              )}
+            </>
+          )}
+          <FormField label={t("jobs.field.notes")}>
+            <TextInput value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </FormField>
+        </FormSection>
 
         <datalist id="hvac-component-types">
           {HVAC_COMPONENT_TYPES.map((c) => (
