@@ -335,9 +335,16 @@ const BUTTON_VARIANT_CLASS: Record<ButtonVariant, string> = {
   text: "text-teal-700 hover:text-teal-800 hover:underline underline-offset-2",
 };
 
+// Global premium UI phase, Part 30 — "Recommended desktop control
+// height: 40-44px. Large touch target mobile: 44px+." `md` (the default,
+// used for every primary action) now hits 44px consistently, matching
+// `ProButton`'s existing `min-h-11` base (Stage 1) — the two button
+// systems agreed on this already, primitives.tsx's own `Button` just
+// hadn't caught up. `sm` stays compact by design for dense inline/table
+// contexts (Part 48's "data-dense without clutter"), not an oversight.
 const BUTTON_SIZE_CLASS: Record<ButtonSize, string> = {
   sm: "px-2.5 py-1.5 text-xs",
-  md: "px-4 py-2 text-sm",
+  md: "min-h-11 px-4 py-2 text-sm",
 };
 
 /** Standard action-button variants — one primary per context, everything

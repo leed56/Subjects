@@ -588,3 +588,62 @@ build succeeds (same 41-route list); confirmed in the built static HTML
 that the real plan prices (Rs. 1,490 / 2,990 / 4,990) render and zero
 `rounded-[`/`shadow-2xl`/`font-black`/`backdrop-blur` occurrences remain
 on the landing page.
+
+---
+
+## 13. Stage 7 — Responsive + accessibility cleanup (Part 29/30/32/36-38)
+
+Code-level review (no browser in this sandbox — disclosed consistently
+throughout this engagement; this is inspection of computed classnames
+and structure, not a rendered/screenshotted check).
+
+**Confirmed already correct, not reassumed:**
+- `DataTable` (`table.tsx`) already wraps its desktop table in
+  `overflow-x-auto` and hides it below `sm:` in favor of a card-based
+  mobile fallback — Part 29's responsive-table requirement was already
+  met.
+- `MobileNav` already matches Part 37 exactly: one top bar + a single
+  slide-out drawer sharing the same `sections`/`managementItems` data
+  the desktop `Sidebar` uses — no duplicate nav state, no 20-destination
+  bottom bar.
+- `form.tsx`'s shared input class already lands at ~42px
+  (`py-2.5`), inside the Part 30 target band, with an explicit comment
+  recording the calculation — already correct.
+- The shared `Button`/`form.tsx` focus styles already pair
+  `outline-none` with a real `focus:ring` replacement everywhere.
+
+**Fixed:**
+- **Reduced motion (Part 32/38) — was entirely unhandled.** No
+  `prefers-reduced-motion` rule existed anywhere in the codebase. Added
+  one global media query to `globals.css` that neutralizes animation/
+  transition duration app-wide (keeps color/opacity changes so a toggle
+  or focus ring still visibly updates, just without motion) — global
+  rather than per-component, since the app uses ordinary Tailwind
+  `transition`/`animate-*` utilities throughout rather than one central
+  animation helper, so a single component-level fix couldn't have
+  covered it.
+- **Touch target height (Part 30) — `Button`'s `md` size (the default,
+  used for every primary action across the 10 pages on `primitives.tsx`)
+  was ~36px**, short of the 40-44px target and inconsistent with
+  `ProButton`'s own `min-h-11` (Stage 1 confirmed `pro-shell.tsx` already
+  had this right). Added `min-h-11` to `Button`'s `md` size so the two
+  button systems agree. `sm` and `IconButton` stay compact by design —
+  dense inline/table contexts, not an oversight.
+- **Invisible keyboard focus (Part 38) — one real bug found**, not a
+  systemic pattern: `sales/page.tsx`'s cart quantity stepper
+  (−/number-input/+) had `outline-none` with no `focus:` replacement at
+  all on any of its three controls — tabbing to it left no visible focus
+  indicator whatsoever. Added a `focus:ring-2 focus:ring-inset` to all
+  three. Checked the other 11 `outline-none` call sites in the app
+  (including every shared primitive) — all correctly pair it with a
+  `focus:ring`/`focus:border` replacement; this was an isolated miss,
+  not a pattern.
+- Two remaining raw gradient logo badges (`Sidebar`, `MobileNav` — not
+  `pro-shell.tsx`, so untouched by Stage 1) flattened to the same flat
+  `bg-teal-600` used everywhere else, for consistency.
+- Login's 4 raw `<input>` fields (shop name/phone/email/password —
+  don't use the shared `TextInput`) bumped from `py-2` (~38px) to
+  `py-2.5` (~42px), matching `form.tsx`'s confirmed-correct target.
+
+Verification: tsc clean, eslint clean, 89/89 tests passing, production
+build succeeds, same 41-route list.

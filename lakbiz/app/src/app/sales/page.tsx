@@ -417,7 +417,7 @@ export default function SalesPage() {
                           <div className="flex items-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
                             <button
                               onClick={() => setQty(p.id, qty - 1, p.stockQty)}
-                              className="flex h-11 w-11 items-center justify-center text-xl font-bold text-slate-600 transition hover:bg-white"
+                              className="flex h-11 w-11 items-center justify-center text-xl font-bold text-slate-600 transition hover:bg-white focus:z-10 focus:bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-teal-400"
                             >
                               −
                             </button>
@@ -428,11 +428,11 @@ export default function SalesPage() {
                               step="any"
                               value={qty || ""}
                               onChange={(e) => setQty(p.id, Number(e.target.value), p.stockQty)}
-                              className="h-11 w-16 border-x border-slate-200 bg-white text-center text-sm font-bold text-slate-950 outline-none"
+                              className="h-11 w-16 border-x border-slate-200 bg-white text-center text-sm font-bold text-slate-950 outline-none focus:z-10 focus:ring-2 focus:ring-inset focus:ring-teal-400"
                             />
                             <button
                               onClick={() => setQty(p.id, qty + 1, p.stockQty)}
-                              className="flex h-11 w-11 items-center justify-center text-xl font-bold text-teal-700 transition hover:bg-white"
+                              className="flex h-11 w-11 items-center justify-center text-xl font-bold text-teal-700 transition hover:bg-white focus:z-10 focus:bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-teal-400"
                             >
                               +
                             </button>

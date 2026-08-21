@@ -88,6 +88,25 @@ body {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
+/* Global premium UI phase, Part 32/38 — "respect reduced-motion
+ * preference." Global rather than per-component: the app uses ordinary
+ * Tailwind `transition`/`animate-*` utilities throughout (drawer slide,
+ * menu fade, row highlight, hover states) rather than a single
+ * animation helper class, so a global override is the only way to
+ * cover all of them at once without hunting down every call site.
+ * Keeps opacity/color transitions (so a disabled toggle or a focus ring
+ * still visibly changes) but removes actual motion/duration. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @media print {
   .no-print {
     display: none !important;

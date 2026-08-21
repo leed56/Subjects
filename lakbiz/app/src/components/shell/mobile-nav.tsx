@@ -62,7 +62,7 @@ export function MobileNav() {
     <>
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-3 backdrop-blur-md lg:hidden">
         <Link href={isPlatformAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-teal-700 text-xs font-bold text-white">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-600 text-xs font-bold text-white">
             L
           </span>
           <span className="text-base font-bold text-slate-900">LakBiz</span>

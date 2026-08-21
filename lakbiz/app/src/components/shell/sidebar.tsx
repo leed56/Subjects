@@ -45,7 +45,7 @@ export function Sidebar() {
     <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200 bg-white lg:flex">
       <div className="flex h-14 items-center gap-2 border-b border-slate-200 px-4">
         <Link href={isPlatformAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2 min-w-0">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-teal-700 text-xs font-bold text-white">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-teal-600 text-xs font-bold text-white">
             L
           </span>
           <span className="truncate text-base font-bold text-slate-900">LakBiz</span>

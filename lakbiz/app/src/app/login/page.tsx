@@ -290,7 +290,7 @@ export default function LoginPage() {
                     required
                     value={shopName}
                     onChange={(e) => setShopName(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5"
                   />
                 </label>
                 <label className="block text-sm">
@@ -300,7 +300,7 @@ export default function LoginPage() {
                     placeholder="07X XXX XXXX"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5"
                   />
                 </label>
               </>
@@ -312,7 +312,7 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className={`mt-1 w-full rounded-lg border px-3 py-2 ${
+                className={`mt-1 w-full rounded-lg border px-3 py-2.5 ${
                   adminLogin
                     ? "border-slate-700 bg-slate-950 text-white placeholder:text-slate-500"
                     : "border-slate-300"
@@ -328,7 +328,7 @@ export default function LoginPage() {
                 minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className={`mt-1 w-full rounded-lg border px-3 py-2 ${
+                className={`mt-1 w-full rounded-lg border px-3 py-2.5 ${
                   adminLogin
                     ? "border-slate-700 bg-slate-950 text-white"
                     : "border-slate-300"
