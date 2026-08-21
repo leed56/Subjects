@@ -82,6 +82,15 @@ body:has(aside a[href="/sales"][aria-current="page"])
   display: none;
 }
 
+/* With no sellable inventory, three zero-value sale KPIs add no information.
+   Collapse them so the page becomes an intentional onboarding state. They
+   return automatically the moment stock exists. */
+body:has(aside a[href="/sales"][aria-current="page"])
+  main:has(> section.mt-6 > section > div[class*="border-dashed"])
+  > section.grid.gap-4 {
+  display: none;
+}
+
 /* Empty inventory is a next-step message, not a feature-sized canvas. Remove
    the redundant outer card so the state reads as one deliberate surface. */
 body:has(aside a[href="/sales"][aria-current="page"])
@@ -101,6 +110,12 @@ body:has(aside a[href="/sales"][aria-current="page"])
     radial-gradient(circle at 50% 0%, rgba(20, 184, 166, 0.075), transparent 48%),
     linear-gradient(180deg, #fbfdff 0%, #f7fafc 100%);
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.035);
+}
+
+body:has(aside a[href="/sales"][aria-current="page"])
+  main:has(> section.mt-6 > section > div[class*="border-dashed"])
+  > section.mt-6 {
+  margin-top: 0.75rem !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -125,6 +140,20 @@ body:has(aside a[href="/dashboard"][aria-current="page"])
 body:has(aside a[href="/dashboard"][aria-current="page"])
   main > section:has(a[href="/teams"]):has(div[class*="border-dashed"]) {
   display: none;
+}
+
+/* When the performance chart has no sales history, do not reserve half of the
+   command center for a large empty chart. Keep the financial snapshot as the
+   useful compact panel; the chart returns automatically once data exists. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div.grid.gap-4:has(> section:nth-child(2) div[class*="border-dashed"])
+  > section:nth-child(2) {
+  display: none;
+}
+
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div.grid.gap-4:has(> section:nth-child(2) div[class*="border-dashed"]) {
+  grid-template-columns: minmax(0, 34rem) !important;
 }
 
 /* Low stock already appears in Needs Attention. If it is the only bottom
@@ -179,5 +208,10 @@ body:has(aside a[href="/dashboard"][aria-current="page"])
   body:has(aside a[href="/sales"][aria-current="page"])
     main > section.mt-6 > section > div[class*="border-dashed"] {
     padding: 1.4rem 1rem !important;
+  }
+
+  body:has(aside a[href="/dashboard"][aria-current="page"])
+    main > div.grid.gap-4:has(> section:nth-child(2) div[class*="border-dashed"]) {
+    grid-template-columns: minmax(0, 1fr) !important;
   }
 }
