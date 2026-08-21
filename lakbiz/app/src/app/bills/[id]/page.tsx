@@ -69,7 +69,7 @@ export default function BillDetailPage() {
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98]"
+                  className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98]"
                 >
                   {t("common.view_print")}
                 </button>
@@ -79,18 +79,18 @@ export default function BillDetailPage() {
 
           <section className={`mb-6 grid gap-4 ${canSeeFinancials ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
             <ProCard>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{t("common.total")}</p>
-              <p className="mt-2 font-mono text-2xl font-black text-slate-950">{formatLkr(sale.total)}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{t("common.total")}</p>
+              <p className="mt-2 font-mono text-2xl font-bold text-slate-950">{formatLkr(sale.total)}</p>
             </ProCard>
             {canSeeFinancials && (
             <ProCard>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{t("common.profit")}</p>
-              <p className="mt-2 font-mono text-2xl font-black text-teal-700">{formatLkr(sale.profit)}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{t("common.profit")}</p>
+              <p className="mt-2 font-mono text-2xl font-bold text-teal-700">{formatLkr(sale.profit)}</p>
             </ProCard>
             )}
             <ProCard>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{t("common.payment")}</p>
-              <p className="mt-2 text-2xl font-black text-slate-950">{paymentLabel(t, sale.paymentMethod)}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{t("common.payment")}</p>
+              <p className="mt-2 text-2xl font-bold text-slate-950">{paymentLabel(t, sale.paymentMethod)}</p>
             </ProCard>
           </section>
         </div>

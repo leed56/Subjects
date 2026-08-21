@@ -431,3 +431,46 @@ every page touched this stage.
 Verification: tsc clean, eslint clean, 89/89 tests passing, production
 build succeeds (all 6 `/sectors/[id]` static params still generate),
 same 41-route list.
+
+---
+
+## 10. Stage 4 findings — per-page typography/radius/shadow sweep
+
+A count across the 12 pages still on `pro-shell.tsx` found `font-black`,
+`rounded-[2rem]`/`rounded-[1.5rem]`, and `shadow-2xl` used **as literal
+page-level Tailwind classes**, not inherited from the shared
+`pro-shell.tsx` components Stage 1 already converged — meaning Stage 1's
+fix, while real, didn't touch this: 288 `font-black` occurrences and 24
+`rounded-[2rem]`/`rounded-[1.5rem]`/`shadow-2xl` occurrences, spread
+unevenly (suppliers and workforce carried the most). This confirms these
+12 pages are largely untouched since a much earlier, heavier design era
+— exactly Part 27's "do not assume a page is good merely because it
+wasn't in screenshots."
+
+- `font-black` → `font-bold` across all 12 files (safe, mechanical — a
+  font-weight utility swap changes no layout/spacing, only visual
+  weight, matching Part 7's "reduce excessive... font weights
+  disciplined").
+- `rounded-[2rem]`/`rounded-[1.5rem]` → `rounded-xl`, `shadow-2xl` →
+  `shadow-sm`, in the 6 files that had them (vat, workforce, suppliers,
+  vehicles, sales, banking) — the same radius/shadow convergence Stage 1
+  applied to `pro-shell.tsx` itself, applied here to page-level literal
+  classes Stage 1 couldn't reach.
+- One structural fix beyond the mechanical sweep: `vat/page.tsx`'s
+  income-tax hero card was a full marketing-hero treatment
+  (`rounded-[2rem]`, `shadow-2xl shadow-indigo-950/20 ring-1`, 4xl-5xl
+  `font-black` figure) sitting inside an operational report — exactly
+  "marketing aesthetics inside operational tables," Part 48's own
+  example of what not to do. Kept as a deliberately darker card (it
+  genuinely is the headline number on the page) but brought to the same
+  `rounded-xl`/border/`font-bold` scale as every other card, no heavy
+  shadow.
+
+Not attempted this pass: a full structural per-page rebuild of all 12
+pages (new card taxonomy, button hierarchy audit, spacing scale) — the
+mechanical sweep addresses the dominant, measurable "heavy/dated" signal
+across all of them at once; a deeper structural pass per page is real
+remaining work, noted honestly rather than claimed as finished.
+
+Verification: tsc clean, eslint clean, 89/89 tests passing, production
+build succeeds, same 41-route list.

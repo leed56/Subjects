@@ -82,19 +82,25 @@ export default function VatReturnPage() {
         actions={<ProButton href="/settings/shop" variant="secondary">{t("tax.rate_setting")}</ProButton>}
       />
 
-      <section className="mb-6 overflow-hidden rounded-[2rem] bg-indigo-950 p-6 text-white shadow-2xl shadow-indigo-950/20 ring-1 ring-indigo-900 sm:p-8">
+      {/* Global premium UI phase, Part 48 — was rounded-xl/shadow-sm/
+       * font-bold, a marketing-hero treatment on an operational report
+       * ("marketing aesthetics inside operational tables" is explicitly
+       * called out to avoid). Kept as a deliberately darker card — this
+       * genuinely is the headline number on the page — but at the same
+       * rounded-xl/no-heavy-shadow/font-bold scale as every other card. */}
+      <section className="mb-6 rounded-xl border border-indigo-900 bg-indigo-950 p-6 text-white sm:p-7">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-indigo-300">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-300">
               {t("tax.estimated_tax")}
             </p>
-            <p className="mt-3 font-mono text-4xl font-black tracking-tight text-indigo-200 sm:text-5xl">
+            <p className="mt-3 font-mono text-3xl font-bold tracking-tight text-indigo-200 sm:text-4xl">
               {formatLkr(incomeTax.estimatedTax)}
             </p>
-            <p className="mt-3 text-sm font-semibold text-indigo-300/80">
+            <p className="mt-3 text-sm font-medium text-indigo-300/80">
               {t("tax.fiscal_year")}: {incomeTax.bounds.label}
             </p>
-            <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-indigo-300/70">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-indigo-300/70">
               {t("tax.disclaimer")}
             </p>
           </div>
@@ -233,11 +239,11 @@ export default function VatReturnPage() {
           }
         />
 
-        <section className="mb-6 overflow-hidden rounded-[2rem] bg-slate-950 p-6 text-white shadow-2xl shadow-slate-950/20 ring-1 ring-slate-800 sm:p-8">
+        <section className="mb-6 overflow-hidden rounded-xl bg-slate-950 p-6 text-white shadow-sm shadow-slate-950/20 ring-1 ring-slate-800 sm:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-teal-300">{t("vat.net_payable")}</p>
-              <p className="mt-3 font-mono text-4xl font-black tracking-tight text-teal-300 sm:text-5xl">
+              <p className="text-xs font-bold uppercase tracking-[0.24em] text-teal-300">{t("vat.net_payable")}</p>
+              <p className="mt-3 font-mono text-4xl font-bold tracking-tight text-teal-300 sm:text-5xl">
                 {formatLkr(summary.netPayable)}
               </p>
               <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-400">{t("vat.ird_note")}</p>
@@ -264,11 +270,11 @@ export default function VatReturnPage() {
                 {quarterSales.map((s) => (
                   <Link key={s.id} href={`/bills/${s.id}`} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-white">
                     <div className="min-w-0">
-                      <p className="font-mono text-xs font-black uppercase tracking-wide text-slate-500">{s.billNo ?? s.id.slice(0, 8)}</p>
-                      <p className="mt-1 truncate text-sm font-black text-slate-950">{s.customerName || "Walk-in customer"}</p>
+                      <p className="font-mono text-xs font-bold uppercase tracking-wide text-slate-500">{s.billNo ?? s.id.slice(0, 8)}</p>
+                      <p className="mt-1 truncate text-sm font-bold text-slate-950">{s.customerName || "Walk-in customer"}</p>
                       <p className="mt-1 text-xs font-semibold text-slate-500">{new Date(s.date).toLocaleDateString("en-LK")}</p>
                     </div>
-                    <p className="shrink-0 font-mono text-sm font-black text-amber-700">{formatLkr(s.outputVat ?? 0)}</p>
+                    <p className="shrink-0 font-mono text-sm font-bold text-amber-700">{formatLkr(s.outputVat ?? 0)}</p>
                   </Link>
                 ))}
               </div>
@@ -283,11 +289,11 @@ export default function VatReturnPage() {
                 {quarterPurchases.map((p) => (
                   <div key={p.id} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="min-w-0">
-                      <p className="font-mono text-xs font-black uppercase tracking-wide text-slate-500">{p.grnNo}</p>
-                      <p className="mt-1 truncate text-sm font-black text-slate-950">{p.supplierName}</p>
+                      <p className="font-mono text-xs font-bold uppercase tracking-wide text-slate-500">{p.grnNo}</p>
+                      <p className="mt-1 truncate text-sm font-bold text-slate-950">{p.supplierName}</p>
                       <p className="mt-1 text-xs font-semibold text-slate-500">{new Date(p.date).toLocaleDateString("en-LK")}</p>
                     </div>
-                    <p className="shrink-0 font-mono text-sm font-black text-teal-700">{formatLkr(p.inputVat ?? 0)}</p>
+                    <p className="shrink-0 font-mono text-sm font-bold text-teal-700">{formatLkr(p.inputVat ?? 0)}</p>
                   </div>
                 ))}
               </div>

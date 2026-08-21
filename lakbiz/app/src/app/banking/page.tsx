@@ -261,7 +261,7 @@ export default function BankingPage() {
                 onClick={openBankModal}
                 disabled={!canWrite}
                 title={!canWrite ? (disabledHint ?? undefined) : undefined}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("bank.add_account")}
               </button>
@@ -270,7 +270,7 @@ export default function BankingPage() {
                 onClick={openTxnModal}
                 disabled={!canWrite}
                 title={!canWrite ? (disabledHint ?? undefined) : undefined}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("bank.record_txn")}
               </button>
@@ -279,7 +279,7 @@ export default function BankingPage() {
                 onClick={openTransferModal}
                 disabled={!canWrite}
                 title={!canWrite ? (disabledHint ?? undefined) : undefined}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("bank.transfer")}
               </button>
@@ -288,7 +288,7 @@ export default function BankingPage() {
                 onClick={openChequeModal}
                 disabled={!canWrite}
                 title={!canWrite ? (disabledHint ?? undefined) : undefined}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("bank.add_cheque")}
               </button>
@@ -340,7 +340,7 @@ export default function BankingPage() {
                 description="Add a bank account to track deposits, cleared cheques and balances."
                 action={
                   canWrite ? (
-                    <button type="button" onClick={openBankModal} className="rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-black text-white hover:bg-teal-700">
+                    <button type="button" onClick={openBankModal} className="rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-teal-700">
                       {t("bank.add_account")}
                     </button>
                   ) : undefined
@@ -349,16 +349,16 @@ export default function BankingPage() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {data.bankAccounts.map((acc) => (
-                  <article key={acc.id} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 ring-1 ring-slate-100">
+                  <article key={acc.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4 ring-1 ring-slate-100">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-xs font-black uppercase tracking-wide text-teal-700">{acc.bankName}</p>
-                        <h2 className="mt-2 text-base font-black text-slate-950">{acc.accountName}</h2>
+                        <p className="text-xs font-bold uppercase tracking-wide text-teal-700">{acc.bankName}</p>
+                        <h2 className="mt-2 text-base font-bold text-slate-950">{acc.accountName}</h2>
                         <p className="mt-1 text-xs font-semibold text-slate-500">{acc.branch || "—"} · {acc.accountNumber}</p>
                       </div>
                       <ProBadge tone="emerald">Active</ProBadge>
                     </div>
-                    <p className="mt-5 font-mono text-2xl font-black text-slate-950">{formatLkr(acc.balance)}</p>
+                    <p className="mt-5 font-mono text-2xl font-bold text-slate-950">{formatLkr(acc.balance)}</p>
                     <button
                       onClick={async () => {
                         if (deletingAccountId || !confirm(t("bank.delete_account"))) return;
@@ -369,7 +369,7 @@ export default function BankingPage() {
                         if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
                       }}
                       disabled={!!deletingAccountId}
-                      className="mt-4 rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                      className="mt-4 rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
                     >
                       {deletingAccountId === acc.id ? t("common.saving") : t("common.delete")}
                     </button>
@@ -387,7 +387,7 @@ export default function BankingPage() {
             ) : (
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="w-full text-left text-sm">
-                  <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+                  <thead className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
                     <tr>
                       <th className="px-4 py-3">{t("common.date")}</th>
                       <th className="px-4 py-3">{t("bank.type")}</th>
@@ -400,9 +400,9 @@ export default function BankingPage() {
                     {ledger.map((row) => (
                       <tr key={row.key} className="border-b last:border-0">
                         <td className="px-4 py-3 font-semibold text-slate-600">{row.date.slice(0, 10)}</td>
-                        <td className="px-4 py-3 font-black text-slate-950">{row.label}</td>
+                        <td className="px-4 py-3 font-bold text-slate-950">{row.label}</td>
                         <td className="px-4 py-3 font-semibold text-slate-600">{row.detail}</td>
-                        <td className={`px-4 py-3 text-right font-mono font-black ${row.signed < 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                        <td className={`px-4 py-3 text-right font-mono font-bold ${row.signed < 0 ? "text-rose-600" : "text-emerald-600"}`}>
                           {row.signed < 0 ? "-" : "+"}{formatLkr(Math.abs(row.signed))}
                         </td>
                         <td className="px-4 py-3">
@@ -417,7 +417,7 @@ export default function BankingPage() {
                                 if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
                               }}
                               disabled={!!deletingTxnId}
-                              className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                              className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
                             >
                               {deletingTxnId === row.removable ? t("common.saving") : t("common.delete")}
                             </button>
@@ -440,7 +440,7 @@ export default function BankingPage() {
               <>
                 <div className="hidden overflow-hidden rounded-2xl border border-slate-200 lg:block">
                   <table className="w-full text-left text-sm">
-                    <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+                    <thead className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
                       <tr>
                         <th className="px-4 py-3">#</th>
                         <th className="px-4 py-3">{t("bank.party")}</th>
@@ -454,18 +454,18 @@ export default function BankingPage() {
                     <tbody>
                       {data.cheques.map((c) => (
                         <tr key={c.id} className="border-b last:border-0">
-                          <td className="px-4 py-3 font-mono text-xs font-black text-slate-700">{c.chequeNo}</td>
-                          <td className="px-4 py-3 font-black text-slate-950">{c.partyName}</td>
+                          <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">{c.chequeNo}</td>
+                          <td className="px-4 py-3 font-bold text-slate-950">{c.partyName}</td>
                           <td className="px-4 py-3 font-semibold text-slate-600">
                             {c.direction === "received" ? t("bank.in") : t("bank.out")}
-                            {c.postDated && <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-black text-amber-700">PDC</span>}
+                            {c.postDated && <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">PDC</span>}
                           </td>
-                          <td className="px-4 py-3 font-mono font-black text-slate-950">{formatLkr(c.amount)}</td>
+                          <td className="px-4 py-3 font-mono font-bold text-slate-950">{formatLkr(c.amount)}</td>
                           <td className="px-4 py-3 font-semibold text-slate-600">{c.chequeDate}</td>
                           <td className="px-4 py-3"><ChequeStatusBadge status={c.status} label={statusLabels[c.status]} /></td>
                           <td className="px-4 py-3">
                             {c.status !== "cleared" && c.status !== "bounced" && (
-                              <button onClick={() => openStatusModal(c)} className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700 hover:bg-teal-100">
+                              <button onClick={() => openStatusModal(c)} className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-700 hover:bg-teal-100">
                                 {t("common.update")}
                               </button>
                             )}
@@ -481,21 +481,21 @@ export default function BankingPage() {
                     <article key={c.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="font-mono text-xs font-black uppercase tracking-wide text-teal-700">{c.chequeNo}</p>
-                          <h2 className="mt-2 font-black text-slate-950">{c.partyName}</h2>
+                          <p className="font-mono text-xs font-bold uppercase tracking-wide text-teal-700">{c.chequeNo}</p>
+                          <h2 className="mt-2 font-bold text-slate-950">{c.partyName}</h2>
                           <p className="mt-1 text-xs font-semibold text-slate-500">{c.bankName} · {c.chequeDate}</p>
                         </div>
                         <ChequeStatusBadge status={c.status} label={statusLabels[c.status]} />
                       </div>
                       <div className="mt-4 flex items-end justify-between border-t border-slate-200 pt-3">
                         <div>
-                          <p className="text-xs font-black uppercase tracking-wide text-slate-400">{c.direction === "received" ? t("bank.in") : t("bank.out")}</p>
-                          {c.postDated && <p className="mt-1 text-xs font-black text-amber-700">PDC</p>}
+                          <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{c.direction === "received" ? t("bank.in") : t("bank.out")}</p>
+                          {c.postDated && <p className="mt-1 text-xs font-bold text-amber-700">PDC</p>}
                         </div>
-                        <p className="font-mono text-lg font-black text-slate-950">{formatLkr(c.amount)}</p>
+                        <p className="font-mono text-lg font-bold text-slate-950">{formatLkr(c.amount)}</p>
                       </div>
                       {c.status !== "cleared" && c.status !== "bounced" && (
-                        <button onClick={() => openStatusModal(c)} className="mt-4 w-full rounded-2xl bg-teal-50 px-3 py-3 text-xs font-black text-teal-700 hover:bg-teal-100">
+                        <button onClick={() => openStatusModal(c)} className="mt-4 w-full rounded-2xl bg-teal-50 px-3 py-3 text-xs font-bold text-teal-700 hover:bg-teal-100">
                           {t("common.update")}
                         </button>
                       )}
@@ -796,10 +796,10 @@ export default function BankingPage() {
           }
         >
           <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("bank.update_status")}</p>
-          <label className="block text-sm font-black text-slate-700">
+          <label className="block text-sm font-bold text-slate-700">
             {t("bank.status_col")}
             <select
-              className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+              className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
               value={selectedChequeStatus}
               onChange={(e) => {
                 const status = e.target.value as ChequeStatus;
@@ -819,10 +819,10 @@ export default function BankingPage() {
           </label>
 
           {data.bankAccounts.length > 0 && (
-            <label className="mt-4 block text-sm font-black text-slate-700">
+            <label className="mt-4 block text-sm font-bold text-slate-700">
               {t("bank.total_balance")}
               <select
-                className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
                 value={depositAccountId || data.bankAccounts[0].id}
                 onChange={(e) => setDepositAccountId(e.target.value)}
               >
