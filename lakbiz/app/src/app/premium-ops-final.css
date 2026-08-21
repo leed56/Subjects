@@ -24,9 +24,7 @@ body:has(aside a[href="/stock"][aria-current="page"])
   padding-bottom: 0 !important;
 }
 
-/* Keep the sticky drawer footer visually separate from the scroll content.
-   The previous translucent surface let fields show through underneath it,
-   which read as overlap even though the fields remained scrollable. */
+/* Keep the sticky drawer footer visually separate from the scroll content. */
 body:has(aside a[href="/stock"][aria-current="page"])
   [data-product-form="true"] > div.sticky {
   background: #ffffff !important;
@@ -75,26 +73,29 @@ body:has(aside a[href="/stock"][aria-current="page"])
  * Sales / POS
  * ----------------------------------------------------------------------- */
 
-/* The central empty-state CTA is enough. Keep the header focused on the sale
-   itself rather than repeating “Add stock” in two places. */
+/* ProPageHeader is the first direct child on this route. Hide only its Stock
+   link so the central empty-state CTA remains the one primary next step. */
 body:has(aside a[href="/sales"][aria-current="page"])
-  main > div.mb-8 a[href="/stock"] {
-  display: none;
+  main > :first-child a[href="/stock"] {
+  display: none !important;
 }
 
-/* With no sellable inventory, three zero-value sale KPIs add no information.
-   Collapse them so the page becomes an intentional onboarding state. They
-   return automatically the moment stock exists. */
+/* ProCard renders as a div in the live app. When its empty state is present,
+   hide the three zero-value KPIs and collapse the page into an onboarding
+   state. */
 body:has(aside a[href="/sales"][aria-current="page"])
-  main:has(> section.mt-6 > section > div[class*="border-dashed"])
+  main:has(> section.mt-6 > div div[class*="border-dashed"])
   > section.grid.gap-4 {
-  display: none;
+  display: none !important;
 }
 
-/* Empty inventory is a next-step message, not a feature-sized canvas. Remove
-   the redundant outer card so the state reads as one deliberate surface. */
 body:has(aside a[href="/sales"][aria-current="page"])
-  main > section.mt-6 > section:has(> div[class*="border-dashed"]) {
+  main > section.mt-6:has(> div div[class*="border-dashed"]) {
+  margin-top: 1.25rem !important;
+}
+
+body:has(aside a[href="/sales"][aria-current="page"])
+  main > section.mt-6:has(> div div[class*="border-dashed"]) > div {
   border: 0 !important;
   background: transparent !important;
   padding: 0 !important;
@@ -102,9 +103,9 @@ body:has(aside a[href="/sales"][aria-current="page"])
 }
 
 body:has(aside a[href="/sales"][aria-current="page"])
-  main > section.mt-6 > section > div[class*="border-dashed"] {
-  min-height: 0;
-  padding: 1.75rem 1.5rem !important;
+  main > section.mt-6 div[class*="border-dashed"] {
+  min-height: 0 !important;
+  padding: 2.25rem 1.5rem !important;
   border-color: #d8e4ec;
   background:
     radial-gradient(circle at 50% 0%, rgba(20, 184, 166, 0.075), transparent 48%),
@@ -112,17 +113,10 @@ body:has(aside a[href="/sales"][aria-current="page"])
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.035);
 }
 
-body:has(aside a[href="/sales"][aria-current="page"])
-  main:has(> section.mt-6 > section > div[class*="border-dashed"])
-  > section.mt-6 {
-  margin-top: 0.75rem !important;
-}
-
 /* --------------------------------------------------------------------------
  * Owner dashboard
  * ----------------------------------------------------------------------- */
 
-/* Zero-data sections contract instead of stacking large empty architecture. */
 body:has(aside a[href="/dashboard"][aria-current="page"])
   main div[class*="border-dashed"] {
   min-height: 0 !important;
@@ -135,42 +129,44 @@ body:has(aside a[href="/dashboard"][aria-current="page"])
   line-height: 1.45;
 }
 
-/* An empty Teams Today card adds no information. Let it disappear until a
-   real assignment exists; the Field Teams route remains available in nav. */
+/* Card() renders div, not section. Remove empty Today's Operations and Teams
+   Today cards completely; they return automatically when real records exist. */
 body:has(aside a[href="/dashboard"][aria-current="page"])
-  main > section:has(a[href="/teams"]):has(div[class*="border-dashed"]) {
-  display: none;
+  main > div:has(a[href="/schedule"]):has(div[class*="border-dashed"]),
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div:has(a[href="/teams"]):has(div[class*="border-dashed"]) {
+  display: none !important;
 }
 
-/* When the performance chart has no sales history, do not reserve half of the
-   command center for a large empty chart. Keep the financial snapshot as the
-   useful compact panel; the chart returns automatically once data exists. */
+/* Business Performance is also Card() => div. When it contains an EmptyState,
+   remove it and collapse the financial row to one intentional panel. */
 body:has(aside a[href="/dashboard"][aria-current="page"])
-  main > div.grid.gap-4:has(> section:nth-child(2) div[class*="border-dashed"])
-  > section:nth-child(2) {
-  display: none;
+  main > div.grid.gap-4:has(> div:nth-child(2) div[class*="border-dashed"])
+  > div:nth-child(2) {
+  display: none !important;
 }
 
 body:has(aside a[href="/dashboard"][aria-current="page"])
-  main > div.grid.gap-4:has(> section:nth-child(2) div[class*="border-dashed"]) {
-  grid-template-columns: minmax(0, 34rem) !important;
+  main > div.grid.gap-4:has(> div:nth-child(2) div[class*="border-dashed"]) {
+  grid-template-columns: minmax(0, 1fr) !important;
 }
 
-/* Low stock already appears in Needs Attention. If it is the only bottom
-   summary card, suppress the duplicate panel entirely. */
+/* Low stock is already an actionable Needs Attention row. If it is the sole
+   bottom summary card, suppress the duplicate panel. */
 body:has(aside a[href="/dashboard"][aria-current="page"])
-  main > div.mt-4.grid:has(> section:only-child a[href="/stock"]) {
-  display: none;
+  main > div.mt-4.grid:has(> div:only-child a[href="/stock"]) {
+  display: none !important;
 }
 
-/* Needs-attention rows should read as the actionable command-center layer. */
+/* Needs-attention rows get one quiet severity rail. */
 body:has(aside a[href="/dashboard"][aria-current="page"])
-  main section:has(h2, [class*="uppercase"]) div[class*="border-amber"] {
+  main div:has(> div > span.bg-amber-500),
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main div:has(> div > span.bg-rose-500) {
   box-shadow: inset 3px 0 0 #f59e0b;
 }
 
-/* The reset/sync row is system maintenance, not dashboard content. Make it a
-   quiet utility footer while keeping the action accessible. */
+/* System maintenance is not dashboard content. */
 body:has(aside a[href="/dashboard"][aria-current="page"])
   main > div.mt-8.flex.flex-col.items-center.justify-between {
   margin-top: 1.25rem;
@@ -194,24 +190,19 @@ body:has(aside a[href="/dashboard"][aria-current="page"])
   color: #be123c;
 }
 
-/* Slightly reduce vertical rhythm between dashboard operational sections when
-   they contain only empty-state content. */
-body:has(aside a[href="/dashboard"][aria-current="page"])
-  main > section:has(div[class*="border-dashed"]),
-body:has(aside a[href="/dashboard"][aria-current="page"])
-  main > div > section:has(div[class*="border-dashed"]) {
-  padding-top: 1rem;
-  padding-bottom: 1rem;
+@media (min-width: 1024px) {
+  /* With the chart hidden, spread the four financial values across one row so
+     the remaining panel feels intentionally composed rather than stretched. */
+  body:has(aside a[href="/dashboard"][aria-current="page"])
+    main > div.grid.gap-4:has(> div:nth-child(2) div[class*="border-dashed"])
+    > div:first-child > div.grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 639px) {
   body:has(aside a[href="/sales"][aria-current="page"])
-    main > section.mt-6 > section > div[class*="border-dashed"] {
-    padding: 1.4rem 1rem !important;
-  }
-
-  body:has(aside a[href="/dashboard"][aria-current="page"])
-    main > div.grid.gap-4:has(> section:nth-child(2) div[class*="border-dashed"]) {
-    grid-template-columns: minmax(0, 1fr) !important;
+    main > section.mt-6 div[class*="border-dashed"] {
+    padding: 1.75rem 1rem !important;
   }
 }
