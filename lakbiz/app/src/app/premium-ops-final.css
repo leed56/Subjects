@@ -15,6 +15,18 @@ body:has(aside a[href="/stock"][aria-current="page"])
   display: none;
 }
 
+/* Keep the sticky drawer footer visually separate from the scroll content.
+   The previous translucent surface let fields show through underneath it,
+   which read as overlap even though the fields remained scrollable. */
+body:has(aside a[href="/stock"][aria-current="page"])
+  [data-product-form="true"] > div.sticky {
+  background: #ffffff !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: 0 -12px 30px rgba(15, 23, 42, 0.07) !important;
+  isolation: isolate;
+}
+
 /* Low stock should earn more attention only when the metric is actually in a
    warning state. Keep the rest of the KPI row quiet. */
 body:has(aside a[href="/stock"][aria-current="page"])
@@ -54,28 +66,32 @@ body:has(aside a[href="/stock"][aria-current="page"])
  * Sales / POS
  * ----------------------------------------------------------------------- */
 
-/* When there is no sellable stock, the central empty state is the one primary
-   action. Remove the duplicate Add stock button from the page header. */
+/* The central empty-state CTA is enough. Keep the header focused on the sale
+   itself rather than repeating “Add stock” in two places. */
 body:has(aside a[href="/sales"][aria-current="page"])
-  main:has(> section.mt-6 > section > div[class*="border-dashed"])
-  > div:first-child a[href="/stock"] {
+  main > div.mb-8 a[href="/stock"] {
   display: none;
 }
 
-/* Empty inventory is a next-step message, not a feature-sized canvas. */
+/* Empty inventory is a next-step message, not a feature-sized canvas. Remove
+   the redundant outer card so the state reads as one deliberate surface. */
 body:has(aside a[href="/sales"][aria-current="page"])
   main > section.mt-6 > section:has(> div[class*="border-dashed"]) {
-  padding: 1rem !important;
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
 }
 
 body:has(aside a[href="/sales"][aria-current="page"])
   main > section.mt-6 > section > div[class*="border-dashed"] {
   min-height: 0;
-  padding: 2rem 1.5rem !important;
+  padding: 1.75rem 1.5rem !important;
   border-color: #d8e4ec;
   background:
     radial-gradient(circle at 50% 0%, rgba(20, 184, 166, 0.075), transparent 48%),
     linear-gradient(180deg, #fbfdff 0%, #f7fafc 100%);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.035);
 }
 
 /* --------------------------------------------------------------------------
@@ -86,13 +102,27 @@ body:has(aside a[href="/sales"][aria-current="page"])
 body:has(aside a[href="/dashboard"][aria-current="page"])
   main div[class*="border-dashed"] {
   min-height: 0 !important;
-  padding: 1rem 1.25rem !important;
+  padding: 0.9rem 1.15rem !important;
 }
 
 body:has(aside a[href="/dashboard"][aria-current="page"])
   main div[class*="border-dashed"] p[class*="max-w-sm"] {
   margin-top: 0.25rem;
   line-height: 1.45;
+}
+
+/* An empty Teams Today card adds no information. Let it disappear until a
+   real assignment exists; the Field Teams route remains available in nav. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > section:has(a[href="/teams"]):has(div[class*="border-dashed"]) {
+  display: none;
+}
+
+/* Low stock already appears in Needs Attention. If it is the only bottom
+   summary card, suppress the duplicate panel entirely. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div.mt-4.grid:has(> section:only-child a[href="/stock"]) {
+  display: none;
 }
 
 /* Needs-attention rows should read as the actionable command-center layer. */
@@ -105,10 +135,10 @@ body:has(aside a[href="/dashboard"][aria-current="page"])
    quiet utility footer while keeping the action accessible. */
 body:has(aside a[href="/dashboard"][aria-current="page"])
   main > div.mt-8.flex.flex-col.items-center.justify-between {
-  margin-top: 1.5rem;
+  margin-top: 1.25rem;
   border: 0;
   background: transparent;
-  padding: 0.35rem 0.25rem;
+  padding: 0.25rem;
   box-shadow: none;
   color: #94a3b8;
 }
@@ -132,13 +162,13 @@ body:has(aside a[href="/dashboard"][aria-current="page"])
   main > section:has(div[class*="border-dashed"]),
 body:has(aside a[href="/dashboard"][aria-current="page"])
   main > div > section:has(div[class*="border-dashed"]) {
-  padding-top: 1.1rem;
-  padding-bottom: 1.1rem;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
 }
 
 @media (max-width: 639px) {
   body:has(aside a[href="/sales"][aria-current="page"])
     main > section.mt-6 > section > div[class*="border-dashed"] {
-    padding: 1.5rem 1rem !important;
+    padding: 1.4rem 1rem !important;
   }
 }
