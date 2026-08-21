@@ -49,7 +49,7 @@ describe("canManageTeam", () => {
 
 describe("canAccessShopRoute", () => {
   it("owner can access every shop route", () => {
-    for (const route of ["/job-costing", "/expenses", "/reports", "/suppliers", "/banking", "/vat", "/jobs"]) {
+    for (const route of ["/job-costing", "/expenses", "/reports", "/suppliers", "/banking", "/vat", "/jobs", "/jobs/abc/invoice"]) {
       expect(canAccessShopRoute("owner", route)).toBe(true);
     }
   });
@@ -58,7 +58,7 @@ describe("canAccessShopRoute", () => {
     for (const route of ["/dashboard", "/sales", "/stock", "/customers", "/bills", "/jobs", "/schedule", "/workforce", "/vehicles", "/assets", "/teams"]) {
       expect(canAccessShopRoute("manager", route)).toBe(true);
     }
-    for (const route of ["/vat", "/suppliers", "/banking", "/job-costing", "/expenses", "/reports"]) {
+    for (const route of ["/vat", "/suppliers", "/banking", "/job-costing", "/expenses", "/reports", "/jobs/abc/invoice"]) {
       expect(canAccessShopRoute("manager", route)).toBe(false);
     }
   });
@@ -76,7 +76,7 @@ describe("canAccessShopRoute", () => {
     for (const route of ["/sales", "/jobs", "/assets", "/schedule"]) {
       expect(canAccessShopRoute("data_entry", route)).toBe(true);
     }
-    for (const route of ["/workforce", "/suppliers", "/banking", "/job-costing", "/expenses", "/reports", "/vat"]) {
+    for (const route of ["/workforce", "/suppliers", "/banking", "/job-costing", "/expenses", "/reports", "/vat", "/jobs/abc123/invoice"]) {
       expect(canAccessShopRoute("data_entry", route)).toBe(false);
     }
   });
@@ -85,13 +85,13 @@ describe("canAccessShopRoute", () => {
     for (const route of ["/dashboard", "/jobs", "/schedule", "/workforce", "/assets", "/teams"]) {
       expect(canAccessShopRoute("technician", route)).toBe(true);
     }
-    for (const route of ["/sales", "/stock", "/customers", "/suppliers", "/banking", "/job-costing", "/expenses", "/reports"]) {
+    for (const route of ["/sales", "/stock", "/customers", "/suppliers", "/banking", "/job-costing", "/expenses", "/reports", "/jobs/abc/invoice"]) {
       expect(canAccessShopRoute("technician", route)).toBe(false);
     }
   });
 
-  it("allows sub-paths only under an allowed route", () => {
-    expect(canAccessShopRoute("data_entry", "/jobs/abc123/invoice")).toBe(true);
+  it("does exact path-segment prefix matching, not string-prefix matching", () => {
+    expect(canAccessShopRoute("data_entry", "/jobs/abc123")).toBe(true);
     expect(canAccessShopRoute("cashier", "/jobsxyz")).toBe(false);
     expect(canAccessShopRoute("manager", "/banking/accounts/1")).toBe(false);
   });
@@ -118,19 +118,20 @@ describe("canUpdateAcJob", () => {
     expect(canUpdateAcJob("owner", { quotedAmount: 120000, depositAmount: 50000, subcontractCost: 15000 })).toBe(true);
   });
 
-  it("manager may update operational fields but not hidden job money", () => {
+  it("manager may update operational fields but not real job money", () => {
     expect(canUpdateAcJob("manager", { notes: "customer called" })).toBe(true);
     expect(canUpdateAcJob("manager", { quotedAmount: 120000 })).toBe(false);
     expect(canUpdateAcJob("manager", { depositAmount: 50000 })).toBe(false);
     expect(canUpdateAcJob("manager", { subcontractCost: 15000 })).toBe(false);
+    expect(canUpdateAcJob("manager", { quotedAmount: 0, depositAmount: 0, notes: "masked form" })).toBe(true);
   });
 
-  it("data_entry may update operational fields but not hidden job money", () => {
+  it("data_entry may update operational fields but not real job money", () => {
     expect(canUpdateAcJob("data_entry", { notes: "customer called" })).toBe(true);
     expect(canUpdateAcJob("data_entry", { quotedAmount: 120000 })).toBe(false);
     expect(canUpdateAcJob("data_entry", { depositAmount: 50000 })).toBe(false);
     expect(canUpdateAcJob("data_entry", { subcontractCost: 5000 })).toBe(false);
-    expect(canUpdateAcJob("data_entry", { notes: "x", quotedAmount: 1 })).toBe(false);
+    expect(canUpdateAcJob("data_entry", { quotedAmount: 0, depositAmount: 0, notes: "masked form" })).toBe(true);
   });
 
   it("cashier and technician cannot update jobs", () => {
@@ -149,12 +150,16 @@ describe("sanitizeAcJobInputForRole", () => {
     expect(sanitizeAcJobInputForRole(input, "owner")).toEqual(input);
   });
 
-  it("strips all owner-only job money for every non-owner", () => {
+  it("masks required quote/deposit fields and strips subcontract cost for every non-owner", () => {
     const input = { quotedAmount: 100000, depositAmount: 20000, subcontractCost: 5000, notes: "x" };
     for (const role of ["manager", "data_entry", "cashier", "technician"] as OrgRole[]) {
-      expect(sanitizeAcJobInputForRole(input, role)).toEqual({ notes: "x" });
+      expect(sanitizeAcJobInputForRole(input, role)).toEqual({ quotedAmount: 0, depositAmount: 0, notes: "x" });
     }
-    expect(input).toHaveProperty("quotedAmount");
+    expect(input).toHaveProperty("quotedAmount", 100000);
+  });
+
+  it("does not add financial keys to a partial operational update", () => {
+    expect(sanitizeAcJobInputForRole({ notes: "visit complete" }, "manager")).toEqual({ notes: "visit complete" });
   });
 });
 
