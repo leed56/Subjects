@@ -37,8 +37,8 @@ body:has(aside a[href="/dashboard"]) main > section div.rounded-xl.border.border
 
 /* Empty states should communicate a next step, not occupy half the viewport. */
 body:has(aside a[href="/dashboard"]) main div[class*="border-dashed"][class*="bg-slate-50/70"] {
-  padding-top: 2rem;
-  padding-bottom: 2rem;
+  padding-top: 1.75rem;
+  padding-bottom: 1.75rem;
   border-color: #dbe5ee;
   background:
     radial-gradient(circle at 50% 0%, rgba(20, 184, 166, 0.07), transparent 42%),
@@ -71,6 +71,40 @@ body:has(aside a[href="/dashboard"]) main table tbody tr:hover {
 body:has(aside a[href="/dashboard"]) main button[class*="bg-teal-600"],
 body:has(aside a[href="/dashboard"]) main a[class*="bg-teal-600"] {
   box-shadow: 0 7px 18px rgba(13, 148, 136, 0.16);
+}
+
+/* The stock translation already includes a leading plus. Hide the separate
+   icon in the page-level add action so it never renders as "+ + Add item". */
+body:has(aside a[href="/stock"][aria-current="page"]) main > div:first-child button[class*="bg-teal-600"] > svg {
+  display: none;
+}
+
+/* Owner dashboard: one strong KPI anchors the page. The remaining metrics
+   stay light so the command center has hierarchy instead of four equal white
+   cards competing for attention. */
+body:has(aside a[href="/dashboard"][aria-current="page"]) main > div:first-child > .mt-5 > .grid > div:first-child {
+  border-color: #14283e !important;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(45, 212, 191, 0.18), transparent 46%),
+    linear-gradient(135deg, #081421 0%, #0d2033 100%) !important;
+  box-shadow: 0 18px 44px rgba(8, 17, 31, 0.16) !important;
+}
+
+body:has(aside a[href="/dashboard"][aria-current="page"]) main > div:first-child > .mt-5 > .grid > div:first-child > div p {
+  color: #8ea6bf !important;
+}
+
+body:has(aside a[href="/dashboard"][aria-current="page"]) main > div:first-child > .mt-5 > .grid > div:first-child > p:first-of-type {
+  color: #f8fafc !important;
+}
+
+body:has(aside a[href="/dashboard"][aria-current="page"]) main > div:first-child > .mt-5 > .grid > div:first-child > p:last-of-type {
+  color: #a9bdd0 !important;
+}
+
+body:has(aside a[href="/dashboard"][aria-current="page"]) main div[class*="border-dashed"] {
+  padding-top: 1.5rem !important;
+  padding-bottom: 1.5rem !important;
 }
 
 /* Product create/edit drawer. The previous md drawer made a long HVAC form
