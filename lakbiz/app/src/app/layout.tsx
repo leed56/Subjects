@@ -9,6 +9,7 @@ import { SubscriptionProvider } from "@/lib/subscription/subscription-provider";
 import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 import "./premium-ops.css";
+import "./premium-ops-final.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
