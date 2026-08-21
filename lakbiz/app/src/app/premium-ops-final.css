@@ -15,6 +15,15 @@ body:has(aside a[href="/stock"][aria-current="page"])
   display: none;
 }
 
+/* The form used to reserve 96px of padding after its sticky action bar. At the
+   bottom of the drawer that became a large blank white block below Save/Cancel.
+   The footer already participates in normal flow, so no trailing reserve is
+   needed once the user reaches the end of the form. */
+body:has(aside a[href="/stock"][aria-current="page"])
+  [data-product-form="true"] {
+  padding-bottom: 0 !important;
+}
+
 /* Keep the sticky drawer footer visually separate from the scroll content.
    The previous translucent surface let fields show through underneath it,
    which read as overlap even though the fields remained scrollable. */
