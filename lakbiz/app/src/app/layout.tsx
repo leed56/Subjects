@@ -10,6 +10,7 @@ import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 import "./premium-ops.css";
 import "./premium-ops-final.css";
+import "./premium-ops-realistic.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
