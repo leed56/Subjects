@@ -90,8 +90,15 @@ function routeAllowed(href: string, allowedRoutes: ShopNavHref[]): boolean {
   );
 }
 
+function isOwnerOnlyJobFinanceRoute(href: string): boolean {
+  return /^\/jobs\/[^/]+\/invoice(?:\/|$)/.test(href);
+}
+
 export function canAccessShopRoute(role: OrgRole, href: string): boolean {
   if (role === "owner") return true;
+  // A role that may operate /jobs must not inherit its nested customer-price
+  // invoice just because route access uses prefix matching.
+  if (isOwnerOnlyJobFinanceRoute(href)) return false;
   if (role === "manager") return routeAllowed(href, MANAGER_ROUTES);
   if (role === "data_entry") return routeAllowed(href, DATA_ENTRY_ROUTES);
   if (role === "cashier") return routeAllowed(href, SHOP_STAFF_ROUTES);
@@ -110,32 +117,38 @@ export function canOperateAcJobs(role: OrgRole): boolean {
 }
 
 /**
- * Job revenue/collections and contractor cost are owner-only. Non-owners can
- * update the job itself without being allowed to modify these hidden values.
+ * Job revenue/collections and contractor cost are owner-only. A non-owner
+ * form may still carry the masked zero values for quote/deposit; accepting
+ * those zero placeholders keeps create/edit workflows functional while the
+ * DB layer preserves any real existing owner values.
  */
-const AC_JOB_INTERNAL_FINANCIAL_KEYS = new Set<keyof ACJobInput>([
-  "quotedAmount",
-  "depositAmount",
-  "subcontractCost",
-]);
-
 export function canUpdateAcJob(role: OrgRole, input: Partial<ACJobInput>): boolean {
   if (!canOperateAcJobs(role)) return false;
   const keys = Object.keys(input) as (keyof ACJobInput)[];
   if (keys.length === 0) return false;
   if (canSeeFinancials(role)) return true;
-  return keys.every((key) => !AC_JOB_INTERNAL_FINANCIAL_KEYS.has(key));
+  if ("subcontractCost" in input) return false;
+  if ("quotedAmount" in input && Number(input.quotedAmount) !== 0) return false;
+  if ("depositAmount" in input && Number(input.depositAmount) !== 0) return false;
+  return true;
 }
 
-/** Defense in depth against a tampered non-owner client payload. */
+/**
+ * Defense in depth against a tampered non-owner client payload.
+ *
+ * We mask required quote/deposit fields to zero instead of deleting them:
+ * ACJobInput requires both on create. On UPDATE the DB trigger deliberately
+ * treats those zeros as masked placeholders and preserves the owner's stored
+ * values, so operational edits can never zero real revenue by accident.
+ */
 export function sanitizeAcJobInputForRole(
   input: Partial<ACJobInput>,
   role: OrgRole,
 ): Partial<ACJobInput> {
   if (canSeeFinancials(role)) return input;
   const next = { ...input };
-  delete next.quotedAmount;
-  delete next.depositAmount;
+  if ("quotedAmount" in next) next.quotedAmount = 0;
+  if ("depositAmount" in next) next.depositAmount = 0;
   delete next.subcontractCost;
   return next;
 }
