@@ -474,3 +474,44 @@ remaining work, noted honestly rather than claimed as finished.
 
 Verification: tsc clean, eslint clean, 89/89 tests passing, production
 build succeeds, same 41-route list.
+
+---
+
+## 11. Stage 5 — Login/auth premium pass (Part 19/20/35)
+
+Fixed the exact bug root-caused during the audit (§8 above): visiting
+`/login` while already authenticated used to render `<SignedInBanner>`
+(no timer, no auto-redirect) directly above the still-fully-rendered
+sign-in/sign-up form, indefinitely — both the "stale Signed-in-as
+banner" and "full login form unnecessarily below it" issues Part 19
+names explicitly.
+
+- New `alreadySignedIn` gate (`!!user && !authLoading`) now shows a
+  single compact card — email, **Continue to Dashboard**, **Sign out
+  and use another account** — and skips the tabs/form entirely, for
+  both the regular and admin-login (`?next=/admin`) variants. "Continue"
+  resolves the same way the existing post-submit redirect already does
+  (`safeNextPath() ?? "/dashboard"`), so it's consistent with where a
+  fresh sign-in would have landed.
+- Confirmed the post-submit sign-in path was already correct — it calls
+  `window.location.assign(destination)` immediately with no lingering
+  success message — no change needed there, only disclosed as verified
+  rather than assumed.
+- Loading-button text changed from a bare `"..."` to `t("auth.signing_in")`
+  ("Signing you in…") per Part 20 — a real, readable transitional state
+  instead of an ellipsis.
+- Admin login stays visually separated (dark slate-950 chrome,
+  independent `adminLogin` branch) — unaffected structurally, just
+  carries the same compact-card fix.
+- `SignedInBanner` itself is untouched (still used by
+  `admin-gate.tsx`) — only its two call sites in `login/page.tsx` were
+  replaced, not the shared component.
+
+New i18n: `auth.already_signed_in`, `auth.continue_dashboard`,
+`auth.sign_out_other`, `auth.signing_in` (en/si).
+
+Verification: tsc clean, eslint clean, 89/89 tests passing, production
+build succeeds, same 41-route list. No browser exists in this sandbox
+(disclosed consistently throughout this engagement) — this is code-level
+verification of the render-gating logic, not a captured screenshot of
+the interaction.

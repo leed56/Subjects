@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { SiteHeader } from "@/components/site-header";
-import { SignedInBanner, SignOutButton } from "@/components/sign-out-button";
+import { SignOutButton } from "@/components/sign-out-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
@@ -59,6 +59,15 @@ export default function LoginPage() {
     if (!next?.startsWith("/") || next.startsWith("//")) return null;
     return next;
   };
+
+  // Part 19 — gates the compact "You're already signed in" card (and
+  // hides the sign-in/sign-up form beneath it) whenever there's a real
+  // signed-in user and the auth state has actually resolved. Always
+  // false during SSR/first hydration (user/authLoading come from context
+  // that only resolves client-side), so `continueDestination`'s
+  // window.location.search read below never causes a hydration mismatch.
+  const alreadySignedIn = !!user && !authLoading;
+  const continueDestination = safeNextPath() ?? "/dashboard";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,17 +178,57 @@ export default function LoginPage() {
           )}
         </div>
 
-        {adminLogin && user && !authLoading && (
-          <div className="mt-6"><SignedInBanner adminMode redirectAfterSignOut="/login?next=/admin" /></div>
-        )}
-
-        {!adminLogin && user && !authLoading && (
-          <div className="mt-6"><SignedInBanner redirectAfterSignOut="/login" /></div>
+        {/* Global premium UI phase, Part 19/35 — root cause: this branch
+         * used to render <SignedInBanner> (no timer, no auto-redirect)
+         * ABOVE the still-fully-rendered sign-in/sign-up form, forever.
+         * Visiting /login while already authenticated now shows this
+         * compact card ONLY — the tabs/form below are skipped entirely
+         * (`alreadySignedIn` gates the whole card at the bottom of this
+         * block) — matching "show a clean compact state immediately...
+         * do not show a full login form unnecessarily below it." The
+         * post-submit sign-in path already navigates immediately via
+         * window.location.assign with no lingering message; unaffected
+         * by this change. */}
+        {alreadySignedIn && (
+          <div
+            className={`mt-6 rounded-xl border p-6 text-center sm:p-7 ${
+              adminLogin ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
+            }`}
+          >
+            <p className={`text-base font-semibold ${adminLogin ? "text-white" : "text-slate-900"}`}>
+              {t("auth.already_signed_in")}
+            </p>
+            <p className={`mt-1 text-sm ${adminLogin ? "text-slate-400" : "text-slate-500"}`}>
+              {user?.email}
+            </p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
+              <button
+                type="button"
+                onClick={() => window.location.assign(continueDestination)}
+                className={`inline-flex min-h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold text-white ${
+                  adminLogin ? "bg-teal-600 hover:bg-teal-500" : "bg-teal-700 hover:bg-teal-800"
+                }`}
+              >
+                {t("auth.continue_dashboard")}
+              </button>
+              <SignOutButton
+                redirectTo={adminLogin ? "/login?next=/admin" : "/login"}
+                label={t("auth.sign_out_other")}
+                className={`inline-flex min-h-11 items-center justify-center rounded-lg border px-4 text-sm font-semibold ${
+                  adminLogin
+                    ? "border-slate-700 text-slate-300 hover:bg-slate-800"
+                    : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                }`}
+              />
+            </div>
+          </div>
         )}
 
         {/* Centered auth card — the login form no longer floats directly on
             the page background, matching the rest of the redesigned
-            surfaces (docs/UI_POLISH_AUDIT.md Part 12). */}
+            surfaces (docs/UI_POLISH_AUDIT.md Part 12). Skipped entirely
+            while already signed in — see the compact card above. */}
+        {!alreadySignedIn && (
         <div
           className={`mt-6 rounded-xl border p-6 shadow-sm sm:p-7 ${
             adminLogin ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
@@ -297,15 +346,16 @@ export default function LoginPage() {
               }`}
             >
               {loading
-                ? "..."
+                ? t("auth.signing_in")
                 : mode === "signup"
                   ? t("sub.create_account")
                   : t("sub.sign_in")}
             </button>
           </form>
         </div>
+        )}
 
-        {!adminLogin && (
+        {!adminLogin && !alreadySignedIn && (
           <p className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm text-slate-600">
             Need access? Contact LakBiz to receive your login details.
           </p>
