@@ -117,17 +117,17 @@ const PAGE_COPY = {
       signIn: "පිවිසෙන්න",
       demo: "ඩෙමෝවක් වෙන්කරගන්න",
     },
-    badge: "ශ්‍රී ලංකා කුඩා හා මධ්‍යම ව්‍යාපාර සඳහා admin-managed SaaS",
-    heroTitle: "ඔබේ ව්‍යාපාරය ක්‍රියාත්මක කරන මෘදුකාංගය,",
+    badge: "ශ්‍රී ලංකා SMEs සඳහා අපේ කණ්ඩායම සකසන SaaS පද්ධතිය",
+    heroTitle: "ඔබේ ව්‍යාපාරය එකම තැනකින් මෙහෙයවන්න,",
     heroAccent: "ශ්‍රී ලංකා ක්‍රමයට.",
     heroDesc:
-      "විකුණුම්, තොග, බිල්පත්, VAT, බැංකු සහ ගනුදෙනුකරු කළමනාකරණය — ඔබේ ව්‍යාපාරයට ගැළපෙන ලෙස අපේ කණ්ඩායම සකසයි.",
+      "විකුණුම්, තොග, බිල්පත්, VAT, බැංකු සහ ගනුදෙනුකරුවන් — ඔබේ ව්‍යාපාරයට ගැළපෙන ලෙස එකම පද්ධතියක.",
     primaryCta: "ඩෙමෝවක් වෙන්කරගන්න",
     secondaryCta: "පිවිසෙන්න",
-    heroTrust: ["Admin විසින් සකසන පද්ධතිය", "භූමිකාව අනුව ආරක්ෂිත ප්‍රවේශය", "ශ්‍රී ලංකා VAT සඳහා සූදානම්"],
+    heroTrust: ["අපේ කණ්ඩායම සකසන පද්ධතිය", "භූමිකාව අනුව ආරක්ෂිත ප්‍රවේශය", "ශ්‍රී ලංකා VAT සඳහා සූදානම්"],
     capabilities: [
-      ["ශ්‍රී ලංකා ව්‍යාපාර සඳහා", "දේශීය ක්‍රියාපටිපාටි, LKR මිලකරණය සහ VAT-ready මෙහෙයුම්"],
-      ["ශ්‍රී ලංකා VAT-ready", "Input සහ output VAT පැහැදිලි සාරාංශ සමඟ පාලනය කරන්න"],
+      ["ශ්‍රී ලංකා ව්‍යාපාර සඳහා", "දේශීය ක්‍රියාපටිපාටි, LKR මිලකරණය සහ VAT සඳහා සූදානම් මෙහෙයුම්"],
+      ["VAT සඳහා සූදානම්", "ඇතුළත් සහ පිටත VAT පැහැදිලි සාරාංශ සමඟ පාලනය කරන්න"],
       ["භූමිකාව අනුව බහු-පරිශීලක ප්‍රවේශය", "එක් එක් සේවකයාට අවශ්‍ය ප්‍රවේශය පමණක් ලබා දෙන්න"],
       ["තොග, බිල්පත් සහ ගනුදෙනුකරුවන්", "දිනපතා මෙහෙයුම් එකම පද්ධතියකින් කරන්න"],
       ["බැංකු සහ චෙක් කළමනාකරණය", "තැන්පතු, චෙක්පත් සහ ගිණුම් සැසඳීම පාලනය කරන්න"],
@@ -137,30 +137,30 @@ const PAGE_COPY = {
     featuresDesc:
       "විකුණුම්, තොග, බිල්පත් සහ මූල්‍ය කටයුතු එකිනෙකට සම්බන්ධ නිසා වැඩ වේගවත් වන අතර නැවත නැවත දත්ත ඇතුළත් කිරීම අඩු වේ.",
     features: [
-      ["විකුණුම් සහ POS", "විකුණුම්, POS, quotations, credit sales සහ returns එකම වේගවත් ක්‍රියාපටිපාටියකින් කරන්න."],
-      ["තොග කළමනාකරණය", "Real-time තොග බලන්න, භාණ්ඩ ඉක්මනින් සොයන්න සහ අඩු තොග දැනුම්දීම් ලබා ගන්න."],
-      ["බිල්පත් සහ Invoicing", "Invoices සහ bills සාදන්න, credit customers සහ balances පැහැදිලිව පාලනය කරන්න."],
-      ["VAT Ready", "Input සහ output VAT එකම පද්ධතියෙන් track කර return-ready summaries සකසන්න."],
-      ["බැංකු සහ චෙක්", "Bank accounts, ලැබුණු සහ නිකුත් කළ චෙක්, deposits සහ reconciliation පාලනය කරන්න."],
-      ["ගනුදෙනුකරුවන් සහ සැපයුම්කරුවන්", "Contacts, balances, purchase history සහ outstanding amounts එකම තැනක තබන්න."],
-      ["Sector Modules", "AC service, vehicle සහ sector-specific ක්‍රියාපටිපාටි අවශ්‍ය විට පමණක් සක්‍රිය කරන්න."],
+      ["විකුණුම් සහ POS", "විකුණුම්, POS, මිල ගණන්, ණය විකුණුම් සහ ආපසු භාරගැනීම් එකම වේගවත් ක්‍රියාපටිපාටියකින් කරන්න."],
+      ["තොග කළමනාකරණය", "තොග තත්ත්වය එසැණින් බලන්න, භාණ්ඩ ඉක්මනින් සොයන්න සහ අඩු තොග දැනුම්දීම් ලබා ගන්න."],
+      ["බිල්පත් සහ ඉන්වොයිස්", "ඉන්වොයිස් සහ බිල් සාදන්න, ණය ගනුදෙනුකරුවන් සහ ශේෂයන් පැහැදිලිව පාලනය කරන්න."],
+      ["VAT සඳහා සූදානම්", "ඇතුළත් සහ පිටත VAT එකම පද්ධතියෙන් පාලනය කර වාර්තා සඳහා සූදානම් සාරාංශ ලබා ගන්න."],
+      ["බැංකු සහ චෙක්", "බැංකු ගිණුම්, ලැබුණු සහ නිකුත් කළ චෙක්, තැන්පතු සහ ගිණුම් සැසඳීම පාලනය කරන්න."],
+      ["ගනුදෙනුකරුවන් සහ සැපයුම්කරුවන්", "සම්බන්ධතා, ශේෂයන්, මිලදී ගැනීම් සහ හිඟ මුදල් එකම තැනක තබන්න."],
+      ["ව්‍යාපාර-විශේෂ මොඩියුල", "AC සේවා, වාහන සහ අනෙකුත් ව්‍යාපාර-විශේෂ ක්‍රියාපටිපාටි අවශ්‍ය විට පමණක් සක්‍රිය කරන්න."],
     ],
     industriesEyebrow: "ඔබේ ව්‍යාපාර වර්ගය සඳහා",
     industriesTitle: "එකම පද්ධතියක්. ව්‍යාපාර වර්ගයට ගැළපෙන වෙනස් ක්‍රියාපටිපාටි.",
     industriesDesc:
-      "ඔබේ sector එකට අවශ්‍ය fields, reports සහ ක්‍රියාපටිපාටි අනුව LakBiz සකස් වේ.",
+      "ඔබේ ව්‍යාපාර වර්ගයට අවශ්‍ය තොරතුරු, වාර්තා සහ ක්‍රියාපටිපාටි අනුව LakBiz සකස් වේ.",
     industryDescriptions: {
-      grocery: "වේගවත් billing, weighted items, expiry tracking සහ credit customers.",
-      electronics: "Serial/IMEI tracking, warranty, brand සහ model control.",
-      electricals: "Meters, project billing සහ contractor pricing ක්‍රියාපටිපාටි.",
-      spare_parts: "Part numbers, vehicle fitment සහ slow-moving stock visibility.",
-      ac_hvac: "Installation jobs, service schedules, parts සහ warranty workflows.",
-      car_sales: "Vehicle stock, landed cost, aging සහ profitability tracking.",
+      grocery: "වේගවත් බිල්පත්, බර අනුව භාණ්ඩ, කල් ඉකුත්වීම් සහ ණය ගනුදෙනුකරුවන්.",
+      electronics: "Serial/IMEI අංක, වගකීම් කාලය, brand සහ model පාලනය.",
+      electricals: "මීටර් අනුව විකිණීම, ව්‍යාපෘති බිල්පත් සහ කොන්ත්‍රාත් මිලකරණය.",
+      spare_parts: "කොටස් අංක, වාහන ගැළපීම සහ මන්දගාමී තොග හඳුනාගැනීම.",
+      ac_hvac: "ස්ථාපන වැඩ, සේවා කාලසටහන්, අමතර කොටස් සහ වගකීම් ක්‍රියාපටිපාටි.",
+      car_sales: "වාහන අනුව තොග, මුළු ගෙන්වීමේ පිරිවැය, තොග වයස සහ ලාභදායීතාව.",
     },
     pricingEyebrow: "සරල සහ පැහැදිලි මිල ගණන්",
     pricingTitle: "ඔබේ ව්‍යාපාරයට ගැළපෙන සැලැස්ම තෝරන්න",
     pricingDesc:
-      "ගෙවීම සහ verification පසු LakBiz plan එක activate කරයි. වැඩි පහසුකම් අවශ්‍ය විට පමණක් upgrade කරන්න.",
+      "ගෙවීම තහවුරු වූ පසු LakBiz විසින් සැලැස්ම සක්‍රිය කරයි. වැඩි පහසුකම් අවශ්‍ය විට පමණක් ඉහළ සැලැස්මකට යන්න.",
     planDescriptions: {
       starter: "කුඩා වෙළඳසැල් සඳහා",
       business: "වර්ධනය වන ව්‍යාපාර සඳහා",
@@ -169,26 +169,26 @@ const PAGE_COPY = {
     mostPopular: "වැඩිම ජනප්‍රිය",
     includes: "ඇතුළත්",
     planCta: "ඩෙමෝවක් වෙන්කරගන්න",
-    planFootnote: "ගෙවීම සහ verification පසු LakBiz admin විසින් සැලැස්ම assign කරයි.",
+    planFootnote: "ගෙවීම තහවුරු වූ පසු LakBiz කණ්ඩායම විසින් සැලැස්ම ඔබේ ගිණුමට සකසයි.",
     proofEyebrow: "සැබෑ ව්‍යාපාර මෙහෙයුම් සඳහා",
     proofTitle: "සාර්ථක ව්‍යාපාරයක් ක්‍රියාත්මක වන ආකාරයට නිර්මාණය කළ පද්ධතිය",
     proofDesc:
-      "අනවශ්‍ය සංකීර්ණතාවක් නැහැ. පොදු self-signup නැහැ. LakBiz ඔබේ ව්‍යාපාරය ක්‍රියා කරන ආකාරයට සකස් කරයි.",
+      "අනවශ්‍ය සංකීර්ණතාවක් නැහැ. පොදු ලියාපදිංචියක් නැහැ. LakBiz ඔබේ ව්‍යාපාරය ක්‍රියා කරන ආකාරයට සකස් කරයි.",
     proofItems: [
-      ["Admin-managed onboarding", "ඔබේ shop, plan සහ user access කණ්ඩායම වැඩ ආරම්භ කිරීමට පෙර අපි සකසමු."],
-      ["LKR-first මෙහෙයුම්", "මිලකරණය සහ දිනපතා කටයුතු ශ්‍රී ලංකා ව්‍යාපාර සඳහා සකසා ඇත."],
-      ["VAT-ready මෙහෙයුම්", "Input VAT, output VAT සහ summaries සැබෑ ගනුදෙනු සමඟ සම්බන්ධයි."],
-      ["භූමිකාව අනුව ප්‍රවේශය", "සේවකයාට ඔහුගේ කාර්යයට අවශ්‍ය tools සහ data පමණක් පෙන්වයි."],
+      ["අපේ කණ්ඩායම සකසන ආරම්භය", "ඔබේ වෙළඳසැල, සැලැස්ම සහ පරිශීලක ප්‍රවේශය කණ්ඩායම වැඩ ආරම්භ කිරීමට පෙර සකසමු."],
+      ["LKR පදනම් මෙහෙයුම්", "මිලකරණය සහ දිනපතා කටයුතු ශ්‍රී ලංකා ව්‍යාපාර සඳහා සකසා ඇත."],
+      ["VAT සඳහා සූදානම්", "ඇතුළත් VAT, පිටත VAT සහ සාරාංශ සැබෑ ගනුදෙනු සමඟ සම්බන්ධයි."],
+      ["භූමිකාව අනුව ප්‍රවේශය", "සේවකයාට ඔහුගේ කාර්යයට අවශ්‍ය මෙවලම් සහ දත්ත පමණක් පෙන්වයි."],
       ["ශාඛා කිහිපයකට සූදානම්", "පද්ධතිය මාරු නොකර එක ස්ථානයකින් ශාඛා කිහිපයකට වර්ධනය වන්න."],
-      ["Pro සඳහා offline billing", "Internet connection දුර්වල වුවත් අත්‍යවශ්‍ය billing කටයුතු දිගටම කරන්න."],
+      ["Pro හි offline බිල්පත්", "අන්තර්ජාල සම්බන්ධතාව දුර්වල වුවත් අත්‍යවශ්‍ය බිල්පත් කටයුතු දිගටම කරන්න."],
     ],
-    ctaEyebrow: "ඔබේ LakBiz account එක ලබා ගන්න",
+    ctaEyebrow: "ඔබේ LakBiz ගිණුම ලබා ගන්න",
     ctaTitle: "පද්ධතිය අපි සකස් කරමු. ඔබේ කණ්ඩායම වැඩ ආරම්භ කරයි.",
     ctaDesc:
-      "ඩෙමෝවක් වෙන්කරගෙන නිවැරදි සැලැස්ම තෝරන්න. ඔබේ shop සහ user access අපේ කණ්ඩායම සකස් කරයි.",
+      "ඩෙමෝවක් වෙන්කරගෙන නිවැරදි සැලැස්ම තෝරන්න. ඔබේ වෙළඳසැල සහ පරිශීලක ප්‍රවේශය අපේ කණ්ඩායම සකසයි.",
     ctaPrimary: "ඩෙමෝවක් වෙන්කරගන්න",
     ctaSecondary: "පිවිසෙන්න",
-    footerTagline: "ශ්‍රී ලංකා SMEs සඳහා admin-managed ව්‍යාපාර මෘදුකාංගය.",
+    footerTagline: "ශ්‍රී ලංකා SMEs සඳහා අපේ කණ්ඩායම සකසන ව්‍යාපාර මෘදුකාංගය.",
     footerProduct: "LakBiz",
     footerStart: "ආරම්භ කරන්න",
     rights: "සියලු හිමිකම් ඇවිරිණි.",
@@ -207,9 +207,9 @@ const PLAN_FEATURE_ROWS: { flag: FeatureFlag; en: string; si: string }[] = [
   { flag: "banking", en: "Banking", si: "බැංකු" },
   { flag: "ac_jobs", en: "AC Jobs", si: "AC සේවා" },
   { flag: "vehicles", en: "Vehicles", si: "වාහන" },
-  { flag: "export", en: "Data export", si: "දත්ත export" },
-  { flag: "offline", en: "Offline billing", si: "Offline billing" },
-  { flag: "bulk_messaging", en: "Bulk customer messages", si: "සමූහ customer messages" },
+  { flag: "export", en: "Data export", si: "දත්ත පිටතට ලබාගැනීම" },
+  { flag: "offline", en: "Offline billing", si: "Offline බිල්පත්" },
+  { flag: "bulk_messaging", en: "Bulk customer messages", si: "සමූහ පාරිභෝගික පණිවිඩ" },
 ];
 
 const FEATURE_ICONS = [SalesIcon, StockIcon, BillsIcon, VatIcon, BankingIcon, CustomersIcon, JobsIcon];
@@ -228,15 +228,15 @@ const INDUSTRY_REPORT_SI: Record<string, string> = {
   "Daily sales": "දිනපතා විකුණුම්",
   "Expiry alert": "කල් ඉකුත් දැනුම්දීම්",
   "Top sellers": "වැඩිම විකිණෙන භාණ්ඩ",
-  "Warranty expiring": "Warranty අවසන් වන භාණ්ඩ",
+  "Warranty expiring": "වගකීම් කාලය අවසන් වන භාණ්ඩ",
   "Sales by brand": "Brand අනුව විකුණුම්",
-  "Sales by project": "Project අනුව විකුණුම්",
-  "Stock by unit": "Unit අනුව තොග",
+  "Sales by project": "ව්‍යාපෘතිය අනුව විකුණුම්",
+  "Stock by unit": "ඒකක අනුව තොග",
   "Slow movers": "මන්දගාමී භාණ්ඩ",
   "Fast movers": "වේගයෙන් විකිණෙන භාණ්ඩ",
   "Reorder list": "නැවත ඇණවුම් ලැයිස්තුව",
-  "Installations pending": "අවසන් නොකළ installations",
-  "Warranty registrations": "Warranty ලියාපදිංචි",
+  "Installations pending": "අවසන් නොකළ ස්ථාපන",
+  "Warranty registrations": "වගකීම් ලියාපදිංචි",
   "Pipe & accessory usage": "Pipe සහ accessories භාවිතය",
   "Stock aging 30/60/90 days": "තොග වයස 30/60/90 දින",
   "Profit per vehicle": "වාහනයකට ලාභය",
@@ -254,18 +254,18 @@ export function MarketingHomePage() {
   const year = new Date().getFullYear();
 
   const salesStoryItems = isSinhala
-    ? ["වේගවත් counter flow", "Credit sales", "Returns සහ quotations"]
+    ? ["වේගවත් කවුන්ටර් ක්‍රියාවලිය", "ණය විකුණුම්", "ආපසු භාරගැනීම් සහ මිල ගණන්"]
     : ["Fast counter flow", "Credit sales", "Returns & quotations"];
   const stockMetrics = isSinhala
     ? [["තොගයේ", "1,248"], ["අඩු තොග", "18"], ["වර්ග", "42"]]
     : [["In stock", "1,248"], ["Low stock", "18"], ["Categories", "42"]];
   const billingRows = isSinhala
-    ? [["Invoice #INV-2048", "Rs. 18,500"], ["Credit balance", "Rs. 7,200"], ["ලැබුණු ගෙවීම", "Rs. 11,300"]]
+    ? [["ඉන්වොයිස් #INV-2048", "Rs. 18,500"], ["ණය ශේෂය", "Rs. 7,200"], ["ලැබුණු ගෙවීම", "Rs. 11,300"]]
     : [["Invoice #INV-2048", "Rs. 18,500"], ["Credit balance", "Rs. 7,200"], ["Payment received", "Rs. 11,300"]];
 
   return (
     <div lang={locale} className="min-h-screen overflow-hidden bg-white text-slate-950">
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-200/70 bg-white/88 backdrop-blur-xl">
+      <header className="sticky inset-x-0 top-0 z-50 border-b border-slate-200/70 bg-white/88 backdrop-blur-xl">
         <div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
           <Link href="/" className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-teal-600 text-sm font-black text-white shadow-[0_8px_22px_rgba(13,148,136,0.22)]">L</span>
@@ -300,7 +300,7 @@ export function MarketingHomePage() {
       </header>
 
       <main>
-        <section className="relative overflow-hidden bg-white pb-12 pt-28 sm:pt-32 lg:pb-14 lg:pt-36">
+        <section className="relative overflow-hidden bg-white pb-12 pt-10 sm:pt-12 lg:pb-14 lg:pt-16">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-[42rem] bg-[radial-gradient(circle_at_84%_10%,rgba(20,184,166,0.16),transparent_31%),radial-gradient(circle_at_18%_8%,rgba(45,212,191,0.08),transparent_25%)]" />
           <div className="pointer-events-none absolute right-[-8rem] top-24 h-[29rem] w-[29rem] rounded-full border border-teal-100" />
           <div className="pointer-events-none absolute right-[-1rem] top-48 h-[18rem] w-[18rem] rounded-full border border-teal-100/80" />
@@ -313,7 +313,7 @@ export function MarketingHomePage() {
                   {c.badge}
                 </div>
 
-                <h1 className={`mt-6 font-bold tracking-[-0.052em] text-slate-950 ${isSinhala ? "text-[2.35rem] leading-[1.08] sm:text-[2.95rem] lg:text-[3.7rem]" : "text-[2.8rem] leading-[0.98] sm:text-[3.7rem] lg:text-[4.45rem]"}`}>
+                <h1 className={`mt-6 font-bold tracking-[-0.052em] text-slate-950 ${isSinhala ? "text-[2.25rem] leading-[1.08] sm:text-[2.85rem] lg:text-[3.55rem]" : "text-[2.8rem] leading-[0.98] sm:text-[3.7rem] lg:text-[4.45rem]"}`}>
                   {c.heroTitle}{" "}
                   <span className="text-teal-600">{c.heroAccent}</span>
                 </h1>
@@ -504,7 +504,7 @@ export function MarketingHomePage() {
                         <p className="mt-1 text-sm text-slate-500">{planDesc}</p>
                         <p className="mt-5 text-[2.65rem] font-bold tracking-[-0.05em] text-teal-700">
                           {formatLkrPrice(plan.priceMonthlyLkr)}
-                          <span className="ml-1 text-sm font-semibold tracking-normal text-slate-400">/month</span>
+                          <span className="ml-1 text-sm font-semibold tracking-normal text-slate-400">/{isSinhala ? "මාසය" : "month"}</span>
                         </p>
                         <div className="mt-4 flex flex-wrap gap-2">
                           <span className="rounded-full bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-500 ring-1 ring-inset ring-slate-100">
@@ -669,7 +669,7 @@ function ProductShowcase({ locale }: { locale: string }) {
   const stats = isSinhala
     ? [
         ["අද විකුණුම්", "Rs. 45,680", "සජීවී"],
-        ["ලාභය", "Rs. 12,340", "Track කර ඇත"],
+        ["ලාභය", "Rs. 12,340", "සටහන් කර ඇත"],
         ["බිල්", "32", "සූදානම්"],
         ["මුදල්", "Rs. 128,750", "ලබා ගත හැක"],
       ]
@@ -683,7 +683,7 @@ function ProductShowcase({ locale }: { locale: string }) {
     ? ["මුල් පුවරුව", "විකුණුම්", "තොග", "ගනුදෙනුකරුවන්", "බිල්", "VAT වාර්තාව"]
     : ["Dashboard", "Sales", "Stock", "Customers", "Bills", "VAT return"];
   const sideCards = isSinhala
-    ? [["අඩු තොග", "Cooking Oil 5L", "ඒකක 2 ඉතිරි"], ["ලැබිය යුතු", "Rs. 85,420", "Credit customers"], ["ගෙවිය යුතු VAT", "Rs. 9,500", "මෙම කාර්තුව"]]
+    ? [["අඩු තොග", "Cooking Oil 5L", "ඒකක 2 ඉතිරි"], ["ලැබිය යුතු", "Rs. 85,420", "ණය ගනුදෙනුකරුවන්"], ["ගෙවිය යුතු VAT", "Rs. 9,500", "මෙම කාර්තුව"]]
     : [["LOW STOCK", "Cooking Oil 5L", "2 units left"], ["RECEIVABLES", "Rs. 85,420", "Credit customers"], ["VAT PAYABLE", "Rs. 9,500", "This quarter"]];
 
   return (
