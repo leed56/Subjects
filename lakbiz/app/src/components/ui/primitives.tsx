@@ -136,6 +136,77 @@ export function MetricCard({ label, value, hint, icon, tone = "default" }: Metri
   );
 }
 
+/** Global premium UI phase — the "Operational Panel" card type from the
+ * card taxonomy (docs/DESIGN_SYSTEM_CONVERGENCE.md §4): a bordered
+ * grouping surface for a table/list/workspace section, distinct from a
+ * KPI reading (`MetricCard`) or a page-level empty state. Same visual
+ * shape `ProCard` converged to in Stage 1, exposed here so pages already
+ * on `primitives.tsx` don't need `pro-shell.tsx` just for a titled card. */
+export function Panel({
+  title,
+  eyebrow,
+  action,
+  children,
+  className = "",
+}: {
+  title?: ReactNode;
+  eyebrow?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`rounded-xl border border-slate-200 bg-white p-5 ${className}`}>
+      {(title || eyebrow || action) && (
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            {eyebrow && <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">{eyebrow}</p>}
+            {title && <h2 className="text-base font-semibold text-slate-900">{title}</h2>}
+          </div>
+          {action && <div className="shrink-0">{action}</div>}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+type AlertRowTone = "warning" | "danger" | "info" | "positive";
+
+const ALERT_ROW_TONE: Record<AlertRowTone, string> = {
+  warning: "border-amber-200 bg-amber-50 text-amber-900",
+  danger: "border-rose-200 bg-rose-50 text-rose-900",
+  info: "border-sky-200 bg-sky-50 text-sky-900",
+  positive: "border-emerald-200 bg-emerald-50 text-emerald-900",
+};
+
+/** Global premium UI phase — the compact "needs attention" row (Part 10's
+ * "only show active alerts, never five zeros"; Part 11's "SMS reminders
+ * off" inline status instead of a giant warning panel). One line, one
+ * optional action — never a tall decorative card for what is, at most, a
+ * sentence and a button. */
+export function AlertRow({
+  tone = "warning",
+  icon,
+  children,
+  action,
+}: {
+  tone?: AlertRowTone;
+  icon?: ReactNode;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className={`flex items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-sm ${ALERT_ROW_TONE[tone]}`}>
+      <span className="flex min-w-0 items-center gap-2">
+        {icon && <span className="shrink-0">{icon}</span>}
+        <span className="min-w-0 truncate font-medium">{children}</span>
+      </span>
+      {action && <span className="shrink-0">{action}</span>}
+    </div>
+  );
+}
+
 export function EmptyState({
   title,
   description,
