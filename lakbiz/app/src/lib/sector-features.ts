@@ -2,9 +2,9 @@ import type { SectorId } from "@/lib/types";
 import type { PlanFeatures } from "@/lib/subscription/types";
 
 /**
- * Client mirror of the authoritative `public.sector_modules` table in Supabase
- * (migration 20250620000013). The DB is the source of truth and is RLS-enforced;
- * these values MUST stay identical so the UI and the database agree exactly.
+ * Client mirror of authoritative public.sector_modules. Keep this table and
+ * the Supabase seed migration in lockstep: the UI may hide a module, but RLS
+ * is the actual security boundary.
  */
 const SECTOR_FEATURES: Record<SectorId, PlanFeatures> = {
   grocery: {
@@ -20,7 +20,33 @@ const SECTOR_FEATURES: Record<SectorId, PlanFeatures> = {
     offline: false,
     bulk_messaging: true,
   },
+  pharmacy: {
+    sales: true,
+    stock: true,
+    bills: true,
+    customers: true,
+    suppliers: true,
+    banking: true,
+    ac_jobs: false,
+    vehicles: false,
+    export: true,
+    offline: false,
+    bulk_messaging: true,
+  },
   electronics: {
+    sales: true,
+    stock: true,
+    bills: true,
+    customers: true,
+    suppliers: true,
+    banking: true,
+    ac_jobs: false,
+    vehicles: false,
+    export: true,
+    offline: false,
+    bulk_messaging: true,
+  },
+  mobile_shop: {
     sales: true,
     stock: true,
     bills: true,
@@ -47,6 +73,19 @@ const SECTOR_FEATURES: Record<SectorId, PlanFeatures> = {
     bulk_messaging: true,
   },
   spare_parts: {
+    sales: true,
+    stock: true,
+    bills: true,
+    customers: true,
+    suppliers: true,
+    banking: true,
+    ac_jobs: false,
+    vehicles: false,
+    export: true,
+    offline: false,
+    bulk_messaging: true,
+  },
+  footwear: {
     sales: true,
     stock: true,
     bills: true,
