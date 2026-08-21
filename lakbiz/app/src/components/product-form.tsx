@@ -132,14 +132,20 @@ export function ProductForm({
 
   const saveLabel = submitLabel ?? t("stock.save_item");
   const basicsTitle = isSinhala ? "භාණ්ඩ මූලික තොරතුරු" : "Item details";
-  const basicsHint = isSinhala ? "භාණ්ඩය හඳුනාගැනීමට අවශ්‍ය මූලික තොරතුරු." : "The core information your team uses to find and sell this item.";
+  const basicsHint = isSinhala
+    ? "භාණ්ඩය හඳුනාගැනීමට අවශ්‍ය මූලික තොරතුරු."
+    : "The core information your team uses to find and sell this item.";
   const inventoryTitle = isSinhala ? "තොග සහ මිල" : "Inventory & pricing";
-  const inventoryHint = isSinhala ? "තොග ප්‍රමාණය, මිල සහ අඩු තොග සීමාව පාලනය කරන්න." : "Control quantity, pricing and the low-stock threshold in one place.";
+  const inventoryHint = isSinhala
+    ? "තොග ප්‍රමාණය, මිල සහ අඩු තොග සීමාව පාලනය කරන්න."
+    : "Control quantity, pricing and the low-stock threshold in one place.";
   const sectorTitle = isSinhala ? "ව්‍යාපාර-විශේෂ තොරතුරු" : "Sector-specific details";
-  const sectorHint = isSinhala ? "ඔබේ ව්‍යාපාර වර්ගයට පමණක් අදාළ අමතර තොරතුරු." : "Only the extra fields required by this business type.";
+  const sectorHint = isSinhala
+    ? "ඔබේ ව්‍යාපාර වර්ගයට පමණක් අදාළ අමතර තොරතුරු."
+    : "Only the extra fields required by this business type.";
 
   return (
-    <form data-product-form="true" onSubmit={handleSubmit} className="space-y-5 pb-1">
+    <form data-product-form="true" onSubmit={handleSubmit} className="space-y-5 pb-24">
       <section className={sectionClass}>
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
@@ -337,7 +343,7 @@ export function ProductForm({
         </label>
       </section>
 
-      <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-between gap-3 border-t border-slate-200/80 bg-white/95 px-1 pb-1 pt-4 backdrop-blur-xl">
+      <div className="sticky bottom-[-1.25rem] z-20 -mx-5 -mb-5 flex items-center justify-between gap-3 border-t border-slate-200/80 bg-white/96 px-5 py-4 shadow-[0_-12px_30px_rgba(15,23,42,0.055)] backdrop-blur-xl">
         {onCancel ? (
           <button
             type="button"
