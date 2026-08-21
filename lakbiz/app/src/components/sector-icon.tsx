@@ -5,20 +5,21 @@ import {
   JobsIcon,
   AssetIcon,
   VehiclesIcon,
+  StockIcon,
+  ShopIcon,
   type IconProps,
 } from "@/components/ui/icons";
 import type { SectorId } from "@/lib/types";
 
-/** Global premium UI phase, Part 28 — replaces the raw emoji every
- * SectorTemplate row used to carry as its `icon` field (🛒/📱/⚡/🔧/❄️/🚗).
- * A lookup by id rather than data-carried JSX, same convention as
- * NAV_ICON_BY_HREF: sector data (sectors.ts) stays plain data, the icon
- * choice lives with the other icon-set decisions in one place. */
+/** One professional SVG vocabulary for sector identity — no emoji drift. */
 const SECTOR_ICON_BY_ID: Record<SectorId, (props: IconProps) => React.ReactElement> = {
   grocery: CartIcon,
+  pharmacy: StockIcon,
   electronics: DeviceIcon,
+  mobile_shop: DeviceIcon,
   electricals: BoltIcon,
   spare_parts: JobsIcon,
+  footwear: ShopIcon,
   ac_hvac: AssetIcon,
   car_sales: VehiclesIcon,
 };
