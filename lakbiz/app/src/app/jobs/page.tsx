@@ -1060,6 +1060,7 @@ function AddJobItemDialog({
   const [productQuery, setProductQuery] = useState("");
   const [productId, setProductId] = useState("");
   const activeProducts = products.filter((p) => p.active !== false);
+  const activeProductsInStock = activeProducts.filter((p) => p.stockQty > 0);
   const filteredProducts = activeProducts.filter((p) => {
     if (mode === "stock" && p.stockQty <= 0) return false;
     if (!productQuery.trim()) return true;
@@ -1072,6 +1073,20 @@ function AddJobItemDialog({
       brand.toLowerCase().includes(q)
     );
   });
+  // A generic "No items yet" doesn't tell an owner WHY the From Stock
+  // picker is empty — three genuinely different situations look
+  // identical otherwise: no products in the catalogue at all, products
+  // exist but every one is at 0 quantity on hand, or a search just has
+  // no match. Distinguish them so this is diagnosable at a glance
+  // instead of reading as a broken dialog.
+  const stockEmptyReason: "no_products" | "out_of_stock" | "no_match" | null =
+    filteredProducts.length > 0
+      ? null
+      : products.length === 0
+        ? "no_products"
+        : activeProductsInStock.length === 0
+          ? "out_of_stock"
+          : "no_match";
   const selectedProduct = productId ? products.find((p) => p.id === productId) : undefined;
 
   const [supplierId, setSupplierId] = useState("");
@@ -1174,7 +1189,20 @@ function AddJobItemDialog({
             <SearchInput value={productQuery} onChange={setProductQuery} placeholder={t("jobs.search_products")} />
             <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-lg border border-slate-200 p-1.5">
               {filteredProducts.length === 0 ? (
-                <p className="p-3 text-center text-sm text-slate-400">{t("jobs.no_items")}</p>
+                <div className="p-3 text-center text-sm text-slate-400">
+                  <p>
+                    {stockEmptyReason === "no_products"
+                      ? t("jobs.stock_empty_no_products")
+                      : stockEmptyReason === "out_of_stock"
+                        ? t("jobs.stock_empty_out_of_stock")
+                        : t("jobs.no_items")}
+                  </p>
+                  {(stockEmptyReason === "no_products" || stockEmptyReason === "out_of_stock") && (
+                    <Link href="/stock" className="mt-1.5 inline-block font-semibold text-teal-700 hover:underline">
+                      {t("jobs.stock_empty_cta")}
+                    </Link>
+                  )}
+                </div>
               ) : (
                 filteredProducts.map((p) => (
                   <button
