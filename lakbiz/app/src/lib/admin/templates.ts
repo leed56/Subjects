@@ -2,11 +2,6 @@ import type { PlanId } from "@/lib/subscription/types";
 import type { SectorId } from "@/lib/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-// Global premium UI phase, Part 28 — `icon` (a raw emoji) dropped from
-// this type entirely: every template already carries `sectorId`, and
-// `sectorId` is all a render site needs to look up the real SVG icon via
-// <SectorIcon> (see sector-icon.tsx) — a second, redundant icon field
-// that could drift from the sector's own icon was never necessary.
 export type BusinessTemplate = {
   id: string;
   nameEn: string;
@@ -15,7 +10,11 @@ export type BusinessTemplate = {
   defaultPlanId: PlanId;
 };
 
-/** Fallback templates when DB row unavailable (matches migration seed). */
+/**
+ * Fallback provisioning templates. The database is preferred; this list is
+ * deliberately kept equivalent so a temporary reference-data failure never
+ * downgrades a newly created shop to the wrong sector.
+ */
 export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
   {
     id: "grocery",
@@ -25,10 +24,24 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     defaultPlanId: "business",
   },
   {
+    id: "pharmacy",
+    nameEn: "Pharmacy",
+    nameSi: "ඖෂධ අලෙවිසැල",
+    sectorId: "pharmacy",
+    defaultPlanId: "business",
+  },
+  {
     id: "electronics",
     nameEn: "Electronics",
     nameSi: "ඉලෙක්ට්‍රොනික උපකරණ",
     sectorId: "electronics",
+    defaultPlanId: "business",
+  },
+  {
+    id: "mobile_shop",
+    nameEn: "Mobile Phones & Repair Parts",
+    nameSi: "ජංගම දුරකථන සහ අමතර කොටස්",
+    sectorId: "mobile_shop",
     defaultPlanId: "business",
   },
   {
@@ -40,21 +53,28 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
   },
   {
     id: "spare_parts",
-    nameEn: "Spare Parts",
-    nameSi: "අමතර කොටස්",
+    nameEn: "Auto & Machinery Spare Parts",
+    nameSi: "වාහන සහ යන්ත්‍ර අමතර කොටස්",
     sectorId: "spare_parts",
     defaultPlanId: "business",
   },
   {
+    id: "footwear",
+    nameEn: "Footwear, Slippers & Shoes",
+    nameSi: "පාවහන්, සෙරෙප්පු සහ සපත්තු",
+    sectorId: "footwear",
+    defaultPlanId: "business",
+  },
+  {
     id: "ac_hvac",
-    nameEn: "Air Conditioning",
-    nameSi: "වායු සමනය",
+    nameEn: "Air Conditioning & HVAC",
+    nameSi: "වායු සමනය සහ HVAC",
     sectorId: "ac_hvac",
     defaultPlanId: "pro",
   },
   {
     id: "car_sales",
-    nameEn: "Car Sales",
+    nameEn: "Car Sales & Vehicle Dealership",
     nameSi: "මෝටර් රථ වෙළඳාම",
     sectorId: "car_sales",
     defaultPlanId: "pro",
