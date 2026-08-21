@@ -3,24 +3,44 @@
 import Link from "next/link";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PLANS, formatLkrPrice } from "@/lib/subscription/plans";
+import { sectors } from "@/lib/sectors";
+import { SectorIcon } from "@/components/sector-icon";
+import {
+  SalesIcon,
+  StockIcon,
+  BillsIcon,
+  VatIcon,
+  BankingIcon,
+  CustomersIcon,
+  JobsIcon,
+  LanguageIcon,
+  UsersIcon,
+  SyncIcon,
+  ShieldIcon,
+  LayersIcon,
+} from "@/components/ui/icons";
 
-const featureIcons = ["POS", "VAT", "BANK", "PRO"] as const;
 const featureKeys = [
-  { title: "home.mkt.feat1_title", desc: "home.mkt.feat1_desc" },
-  { title: "home.mkt.feat2_title", desc: "home.mkt.feat2_desc" },
-  { title: "home.mkt.feat3_title", desc: "home.mkt.feat3_desc" },
-  { title: "home.mkt.feat4_title", desc: "home.mkt.feat4_desc" },
+  { title: "home.mkt.feat1_title", desc: "home.mkt.feat1_desc", Icon: SalesIcon },
+  { title: "home.mkt.feat2_title", desc: "home.mkt.feat2_desc", Icon: StockIcon },
+  { title: "home.mkt.feat3_title", desc: "home.mkt.feat3_desc", Icon: BillsIcon },
+  { title: "home.mkt.feat4_title", desc: "home.mkt.feat4_desc", Icon: VatIcon },
+  { title: "home.mkt.feat5_title", desc: "home.mkt.feat5_desc", Icon: BankingIcon },
+  { title: "home.mkt.feat6_title", desc: "home.mkt.feat6_desc", Icon: CustomersIcon },
+  { title: "home.mkt.feat7_title", desc: "home.mkt.feat7_desc", Icon: JobsIcon },
 ] as const;
 
-const sectorKeys = [
-  "home.mkt.sector_1",
-  "home.mkt.sector_2",
-  "home.mkt.sector_3",
-  "home.mkt.sector_4",
-  "home.mkt.sector_5",
-  "home.mkt.sector_6",
-  "home.mkt.sector_7",
-  "home.mkt.sector_8",
+// Landing v2 — capability-row strip. Every item names a capability that is
+// already implemented elsewhere in the app (bilingual UI: locale-provider;
+// role gates: auth-gate/feature-gate; offline sync: sync-queue; RLS: every
+// Supabase migration; multi-branch: shop/branch settings) — nothing here is
+// aspirational copy.
+const capabilityKeys = [
+  { key: "home.mkt.capability_bilingual", Icon: LanguageIcon },
+  { key: "home.mkt.capability_roles", Icon: UsersIcon },
+  { key: "home.mkt.capability_offline", Icon: SyncIcon },
+  { key: "home.mkt.capability_secure", Icon: ShieldIcon },
+  { key: "home.mkt.capability_branches", Icon: LayersIcon },
 ] as const;
 
 const stepKeys = [
@@ -42,6 +62,25 @@ const PLAN_DETAIL_KEY: Record<string, string> = {
   pro: "home.mkt.plan_pro_detail",
 };
 
+// Landing v2 pricing checklist — built from the real PlanFeatures flags
+// (lib/subscription/types.ts) rather than a separate hand-written list per
+// plan, so a checklist can never silently drift from what a plan actually
+// unlocks. Order is fixed regardless of which flags are true so cards stay
+// visually aligned; falsy flags are simply skipped per card.
+const PLAN_FEATURE_ROWS: { flag: keyof (typeof PLANS)[number]["features"]; labelKey: string }[] = [
+  { flag: "sales", labelKey: "nav.sales" },
+  { flag: "stock", labelKey: "nav.stock" },
+  { flag: "bills", labelKey: "nav.bills" },
+  { flag: "customers", labelKey: "nav.customers" },
+  { flag: "suppliers", labelKey: "nav.suppliers" },
+  { flag: "banking", labelKey: "nav.banking" },
+  { flag: "ac_jobs", labelKey: "nav.jobs" },
+  { flag: "vehicles", labelKey: "nav.vehicles" },
+  { flag: "export", labelKey: "home.mkt.plan_feature_export" },
+  { flag: "offline", labelKey: "home.mkt.plan_feature_offline" },
+  { flag: "bulk_messaging", labelKey: "home.mkt.plan_feature_bulk_messaging" },
+];
+
 const previewNavKeys = [
   "nav.dashboard",
   "nav.sales",
@@ -53,6 +92,7 @@ const previewNavKeys = [
 
 export function MarketingHomePage() {
   const { locale, setLocale, t } = useLocale();
+  const year = new Date().getFullYear();
 
   return (
     <div className="min-h-screen overflow-hidden bg-slate-50 text-slate-950">
@@ -73,8 +113,8 @@ export function MarketingHomePage() {
             <a href="#features" className="transition hover:text-teal-700">
               {t("home.mkt.nav.features")}
             </a>
-            <a href="#solutions" className="transition hover:text-teal-700">
-              {t("home.mkt.nav.solutions")}
+            <a href="#industries" className="transition hover:text-teal-700">
+              {t("home.mkt.nav.industries")}
             </a>
             <a href="#plans" className="transition hover:text-teal-700">
               {t("home.mkt.nav.plans")}
@@ -102,7 +142,7 @@ export function MarketingHomePage() {
               href="#contact"
               className="inline-flex items-center justify-center rounded-full bg-teal-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-teal-700 sm:px-5 sm:text-sm"
             >
-              {t("home.mkt.nav.request_access")}
+              {t("home.mkt.nav.book_demo")}
             </a>
           </div>
         </div>
@@ -154,7 +194,21 @@ export function MarketingHomePage() {
           </div>
         </section>
 
-        <section className="mx-auto mt-16 max-w-7xl px-4 sm:px-6 lg:px-8">
+        {/* Landing v2 — capability-row strip. Sits between the hero and the
+         * "how it works" steps: a quick, scannable line of things the
+         * product already does, not a repeat of the feature cards below. */}
+        <section className="mx-auto mt-14 max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 rounded-xl border border-slate-200 bg-white px-6 py-5 sm:justify-between">
+            {capabilityKeys.map(({ key, Icon }) => (
+              <div key={key} className="flex items-center gap-2.5 text-sm font-semibold text-slate-700">
+                <Icon className="h-5 w-5 shrink-0 text-teal-600" />
+                {t(key)}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="mx-auto mt-10 max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {stepKeys.map((key, index) => (
               <div
@@ -179,40 +233,62 @@ export function MarketingHomePage() {
               {t("home.mkt.features_title")}
             </h2>
           </div>
-          <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-            {featureKeys.map((feature, index) => (
-              <div
-                key={feature.title}
-                className="rounded-xl border border-white bg-white p-6"
-              >
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-xs font-bold text-teal-300">
-                  {featureIcons[index]}
+          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {featureKeys.map(({ title, desc, Icon }) => (
+              <div key={title} className="rounded-xl border border-white bg-white p-6">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
+                  <Icon className="h-6 w-6" />
                 </div>
-                <h3 className="mt-5 text-lg font-bold text-slate-950">{t(feature.title)}</h3>
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">{t(feature.desc)}</p>
+                <h3 className="mt-5 text-lg font-bold text-slate-950">{t(title)}</h3>
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">{t(desc)}</p>
               </div>
             ))}
           </div>
         </section>
 
-        <section id="solutions" className="mx-auto mt-20 max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="rounded-2xl bg-slate-950 p-6 text-white shadow-sm shadow-slate-950/20 sm:p-10">
-            <p className="text-sm font-bold uppercase tracking-[0.2em] text-teal-300">
-              {t("home.mkt.sectors_eyebrow")}
+        {/* Landing v2 — "Industries" replaces the old dark chip strip. Every
+         * card is driven by the real sector catalogue (lib/sectors.ts) that
+         * the product form and sector picker also read from, so this list
+         * can never claim a sector the app doesn't actually support. No
+         * photography exists for these sectors in this sandbox, and this
+         * phase's own no-fake-imagery rule rules out sourcing stock photos
+         * to stand in for real customer sites — so the cards stay
+         * icon-and-data led (name, real description, real sample reports)
+         * rather than photo-led. */}
+        <section id="industries" className="mx-auto mt-20 max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="max-w-3xl">
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-teal-700">
+              {t("home.mkt.industries_eyebrow")}
             </p>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-              {t("home.mkt.sectors_title")}
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+              {t("home.mkt.industries_title")}
             </h2>
-            <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {sectorKeys.map((key) => (
-                <div
-                  key={key}
-                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-slate-200"
-                >
-                  {t(key)}
+            <p className="mt-4 text-sm font-semibold leading-6 text-slate-500">
+              {t("home.mkt.industries_desc")}
+            </p>
+          </div>
+          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {sectors.map((sector) => (
+              <div key={sector.id} className="rounded-xl border border-white bg-white p-6">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-teal-300">
+                  <SectorIcon sectorId={sector.id} className="h-6 w-6" />
                 </div>
-              ))}
-            </div>
+                <h3 className="mt-5 text-base font-bold text-slate-950">
+                  {locale === "si" ? sector.nameSi : sector.nameEn}
+                </h3>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">{sector.description}</p>
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  {sector.reports.slice(0, 2).map((report) => (
+                    <span
+                      key={report}
+                      className="rounded-full border border-slate-200 px-2.5 py-1 text-[10px] font-bold text-slate-500"
+                    >
+                      {report}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -229,33 +305,61 @@ export function MarketingHomePage() {
             </p>
           </div>
           <div className="mt-8 grid gap-5 md:grid-cols-3">
-            {PLANS.map((plan) => (
-              <div
-                key={plan.id}
-                className={`relative rounded-xl border bg-white p-6 ${
-                  plan.highlight ? "border-teal-300 ring-2 ring-teal-100" : "border-slate-200"
-                }`}
-              >
-                {plan.highlight && (
-                  <span className="absolute -top-3 left-6 rounded-full bg-teal-600 px-3 py-1 text-xs font-bold text-white">
-                    {t("home.mkt.plan_recommended")}
-                  </span>
-                )}
-                <h3 className="text-xl font-bold text-slate-950">
-                  {locale === "si" ? plan.nameSi : plan.nameEn}
-                </h3>
-                <p className="mt-3 text-2xl font-bold text-teal-700">
-                  {formatLkrPrice(plan.priceMonthlyLkr)}
-                  <span className="text-sm font-semibold text-slate-400">/{t("sub.month")}</span>
-                </p>
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
-                  {t(PLAN_DETAIL_KEY[plan.id] ?? "")}
-                </p>
-                <p className="mt-3 text-xs font-medium text-slate-400">
-                  {t("home.mkt.plan_users").replace("{n}", String(plan.maxUsers))}
-                </p>
-              </div>
-            ))}
+            {PLANS.map((plan) => {
+              const planName = locale === "si" ? plan.nameSi : plan.nameEn;
+              return (
+                <div
+                  key={plan.id}
+                  className={`relative flex flex-col rounded-xl border bg-white p-6 ${
+                    plan.highlight ? "border-teal-300 ring-2 ring-teal-100" : "border-slate-200"
+                  }`}
+                >
+                  {plan.highlight && (
+                    <span className="absolute -top-3 left-6 rounded-full bg-teal-600 px-3 py-1 text-xs font-bold text-white">
+                      {t("home.mkt.plan_recommended")}
+                    </span>
+                  )}
+                  <h3 className="text-xl font-bold text-slate-950">{planName}</h3>
+                  <p className="mt-3 text-2xl font-bold text-teal-700">
+                    {formatLkrPrice(plan.priceMonthlyLkr)}
+                    <span className="text-sm font-semibold text-slate-400">/{t("sub.month")}</span>
+                  </p>
+                  <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
+                    {t(PLAN_DETAIL_KEY[plan.id] ?? "")}
+                  </p>
+                  <p className="mt-3 text-xs font-medium text-slate-400">
+                    {t("home.mkt.plan_users").replace("{n}", String(plan.maxUsers))}
+                    {" · "}
+                    {t("home.mkt.plan_branches").replace("{n}", String(plan.maxBranches))}
+                  </p>
+
+                  <div className="mt-5 border-t border-slate-100 pt-5">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                      {t("home.mkt.plan_includes")}
+                    </p>
+                    <ul className="mt-3 space-y-2">
+                      {PLAN_FEATURE_ROWS.filter((row) => plan.features[row.flag]).map((row) => (
+                        <li key={row.flag} className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                          <CheckBadge />
+                          {t(row.labelKey)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <a
+                    href="#contact"
+                    className={`mt-6 inline-flex items-center justify-center rounded-lg px-5 py-3 text-sm font-bold transition ${
+                      plan.highlight
+                        ? "bg-teal-600 text-white hover:bg-teal-700"
+                        : "border border-slate-300 text-slate-800 hover:border-teal-300 hover:text-teal-800"
+                    }`}
+                  >
+                    {t("home.mkt.plan_cta").replace("{plan}", planName)}
+                  </a>
+                </div>
+              );
+            })}
           </div>
           <p className="mt-6 text-xs text-slate-400">{t("home.mkt.plans_footnote")}</p>
         </section>
@@ -290,7 +394,73 @@ export function MarketingHomePage() {
           </div>
         </section>
       </main>
+
+      <footer className="border-t border-slate-200 bg-slate-950 text-slate-300">
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr]">
+            <div>
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-600 text-sm font-bold text-white">
+                  L
+                </span>
+                <span className="text-lg font-bold text-white">LakBiz</span>
+              </div>
+              <p className="mt-4 max-w-xs text-sm leading-6 text-slate-400">
+                {t("home.mkt.footer_tagline")}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                {t("home.mkt.footer_product_heading")}
+              </p>
+              <div className="mt-4 flex flex-col gap-3 text-sm font-semibold text-slate-300">
+                <a href="#features" className="transition hover:text-teal-300">
+                  {t("home.mkt.nav.features")}
+                </a>
+                <a href="#industries" className="transition hover:text-teal-300">
+                  {t("home.mkt.nav.industries")}
+                </a>
+                <a href="#plans" className="transition hover:text-teal-300">
+                  {t("home.mkt.nav.plans")}
+                </a>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                {t("home.mkt.footer_start_heading")}
+              </p>
+              <div className="mt-4 flex flex-col gap-3 text-sm font-semibold text-slate-300">
+                <Link href="/login" className="transition hover:text-teal-300">
+                  {t("home.mkt.nav.sign_in")}
+                </Link>
+                <a href="#contact" className="transition hover:text-teal-300">
+                  {t("home.mkt.nav.contact")}
+                </a>
+                <Link href="/login?next=/admin" className="transition hover:text-teal-300">
+                  {t("home.mkt.contact_admin")}
+                </Link>
+              </div>
+            </div>
+          </div>
+          <div className="mt-10 flex flex-col gap-2 border-t border-white/10 pt-6 text-xs font-medium text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              © {year} LakBiz. {t("home.mkt.footer_rights")}
+            </span>
+            <span>{t("home.mkt.region")}</span>
+          </div>
+        </div>
+      </footer>
     </div>
+  );
+}
+
+function CheckBadge() {
+  return (
+    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-700">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="h-2.5 w-2.5" aria-hidden="true">
+        <path d="M4 12.5 9.5 18 20 6" />
+      </svg>
+    </span>
   );
 }
 
@@ -319,7 +489,7 @@ function ProductPreview({ t }: { t: (key: string) => string }) {
   ];
 
   return (
-    <div className="relative mx-auto w-full max-w-2xl lg:max-w-none">
+    <div className="relative mx-auto w-full max-w-2xl pb-8 lg:max-w-none lg:pb-10">
       {/* Global premium UI phase, Part 21/48 — was a glassmorphism stack
        * (glow blob + backdrop-blur-xl translucent frame). Disclosed
        * limitation, unchanged by this phase: no browser exists in this
@@ -408,6 +578,35 @@ function ProductPreview({ t }: { t: (key: string) => string }) {
                     hint={t("home.mkt.preview_vat_hint")}
                   />
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Landing v2 — a second, smaller frame standing in for the phone/PWA
+       * view (README: "Responsive PWA from the same codebase" — this is a
+       * real product mode, not an invented one). Same disclosed-mockup
+       * status as the frame above: a hand-built approximation, not a
+       * screenshot. */}
+      <div className="absolute -bottom-6 -left-3 hidden w-40 rounded-[1.4rem] border border-slate-200 bg-white p-1.5 shadow-lg sm:block lg:-left-8 lg:w-44">
+        <div className="overflow-hidden rounded-[1.1rem] border border-slate-200 bg-slate-950">
+          <div className="flex items-center justify-between px-3 pt-2.5 text-[8px] font-bold text-slate-400">
+            <span>9:41</span>
+            <span className="h-1 w-6 rounded-full bg-white/20" />
+          </div>
+          <div className="px-3 pb-3 pt-2">
+            <p className="text-[9px] font-bold text-teal-300">{t("home.mkt.preview_shop")}</p>
+            <div className="mt-2 rounded-xl bg-white/5 p-2.5">
+              <p className="text-[8px] font-bold text-slate-400">{t("home.mkt.preview_today_sales")}</p>
+              <p className="mt-1 text-sm font-bold text-white">Rs. 45,680</p>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              <div className="rounded-lg bg-teal-500 py-2 text-center text-[8px] font-bold text-white">
+                {t("nav.sales")}
+              </div>
+              <div className="rounded-lg bg-white/5 py-2 text-center text-[8px] font-bold text-slate-300">
+                {t("nav.stock")}
               </div>
             </div>
           </div>

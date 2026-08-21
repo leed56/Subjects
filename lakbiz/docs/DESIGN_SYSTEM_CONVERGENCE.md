@@ -647,3 +647,83 @@ and structure, not a rendered/screenshotted check).
 
 Verification: tsc clean, eslint clean, 89/89 tests passing, production
 build succeeds, same 41-route list.
+
+## 14. Stage 9 — Landing page v2 (post-PR-#79 follow-up)
+
+After Stage 8 shipped, the user shared a more polished landing-page
+reference (nav with Pricing/Industries/a primary "Book demo" CTA, a
+laptop+phone hero mockup, a capability-row icon strip, seven pictographic
+feature cards, photo-based industry cards, per-plan pricing checklists,
+a testimonials section, and a full footer) and asked for the live page
+to match it. This section documents what changed and, just as
+importantly, where the reference was **not** followed verbatim and why.
+
+**Followed as specified:**
+- Nav: added `#industries` (renamed from `#solutions`) and a
+  `home.mkt.nav.book_demo` primary pill, replacing the old "Request
+  access" label — it still anchors to the real `#contact` section
+  (sign-in / platform-admin), no new booking flow was invented.
+- Hero: `ProductPreview` gained a second, smaller floating frame
+  approximating the mobile/PWA view (the README already names
+  "Responsive PWA from the same codebase" as a real product mode, so
+  this isn't an invented surface) — same disclosed-mockup status as the
+  existing laptop frame comment: a hand-built approximation, not a
+  screenshot, because no browser exists in this sandbox.
+- Capability-row strip: 5 items (bilingual, role-based access,
+  offline-first, secure/tenant-isolated, multi-branch), each naming a
+  capability that already exists elsewhere in the codebase (locale
+  provider, auth/feature gates, sync queue, RLS migrations, shop/branch
+  settings) — not aspirational copy.
+- Feature cards: expanded 4 → 7, each now a real product icon
+  (`SalesIcon`/`StockIcon`/`BillsIcon`/`VatIcon`/`BankingIcon`/
+  `CustomersIcon`/`JobsIcon`) instead of the old text-abbreviation boxes
+  (POS/VAT/BANK/PRO) already flagged as a visual gap after PR #79's
+  screenshots.
+- Pricing: per-plan feature checklist is generated from the real
+  `PlanDefinition.features` flags (`lib/subscription/plans.ts`) via a
+  fixed-order `PLAN_FEATURE_ROWS` table, reusing existing `nav.*`
+  translation labels (sales/stock/bills/customers/suppliers/banking/
+  jobs/vehicles) where they already exist — so a checklist can never
+  silently drift from what a plan actually unlocks. Added `maxBranches`
+  alongside the existing `maxUsers` line, and a per-card CTA button.
+- Footer: added (there wasn't one before) — brand + tagline, a Product
+  column (Features/Industries/Plans anchors) and a Get Started column
+  (Sign in / Contact / Platform admin), a copyright line. Every link
+  points at a route or in-page anchor that actually exists.
+
+**Deliberately not followed, with the user's explicit sign-off:**
+- **Testimonials section — omitted entirely.** The reference includes
+  customer quotes/names/photos; this phase's own originating spec
+  states "Do NOT use fake customer testimonials or fake usage numbers,"
+  and LakBiz has no real customers to quote yet. Asked the user how to
+  handle this before writing any code; they chose to omit the section
+  rather than fabricate placeholder quotes or pause for real ones.
+- **"Photo-based" industry cards — built as icon+data cards instead.**
+  No photography of Sri Lankan shops/customers exists in or is
+  reachable from this sandbox, and sourcing generic stock photography to
+  stand in for real customer sites would be the same category of
+  fabrication the testimonials rule forbids. The "Industries" section
+  (renamed from the old dark `sector_1..8` text-chip strip, which didn't
+  even match the real `SectorId` enum) instead reads directly from
+  `lib/sectors.ts` — the same catalogue the product form and sector
+  picker use — showing each sector's real icon (`SectorIcon`), real
+  name, real one-line description, and two real sample report names.
+  Genuine product data stood in for imagery that couldn't be sourced
+  honestly.
+
+**Translation keys:** ~40 new `home.mkt.*` keys added in both `si`/`en`
+dictionaries (nav, capability row, 7 feature cards, industries section,
+plan checklist/CTA, footer). Removed `home.mkt.nav.solutions`,
+`sectors_eyebrow`, `sectors_title`, and `sector_1`..`sector_8` (verified
+via repo-wide grep to be unused anywhere else before deletion).
+
+**New icons:** `ShieldIcon`, `SyncIcon`, `LayersIcon`, `UsersIcon` added
+to `components/ui/icons.tsx`, same hand-rolled stroke-based convention as
+the existing set (no new dependency).
+
+Verification: `npm install` (fresh clone had no `node_modules`), tsc
+clean, eslint clean (0 errors — pre-existing unrelated warnings only),
+89/89 tests passing, production build succeeds with the same 47-route
+list. `git diff --stat` against the branch tip touches exactly 3 files:
+`marketing-home-page.tsx`, `icons.tsx`, `translations.ts` — no
+regression risk to any other page or business-logic path.

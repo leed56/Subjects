@@ -374,3 +374,53 @@ export const DeviceIcon = (p: IconProps) =>
 /** A lightning bolt — electricals. */
 export const BoltIcon = (p: IconProps) =>
   base(<path d="M12.5 2.5 5 13.5h5.5L11 21.5l7.5-11H13l-.5-8Z" />, p);
+
+/** Global premium UI phase, landing v2 — capability-row glyphs. A shield
+ * with a check — data security / RLS-backed access, distinct from
+ * SettingsIcon's gear. */
+export const ShieldIcon = (p: IconProps) =>
+  base(
+    <>
+      <path d="M12 3.5 5 6v5.2c0 4.6 3 7.9 7 9.3 4-1.4 7-4.7 7-9.3V6l-7-2.5Z" />
+      <path d="m9 12 2 2 4-4.2" />
+    </>,
+    p,
+  );
+
+/** Two arrows chasing each other in a loop — offline-first local/cloud
+ * sync, distinct from NavigateIcon's directional arrow. */
+export const SyncIcon = (p: IconProps) =>
+  base(
+    <>
+      <path d="M4 12a8 8 0 0 1 13.5-5.8L20 8.5" />
+      <path d="M20 4.5v4h-4" />
+      <path d="M20 12a8 8 0 0 1-13.5 5.8L4 15.5" />
+      <path d="M4 19.5v-4h4" />
+    </>,
+    p,
+  );
+
+/** Three stacked, gently offset rounded rectangles — multi-branch/multi-
+ * layer, distinct from ReportsIcon's axis-and-line chart. */
+export const LayersIcon = (p: IconProps) =>
+  base(
+    <>
+      <path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Z" />
+      <path d="m4 12 8 4.5 8-4.5" />
+      <path d="m4 16.5 8 4.5 8-4.5" />
+    </>,
+    p,
+  );
+
+/** Two overlapping head-and-shoulders silhouettes — role-based, multi-
+ * user access, distinct from CustomersIcon's single-person + list glyph. */
+export const UsersIcon = (p: IconProps) =>
+  base(
+    <>
+      <circle cx="9" cy="8.5" r="3" />
+      <path d="M3.5 20c0-3.3 2.5-6 6-6h1c3 0 5.5 2.3 6 5.3" />
+      <path d="M15.5 6a3 3 0 0 1 0 5.9" />
+      <path d="M18.5 13.3c2 .7 3.4 2.5 3.8 4.7" />
+    </>,
+    p,
+  );
