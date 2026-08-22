@@ -142,12 +142,22 @@ export function SaleReturnHistory({ saleId }: Props) {
                 {holdQty > 0 && <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-800">{holdQty} on return hold</span>}
                 {creditNote && <span className="rounded-full bg-teal-50 px-2 py-1 text-teal-700">VAT / revenue reversed</span>}
                 {orgRole === "owner" && (
-                  <Link
-                    href={`/bills/${saleId}/returns/${item.id}`}
-                    className="ml-auto rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800 no-print"
-                  >
-                    {creditNote ? (si ? "Settlement" : "Settlement") : (si ? "Issue credit note" : "Issue credit note")}
-                  </Link>
+                  <div className="ml-auto flex flex-wrap items-center gap-1.5 no-print">
+                    {creditNote && (
+                      <Link
+                        href={`/bills/${saleId}/returns/${item.id}/credit-note`}
+                        className="rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-teal-800 transition hover:bg-teal-100"
+                      >
+                        {si ? "Credit note" : "Credit note"}
+                      </Link>
+                    )}
+                    <Link
+                      href={`/bills/${saleId}/returns/${item.id}`}
+                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800"
+                    >
+                      {creditNote ? (si ? "Settlement" : "Settlement") : (si ? "Issue credit note" : "Issue credit note")}
+                    </Link>
+                  </div>
                 )}
               </div>
             </div>
