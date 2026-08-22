@@ -142,7 +142,27 @@ export function saleReturnSchemaUnavailable(error: string | null | undefined): b
   );
 }
 
-/** Read immutable return + credit-note history for one original sale. */
+export function saleReturnFinanceSchemaUnavailable(
+  error: string | null | undefined,
+): boolean {
+  const value = (error ?? "").toLowerCase();
+  return (
+    value.includes("sale_credit_notes") ||
+    value.includes("sale_return_settlements") ||
+    value.includes("issue_sale_return_credit_note") ||
+    value.includes("settle_sale_return_credit") ||
+    value.includes("settled_at") ||
+    (value.includes("schema cache") &&
+      (value.includes("credit") || value.includes("settlement")))
+  );
+}
+
+/**
+ * Read immutable physical-return history for one original sale. Credit-note
+ * enrichment is deliberately optional: migration 00008 (physical intake) must
+ * remain usable even when the later 00009 finance migration has not been
+ * applied yet.
+ */
 export async function fetchSaleReturns(
   organizationId: string,
   saleId: string,
@@ -151,17 +171,20 @@ export async function fetchSaleReturns(
   lines: SaleReturnLineRecord[];
   creditNotes: SaleCreditNoteRecord[];
   error: string | null;
+  financeError?: string | null;
 }> {
   const supabase = createBrowserClient();
   if (!supabase) {
     return { returns: [], lines: [], creditNotes: [], error: "Supabase not configured" };
   }
 
-  const [returnResult, lineResult, creditNoteResult] = await Promise.all([
+  // Do not select `settled_at` here: that column belongs to finance migration
+  // 00009. The physical-return workspace must still function with only 00008.
+  const [returnResult, lineResult] = await Promise.all([
     supabase
       .from("sale_returns")
       .select(
-        "id, return_no, sale_id, returned_at, reason, merchandise_value, output_vat_reversal, settlement_status, settled_at",
+        "id, return_no, sale_id, returned_at, reason, merchandise_value, output_vat_reversal, settlement_status",
       )
       .eq("organization_id", organizationId)
       .eq("sale_id", saleId)
@@ -174,49 +197,66 @@ export async function fetchSaleReturns(
       .eq("organization_id", organizationId)
       .eq("sale_id", saleId)
       .order("created_at", { ascending: true }),
-    supabase
-      .from("sale_credit_notes")
-      .select(
-        "id, credit_note_no, return_id, sale_id, issued_at, gross_credit, output_vat_reversal, net_revenue_reversal",
-      )
-      .eq("organization_id", organizationId)
-      .eq("sale_id", saleId)
-      .order("issued_at", { ascending: false }),
   ]);
 
-  const error = returnResult.error ?? lineResult.error ?? creditNoteResult.error;
-  if (error) {
-    return { returns: [], lines: [], creditNotes: [], error: error.message };
+  const physicalError = returnResult.error ?? lineResult.error;
+  if (physicalError) {
+    return { returns: [], lines: [], creditNotes: [], error: physicalError.message };
+  }
+
+  const returns: SaleReturnRecord[] = (returnResult.data ?? []).map((row) => ({
+    id: String(row.id),
+    returnNo: String(row.return_no),
+    saleId: String(row.sale_id),
+    returnedAt: String(row.returned_at),
+    reason: String(row.reason ?? ""),
+    merchandiseValue: Number(row.merchandise_value ?? 0),
+    outputVatReversal: Number(row.output_vat_reversal ?? 0),
+    settlementStatus: String(row.settlement_status ?? "pending") as SaleReturnSettlementStatus,
+  }));
+  const lines: SaleReturnLineRecord[] = (lineResult.data ?? []).map((row) => ({
+    id: String(row.id),
+    returnId: String(row.return_id),
+    saleId: String(row.sale_id),
+    saleLineOrder: Number(row.sale_line_order ?? 0),
+    productId: String(row.product_id),
+    productName: String(row.product_name ?? ""),
+    qty: Number(row.qty ?? 0),
+    unitPrice: Number(row.unit_price ?? 0),
+    returnValue: Number(row.return_value ?? 0),
+    outputVatReversal: Number(row.output_vat_reversal ?? 0),
+    originalAllocationId: row.original_allocation_id
+      ? String(row.original_allocation_id)
+      : null,
+    restocked: Boolean(row.restocked),
+  }));
+
+  // Finance enrichment is a second, optional read. A missing finance schema is
+  // not an error for physical-return intake/history.
+  const creditNoteResult = await supabase
+    .from("sale_credit_notes")
+    .select(
+      "id, credit_note_no, return_id, sale_id, issued_at, gross_credit, output_vat_reversal, net_revenue_reversal",
+    )
+    .eq("organization_id", organizationId)
+    .eq("sale_id", saleId)
+    .order("issued_at", { ascending: false });
+
+  if (creditNoteResult.error) {
+    return {
+      returns,
+      lines,
+      creditNotes: [],
+      error: null,
+      financeError: saleReturnFinanceSchemaUnavailable(creditNoteResult.error.message)
+        ? null
+        : creditNoteResult.error.message,
+    };
   }
 
   return {
-    returns: (returnResult.data ?? []).map((row) => ({
-      id: String(row.id),
-      returnNo: String(row.return_no),
-      saleId: String(row.sale_id),
-      returnedAt: String(row.returned_at),
-      reason: String(row.reason ?? ""),
-      merchandiseValue: Number(row.merchandise_value ?? 0),
-      outputVatReversal: Number(row.output_vat_reversal ?? 0),
-      settlementStatus: String(row.settlement_status ?? "pending") as SaleReturnSettlementStatus,
-      settledAt: row.settled_at ? String(row.settled_at) : null,
-    })),
-    lines: (lineResult.data ?? []).map((row) => ({
-      id: String(row.id),
-      returnId: String(row.return_id),
-      saleId: String(row.sale_id),
-      saleLineOrder: Number(row.sale_line_order ?? 0),
-      productId: String(row.product_id),
-      productName: String(row.product_name ?? ""),
-      qty: Number(row.qty ?? 0),
-      unitPrice: Number(row.unit_price ?? 0),
-      returnValue: Number(row.return_value ?? 0),
-      outputVatReversal: Number(row.output_vat_reversal ?? 0),
-      originalAllocationId: row.original_allocation_id
-        ? String(row.original_allocation_id)
-        : null,
-      restocked: Boolean(row.restocked),
-    })),
+    returns,
+    lines,
     creditNotes: (creditNoteResult.data ?? []).map((row) => ({
       id: String(row.id),
       creditNoteNo: String(row.credit_note_no),
@@ -228,6 +268,7 @@ export async function fetchSaleReturns(
       netRevenueReversal: Number(row.net_revenue_reversal ?? 0),
     })),
     error: null,
+    financeError: null,
   };
 }
 
