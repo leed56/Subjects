@@ -147,7 +147,7 @@ begin
     );
   end if;
 
-  select p.id, p.name, p.active, o.sector_id
+  select p.id, p.name, p.active, o.sector as sector_id
   into v_product
   from public.products_base p
   join public.organizations o on o.id = p.organization_id
