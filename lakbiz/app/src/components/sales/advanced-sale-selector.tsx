@@ -57,8 +57,12 @@ export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props)
     setError(null);
     void fetchSaleInventoryOptions(productId).then((result) => {
       if (cancelled) return;
-      setOptions(result.data);
-      setError(result.error);
+      if (result.error) {
+        setError(result.error);
+        setOptions(result.data);
+      } else {
+        setOptions(result.data);
+      }
       setLoading(false);
     });
     return () => {
@@ -67,57 +71,66 @@ export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props)
   }, [productId]);
 
   const mode = options?.profile?.trackingMode ?? "simple";
+  const needsVariant = ["variant", "variant_lot", "variant_serial"].includes(mode);
+  const needsUnits = ["serial", "variant_serial"].includes(mode);
+
+  const variantAvailability = useMemo(() => {
+    const byVariant = new Map<string, number>();
+    if (!options) return byVariant;
+
+    if (mode === "variant") {
+      for (const variant of options.variants) {
+        byVariant.set(variant.id, variant.stockQty);
+      }
+      return byVariant;
+    }
+
+    if (mode === "variant_lot") {
+      for (const lot of options.lots) {
+        if (!lot.variantId) continue;
+        byVariant.set(
+          lot.variantId,
+          (byVariant.get(lot.variantId) ?? 0) + lot.qtyOnHand,
+        );
+      }
+      return byVariant;
+    }
+
+    if (mode === "variant_serial") {
+      for (const unit of options.units) {
+        if (!unit.variantId) continue;
+        byVariant.set(unit.variantId, (byVariant.get(unit.variantId) ?? 0) + 1);
+      }
+    }
+
+    return byVariant;
+  }, [options, mode]);
+
   const selectedVariant = selection.variantId
     ? options?.variants.find((variant) => variant.id === selection.variantId)
     : undefined;
-
-  const validLotsByVariant = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const lot of options?.lots ?? []) {
-      if (!lot.variantId) continue;
-      map.set(lot.variantId, (map.get(lot.variantId) ?? 0) + lot.qtyOnHand);
-    }
-    return map;
-  }, [options?.lots]);
-
-  const availableUnitsByVariant = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const unit of options?.units ?? []) {
-      if (!unit.variantId) continue;
-      map.set(unit.variantId, (map.get(unit.variantId) ?? 0) + 1);
-    }
-    return map;
-  }, [options?.units]);
-
-  const variantAvailability = (variantId: string, fallbackQty: number): number => {
-    if (mode === "variant_lot") return validLotsByVariant.get(variantId) ?? 0;
-    if (mode === "variant_serial") return availableUnitsByVariant.get(variantId) ?? 0;
-    return fallbackQty;
-  };
+  const selectedVariantAvailable = selection.variantId
+    ? variantAvailability.get(selection.variantId) ?? 0
+    : 0;
 
   const visibleUnits = useMemo(() => {
     if (!options) return [];
     if (mode !== "variant_serial" || !selection.variantId) return options.units;
     return options.units.filter((unit) => unit.variantId === selection.variantId);
   }, [options, mode, selection.variantId]);
-
   const visibleLots = useMemo(() => {
     if (!options) return [];
     if (mode !== "variant_lot" || !selection.variantId) return options.lots;
     return options.lots.filter((lot) => lot.variantId === selection.variantId);
   }, [options, mode, selection.variantId]);
-
   const lotAvailable = visibleLots.reduce((sum, lot) => sum + lot.qtyOnHand, 0);
   const readiness = inventorySelectionReadiness(mode, qty, selection);
   const lotReady = !["lot", "variant_lot"].includes(mode) || lotAvailable >= qty;
-  const variantReady = !["variant", "variant_lot", "variant_serial"].includes(mode) || Boolean(selection.variantId);
-  const selectedVariantAvailable = selectedVariant
-    ? variantAvailability(selectedVariant.id, selectedVariant.stockQty)
-    : 0;
-  const variantQuantityReady =
-    !selectedVariant || mode === "lot" || mode === "serial" || selectedVariantAvailable >= qty;
+  const variantReady =
+    !needsVariant ||
+    (Boolean(selection.variantId) && selectedVariantAvailable >= qty);
   const degraded = schemaUnavailable(error);
-  const ready = degraded || (readiness.complete && lotReady && variantReady && variantQuantityReady && !error);
+  const ready = degraded || (readiness.complete && lotReady && variantReady && !error);
 
   useEffect(() => {
     onChange({
@@ -160,8 +173,6 @@ export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props)
 
   if (mode === "simple") return null;
 
-  const needsVariant = ["variant", "variant_lot", "variant_serial"].includes(mode);
-  const needsUnits = ["serial", "variant_serial"].includes(mode);
   const nextLot = visibleLots.find((lot) => lot.qtyOnHand > 0);
 
   const updateSelection = (next: SaleInventorySelection) => {
@@ -197,7 +208,7 @@ export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props)
 
       {needsVariant && (
         <label className="mt-3 block text-xs font-semibold text-slate-700">
-          Variant
+          {si ? "Variant" : "Variant"}
           <select
             value={selection.variantId ?? ""}
             onChange={(event) => updateSelection({ variantId: event.target.value || null, unitIds: [] })}
@@ -205,7 +216,7 @@ export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props)
           >
             <option value="">{si ? "තෝරන්න" : "Select variant"}</option>
             {options?.variants.map((variant) => {
-              const available = variantAvailability(variant.id, variant.stockQty);
+              const available = variantAvailability.get(variant.id) ?? 0;
               return (
                 <option key={variant.id} value={variant.id} disabled={available < qty}>
                   {variant.label} · {available} {si ? "තිබේ" : "available"}
@@ -214,6 +225,12 @@ export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props)
             })}
           </select>
         </label>
+      )}
+
+      {needsVariant && selectedVariant && selectedVariantAvailable < qty && (
+        <p className="mt-2 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700">
+          {si ? "මෙම variant එකට ප්‍රමාණවත් available identity stock නැත." : "This variant does not have enough available identity stock."}
+        </p>
       )}
 
       {(mode === "lot" || mode === "variant_lot") && (
@@ -276,9 +293,6 @@ export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props)
         </div>
       )}
 
-      {!ready && selectedVariant && selectedVariantAvailable < qty && mode === "variant" && (
-        <p className="mt-2 text-[11px] font-semibold text-rose-700">{si ? "මෙම variant එකට ප්‍රමාණවත් stock නැත." : "This variant does not have enough stock."}</p>
-      )}
       {!ready && readiness.reason && !needsUnits && (
         <p className="mt-2 text-[11px] font-semibold text-amber-800">{readiness.reason}</p>
       )}
