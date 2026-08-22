@@ -10,10 +10,18 @@ export type SaleTenderDraft = {
   id: string;
   kind: SaleTenderKind;
   amount: number;
-  /** Required when kind=bank_transfer once the DB workflow is wired. */
+  /**
+   * Optional owner-only bank destination override. Staff bank transfers resolve
+   * the organization's private POS route server-side and never need this id.
+   */
   bankAccountId?: string;
-  /** Required when kind=cheque once the DB workflow is wired. */
+  /** Optional owner-only reference to an already-created received cheque. */
   chequeId?: string;
+  /** Privacy-safe inline cheque capture for cashier/data-entry checkout. */
+  chequeNo?: string;
+  chequeBank?: string;
+  chequeDate?: string;
+  postDated?: boolean;
   /** Required when kind=return_credit. */
   returnId?: string;
   note?: string;
@@ -81,9 +89,11 @@ export function summarizeSaleTenders(
 }
 
 /**
- * Pure validation used before any eventual DB write. It deliberately does not
- * infer missing payment sources: mixed tender is only safe when every amount is
- * explicit and the final allocation exactly explains the sale total.
+ * Pure validation used before the atomic DB write. Every amount is explicit,
+ * while sensitive owner banking identifiers are deliberately NOT required from
+ * operational staff. Bank transfer routing is resolved inside the database;
+ * cheque details can be captured inline and the protected cheque row is created
+ * in the same transaction as the invoice.
  */
 export function validateSaleTenders(
   tenders: SaleTenderDraft[],
@@ -115,11 +125,12 @@ export function validateSaleTenders(
     if (tender.kind === "credit" && !context.hasCustomerAccount) {
       errors.push("Credit payment requires a customer account.");
     }
-    if (tender.kind === "bank_transfer" && !tender.bankAccountId) {
-      errors.push("Bank transfer requires a destination bank account.");
-    }
-    if (tender.kind === "cheque" && !tender.chequeId) {
-      errors.push("Cheque payment requires a cheque record.");
+    if (
+      tender.kind === "cheque" &&
+      !tender.chequeId &&
+      (!tender.chequeNo?.trim() || !tender.chequeBank?.trim() || !tender.chequeDate)
+    ) {
+      errors.push("Cheque payment requires cheque number, bank and date.");
     }
     if (tender.kind === "return_credit" && !tender.returnId) {
       errors.push("Return credit requires a return document.");
