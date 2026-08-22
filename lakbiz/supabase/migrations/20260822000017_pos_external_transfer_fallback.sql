@@ -176,6 +176,14 @@ $$;
 
 -- v3 is now the only authenticated POS finalization entrypoint. Nested security
 -- definer calls remain available to the database owner but not direct app users.
+revoke execute on function public.finalize_sale_with_tenders(
+  uuid, text, text, text, numeric, jsonb, jsonb
+) from authenticated;
+
+revoke execute on function public.finalize_sale_with_private_tenders(
+  uuid, text, text, text, numeric, jsonb, jsonb
+) from authenticated;
+
 revoke execute on function public.finalize_sale_with_private_tenders_v2(
   uuid, text, text, text, numeric, jsonb, jsonb
 ) from authenticated;
@@ -190,4 +198,4 @@ grant execute on function public.finalize_sale_with_private_tenders_v3(
 comment on function public.finalize_sale_with_private_tenders_v3(
   uuid, text, text, text, numeric, jsonb, jsonb
 ) is
-  'Final POS facade. Banking-enabled orgs use the hidden routed account; orgs without Banking may record a customer bank-transfer tender without fabricating an internal bank account or ledger posting.';
+  'Final POS facade. Banking-enabled orgs use the hidden routed account; orgs without Banking may record a customer bank-transfer tender without fabricating an internal bank account or ledger posting. This is the only authenticated tender finalization entrypoint.';
