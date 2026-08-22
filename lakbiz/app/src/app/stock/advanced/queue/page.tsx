@@ -33,9 +33,10 @@ function schemaMissing(error: string | null): boolean {
 
 export default function TrackedReceivingQueuePage() {
   const { data, ready } = useAppStore();
-  const { org } = useSubscription();
+  const { org, orgRole } = useSubscription();
   const { locale } = useLocale();
   const si = locale === "si";
+  const canInspectReturns = orgRole === "owner" || orgRole === "manager";
   const [coverage, setCoverage] = useState<ReceivingQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +122,9 @@ export default function TrackedReceivingQueuePage() {
           actions={
             <div className="flex flex-wrap gap-2">
               <Link href="/stock/advanced" className={secondary}>{si ? "Inventory control" : "Inventory control"}</Link>
+              {canInspectReturns && (
+                <Link href="/stock/advanced/returns" className={secondary}>{si ? "Return inspection" : "Return inspection"}</Link>
+              )}
               <Link href="/stock/advanced/receive" className={primary}>{si ? "Identity assign කරන්න" : "Assign identity"}</Link>
             </div>
           }
@@ -264,9 +268,22 @@ export default function TrackedReceivingQueuePage() {
                     </div>
                   ))}
                 </div>
-                <p className="mt-4 text-xs font-semibold leading-5 text-orange-900">
-                  {si ? "Release / quarantine / damage disposition workflow එක වෙනම controlled phase එකක් ලෙස build කරනු ඇත; hold quantity අද POS sale එකකට යා නොහැක." : "Release / quarantine / damage disposition will be handled by a separate controlled workflow; held quantity cannot enter a POS sale today."}
-                </p>
+                <div className="mt-4 flex flex-col gap-3 rounded-xl border border-orange-200 bg-white/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="max-w-3xl text-xs font-semibold leading-5 text-orange-900">
+                    {canInspectReturns
+                      ? si
+                        ? "මෙම held stock Return inspection workspace එකෙන් inspect කර release, quarantine, damaged හෝ write-off decision එකක් දෙන්න. Receiving identity ලෙස නැවත assign නොකරන්න."
+                        : "Inspect these holds in Return inspection, then approve resale, quarantine, mark damaged or write off as appropriate. Do not reassign them as receiving identity."
+                      : si
+                        ? "මෙම held stock resolve කිරීමට Owner හෝ Manager approval අවශ්‍යයි. Hold quantity POS sale එකකට යා නොහැක."
+                        : "Owner or Manager approval is required to resolve held stock. Held quantity remains blocked from POS until inspection is completed."}
+                  </p>
+                  {canInspectReturns && (
+                    <Link href="/stock/advanced/returns" className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-700">
+                      {si ? "Return inspection විවෘත කරන්න" : "Open return inspection"}
+                    </Link>
+                  )}
+                </div>
               </section>
             )}
 
