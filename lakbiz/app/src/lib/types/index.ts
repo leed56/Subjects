@@ -16,7 +16,9 @@ export type PaymentMethod =
   | "bank_transfer"
   | "card"
   | "cheque"
-  | "credit";
+  | "credit"
+  /** Display/read value for invoices finalized through the normalized tender ledger. */
+  | "mixed";
 
 /** Inventory lane: new stock vs used/refurbished (Phase A). */
 export type ProductCondition = "new" | "used";
