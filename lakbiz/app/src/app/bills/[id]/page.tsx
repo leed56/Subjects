@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { AppShell } from "@/components/shell/app-shell";
 import { InvoiceView } from "@/components/invoice-view";
+import { SaleInventoryTrace } from "@/components/sales/sale-inventory-trace";
 import {
   ProButton,
   ProCard,
@@ -83,10 +84,10 @@ export default function BillDetailPage() {
               <p className="mt-2 font-mono text-2xl font-bold text-slate-950">{formatLkr(sale.total)}</p>
             </ProCard>
             {canSeeFinancials && (
-            <ProCard>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{t("common.profit")}</p>
-              <p className="mt-2 font-mono text-2xl font-bold text-teal-700">{formatLkr(sale.profit)}</p>
-            </ProCard>
+              <ProCard>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{t("common.profit")}</p>
+                <p className="mt-2 font-mono text-2xl font-bold text-teal-700">{formatLkr(sale.profit)}</p>
+              </ProCard>
             )}
             <ProCard>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{t("common.payment")}</p>
@@ -103,6 +104,7 @@ export default function BillDetailPage() {
             customerAddress={customer?.address}
             customerVatNumber={customer?.vatNumber}
           />
+          <SaleInventoryTrace saleId={sale.id} />
         </div>
       </ProMain>
     </AppShell>
