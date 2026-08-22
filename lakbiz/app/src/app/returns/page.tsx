@@ -33,6 +33,8 @@ const emptySummary: SaleReturnControlSummary = {
   outstandingCredit: 0,
 };
 
+type RegisterFilter = "all" | "action" | "settled";
+
 function isActionable(row: SaleReturnControlRow): boolean {
   return !row.creditNote || row.remainingCredit > 0.005;
 }
@@ -52,6 +54,8 @@ export default function ReturnsControlPage() {
   const [summary, setSummary] = useState<SaleReturnControlSummary>(emptySummary);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [registerFilter, setRegisterFilter] = useState<RegisterFilter>("all");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!org.isAuthenticated || !org.id || orgRole !== "owner") return;
@@ -75,6 +79,22 @@ export default function ReturnsControlPage() {
     [data?.sales],
   );
   const actionable = useMemo(() => rows.filter(isActionable), [rows]);
+  const filteredRows = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (registerFilter === "action" && !isActionable(row)) return false;
+      if (registerFilter === "settled" && isActionable(row)) return false;
+      if (!query) return true;
+      const sale = salesById.get(row.saleId);
+      return [
+        row.returnNo,
+        row.creditNote?.creditNoteNo ?? "",
+        sale?.billNo ?? row.saleId,
+        sale?.customerName ?? "walk-in customer",
+        row.reason,
+      ].some((value) => value.toLowerCase().includes(query));
+    });
+  }, [registerFilter, rows, salesById, search]);
 
   if (!ready || !data) {
     return (
@@ -214,7 +234,7 @@ export default function ReturnsControlPage() {
                 )}
               </ProCard>
 
-              <ProCard title="Return register" action={<ProBadge tone="slate">{rows.length}</ProBadge>}>
+              <ProCard title="Return register" action={<ProBadge tone="slate">{filteredRows.length}</ProBadge>}>
                 {rows.length === 0 ? (
                   <ProEmptyState
                     title="No customer returns yet"
@@ -222,34 +242,74 @@ export default function ReturnsControlPage() {
                     size="compact"
                   />
                 ) : (
-                  <div className="max-h-[36rem] divide-y divide-slate-100 overflow-y-auto pr-1">
-                    {rows.map((row) => {
-                      const sale = salesById.get(row.saleId);
-                      return (
-                        <div key={row.id} className="flex flex-col gap-3 py-3 first:pt-0 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Link href={`/bills/${row.saleId}/returns/${row.id}`} className="font-mono text-xs font-bold text-teal-700 hover:underline">{row.returnNo}</Link>
-                              {row.creditNote && <span className="font-mono text-[11px] font-semibold text-slate-500">{row.creditNote.creditNoteNo}</span>}
+                  <>
+                    <div className="mb-4 space-y-3 border-b border-slate-100 pb-4">
+                      <input
+                        type="search"
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder="Search return, credit note, bill or customer"
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm font-semibold text-slate-900 outline-none transition placeholder:font-medium placeholder:text-slate-400 focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100/70"
+                      />
+                      <div className="flex flex-wrap gap-1.5" aria-label="Return register filters">
+                        {([
+                          ["all", "All"],
+                          ["action", "Action needed"],
+                          ["settled", "Settled"],
+                        ] as const).map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setRegisterFilter(value)}
+                            className={`min-h-9 rounded-lg px-3 text-xs font-bold transition ${
+                              registerFilter === value
+                                ? "bg-slate-950 text-white shadow-sm"
+                                : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200 hover:text-teal-800"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {filteredRows.length === 0 ? (
+                      <ProEmptyState
+                        title="No returns match this view"
+                        description="Change the filter or search term to view other return documents."
+                        size="compact"
+                      />
+                    ) : (
+                      <div className="max-h-[36rem] divide-y divide-slate-100 overflow-y-auto pr-1">
+                        {filteredRows.map((row) => {
+                          const sale = salesById.get(row.saleId);
+                          return (
+                            <div key={row.id} className="flex flex-col gap-3 py-3 first:pt-0 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Link href={`/bills/${row.saleId}/returns/${row.id}`} className="font-mono text-xs font-bold text-teal-700 hover:underline">{row.returnNo}</Link>
+                                  {row.creditNote && <span className="font-mono text-[11px] font-semibold text-slate-500">{row.creditNote.creditNoteNo}</span>}
+                                </div>
+                                <p className="mt-1 truncate text-sm font-semibold text-slate-900">{sale?.customerName || "Walk-in customer"}</p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  {sale?.billNo ?? row.saleId.slice(0, 8)} · {new Date(row.returnedAt).toLocaleString("en-LK")}
+                                </p>
+                              </div>
+                              <div className="flex shrink-0 items-center justify-between gap-4 sm:justify-end">
+                                <div className="text-right">
+                                  <p className="font-mono text-sm font-bold text-slate-950">{formatLkr(row.merchandiseValue)}</p>
+                                  {row.creditNote && row.settledTotal > 0 && (
+                                    <p className="mt-0.5 text-[10px] font-semibold text-slate-400">{formatLkr(row.settledTotal)} settled</p>
+                                  )}
+                                </div>
+                                <ReturnStatus row={row} />
+                              </div>
                             </div>
-                            <p className="mt-1 truncate text-sm font-semibold text-slate-900">{sale?.customerName || "Walk-in customer"}</p>
-                            <p className="mt-1 text-xs text-slate-500">
-                              {sale?.billNo ?? row.saleId.slice(0, 8)} · {new Date(row.returnedAt).toLocaleString("en-LK")}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 items-center justify-between gap-4 sm:justify-end">
-                            <div className="text-right">
-                              <p className="font-mono text-sm font-bold text-slate-950">{formatLkr(row.merchandiseValue)}</p>
-                              {row.creditNote && row.settledTotal > 0 && (
-                                <p className="mt-0.5 text-[10px] font-semibold text-slate-400">{formatLkr(row.settledTotal)} settled</p>
-                              )}
-                            </div>
-                            <ReturnStatus row={row} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
                 )}
               </ProCard>
             </section>
