@@ -6,8 +6,9 @@
  * Rebuilt from the original card-grid dashboard around one priority order:
  * TODAY → OPERATIONS → NEEDS ATTENTION → FINANCIAL POSITION → TREND. Every
  * number here is read from `getDashboardStats()` (extended, not duplicated)
- * plus the existing VAT/income-tax helpers and additive cloud-only return
- * accounting adjustments. No historical invoice is rewritten.
+ * plus the existing `getVatQuarterSummary`/`getIncomeTaxYearSummary` — no
+ * new Supabase queries, no fabricated data. See docs/IMPLEMENTATION_PROGRESS.md
+ * for the full before/after writeup.
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -42,11 +43,6 @@ import { getIncomeTaxYearSummary } from "@/lib/income-tax";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { canAccessShopRoute } from "@/lib/org-role/permissions";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
-import {
-  fetchOrgReturnAccountingAdjustments,
-  returnAccountingSchemaUnavailable,
-  type ReturnAccountingAdjustment,
-} from "@/lib/supabase/return-accounting-client";
 import { computeJobProfitability, isLowMarginJob, type JobLinkedExpense } from "@/lib/job-profitability";
 
 type Locale = "si" | "en";
@@ -54,58 +50,45 @@ type TrendPeriod = "30d" | "3m" | "6m" | "12m";
 type TrendPoint = { key: string; label: string; revenue: number; profit: number };
 
 /**
- * Net revenue+profit trend, bucketed daily (30d) or monthly (3/6/12m).
- * Historical invoices stay immutable: issued credit notes are subtracted in
- * the period they are issued. Non-owner roles never receive COGS/profit
- * reversals, so only their customer-facing revenue series is adjusted.
+ * Revenue+profit trend, bucketed daily (30d) or monthly (3/6/12m). A
+ * different shape than the Reports page's single-metric daily trend
+ * (Phase 14) — kept local to this page rather than forcing that
+ * component to support a shape it wasn't built for.
+ *
+ * `new Date()` is called inside this module-level function, never inline
+ * in the component body — matches the codebase's established convention
+ * (see Phase 4/5 notes) for keeping render bodies pure.
  */
-function getRevenueTrend(
-  sales: Sale[],
-  returnAdjustments: ReturnAccountingAdjustment[],
-  period: TrendPeriod,
-  locale: Locale,
-  includeProfitAdjustments: boolean,
-): TrendPoint[] {
+function getRevenueTrend(sales: Sale[], period: TrendPeriod, locale: Locale): TrendPoint[] {
   const now = new Date();
   if (period === "30d") {
     return Array.from({ length: 30 }, (_, i) => {
       const d = new Date(now);
       d.setDate(d.getDate() - (29 - i));
       const iso = d.toISOString().slice(0, 10);
+      // Sale.date is a full ISO timestamp (new Date().toISOString() at
+      // creation, see createSale in actions.ts), not a plain YYYY-MM-DD —
+      // startsWith, not ===, matches the convention getDashboardStats
+      // already uses for exactly this reason.
       const daySales = sales.filter((s) => s.date.startsWith(iso));
-      const dayCredits = returnAdjustments.filter((note) => note.issuedAt.startsWith(iso));
-      const grossRevenue = daySales.reduce((s, x) => s + x.total, 0);
-      const grossProfit = daySales.reduce((s, x) => s + x.profit, 0);
-      const creditRevenue = dayCredits.reduce((s, x) => s + x.grossCredit, 0);
-      const creditProfit = includeProfitAdjustments
-        ? dayCredits.reduce((s, x) => s + (x.reversedProfit ?? 0), 0)
-        : 0;
       return {
         key: iso,
         label: d.toLocaleDateString(locale === "si" ? "si-LK" : "en-LK", { day: "numeric", month: "short" }),
-        revenue: grossRevenue - creditRevenue,
-        profit: grossProfit - creditProfit,
+        revenue: daySales.reduce((s, x) => s + x.total, 0),
+        profit: daySales.reduce((s, x) => s + x.profit, 0),
       };
     });
   }
-
   const months = period === "3m" ? 3 : period === "6m" ? 6 : 12;
   return Array.from({ length: months }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - (months - 1 - i), 1);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     const monthSales = sales.filter((s) => s.date.startsWith(key));
-    const monthCredits = returnAdjustments.filter((note) => note.issuedAt.startsWith(key));
-    const grossRevenue = monthSales.reduce((s, x) => s + x.total, 0);
-    const grossProfit = monthSales.reduce((s, x) => s + x.profit, 0);
-    const creditRevenue = monthCredits.reduce((s, x) => s + x.grossCredit, 0);
-    const creditProfit = includeProfitAdjustments
-      ? monthCredits.reduce((s, x) => s + (x.reversedProfit ?? 0), 0)
-      : 0;
     return {
       key,
       label: d.toLocaleDateString(locale === "si" ? "si-LK" : "en-LK", { month: "short", year: "2-digit" }),
-      revenue: grossRevenue - creditRevenue,
-      profit: grossProfit - creditProfit,
+      revenue: monthSales.reduce((s, x) => s + x.total, 0),
+      profit: monthSales.reduce((s, x) => s + x.profit, 0),
     };
   });
 }
@@ -133,10 +116,15 @@ const secondaryButton =
   "inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3.5 text-sm font-medium text-slate-700 hover:bg-slate-50";
 const ghostLink = "text-xs font-semibold text-teal-700 hover:underline";
 
+/** Card shell used throughout — one consistent 10-14px-radius, subtle-border
+ * container, replacing the old dashboard's mix of flat cards and the
+ * oversized black/indigo MeterCards. */
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`rounded-xl border border-slate-200 bg-white p-4 sm:p-5 ${className}`}>{children}</div>;
 }
 
+/** A single compact, actionable "Needs Attention" row — never a whole card
+ * per alert, per the density requirement. */
 function AttentionRow({
   title,
   description,
@@ -181,6 +169,12 @@ export default function DashboardPage() {
   const [trendPeriod, setTrendPeriod] = useState<TrendPeriod>("6m");
   const [showIncomeTax, setShowIncomeTax] = useState(false);
 
+  // HVAC platform Phase 14 — job profitability needs job-linked Expenses
+  // (Phase 7), which are cloud-only, not part of the local-first store
+  // this page otherwise reads from. Same fetch-on-mount pattern as
+  // /job-costing, which already does exactly this. Gated on
+  // canSeeFinancials up front: never even request the data a technician
+  // isn't allowed to see.
   const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<string, JobLinkedExpense[]> | null>(null);
   useEffect(() => {
     if (!showAcJobs || !canSeeFinancials || !org.isAuthenticated || !org.id) {
@@ -204,39 +198,7 @@ export default function DashboardPage() {
     };
   }, [showAcJobs, canSeeFinancials, org.isAuthenticated, org.id]);
 
-  // Issued credit notes are customer-facing financial adjustments. Every role
-  // that can see sales may receive the gross credit so dashboard revenue is
-  // accurate; only the owner requests the protected profit/COGS reversal.
-  const [returnAdjustments, setReturnAdjustments] = useState<ReturnAccountingAdjustment[] | null>(null);
-  const [returnAccountingError, setReturnAccountingError] = useState<string | null>(null);
-  useEffect(() => {
-    if (!org.isAuthenticated || !org.id) {
-      setReturnAdjustments([]);
-      setReturnAccountingError(null);
-      return;
-    }
-    let cancelled = false;
-    setReturnAdjustments(null);
-    setReturnAccountingError(null);
-    void fetchOrgReturnAccountingAdjustments(org.id, canSeeFinancials).then((result) => {
-      if (cancelled) return;
-      if (returnAccountingSchemaUnavailable(result.error)) {
-        setReturnAdjustments([]);
-        return;
-      }
-      if (result.error) {
-        setReturnAdjustments([]);
-        setReturnAccountingError(result.error);
-        return;
-      }
-      setReturnAdjustments(result.data);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [org.id, org.isAuthenticated, canSeeFinancials]);
-
-  if (!ready || !data || returnAdjustments == null) {
+  if (!ready || !data) {
     return (
       <AppShell>
         <ProMain>
@@ -249,8 +211,19 @@ export default function DashboardPage() {
   const stats = getDashboardStats(data);
   const shopName = data.business.name || org.name || "LakBiz";
   const isTechnician = orgRole === "technician";
+  // showAcJobs is only the plan-feature gate; cashier can't reach /jobs,
+  // /schedule, or /teams at all (see permissions.ts SHOP_STAFF_ROUTES),
+  // so AC-jobs dashboard sections need both checks, not just the feature
+  // flag — otherwise a cashier sees job data and a "+ New job" button
+  // that just bounces them back here via the route guard.
   const canSeeJobs = showAcJobs && orgRole !== "cashier";
 
+  // Job profitability this month — reuses computeJobProfitability (Phase
+  // 8), the one authoritative calculation, exactly as /job-costing does.
+  // Not a separate/simplified dashboard-only formula. Feeds a compact
+  // "Needs Attention" row below rather than its own card — consistent
+  // with this page's "one row per alert, not a card per alert" density
+  // rule (see AttentionRow's docstring).
   const jobItemsByJob = new Map<string, typeof data.jobItems>();
   for (const item of data.jobItems) {
     const list = jobItemsByJob.get(item.jobId) ?? [];
@@ -309,6 +282,15 @@ export default function DashboardPage() {
     />
   );
 
+  // ---------------------------------------------------------------------
+  // Technician view: a simplified, financial-free job list. Deliberately
+  // titled "Today's Jobs" rather than "My Jobs" — org_members.role
+  // "technician" (the login) has no link to a specific technicians.id row
+  // (the workforce roster used for job assignment), so there is no
+  // reliable way to filter to "this person's" jobs specifically. Showing
+  // all of today's real jobs, honestly labeled, beats guessing a filter
+  // that could silently hide or misattribute work. See final report.
+  // ---------------------------------------------------------------------
   if (isTechnician) {
     return (
       <AppShell>
@@ -336,7 +318,7 @@ export default function DashboardPage() {
                         {jobStatusLabel(job.status, locale)}
                       </StatusBadge>
                       {job.phone && <CallLink phone={job.phone} label={t("common.call")} variant="icon" />}
-                      <NavigateLink address={job.address} label={t("common.navigate")} variant="icon" />}
+                      <NavigateLink address={job.address} label={t("common.navigate")} variant="icon" />
                     </div>
                   </li>
                 ))}
@@ -348,6 +330,12 @@ export default function DashboardPage() {
     );
   }
 
+  // ---------------------------------------------------------------------
+  // Smart onboarding state: truly no business data yet (not just "no
+  // products", the old check) — no customers, products, sales, or jobs at
+  // all. Switches to the real dashboard automatically the moment any of
+  // that exists; nothing to dismiss.
+  // ---------------------------------------------------------------------
   const hasAnyData =
     data.customers.length > 0 || data.products.length > 0 || data.sales.length > 0 || data.acJobs.length > 0;
 
@@ -386,31 +374,21 @@ export default function DashboardPage() {
     );
   }
 
-  const vat = canSeeFinancials ? getVatQuarterSummary(data, new Date(), returnAdjustments) : null;
+  // ---------------------------------------------------------------------
+  // Full owner/manager/data_entry/cashier dashboard.
+  // ---------------------------------------------------------------------
+  const vat = canSeeFinancials ? getVatQuarterSummary(data) : null;
   const incomeTax = canSeeFinancials
-    ? getIncomeTaxYearSummary(data, new Date(), 0, jobLinkedExpenseTotals ?? new Map(), returnAdjustments)
+    ? getIncomeTaxYearSummary(data, new Date(), 0, jobLinkedExpenseTotals ?? new Map())
     : null;
-
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const todayCreditNotes = returnAdjustments.filter((note) => note.issuedAt.startsWith(todayKey));
-  const todayReturnRevenue = todayCreditNotes.reduce((sum, note) => sum + note.grossCredit, 0);
-  const todayReturnProfit = canSeeFinancials
-    ? todayCreditNotes.reduce((sum, note) => sum + (note.reversedProfit ?? 0), 0)
-    : 0;
-  const todayNetSales = stats.todaySales - todayReturnRevenue;
-  const todayNetProfit = stats.todayProfit - todayReturnProfit;
-  const marginPct = todayNetSales > 0 ? Math.round((todayNetProfit / todayNetSales) * 100) : 0;
-
-  const trend = getRevenueTrend(data.sales, returnAdjustments, trendPeriod, locale, canSeeFinancials);
-  const trendMax = Math.max(1, ...trend.map((p) => Math.max(Math.abs(p.revenue), Math.abs(p.profit))));
+  const marginPct = stats.todaySales > 0 ? Math.round((stats.todayProfit / stats.todaySales) * 100) : 0;
+  const trend = getRevenueTrend(data.sales, trendPeriod, locale);
+  const trendMax = Math.max(1, ...trend.map((p) => Math.max(p.revenue, p.profit)));
   const trendRevenueTotal = trend.reduce((s, p) => s + p.revenue, 0);
   const trendProfitTotal = trend.reduce((s, p) => s + p.profit, 0);
   const trendAvgMargin = trendRevenueTotal > 0 ? Math.round((trendProfitTotal / trendRevenueTotal) * 100) : 0;
-  const trendReturnAdjustments = returnAdjustments.filter((note) =>
-    trend.some((point) => note.issuedAt.startsWith(point.key)),
-  );
-  const trendReturnTotal = trendReturnAdjustments.reduce((sum, note) => sum + note.grossCredit, 0);
 
+  // Needs Attention — only real, currently-true items, most severe first.
   type Alert = { key: string; title: string; description: string; actionLabel: string; actionHref: string; tone: "danger" | "warning" };
   const alerts: Alert[] = [];
   if (canSeeJobs && stats.todayJobsUnassignedCount > 0) {
@@ -494,6 +472,7 @@ export default function DashboardPage() {
     });
   }
 
+  // Today's Operations table columns.
   const operationsColumns: DataTableColumn<ACJob>[] = [
     {
       key: "customer",
@@ -529,6 +508,11 @@ export default function DashboardPage() {
       header: t("common.status"),
       render: (job) => <StatusBadge tone={job.status === "completed" || job.status === "installed" ? "positive" : job.status === "service_due" ? "warning" : "info"}>{jobStatusLabel(job.status, locale)}</StatusBadge>,
     },
+    // Part 9's explicit column list — Amount, financial-gated same as
+    // every other money figure on this page. "Due" is deliberately not a
+    // column here: stats.todayJobs is already filtered to
+    // scheduledDate === today (actions.ts), so a due-date column on a
+    // today-only list would just repeat "today" on every row.
     ...(canSeeFinancials
       ? [
           {
@@ -549,6 +533,9 @@ export default function DashboardPage() {
     },
   ];
 
+  // Teams Today — grouped by real assignee (technician/contractor), not
+  // the largely-unpopulated crew_id (see docs/IMPLEMENTATION_PROGRESS.md,
+  // Phase 6 known gap, and the note on assigneeName() above).
   type TeamGroup = { key: string; name: string; jobs: ACJob[] };
   const teamGroups = new Map<string, TeamGroup>();
   for (const job of stats.todayJobs) {
@@ -633,20 +620,20 @@ export default function DashboardPage() {
           }
           metrics={
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard
-                label={t("dash.today_sales")}
-                value={formatLkr(todayNetSales)}
-                hint={todayReturnRevenue > 0 ? `${stats.saleCount} ${t("dash.sales_today")} · −${formatLkr(todayReturnRevenue)} credit notes` : `${stats.saleCount} ${t("dash.sales_today")}`}
-                tone={todayNetSales < 0 ? "danger" : "default"}
-              />
+              <MetricCard label={t("dash.today_sales")} value={formatLkr(stats.todaySales)} hint={`${stats.saleCount} ${t("dash.sales_today")}`} />
               {canSeeFinancials ? (
                 <MetricCard
                   label={t("dash.today_profit")}
-                  value={formatLkr(todayNetProfit)}
-                  hint={todayNetSales > 0 ? t("dash.kpi_margin").replace("{pct}", String(marginPct)) : "—"}
-                  tone={todayNetProfit < 0 ? "danger" : "positive"}
+                  value={formatLkr(stats.todayProfit)}
+                  hint={stats.todaySales > 0 ? t("dash.kpi_margin").replace("{pct}", String(marginPct)) : "—"}
+                  tone="positive"
                 />
               ) : (
+                // Non-financial roles (data_entry/cashier) don't get bank
+                // balance either — canUseBankingModule uses the same
+                // FINANCIAL_ROLES gate as canSeeFinancials. Low stock is a
+                // real operational number every role can already see on
+                // /stock, so it fills this slot instead.
                 <MetricCard
                   label={t("dash.low_stock")}
                   value={String(stats.lowStockCount)}
@@ -673,12 +660,7 @@ export default function DashboardPage() {
 
         <OfflineSyncNotice />
 
-        {returnAccountingError && canSeeFinancials && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900">
-            Return credit-note adjustments could not be loaded. Dashboard sales/profit may temporarily show invoice-gross values. {returnAccountingError}
-          </div>
-        )}
-
+        {/* Today's Operations — the main section. */}
         {canSeeJobs && (
           <Card className="mb-4">
             <SectionHeader
@@ -695,6 +677,7 @@ export default function DashboardPage() {
           </Card>
         )}
 
+        {/* Needs Attention. */}
         <Card className="mb-4">
           <SectionHeader title={t("dash.attention_title")} />
           {alerts.length === 0 ? (
@@ -710,7 +693,11 @@ export default function DashboardPage() {
           )}
         </Card>
 
+        {/* Financial Snapshot is omitted entirely for non-financial roles —
+            without it, the chart alone should take the full row, not sit
+            in a lopsided two-column grid with an empty second track. */}
         <div className={`grid gap-4 ${canSeeFinancials && vat && incomeTax ? "lg:grid-cols-[1fr_1.3fr]" : ""}`}>
+          {/* Financial Snapshot — compact, VAT/tax no longer dominant. */}
           {canSeeFinancials && vat && incomeTax && (
             <Card>
               <SectionHeader title={t("dash.financial_title")} />
@@ -732,9 +719,7 @@ export default function DashboardPage() {
                   {vat.enabled ? (
                     <>
                       <p className="mt-1 font-mono text-lg font-bold text-slate-900">{formatLkr(vat.netPayable)}</p>
-                      <p className="text-xs text-slate-400">
-                        {vat.bounds.label}{vat.creditNoteCount > 0 ? ` · ${vat.creditNoteCount} CRN` : ""}
-                      </p>
+                      <p className="text-xs text-slate-400">{vat.bounds.label}</p>
                     </>
                   ) : (
                     <p className="mt-1 text-sm text-slate-400">{t("vat.enable_hint")}</p>
@@ -758,15 +743,13 @@ export default function DashboardPage() {
                   </p>
                   <p className="mt-1 font-mono text-xl font-bold text-slate-900">{formatLkr(incomeTax.estimatedTax)}</p>
                   <p className="mt-1 text-xs text-slate-400">{incomeTax.bounds.label}</p>
-                  {incomeTax.creditNoteCount > 0 && (
-                    <p className="mt-1 text-xs text-teal-700">−{formatLkr(incomeTax.returnRevenueReversal)} issued return credits</p>
-                  )}
                   <p className="mt-2 text-xs text-slate-400">{t("tax.owner_only")}</p>
                 </div>
               )}
             </Card>
           )}
 
+          {/* Business Performance — one dual-series trend. */}
           <Card>
             <SectionHeader
               title={t("dash.performance_title")}
@@ -785,7 +768,7 @@ export default function DashboardPage() {
                 </div>
               }
             />
-            {trendRevenueTotal === 0 && trendProfitTotal === 0 ? (
+            {trendRevenueTotal === 0 ? (
               <EmptyState title={t("dash.performance_empty")} />
             ) : (
               <>
@@ -794,15 +777,18 @@ export default function DashboardPage() {
                     <div key={p.key} className="flex flex-1 flex-col items-center justify-end gap-1">
                       <div className="flex w-full flex-1 items-end justify-center gap-0.5">
                         <div
-                          title={`Net sales: ${formatLkr(p.revenue)}`}
-                          className={`${canSeeFinancials ? "w-1/2" : "w-full"} rounded-t ${p.revenue < 0 ? "bg-rose-400" : "bg-teal-500"}`}
-                          style={{ height: `${Math.max(2, (Math.abs(p.revenue) / trendMax) * 100)}%` }}
+                          title={`${t("dash.today_sales")}: ${formatLkr(p.revenue)}`}
+                          className={canSeeFinancials ? "w-1/2 rounded-t bg-teal-500" : "w-full rounded-t bg-teal-500"}
+                          style={{ height: `${Math.max(2, (p.revenue / trendMax) * 100)}%` }}
                         />
+                        {/* Profit bar is financial data — never rendered for
+                            a role canSeeFinancials excludes (see the P1
+                            fix note below the stats row). */}
                         {canSeeFinancials && (
                           <div
-                            title={`Net profit: ${formatLkr(p.profit)}`}
-                            className={`w-1/2 rounded-t ${p.profit < 0 ? "bg-rose-300" : "bg-emerald-300"}`}
-                            style={{ height: `${Math.max(2, (Math.abs(p.profit) / trendMax) * 100)}%` }}
+                            title={`${t("dash.gross_profit")}: ${formatLkr(p.profit)}`}
+                            className="w-1/2 rounded-t bg-emerald-300"
+                            style={{ height: `${Math.max(2, (p.profit / trendMax) * 100)}%` }}
                           />
                         )}
                       </div>
@@ -810,29 +796,25 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
-                  <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-teal-500" />Net sales</span>
+                <div className="mt-3 flex items-center gap-4 text-xs">
+                  <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-teal-500" />{t("dash.today_sales")}</span>
                   {canSeeFinancials && (
-                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-emerald-300" />Net profit</span>
-                  )}
-                  {(trend.some((p) => p.revenue < 0) || (canSeeFinancials && trend.some((p) => p.profit < 0))) && (
-                    <span className="flex items-center gap-1.5 text-rose-700"><span className="h-2 w-2 rounded-sm bg-rose-400" />Negative after credits</span>
+                    <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-emerald-300" />{t("dash.gross_profit")}</span>
                   )}
                 </div>
-                {trendReturnTotal > 0 && (
-                  <p className="mt-2 rounded-lg bg-teal-50 px-3 py-2 text-[11px] font-semibold text-teal-800">
-                    This period includes {trendReturnAdjustments.length} issued credit note{trendReturnAdjustments.length === 1 ? "" : "s"} reducing sales by {formatLkr(trendReturnTotal)}.
-                  </p>
-                )}
+                {/* Gross profit / margin are financial data — this whole
+                    stat row was previously unconditional, showing them to
+                    every role regardless of canSeeFinancials. Only the
+                    revenue stat is safe to keep for non-financial roles. */}
                 <div className={`mt-3 grid gap-2 border-t border-slate-100 pt-3 text-sm ${canSeeFinancials ? "grid-cols-3" : "grid-cols-1"}`}>
                   <div>
-                    <p className="text-xs text-slate-500">Net sales</p>
+                    <p className="text-xs text-slate-500">{t("dash.today_sales")}</p>
                     <p className="font-mono font-semibold text-slate-900">{formatLkr(trendRevenueTotal)}</p>
                   </div>
                   {canSeeFinancials && (
                     <>
                       <div>
-                        <p className="text-xs text-slate-500">Net profit</p>
+                        <p className="text-xs text-slate-500">{t("dash.gross_profit")}</p>
                         <p className="font-mono font-semibold text-slate-900">{formatLkr(trendProfitTotal)}</p>
                       </div>
                       <div>
@@ -847,6 +829,10 @@ export default function DashboardPage() {
           </Card>
         </div>
 
+        {/* Teams Today — gated on route access, not just canSeeJobs:
+            data_entry has canSeeJobs=true (only cashier is excluded) but
+            DATA_ENTRY_ROUTES doesn't include /teams, so the link would
+            bounce that role straight back here via ShopRouteGuard. */}
         {canSeeJobs && canAccessShopRoute(orgRole, "/teams") && (
           <Card className="mt-4">
             <SectionHeader title={t("dash.teams_title")} action={<Link href="/teams" className={ghostLink}>{t("nav.field_teams")}</Link>} />
@@ -861,6 +847,11 @@ export default function DashboardPage() {
                   const nextJob = g.jobs.find((j) => j.status !== "completed" && j.status !== "installed");
                   return (
                     <div key={g.key} className="flex items-start gap-2.5 rounded-lg border border-slate-200 p-3">
+                      {/* Part 9's "use initials or uploaded staff avatars,
+                       * don't require profile photography" — this app has
+                       * no staff photo field, so initials (from the real
+                       * assignee name, "?" only for the unassigned bucket)
+                       * are the honest choice, not a placeholder photo. */}
                       <span
                         className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                           g.key === "unassigned" ? "bg-amber-100 text-amber-800" : "bg-teal-100 text-teal-800"
@@ -884,6 +875,12 @@ export default function DashboardPage() {
           </Card>
         )}
 
+        {/* Low stock / receivables / payables — compact, hidden when empty.
+            Grid column count matches how many of the three will actually
+            render (a fixed 3-col grid with 1-2 real children leaves an
+            awkward empty track — Tailwind needs the literal class names
+            present for its scanner, so this is a ternary, not string
+            interpolation). Nothing renders at all if none apply. */}
         {(() => {
           const bottomCardCount =
             (stats.lowStockItems.length > 0 ? 1 : 0) +
