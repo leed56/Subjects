@@ -94,11 +94,22 @@ function isOwnerOnlyJobFinanceRoute(href: string): boolean {
   return /^\/jobs\/[^/]+\/invoice(?:\/|$)/.test(href);
 }
 
+/**
+ * A normal stock role may use Stock/Inventory Control, but resolving a customer
+ * return inspection changes sellability or writes physical stock off. Keep that
+ * nested workspace at owner/manager level instead of inheriting `/stock` access
+ * through prefix matching.
+ */
+function isReturnInspectionRoute(href: string): boolean {
+  return href === "/stock/advanced/returns" || href.startsWith("/stock/advanced/returns/");
+}
+
 export function canAccessShopRoute(role: OrgRole, href: string): boolean {
   if (role === "owner") return true;
   // A role that may operate /jobs must not inherit its nested customer-price
   // invoice just because route access uses prefix matching.
   if (isOwnerOnlyJobFinanceRoute(href)) return false;
+  if (isReturnInspectionRoute(href)) return role === "manager";
   if (role === "manager") return routeAllowed(href, MANAGER_ROUTES);
   if (role === "data_entry") return routeAllowed(href, DATA_ENTRY_ROUTES);
   if (role === "cashier") return routeAllowed(href, SHOP_STAFF_ROUTES);
