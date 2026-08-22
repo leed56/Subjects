@@ -1,6 +1,5 @@
 import type { PlanId } from "@/lib/subscription/types";
 import type { SectorId } from "@/lib/types";
-import { sectorById } from "@/lib/sectors";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type BusinessTemplate = {
@@ -9,10 +8,13 @@ export type BusinessTemplate = {
   nameSi: string;
   sectorId: SectorId;
   defaultPlanId: PlanId;
-  icon: string;
 };
 
-/** Fallback templates when DB row unavailable (matches migration seed). */
+/**
+ * Fallback provisioning templates. The database is preferred; this list is
+ * deliberately kept equivalent so a temporary reference-data failure never
+ * downgrades a newly created shop to the wrong sector.
+ */
 export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
   {
     id: "grocery",
@@ -20,7 +22,13 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     nameSi: "සිල්ලර සහ සුපිරි වෙළඳසැල්",
     sectorId: "grocery",
     defaultPlanId: "business",
-    icon: "🛒",
+  },
+  {
+    id: "pharmacy",
+    nameEn: "Pharmacy",
+    nameSi: "ඖෂධ අලෙවිසැල",
+    sectorId: "pharmacy",
+    defaultPlanId: "business",
   },
   {
     id: "electronics",
@@ -28,7 +36,13 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     nameSi: "ඉලෙක්ට්‍රොනික උපකරණ",
     sectorId: "electronics",
     defaultPlanId: "business",
-    icon: "📱",
+  },
+  {
+    id: "mobile_shop",
+    nameEn: "Mobile Phones & Repair Parts",
+    nameSi: "ජංගම දුරකථන සහ අමතර කොටස්",
+    sectorId: "mobile_shop",
+    defaultPlanId: "business",
   },
   {
     id: "electricals",
@@ -36,41 +50,39 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     nameSi: "විදුලි උපකරණ",
     sectorId: "electricals",
     defaultPlanId: "business",
-    icon: "⚡",
   },
   {
     id: "spare_parts",
-    nameEn: "Spare Parts",
-    nameSi: "අමතර කොටස්",
+    nameEn: "Auto & Machinery Spare Parts",
+    nameSi: "වාහන සහ යන්ත්‍ර අමතර කොටස්",
     sectorId: "spare_parts",
     defaultPlanId: "business",
-    icon: "🔧",
+  },
+  {
+    id: "footwear",
+    nameEn: "Footwear, Slippers & Shoes",
+    nameSi: "පාවහන්, සෙරෙප්පු සහ සපත්තු",
+    sectorId: "footwear",
+    defaultPlanId: "business",
   },
   {
     id: "ac_hvac",
-    nameEn: "Air Conditioning",
-    nameSi: "වායු සමනය",
+    nameEn: "Air Conditioning & HVAC",
+    nameSi: "වායු සමනය සහ HVAC",
     sectorId: "ac_hvac",
     defaultPlanId: "pro",
-    icon: "❄️",
   },
   {
     id: "car_sales",
-    nameEn: "Car Sales",
+    nameEn: "Car Sales & Vehicle Dealership",
     nameSi: "මෝටර් රථ වෙළඳාම",
     sectorId: "car_sales",
     defaultPlanId: "pro",
-    icon: "🚗",
   },
 ];
 
 export function getTemplate(id: string): BusinessTemplate | undefined {
-  const local = BUSINESS_TEMPLATES.find((t) => t.id === id);
-  if (local) {
-    const sector = sectorById(local.sectorId);
-    return { ...local, icon: sector?.icon ?? local.icon };
-  }
-  return undefined;
+  return BUSINESS_TEMPLATES.find((t) => t.id === id);
 }
 
 /** Same source as GET /api/admin/templates: DB first, local fallback. */
@@ -99,14 +111,11 @@ export function templateFromDbRow(row: {
   sector_id: string;
   default_plan_id: string;
 }): BusinessTemplate {
-  const sectorId = row.sector_id as SectorId;
-  const sector = sectorById(sectorId);
   return {
     id: row.id,
     nameEn: row.name_en,
     nameSi: row.name_si,
-    sectorId,
+    sectorId: row.sector_id as SectorId,
     defaultPlanId: row.default_plan_id as PlanId,
-    icon: sector?.icon ?? "🏪",
   };
 }

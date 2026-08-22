@@ -1,13 +1,5 @@
 "use client";
 
-/** Phase 1 design-system primitives: page/section headers, metrics, empty
- * states, badges, search/filter controls, tabs, and a small action menu.
- *
- * Design language: ~10-14px radius, subtle borders, minimal shadow, neutral
- * slate-50 background, teal-600/700 accent — replacing pro-shell.tsx's
- * rounded-[2rem]/heavy-shadow "dashboard card demo" look page by page as
- * each page is migrated (see docs/IMPLEMENTATION_PROGRESS.md).
- */
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { ChevronDownIcon, MoreIcon, SearchIcon, FilterIcon } from "@/components/ui/icons";
 
@@ -20,15 +12,15 @@ type PageHeaderProps = {
 
 export function PageHeader({ title, description, actions, metrics }: PageHeaderProps) {
   return (
-    <div className="mb-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="mb-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
-          {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+          <h1 className="text-2xl font-bold tracking-[-0.025em] text-slate-950 sm:text-3xl">{title}</h1>
+          {description && <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p>}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
+        {actions && <div className="flex shrink-0 flex-wrap gap-2.5">{actions}</div>}
       </div>
-      {metrics && <div className="mt-4">{metrics}</div>}
+      {metrics && <div className="mt-5">{metrics}</div>}
     </div>
   );
 }
@@ -40,17 +32,15 @@ export function SectionHeader({
 }: {
   title: string;
   action?: ReactNode;
-  /** Reserve uppercase for short eyebrow/metadata-style labels — set false
-   * for a section title that should read as normal-case hierarchy. */
   uppercase?: boolean;
 }) {
   return (
-    <div className="mb-3 flex items-center justify-between gap-3">
+    <div className="mb-4 flex items-center justify-between gap-3">
       <h2
         className={
           uppercase
-            ? "text-sm font-semibold uppercase tracking-wide text-slate-500"
-            : "text-sm font-semibold text-slate-700"
+            ? "text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400"
+            : "text-base font-semibold tracking-tight text-slate-800"
         }
       >
         {title}
@@ -60,10 +50,6 @@ export function SectionHeader({
   );
 }
 
-/** A titled group of form fields with optional helper text — the "group
- * long forms into sections" primitive. Use `collapsible` for advanced/
- * optional groups that shouldn't compete with the required fields above
- * the fold. */
 export function FormSection({
   title,
   hint,
@@ -81,17 +67,17 @@ export function FormSection({
   const showBody = !collapsible || open;
 
   return (
-    <section className="border-t border-slate-100 pt-4 first:border-t-0 first:pt-0">
+    <section className="border-t border-slate-100 pt-5 first:border-t-0 first:pt-0">
       {collapsible ? (
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="flex w-full items-center justify-between gap-3 text-left"
+          className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
         >
           <span>
-            <span className="block text-sm font-semibold text-slate-800">{title}</span>
-            {hint && <span className="mt-0.5 block text-xs text-slate-500">{hint}</span>}
+            <span className="block text-sm font-semibold text-slate-900">{title}</span>
+            {hint && <span className="mt-1 block text-xs leading-5 text-slate-500">{hint}</span>}
           </span>
           <ChevronDownIcon
             className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
@@ -99,11 +85,11 @@ export function FormSection({
         </button>
       ) : (
         <div className="mb-1">
-          <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
-          {hint && <p className="mt-0.5 text-xs text-slate-500">{hint}</p>}
+          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+          {hint && <p className="mt-1 text-xs leading-5 text-slate-500">{hint}</p>}
         </div>
       )}
-      {showBody && <div className="mt-3 space-y-3">{children}</div>}
+      {showBody && <div className="mt-4 space-y-4">{children}</div>}
     </section>
   );
 }
@@ -117,7 +103,7 @@ type MetricCardProps = {
 };
 
 const METRIC_TONE: Record<NonNullable<MetricCardProps["tone"]>, string> = {
-  default: "text-slate-900",
+  default: "text-slate-950",
   positive: "text-emerald-700",
   warning: "text-amber-700",
   danger: "text-rose-700",
@@ -125,13 +111,77 @@ const METRIC_TONE: Record<NonNullable<MetricCardProps["tone"]>, string> = {
 
 export function MetricCard({ label, value, hint, icon, tone = "default" }: MetricCardProps) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-        {icon && <span className="text-slate-400">{icon}</span>}
+    <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.045)]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">{label}</p>
+        {icon && (
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-slate-400 ring-1 ring-inset ring-slate-100">
+            {icon}
+          </span>
+        )}
       </div>
-      <p className={`mt-2 text-2xl font-bold tracking-tight ${METRIC_TONE[tone]}`}>{value}</p>
-      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+      <p className={`mt-2.5 text-2xl font-bold tracking-[-0.025em] ${METRIC_TONE[tone]}`}>{value}</p>
+      {hint && <p className="mt-1.5 text-xs leading-5 text-slate-500">{hint}</p>}
+    </div>
+  );
+}
+
+export function Panel({
+  title,
+  eyebrow,
+  action,
+  children,
+  className = "",
+}: {
+  title?: ReactNode;
+  eyebrow?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6 ${className}`}>
+      {(title || eyebrow || action) && (
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            {eyebrow && <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">{eyebrow}</p>}
+            {title && <h2 className="mt-0.5 text-base font-semibold tracking-tight text-slate-950">{title}</h2>}
+          </div>
+          {action && <div className="shrink-0">{action}</div>}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+type AlertRowTone = "warning" | "danger" | "info" | "positive";
+
+const ALERT_ROW_TONE: Record<AlertRowTone, string> = {
+  warning: "border-amber-200/80 bg-amber-50/80 text-amber-900",
+  danger: "border-rose-200/80 bg-rose-50/80 text-rose-900",
+  info: "border-sky-200/80 bg-sky-50/80 text-sky-900",
+  positive: "border-emerald-200/80 bg-emerald-50/80 text-emerald-900",
+};
+
+export function AlertRow({
+  tone = "warning",
+  icon,
+  children,
+  action,
+}: {
+  tone?: AlertRowTone;
+  icon?: ReactNode;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className={`flex min-h-11 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm ${ALERT_ROW_TONE[tone]}`}>
+      <span className="flex min-w-0 items-center gap-2.5">
+        {icon && <span className="shrink-0">{icon}</span>}
+        <span className="min-w-0 truncate font-medium">{children}</span>
+      </span>
+      {action && <span className="shrink-0">{action}</span>}
     </div>
   );
 }
@@ -147,22 +197,20 @@ export function EmptyState({
   description?: string;
   action?: ReactNode;
   icon?: ReactNode;
-  /** "compact" for a state nested inside a card/section that already has
-   * its own heading (avoids two headings + a tall dashed box stacked on
-   * top of real content elsewhere on the page); "standard" (default) for
-   * a page-level empty state. */
   size?: "compact" | "standard";
 }) {
-  const padding = size === "compact" ? "px-4 py-6" : "px-6 py-10";
-  const iconBox = size === "compact" ? "h-8 w-8" : "h-10 w-10";
+  const padding = size === "compact" ? "px-5 py-7" : "px-6 py-11";
+  const iconBox = size === "compact" ? "h-10 w-10" : "h-12 w-12";
   return (
-    <div className={`rounded-xl border border-dashed border-slate-300 bg-slate-50/60 text-center ${padding}`}>
+    <div className={`rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 text-center ${padding}`}>
       {icon && (
-        <div className={`mx-auto mb-2.5 flex items-center justify-center text-slate-400 ${iconBox}`}>{icon}</div>
+        <div className={`mx-auto mb-3 flex items-center justify-center rounded-xl bg-white text-slate-400 shadow-sm ring-1 ring-slate-200/70 ${iconBox}`}>
+          {icon}
+        </div>
       )}
-      <p className="text-sm font-semibold text-slate-900">{title}</p>
-      {description && <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">{description}</p>}
-      {action && <div className="mt-4">{action}</div>}
+      <p className="text-sm font-semibold text-slate-950">{title}</p>
+      {description && <p className="mx-auto mt-1.5 max-w-sm text-sm leading-6 text-slate-500">{description}</p>}
+      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }
@@ -170,16 +218,16 @@ export function EmptyState({
 type StatusTone = "neutral" | "positive" | "warning" | "danger" | "info";
 
 const STATUS_TONE: Record<StatusTone, string> = {
-  neutral: "bg-slate-100 text-slate-700",
-  positive: "bg-emerald-50 text-emerald-700",
-  warning: "bg-amber-50 text-amber-700",
-  danger: "bg-rose-50 text-rose-700",
-  info: "bg-sky-50 text-sky-700",
+  neutral: "bg-slate-100 text-slate-700 ring-slate-200",
+  positive: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+  warning: "bg-amber-50 text-amber-700 ring-amber-100",
+  danger: "bg-rose-50 text-rose-700 ring-rose-100",
+  info: "bg-sky-50 text-sky-700 ring-sky-100",
 };
 
 export function StatusBadge({ tone = "neutral", children }: { tone?: StatusTone; children: ReactNode }) {
   return (
-    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_TONE[tone]}`}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${STATUS_TONE[tone]}`}>
       {children}
     </span>
   );
@@ -198,13 +246,13 @@ export function SearchInput({
 }) {
   return (
     <div className={`relative ${className}`}>
-      <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
       <input
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100"
+        className="min-h-11 w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3.5 text-sm text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.03)] placeholder:text-slate-400 focus:border-teal-400 focus:outline-none focus:ring-4 focus:ring-teal-100/70"
       />
     </div>
   );
@@ -212,9 +260,9 @@ export function SearchInput({
 
 export function FilterBar({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5">
+    <div className="mb-5 flex flex-wrap items-center gap-2.5 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-[0_6px_24px_rgba(15,23,42,0.035)]">
       <FilterIcon className="ml-1 h-4 w-4 shrink-0 text-slate-400" />
-      <div className="flex flex-1 flex-wrap items-center gap-2">{children}</div>
+      <div className="flex flex-1 flex-wrap items-center gap-2.5">{children}</div>
     </div>
   );
 }
@@ -229,7 +277,7 @@ export function Tabs({
   onChange: (value: string) => void;
 }) {
   return (
-    <div role="tablist" className="flex gap-1 border-b border-slate-200">
+    <div role="tablist" className="inline-flex max-w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1">
       {tabs.map((tab) => {
         const active = tab.value === value;
         return (
@@ -239,10 +287,10 @@ export function Tabs({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(tab.value)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
+            className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium transition ${
               active
-                ? "border-teal-600 text-teal-700"
-                : "border-transparent text-slate-500 hover:text-slate-800"
+                ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200/70"
+                : "text-slate-500 hover:text-slate-800"
             }`}
           >
             {tab.label}
@@ -257,21 +305,18 @@ type ButtonVariant = "primary" | "secondary" | "ghost" | "destructive" | "text";
 type ButtonSize = "sm" | "md";
 
 const BUTTON_VARIANT_CLASS: Record<ButtonVariant, string> = {
-  primary: "bg-teal-600 text-white hover:bg-teal-700",
-  secondary: "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
-  ghost: "text-slate-600 hover:bg-slate-100",
-  destructive: "bg-rose-50 text-rose-700 hover:bg-rose-100",
-  text: "text-teal-700 hover:text-teal-800 hover:underline underline-offset-2",
+  primary: "bg-teal-600 text-white shadow-sm shadow-teal-950/15 hover:bg-teal-700 hover:shadow-md hover:shadow-teal-950/15",
+  secondary: "border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950",
+  ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-950",
+  destructive: "border border-rose-100 bg-rose-50 text-rose-700 hover:bg-rose-100",
+  text: "text-teal-700 hover:text-teal-800 hover:underline underline-offset-4",
 };
 
 const BUTTON_SIZE_CLASS: Record<ButtonSize, string> = {
-  sm: "px-2.5 py-1.5 text-xs",
-  md: "px-4 py-2 text-sm",
+  sm: "min-h-9 px-3 py-1.5 text-xs",
+  md: "min-h-11 px-4.5 py-2.5 text-sm",
 };
 
-/** Standard action-button variants — one primary per context, everything
- * else secondary/ghost/text, destructive kept visually separate. Use
- * `IconButton` below for icon-only controls (always needs `label`). */
 export function Button({
   variant = "secondary",
   size = "md",
@@ -290,12 +335,12 @@ export function Button({
   className?: string;
   children?: ReactNode;
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className" | "children">) {
-  const shape = variant === "text" ? "" : "rounded-lg font-semibold";
+  const shape = variant === "text" ? "" : "rounded-xl font-semibold";
   return (
     <button
       type={type}
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center gap-1.5 transition disabled:cursor-not-allowed disabled:opacity-50 ${shape} ${
+      className={`inline-flex items-center justify-center gap-2 transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${shape} ${
         variant === "text" ? "text-sm font-medium" : BUTTON_SIZE_CLASS[size]
       } ${BUTTON_VARIANT_CLASS[variant]} ${className}`}
       {...rest}
@@ -306,8 +351,6 @@ export function Button({
   );
 }
 
-/** Icon-only control — always requires an accessible `label` (rendered as
- * both `aria-label` and a native tooltip via `title`). */
 export function IconButton({
   icon,
   label,
@@ -328,7 +371,7 @@ export function IconButton({
       title={label}
       onClick={onClick}
       disabled={disabled}
-      className={`flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     >
       {icon}
     </button>
@@ -370,14 +413,14 @@ export function ActionMenu({ items, label = "Actions" }: { items: ActionMenuItem
         aria-expanded={open}
         aria-label={label}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+        className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
       >
         <MoreIcon className="h-4.5 w-4.5" />
       </button>
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+          className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.14)]"
         >
           {items.map((item) => (
             <button
@@ -389,10 +432,10 @@ export function ActionMenu({ items, label = "Actions" }: { items: ActionMenuItem
                 setOpen(false);
                 item.onSelect();
               }}
-              className={`block w-full px-3 py-2 text-left text-sm disabled:opacity-40 ${
+              className={`block w-full px-3.5 py-2.5 text-left text-sm transition disabled:opacity-40 ${
                 item.tone === "danger"
                   ? "text-rose-600 hover:bg-rose-50"
-                  : "text-slate-700 hover:bg-slate-50"
+                  : "text-slate-700 hover:bg-slate-50 hover:text-slate-950"
               }`}
             >
               {item.label}

@@ -20,6 +20,8 @@ import {
   CostingIcon,
   ExpenseIcon,
   ReportsIcon,
+  LayersIcon,
+  InboxIcon,
   type IconProps,
 } from "@/components/ui/icons";
 
@@ -30,6 +32,9 @@ export const NAV_ICON_BY_HREF: Record<string, (props: IconProps) => React.ReactE
   "/bills": BillsIcon,
   "/customers": CustomersIcon,
   "/stock": StockIcon,
+  "/stock/advanced": LayersIcon,
+  "/stock/advanced/queue": InboxIcon,
+  "/stock/advanced/returns": AssetIcon,
   "/suppliers": SuppliersIcon,
   "/vehicles": VehiclesIcon,
   "/jobs": JobsIcon,
@@ -40,6 +45,7 @@ export const NAV_ICON_BY_HREF: Record<string, (props: IconProps) => React.ReactE
   "/banking": BankingIcon,
   "/vat": VatIcon,
   "/expenses": ExpenseIcon,
+  "/returns": BillsIcon,
   "/job-costing": CostingIcon,
   "/reports": ReportsIcon,
   "/settings/team": TeamIcon,

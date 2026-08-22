@@ -3840,3 +3840,75 @@ setup, same reasoning applied to every other DOM-touching function
 left untested elsewhere in this codebase). `tsc --noEmit` clean,
 `eslint src` clean, `next build` succeeds with the same route list
 throughout every commit on this branch.
+
+---
+
+## Global Premium UI Phase (branch `claude/global-premium-ui`, stacked on PR #78)
+
+Full audit-first design-system convergence across the whole product —
+sidebar, buttons, cards, tables, dashboard, AC Jobs, Job Detail Drawer,
+the 12 remaining `pro-shell.tsx` pages, login/auth, and the landing
+page — plus responsive/accessibility cleanup. Branched from PR #78's
+head (`7d66103`), not `main`, since PR #78 (HVAC job-parts/materials)
+was still open/unmerged and this phase's own brief touches the exact
+same AC Jobs/Job Detail/Parts surfaces PR #78 built — documented in
+`docs/UI_ROUTE_INVENTORY.md` so that work was never at risk of being
+silently lost.
+
+Full findings, token system, and per-stage detail live in
+`docs/DESIGN_SYSTEM_CONVERGENCE.md` (13 sections) and
+`docs/UI_ROUTE_INVENTORY.md`. Summary:
+
+- **Stage 1** — converged `pro-shell.tsx`'s heavy components
+  (`ProButton`/`ProCard`/`ProStatCard`/`ProPageHeader`/`ProBadge`/
+  `ProEmptyState`) to `primitives.tsx`'s calmer token scale, same prop
+  APIs, so all 12 still-heavy pages got the lighter look at once. Added
+  `Panel`/`AlertRow` primitives for the card taxonomy.
+- **Stage 2** — sidebar/mobile-nav account block gained an avatar-
+  initials badge (new `initialsFor()` helper, tested); form control
+  height corrected to the 40-44px target across every shared input.
+- **Stage 3** — Dashboard (Amount column, avatar badges), AC Jobs
+  (reminders banner rebuilt onto `AlertRow`, reminder settings moved
+  into a Dialog instead of sitting inline, Invoice reachable from the
+  card menu and list rows), Job Detail Drawer width corrected to a
+  viewport-relative 52% (was a fixed 896px, past the 48-55% target on
+  common laptop widths).
+- **Stage 4** — removed every remaining production emoji icon (the 6
+  pages Phase A had flagged, plus a `SectorTemplate.icon` emoji
+  rendered in 6 different places across the app, plus a redundant
+  second hardcoded-emoji field found in passing); mechanical font-
+  weight/radius/shadow convergence across the 12 `pro-shell` pages
+  (288 + 24 occurrences).
+- **Stage 5** — fixed the exact `/login` bug this phase's brief
+  described: a `<SignedInBanner>` with no timer/auto-redirect sitting
+  indefinitely above the full sign-in form. Now a compact "already
+  signed in" card, form hidden entirely in that state.
+- **Stage 6** — discovered the live landing page renders
+  `marketing-home-page.tsx`, not the `src/components/landing/*` files
+  Phase A's own audit described editing (confirmed dead code, never
+  imported) — fixed the real file: token convergence, one deliberate
+  gradient instead of six scattered ones, and a plans section that now
+  reads real pricing from `lib/subscription/plans.ts` instead of a
+  second hardcoded copy that could have silently drifted.
+- **Stage 7** — added the reduced-motion support that didn't exist
+  anywhere in the codebase; corrected `Button`'s default touch-target
+  height; found and fixed one genuine invisible-keyboard-focus bug
+  (sales page's cart quantity stepper).
+- **Stage 8** (this entry) — zero route files added/removed/renamed
+  since the branch's fork point (`git diff --name-status` against
+  `7d66103`, filtered to `src/app`, is empty); zero touches to any
+  business-logic, RLS, migration, or role/permission file for the
+  whole phase (also empty diffs, checked directly, not assumed).
+
+No browser exists in this sandbox (the same standing constraint
+disclosed throughout this entire engagement) — every visual/responsive/
+accessibility finding above is code-level review (computed classnames,
+structure, breakpoints, actual built HTML output), never a claimed
+screenshot.
+
+Tests: 89/89 passing throughout (added in the HVAC phase that
+preceded this one; no new pure logic in this UI-only phase to add
+tests for). `tsc --noEmit` clean, `eslint src` clean (same 3
+pre-existing warnings this whole engagement has carried, unrelated to
+any branch here), `next build` succeeds with the same 41-route list on
+every commit.

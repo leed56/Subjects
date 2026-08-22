@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
+import { AdvancedSaleSelector, type AdvancedSaleLineState } from "@/components/sales/advanced-sale-selector";
 import {
   ProBadge,
   ProButton,
@@ -15,14 +16,17 @@ import {
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { LK_BANKS } from "@/lib/banks";
+import { SalesIcon, BillsIcon, CostingIcon } from "@/components/ui/icons";
 import { formatLkr } from "@/lib/format";
 import { buildQuoteTextFromLines, whatsappShareUrl } from "@/lib/invoice";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
+import { buildSaleInventoryAllocationLine } from "@/lib/inventory-sale-allocation";
 import { splitInclusiveTotal } from "@/lib/vat";
 import { customerPrimaryLabel } from "@/lib/contact-type";
 import { effectiveUnitPrice, wholesalePriceFor } from "@/lib/company-pricing";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { allocateSaleInventory } from "@/lib/supabase/sale-inventory-client";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -30,14 +34,19 @@ import type { PaymentMethod, ProductCondition } from "@/lib/types";
 
 type ConditionFilter = "all" | ProductCondition;
 
+const ADVANCED_POS_SECTORS = new Set(["pharmacy", "mobile_shop", "electronics", "footwear"]);
+
 export default function SalesPage() {
   const { data, ready, createSaleToCloud } = useAppStore();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { org, can, canSeeFinancials } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
+  const si = locale === "si";
   const showAcBuyerPanel = org.sector === "ac_hvac" && can("ac_jobs");
+  const advancedPosEnabled = ADVANCED_POS_SECTORS.has(org.sector);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
+  const [inventoryStates, setInventoryStates] = useState<Record<string, AdvancedSaleLineState>>({});
   const [search, setSearch] = useState("");
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
   const [discount, setDiscount] = useState(0);
@@ -80,6 +89,10 @@ export default function SalesPage() {
   const billVat = vatEnabled ? splitInclusiveTotal(netTotal) : null;
   const changeDue = cashReceived === "" ? 0 : Math.max(0, Number(cashReceived) - netTotal);
   const cartCount = lines.reduce((s, l) => s + l.qty, 0);
+  const advancedInventoryBlocked = advancedPosEnabled && lines.some((line) => {
+    const state = inventoryStates[line.product.id];
+    return !state || state.loading || !state.ready;
+  });
 
   if (!ready || !data) {
     return (
@@ -113,6 +126,14 @@ export default function SalesPage() {
   const setQty = (id: string, qty: number, max: number) => {
     const clamped = Math.max(0, Math.min(max, Number.isFinite(qty) ? qty : 0));
     setCart((c) => ({ ...c, [id]: clamped }));
+    if (clamped <= 0) {
+      setInventoryStates((current) => {
+        if (!current[id]) return current;
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+    }
   };
 
   const setOverride = (id: string, value: number) => {
@@ -129,6 +150,7 @@ export default function SalesPage() {
   const resetAfterSale = () => {
     setCart({});
     setPriceOverrides({});
+    setInventoryStates({});
     setWalkInName("");
     setBuyerPhone("");
     setBuyerAddress("");
@@ -160,6 +182,14 @@ export default function SalesPage() {
 
   const handleSale = async () => {
     if (saving || lines.length === 0) return;
+    if (advancedInventoryBlocked) {
+      setMessage(
+        si
+          ? "Checkout කිරීමට පෙර batch / variant / IMEI තේරීම් සම්පූර්ණ කරන්න."
+          : "Complete the batch, variant or IMEI selection before checkout.",
+      );
+      return;
+    }
     if (payment === "credit" && !customerId) {
       setMessage(t("sales.credit_need_customer"));
       return;
@@ -193,6 +223,26 @@ export default function SalesPage() {
       }
     }
 
+    const inventoryAllocationLines = [];
+    if (advancedPosEnabled) {
+      try {
+        for (const line of lines) {
+          const state = inventoryStates[line.product.id];
+          if (!state || state.degraded || state.mode === "simple") continue;
+          const allocation = buildSaleInventoryAllocationLine(
+            line.product.id,
+            line.qty,
+            state.mode,
+            state.selection,
+          );
+          if (allocation) inventoryAllocationLines.push(allocation);
+        }
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Inventory selection is incomplete.");
+        return;
+      }
+    }
+
     setSaving(true);
     setMessage("");
     const result = await createSaleToCloud(
@@ -216,14 +266,35 @@ export default function SalesPage() {
         postDated: payment === "cheque" ? postDated : undefined,
       },
     );
-    setSaving(false);
 
     if (!result.ok || !result.saleId) {
+      setSaving(false);
       setMessage(result.error ?? t("sales.failed"));
       return;
     }
 
     const saleId = result.saleId;
+    if (inventoryAllocationLines.length > 0 && org.id) {
+      const allocationResult = await allocateSaleInventory(
+        org.id,
+        saleId,
+        customerId || undefined,
+        inventoryAllocationLines,
+      );
+      if (!allocationResult.ok) {
+        setSaving(false);
+        resetAfterSale();
+        setLastBillId(saleId);
+        setMessage(
+          si
+            ? `විකිණීම සුරැකුණා. නමුත් exact batch/IMEI allocation එක සම්පූර්ණ නොවීය: ${allocationResult.error ?? "Unknown error"}. Inventory Control තුළ reconcile කරන්න.`
+            : `Sale saved, but the exact batch/IMEI allocation could not be completed: ${allocationResult.error ?? "Unknown error"}. Reconcile it in Inventory Control.`,
+        );
+        return;
+      }
+    }
+
+    setSaving(false);
     resetAfterSale();
     setLastBillId(saleId);
     const savedCustomer = showAcBuyerPanel && addToCustomers && !customerId;
@@ -280,7 +351,7 @@ export default function SalesPage() {
           <div className="mb-5 rounded-[1.25rem] border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900 shadow-sm">
             {message}
             {lastBillId && (
-              <Link href={`/bills/${lastBillId}`} className="ml-2 font-black underline">
+              <Link href={`/bills/${lastBillId}`} className="ml-2 font-bold underline">
                 {t("sales.view_bill")}
               </Link>
             )}
@@ -288,9 +359,9 @@ export default function SalesPage() {
         )}
 
         <section className="grid gap-4 sm:grid-cols-3">
-          <ProStatCard label={t("sales.cart_items")} value={String(cartCount)} hint={lines.length ? `${lines.length} ${t("sales.product_lines")}` : t("sales.no_selected")} icon="🛒" tone="teal" />
-          <ProStatCard label={t("sales.gross")} value={formatLkr(gross)} hint={discountClamped > 0 ? `${t("sales.discount")} ${formatLkr(discountClamped)}` : t("sales.before_discount")} icon="🧾" tone="slate" />
-          <ProStatCard label={t("common.total")} value={formatLkr(netTotal)} hint={paymentLabel(t, payment)} icon="💸" tone="emerald" />
+          <ProStatCard label={t("sales.cart_items")} value={String(cartCount)} hint={lines.length ? `${lines.length} ${t("sales.product_lines")}` : t("sales.no_selected")} icon={<SalesIcon className="h-5 w-5" />} tone="teal" />
+          <ProStatCard label={t("sales.gross")} value={formatLkr(gross)} hint={discountClamped > 0 ? `${t("sales.discount")} ${formatLkr(discountClamped)}` : t("sales.before_discount")} icon={<BillsIcon className="h-5 w-5" />} tone="slate" />
+          <ProStatCard label={t("common.total")} value={formatLkr(netTotal)} hint={paymentLabel(t, payment)} icon={<CostingIcon className="h-5 w-5" />} tone="emerald" />
         </section>
 
         {inStock.length === 0 ? (
@@ -333,7 +404,7 @@ export default function SalesPage() {
                       key={tab.id}
                       type="button"
                       onClick={() => setConditionFilter(tab.id)}
-                      className={`rounded-xl px-3 py-1.5 text-xs font-black transition ${
+                      className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${
                         conditionFilter === tab.id
                           ? "bg-teal-600 text-white"
                           : "bg-slate-100 text-slate-600 hover:bg-teal-50"
@@ -373,7 +444,7 @@ export default function SalesPage() {
                     return (
                       <article
                         key={p.id}
-                        className={`rounded-[1.5rem] border bg-white p-4 shadow-lg shadow-slate-950/5 ring-1 transition ${
+                        className={`rounded-xl border bg-white p-4 shadow-lg shadow-slate-950/5 ring-1 transition ${
                           selected
                             ? "border-teal-200 ring-teal-100"
                             : "border-white ring-slate-200/60 hover:-translate-y-0.5 hover:border-teal-100 hover:ring-teal-100"
@@ -382,7 +453,7 @@ export default function SalesPage() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <h2 className="truncate text-sm font-black text-slate-950">{p.name}</h2>
+                              <h2 className="truncate text-sm font-bold text-slate-950">{p.name}</h2>
                               <ProductConditionBadge condition={p.condition} />
                               {selected && <ProBadge tone="teal">In cart</ProBadge>}
                             </div>
@@ -396,15 +467,15 @@ export default function SalesPage() {
                                 <p className="text-xs font-semibold text-slate-400 line-through">
                                   {formatLkr(p.sellPrice)}
                                 </p>
-                                <p className="text-sm font-black text-teal-700">
+                                <p className="text-sm font-bold text-teal-700">
                                   {formatLkr(unitPrice)}
                                 </p>
-                                <p className="text-[10px] font-black uppercase tracking-wide text-teal-600">
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-teal-600">
                                   {t("sales.wholesale_price")}
                                 </p>
                               </>
                             ) : (
-                              <p className="text-sm font-black text-slate-950">
+                              <p className="text-sm font-bold text-slate-950">
                                 {formatLkr(unitPrice)}
                               </p>
                             )}
@@ -416,7 +487,7 @@ export default function SalesPage() {
                           <div className="flex items-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
                             <button
                               onClick={() => setQty(p.id, qty - 1, p.stockQty)}
-                              className="flex h-11 w-11 items-center justify-center text-xl font-black text-slate-600 transition hover:bg-white"
+                              className="flex h-11 w-11 items-center justify-center text-xl font-bold text-slate-600 transition hover:bg-white focus:z-10 focus:bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-teal-400"
                             >
                               −
                             </button>
@@ -427,16 +498,16 @@ export default function SalesPage() {
                               step="any"
                               value={qty || ""}
                               onChange={(e) => setQty(p.id, Number(e.target.value), p.stockQty)}
-                              className="h-11 w-16 border-x border-slate-200 bg-white text-center text-sm font-black text-slate-950 outline-none"
+                              className="h-11 w-16 border-x border-slate-200 bg-white text-center text-sm font-bold text-slate-950 outline-none focus:z-10 focus:ring-2 focus:ring-inset focus:ring-teal-400"
                             />
                             <button
                               onClick={() => setQty(p.id, qty + 1, p.stockQty)}
-                              className="flex h-11 w-11 items-center justify-center text-xl font-black text-teal-700 transition hover:bg-white"
+                              className="flex h-11 w-11 items-center justify-center text-xl font-bold text-teal-700 transition hover:bg-white focus:z-10 focus:bg-white focus:outline-none focus:ring-2 focus:ring-inset focus:ring-teal-400"
                             >
                               +
                             </button>
                           </div>
-                          <p className="text-right text-sm font-black text-teal-700">
+                          <p className="text-right text-sm font-bold text-teal-700">
                             {formatLkr(unitPrice * qty)}
                           </p>
                         </div>
@@ -453,15 +524,15 @@ export default function SalesPage() {
                   {lines.length === 0 ? (
                     <ProEmptyState title={t("sales.no_selected")} description={t("sales.choose_products_desc")} />
                   ) : (
-                    <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                    <div className="max-h-[30rem] space-y-3 overflow-y-auto pr-1">
                       {lines.map((l) => (
                         <div key={l.product.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                           <div className="flex justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-black text-slate-950">{l.product.name}</p>
+                              <p className="truncate text-sm font-bold text-slate-950">{l.product.name}</p>
                               <p className="text-xs font-bold text-slate-500">× {l.qty}</p>
                             </div>
-                            <p className="shrink-0 font-mono text-sm font-black text-slate-950">{formatLkr(l.unitPrice * l.qty)}</p>
+                            <p className="shrink-0 font-mono text-sm font-bold text-slate-950">{formatLkr(l.unitPrice * l.qty)}</p>
                           </div>
                           <label className="mt-3 flex items-center justify-between gap-2 text-xs font-bold text-slate-500">
                             {t("sales.unit_price")}
@@ -471,9 +542,22 @@ export default function SalesPage() {
                               step="any"
                               value={l.unitPrice}
                               onChange={(e) => setOverride(l.product.id, Number(e.target.value))}
-                              className="w-28 rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-right text-xs font-black text-slate-700 outline-none focus:border-teal-300"
+                              className="w-28 rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-right text-xs font-bold text-slate-700 outline-none focus:border-teal-300"
                             />
                           </label>
+                          {advancedPosEnabled && (
+                            <AdvancedSaleSelector
+                              productId={l.product.id}
+                              qty={l.qty}
+                              value={inventoryStates[l.product.id]?.selection}
+                              onChange={(next) =>
+                                setInventoryStates((current) => ({
+                                  ...current,
+                                  [l.product.id]: next,
+                                }))
+                              }
+                            />
+                          )}
                         </div>
                       ))}
                     </div>
@@ -483,7 +567,7 @@ export default function SalesPage() {
                 <div className="mt-5 space-y-3 border-t border-slate-200 pt-5 text-sm font-semibold text-slate-600">
                   <div className="flex justify-between">
                     <span>{t("sales.gross")}</span>
-                    <span className="font-mono font-black text-slate-950">{formatLkr(gross)}</span>
+                    <span className="font-mono font-bold text-slate-950">{formatLkr(gross)}</span>
                   </div>
                   <label className="flex items-center justify-between gap-2">
                     <span>{t("sales.discount")}</span>
@@ -494,7 +578,7 @@ export default function SalesPage() {
                       value={discount || ""}
                       onChange={(e) => setDiscount(Number(e.target.value))}
                       placeholder="0"
-                      className="w-32 rounded-xl border border-slate-200 bg-white px-3 py-2 text-right text-sm font-black text-slate-900 outline-none focus:border-teal-300"
+                      className="w-32 rounded-xl border border-slate-200 bg-white px-3 py-2 text-right text-sm font-bold text-slate-900 outline-none focus:border-teal-300"
                     />
                   </label>
                   {billVat && (
@@ -505,19 +589,19 @@ export default function SalesPage() {
                       </div>
                       <div className="mt-2 flex justify-between text-teal-300">
                         <span>{t("vat.output_vat")} (18%)</span>
-                        <span className="font-mono font-black">{formatLkr(billVat.vat)}</span>
+                        <span className="font-mono font-bold">{formatLkr(billVat.vat)}</span>
                       </div>
                     </div>
                   )}
                 </div>
 
                 <div className="mt-5 rounded-[1.25rem] bg-gradient-to-br from-teal-600 to-emerald-600 p-4 text-white shadow-lg shadow-teal-700/20">
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-100">{t("common.total")}</p>
-                  <p className="mt-1 text-3xl font-black tracking-tight">{formatLkr(netTotal)}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-100">{t("common.total")}</p>
+                  <p className="mt-1 text-3xl font-bold tracking-tight">{formatLkr(netTotal)}</p>
                 </div>
 
                 <div className="mt-5 space-y-4">
-                  <label className="block text-sm font-black text-slate-700">
+                  <label className="block text-sm font-bold text-slate-700">
                     {t("common.customer")}
                     <select
                       value={customerId}
@@ -547,7 +631,7 @@ export default function SalesPage() {
                   </label>
 
                   {!customerId && (
-                    <label className="block text-sm font-black text-slate-700">
+                    <label className="block text-sm font-bold text-slate-700">
                       {showAcBuyerPanel ? t("common.customer") : t("sales.walkin_name")}
                       <input
                         value={walkInName}
@@ -559,10 +643,10 @@ export default function SalesPage() {
 
                   {showAcBuyerPanel && lines.length > 0 && (
                     <div className="rounded-2xl border border-sky-100 bg-sky-50/80 p-4">
-                      <p className="text-sm font-black text-sky-950">{t("sales.ac_buyer_title")}</p>
+                      <p className="text-sm font-bold text-sky-950">{t("sales.ac_buyer_title")}</p>
                       <p className="mt-1 text-xs font-semibold text-sky-800/80">{t("sales.ac_buyer_hint")}</p>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                        <label className="block text-xs font-black text-sky-900">
+                        <label className="block text-xs font-bold text-sky-900">
                           {t("sales.buyer_phone")}
                           <input
                             value={buyerPhone}
@@ -570,7 +654,7 @@ export default function SalesPage() {
                             className="mt-1 h-11 w-full rounded-xl border border-sky-100 bg-white px-3 text-sm font-semibold outline-none focus:border-teal-300"
                           />
                         </label>
-                        <label className="block text-xs font-black text-sky-900 sm:col-span-2">
+                        <label className="block text-xs font-bold text-sky-900 sm:col-span-2">
                           {t("sales.buyer_address")}
                           <input
                             value={buyerAddress}
@@ -605,7 +689,7 @@ export default function SalesPage() {
                   )}
 
                   {!showAcBuyerPanel && !customerId && (
-                    <label className="block text-sm font-black text-slate-700">
+                    <label className="block text-sm font-bold text-slate-700">
                       {t("sales.walkin_name")}
                       <input
                         value={walkInName}
@@ -616,14 +700,14 @@ export default function SalesPage() {
                   )}
 
                   <div>
-                    <p className="text-sm font-black text-slate-700">{t("common.payment")}</p>
+                    <p className="text-sm font-bold text-slate-700">{t("common.payment")}</p>
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       {PAYMENT_OPTIONS.map((m) => (
                         <button
                           key={m}
                           type="button"
                           onClick={() => setPayment(m)}
-                          className={`rounded-2xl border px-3 py-3 text-sm font-black transition ${
+                          className={`rounded-2xl border px-3 py-3 text-sm font-bold transition ${
                             payment === m
                               ? "border-teal-200 bg-teal-50 text-teal-800 ring-4 ring-teal-100"
                               : "border-slate-200 bg-white text-slate-600 hover:border-teal-200"
@@ -637,7 +721,7 @@ export default function SalesPage() {
 
                   {payment === "cash" && netTotal > 0 && (
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <label className="flex items-center justify-between gap-2 text-sm font-black text-slate-700">
+                      <label className="flex items-center justify-between gap-2 text-sm font-bold text-slate-700">
                         <span>{t("sales.cash_received")}</span>
                         <input
                           type="number"
@@ -645,11 +729,11 @@ export default function SalesPage() {
                           step="any"
                           value={cashReceived}
                           onChange={(e) => setCashReceived(e.target.value === "" ? "" : Number(e.target.value))}
-                          className="w-32 rounded-xl border border-slate-200 bg-white px-3 py-2 text-right text-sm font-black text-slate-900 outline-none focus:border-teal-300"
+                          className="w-32 rounded-xl border border-slate-200 bg-white px-3 py-2 text-right text-sm font-bold text-slate-900 outline-none focus:border-teal-300"
                         />
                       </label>
                       {cashReceived !== "" && (
-                        <div className="mt-3 flex items-center justify-between text-sm font-black text-teal-800">
+                        <div className="mt-3 flex items-center justify-between text-sm font-bold text-teal-800">
                           <span>{t("sales.change_due")}</span>
                           <span className="font-mono">{formatLkr(changeDue)}</span>
                         </div>
@@ -696,19 +780,19 @@ export default function SalesPage() {
                       href={quoteWaUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex w-full items-center justify-center rounded-2xl border border-green-600 bg-green-50 py-3 text-sm font-black text-green-800 transition hover:bg-green-100"
+                      className="flex w-full items-center justify-center rounded-2xl border border-green-600 bg-green-50 py-3 text-sm font-bold text-green-800 transition hover:bg-green-100"
                     >
                       {t("bills.quote_whatsapp")}
                     </a>
                   )}
 
                   <button
-                    disabled={lines.length === 0 || !canWrite || saving}
-                    title={!canWrite ? (disabledHint ?? undefined) : undefined}
+                    disabled={lines.length === 0 || !canWrite || saving || advancedInventoryBlocked}
+                    title={!canWrite ? (disabledHint ?? undefined) : advancedInventoryBlocked ? (si ? "Batch / variant / IMEI තේරීම සම්පූර්ණ කරන්න" : "Complete inventory identity selection") : undefined}
                     onClick={() => void handleSale()}
-                    className="w-full rounded-2xl bg-teal-600 py-4 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="w-full rounded-2xl bg-teal-600 py-4 text-sm font-bold text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {saving ? t("common.saving") : t("sales.complete")}
+                    {saving ? t("common.saving") : advancedInventoryBlocked ? (si ? "තොග හඳුනාගැනීම අවශ්‍යයි" : "Inventory selection required") : t("sales.complete")}
                   </button>
                 </div>
               </ProCard>
@@ -721,7 +805,7 @@ export default function SalesPage() {
             <ProCard title={t("sales.recent")} action={<ProBadge tone="slate">Latest 10</ProBadge>}>
               <div className="hidden overflow-hidden rounded-2xl border border-slate-200 md:block">
                 <table className="w-full text-left text-sm">
-                  <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+                  <thead className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
                     <tr>
                       <th className="px-4 py-3">{t("common.date")}</th>
                       <th className="px-4 py-3">{t("common.customer")}</th>
@@ -735,14 +819,14 @@ export default function SalesPage() {
                     {data.sales.slice(0, 10).map((s) => (
                       <tr key={s.id} className="border-b last:border-0">
                         <td className="px-4 py-3 font-semibold text-slate-600">{new Date(s.date).toLocaleString("en-LK")}</td>
-                        <td className="px-4 py-3 font-black text-slate-900">{s.customerName || "—"}</td>
+                        <td className="px-4 py-3 font-bold text-slate-900">{s.customerName || "—"}</td>
                         <td className="px-4 py-3"><ProBadge tone="slate">{paymentLabel(t, s.paymentMethod)}</ProBadge></td>
-                        <td className="px-4 py-3 font-mono font-black text-slate-900">{formatLkr(s.total)}</td>
+                        <td className="px-4 py-3 font-mono font-bold text-slate-900">{formatLkr(s.total)}</td>
                         {canSeeFinancials && (
-                          <td className="px-4 py-3 font-mono font-black text-teal-700">{formatLkr(s.profit)}</td>
+                          <td className="px-4 py-3 font-mono font-bold text-teal-700">{formatLkr(s.profit)}</td>
                         )}
                         <td className="px-4 py-3 text-right">
-                          <Link href={`/bills/${s.id}`} className="font-black text-teal-700 hover:underline">{t("sales.bill")}</Link>
+                          <Link href={`/bills/${s.id}`} className="font-bold text-teal-700 hover:underline">{t("sales.bill")}</Link>
                         </td>
                       </tr>
                     ))}
@@ -755,14 +839,14 @@ export default function SalesPage() {
                   <Link key={s.id} href={`/bills/${s.id}`} className="block rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-black text-slate-950">{s.customerName || t("sales.walk_in_label")}</p>
+                        <p className="font-bold text-slate-950">{s.customerName || t("sales.walk_in_label")}</p>
                         <p className="mt-1 text-xs font-semibold text-slate-500">{new Date(s.date).toLocaleString("en-LK")}</p>
                       </div>
                       <ProBadge tone="slate">{paymentLabel(t, s.paymentMethod)}</ProBadge>
                     </div>
                     <div className="mt-3 flex items-end justify-between">
-                      <p className="font-mono text-lg font-black text-slate-950">{formatLkr(s.total)}</p>
-                      <p className="text-xs font-black text-teal-700">{t("sales.bill")} →</p>
+                      <p className="font-mono text-lg font-bold text-slate-950">{formatLkr(s.total)}</p>
+                      <p className="text-xs font-bold text-teal-700">{t("sales.bill")} →</p>
                     </div>
                   </Link>
                 ))}
@@ -773,18 +857,18 @@ export default function SalesPage() {
       </ProMain>
 
       {lines.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 shadow-2xl shadow-slate-950/20 backdrop-blur-xl safe-area-pb xl:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 shadow-sm shadow-slate-950/20 backdrop-blur-xl safe-area-pb xl:hidden">
           <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-black uppercase tracking-wide text-slate-400">{cartCount} items</p>
-              <p className="text-lg font-black text-slate-950">{formatLkr(netTotal)}</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{cartCount} items</p>
+              <p className="text-lg font-bold text-slate-950">{formatLkr(netTotal)}</p>
             </div>
             <button
-              disabled={!canWrite || saving}
+              disabled={!canWrite || saving || advancedInventoryBlocked}
               onClick={() => void handleSale()}
-              className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {saving ? t("common.saving") : t("sales.complete")}
+              {saving ? t("common.saving") : advancedInventoryBlocked ? (si ? "තොග තේරීම" : "Select stock") : t("sales.complete")}
             </button>
           </div>
         </div>

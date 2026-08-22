@@ -12,6 +12,7 @@ import {
   ProPageHeader,
   ProStatCard,
 } from "@/components/ui/pro-shell";
+import { VehiclesIcon, CostingIcon, ReportsIcon, AlertTriangleIcon } from "@/components/ui/icons";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
@@ -171,7 +172,7 @@ export default function VehiclesPage() {
                   resetForm();
                   setShowForm((v) => !v);
                 }}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {showForm ? t("common.hide_form") : t("veh.add")}
               </button>
@@ -188,10 +189,10 @@ export default function VehiclesPage() {
         )}
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("veh.for_sale")} value={String(forSale.length)} hint={t("veh.for_sale_count")} icon="🚗" tone="teal" />
-          <ProStatCard label={t("common.cost")} value={formatLkr(stockCost)} hint="Current showroom stock" icon="🏷️" tone="blue" />
-          <ProStatCard label={t("common.profit")} value={formatLkr(potentialProfit)} hint="Potential on asking price" icon="📈" tone="emerald" />
-          <ProStatCard label={t("veh.aging")} value={String(agingCount)} hint="60+ days in yard" icon="⚠️" tone={agingCount ? "amber" : "slate"} />
+          <ProStatCard label={t("veh.for_sale")} value={String(forSale.length)} hint={t("veh.for_sale_count")} icon={<VehiclesIcon className="h-5 w-5" />} tone="teal" />
+          <ProStatCard label={t("common.cost")} value={formatLkr(stockCost)} hint="Current showroom stock" icon={<CostingIcon className="h-5 w-5" />} tone="blue" />
+          <ProStatCard label={t("common.profit")} value={formatLkr(potentialProfit)} hint="Potential on asking price" icon={<ReportsIcon className="h-5 w-5" />} tone="emerald" />
+          <ProStatCard label={t("veh.aging")} value={String(agingCount)} hint="60+ days in yard" icon={<AlertTriangleIcon className="h-5 w-5" />} tone={agingCount ? "amber" : "slate"} />
         </section>
 
         {showForm && (
@@ -282,22 +283,22 @@ export default function VehiclesPage() {
                 <div className="mt-5 rounded-[1.25rem] bg-slate-950 p-4 text-white">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t("veh.total_cost")}</p>
-                      <p className="mt-1 font-mono text-xl font-black text-white">{formatLkr(currentCost)}</p>
+                      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("veh.total_cost")}</p>
+                      <p className="mt-1 font-mono text-xl font-bold text-white">{formatLkr(currentCost)}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t("veh.est_profit")}</p>
-                      <p className="mt-1 font-mono text-xl font-black text-teal-300">{formatLkr(askPrice - currentCost)}</p>
+                      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("veh.est_profit")}</p>
+                      <p className="mt-1 font-mono text-xl font-bold text-teal-300">{formatLkr(askPrice - currentCost)}</p>
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button type="submit" disabled={!canWrite || savingVehicle} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  <button type="submit" disabled={!canWrite || savingVehicle} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
                     {savingVehicle ? t("common.saving") : editing ? t("common.update") : t("veh.add")}
                   </button>
                   {editing && (
-                    <button type="button" onClick={resetForm} disabled={savingVehicle} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                    <button type="button" onClick={resetForm} disabled={savingVehicle} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                       {t("common.cancel")}
                     </button>
                   )}
@@ -314,7 +315,7 @@ export default function VehiclesPage() {
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
-                  className={`rounded-full px-3 py-2 text-xs font-black transition ${filter === f ? "bg-teal-600 text-white shadow-lg shadow-teal-700/20" : "border border-slate-200 bg-white text-slate-700 hover:border-teal-200"}`}
+                  className={`rounded-full px-3 py-2 text-xs font-bold transition ${filter === f ? "bg-teal-600 text-white shadow-lg shadow-teal-700/20" : "border border-slate-200 bg-white text-slate-700 hover:border-teal-200"}`}
                 >
                   {vehStatusLabel(f)}
                 </button>
@@ -337,7 +338,7 @@ export default function VehiclesPage() {
                         resetForm();
                         setShowForm(true);
                       }}
-                      className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20"
+                      className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-700/20"
                     >
                       {t("veh.add")}
                     </button>
@@ -397,11 +398,11 @@ export default function VehiclesPage() {
 
         {sellId && sellVehicleRecord && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+            <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-white/80 bg-white p-5 shadow-sm shadow-slate-950/20">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">{t("veh.sell")}</p>
-                  <h3 className="mt-2 text-xl font-black text-slate-950">
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-600">{t("veh.sell")}</p>
+                  <h3 className="mt-2 text-xl font-bold text-slate-950">
                     {sellVehicleRecord.make} {sellVehicleRecord.model}
                   </h3>
                   <p className="mt-1 text-sm font-semibold text-slate-500">{sellVehicleRecord.stockId} · {sellVehicleRecord.chassisNo}</p>
@@ -409,22 +410,22 @@ export default function VehiclesPage() {
                 <button onClick={() => setSellId(null)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
               </div>
               <div className="mt-5 space-y-3">
-                <input type="number" placeholder={t("veh.sell_price")} value={sellPrice || ""} onChange={(e) => setSellPrice(Number(e.target.value))} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                <select value={sellCustomerId} onChange={(e) => setSellCustomerId(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                <input type="number" placeholder={t("veh.sell_price")} value={sellPrice || ""} onChange={(e) => setSellPrice(Number(e.target.value))} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                <select value={sellCustomerId} onChange={(e) => setSellCustomerId(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
                   <option value="">{t("jobs.customer_opt")}</option>
                   {data.customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
-                {!sellCustomerId && <input placeholder={t("veh.buyer_name")} value={sellCustomerName} onChange={(e) => setSellCustomerName(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />}
-                <select value={sellPayment} onChange={(e) => setSellPayment(e.target.value as PaymentMethod)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                {!sellCustomerId && <input placeholder={t("veh.buyer_name")} value={sellCustomerName} onChange={(e) => setSellCustomerName(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />}
+                <select value={sellPayment} onChange={(e) => setSellPayment(e.target.value as PaymentMethod)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
                   {PAYMENT_OPTIONS.map((m) => <option key={m} value={m}>{paymentLabel(t, m)}</option>)}
                 </select>
-                <select value={financePartner} onChange={(e) => setFinancePartner(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                <select value={financePartner} onChange={(e) => setFinancePartner(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
                   {FINANCE_PARTNERS.map((f) => <option key={f}>{f}</option>)}
                 </select>
               </div>
               <div className="mt-5 rounded-2xl bg-slate-950 p-4 text-white">
-                <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t("common.profit")}</p>
-                <p className="mt-1 font-mono text-2xl font-black text-teal-300">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("common.profit")}</p>
+                <p className="mt-1 font-mono text-2xl font-bold text-teal-300">
                   {formatLkr(sellPrice - vehicleTotalCost(sellVehicleRecord.purchasePrice, sellVehicleRecord.reconditionCost))}
                 </p>
               </div>
@@ -458,11 +459,11 @@ export default function VehiclesPage() {
                     setTimeout(() => setMessage(""), 3000);
                   }}
                   disabled={savingSale}
-                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {savingSale ? t("common.saving") : t("veh.confirm_sale")}
                 </button>
-                <button onClick={() => setSellId(null)} disabled={savingSale} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                <button onClick={() => setSellId(null)} disabled={savingSale} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                   {t("common.cancel")}
                 </button>
               </div>
@@ -504,8 +505,8 @@ function VehicleCard({
       <div className="bg-gradient-to-br from-slate-950 to-slate-800 p-5 text-white">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="font-mono text-xs font-black uppercase tracking-wide text-teal-300">{vehicle.stockId} · {vehicle.chassisNo}</p>
-            <h2 className="mt-2 truncate text-xl font-black tracking-tight">
+            <p className="font-mono text-xs font-bold uppercase tracking-wide text-teal-300">{vehicle.stockId} · {vehicle.chassisNo}</p>
+            <h2 className="mt-2 truncate text-xl font-bold tracking-tight">
               {vehicle.make} {vehicle.model} {vehicle.year}
             </h2>
             <p className="mt-1 text-sm font-semibold text-slate-400">
@@ -519,25 +520,25 @@ function VehicleCard({
       <div className="p-5">
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-2xl bg-slate-50 p-3">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t("common.cost")}</p>
-            <p className="mt-1 font-mono text-sm font-black text-slate-950">{formatLkr(cost)}</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("common.cost")}</p>
+            <p className="mt-1 font-mono text-sm font-bold text-slate-950">{formatLkr(cost)}</p>
           </div>
           <div className="rounded-2xl bg-slate-50 p-3">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-400">{vehicle.status === "sold" ? t("veh.sold_price") : t("veh.ask")}</p>
-            <p className="mt-1 font-mono text-sm font-black text-teal-700">{formatLkr(vehicle.status === "sold" ? vehicle.soldPrice ?? 0 : vehicle.askPrice)}</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{vehicle.status === "sold" ? t("veh.sold_price") : t("veh.ask")}</p>
+            <p className="mt-1 font-mono text-sm font-bold text-teal-700">{formatLkr(vehicle.status === "sold" ? vehicle.soldPrice ?? 0 : vehicle.askPrice)}</p>
           </div>
           <div className="rounded-2xl bg-slate-50 p-3">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t("common.profit")}</p>
-            <p className="mt-1 font-mono text-sm font-black text-emerald-700">{formatLkr(profit)}</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("common.profit")}</p>
+            <p className="mt-1 font-mono text-sm font-bold text-emerald-700">{formatLkr(profit)}</p>
           </div>
           <div className="rounded-2xl bg-slate-50 p-3">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t("veh.days_stock")}</p>
-            <p className="mt-1 font-mono text-sm font-black text-slate-950">{vehicle.status === "sold" ? "—" : days}</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("veh.days_stock")}</p>
+            <p className="mt-1 font-mono text-sm font-bold text-slate-950">{vehicle.status === "sold" ? "—" : days}</p>
           </div>
         </div>
 
         {aging && vehicle.status === "for_sale" && (
-          <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-xs font-black text-amber-800">
+          <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-xs font-bold text-amber-800">
             {aging} {t("veh.in_yard")}
           </div>
         )}
@@ -551,21 +552,21 @@ function VehicleCard({
 
         {vehicle.status !== "sold" && (
           <div className="mt-4 flex flex-wrap gap-2">
-            <button onClick={onEdit} className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700 hover:bg-teal-100">{t("common.edit")}</button>
+            <button onClick={onEdit} className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-700 hover:bg-teal-100">{t("common.edit")}</button>
             {vehicle.status !== "for_sale" && (
               <button
                 onClick={() => void onListForSale()}
                 disabled={updating}
-                className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
               >
                 {updating ? t("common.saving") : t("veh.list_sale")}
               </button>
             )}
-            {vehicle.status === "for_sale" && <button onClick={onSell} className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700 hover:bg-emerald-100">{t("veh.sell")}</button>}
+            {vehicle.status === "for_sale" && <button onClick={onSell} className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100">{t("veh.sell")}</button>}
             <button
               onClick={() => void onDelete()}
               disabled={deleting}
-              className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+              className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
             >
               {deleting ? t("common.saving") : t("common.delete")}
             </button>

@@ -115,10 +115,10 @@ export default function PlansPage() {
 
           <ProCard title={t("sub.plans_current_eyebrow")} eyebrow={t("sub.current_plan")}>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
                 {planName}
               </p>
-              <p className="mt-2 text-3xl font-black text-slate-950">
+              <p className="mt-2 text-3xl font-bold text-slate-950">
                 {formatLkrPrice(currentPrice)}
               </p>
               <p className="mt-1 text-sm font-semibold text-slate-500">
@@ -164,12 +164,12 @@ export default function PlansPage() {
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-lg font-black text-slate-950">{name}</p>
+                      <p className="text-lg font-bold text-slate-950">{name}</p>
                       {plan.id === subscription.planId && (
                         <ProBadge tone="teal">{t("sub.plans_current_badge")}</ProBadge>
                       )}
                     </div>
-                    <p className="mt-2 font-mono text-xl font-black text-teal-700">
+                    <p className="mt-2 font-mono text-xl font-bold text-teal-700">
                       {formatLkrPrice(monthly)}
                       <span className="text-sm font-semibold text-slate-500">
                         /{t("sub.month")}
@@ -200,10 +200,10 @@ export default function PlansPage() {
                     key={addon.id}
                     className="rounded-2xl border border-slate-200 bg-white p-4 text-sm"
                   >
-                    <p className="font-black text-slate-950">
+                    <p className="font-bold text-slate-950">
                       {locale === "si" ? addon.nameSi : addon.nameEn}
                     </p>
-                    <p className="mt-1 font-mono font-black text-teal-700">
+                    <p className="mt-1 font-mono font-bold text-teal-700">
                       {formatLkrPrice(addon.priceMonthlyLkr)}/{t("sub.month")}
                     </p>
                     <p className="mt-2 text-xs font-semibold text-slate-500">

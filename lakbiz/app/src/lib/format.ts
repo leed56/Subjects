@@ -2,6 +2,29 @@ export function formatLkr(amount: number): string {
   return `Rs. ${amount.toLocaleString("en-LK", { maximumFractionDigits: 0 })}`;
 }
 
+/** Global premium UI phase — Part 4/9's "avatar initials, no profile
+ * photography required": 1-2 uppercase letters for a compact avatar
+ * badge. Prefers the first letter of up to two words in `name` (an org
+ * name or a technician's name — "LakBiz Cooling" -> "LC", "Nimal" -> "N");
+ * falls back to the first letter of `fallback` (typically an email) when
+ * `name` is empty, so the badge shows a real initial whenever one is
+ * available; "?" only appears when neither `name` nor `fallback` has
+ * anything to derive from at all — an honest "unknown," not a guess. */
+export function initialsFor(name: string | null | undefined, fallback?: string | null): string {
+  const source = (name ?? "").trim();
+  if (source) {
+    const letters = source
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0]?.toUpperCase() ?? "")
+      .join("");
+    if (letters) return letters;
+  }
+  const fb = (fallback ?? "").trim();
+  return fb ? fb[0].toUpperCase() : "?";
+}
+
 const ONES = [
   "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight",
   "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen",

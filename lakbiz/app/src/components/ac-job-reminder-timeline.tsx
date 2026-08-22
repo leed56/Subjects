@@ -22,9 +22,9 @@ function statusIcon(status: ReminderTimelineEntry["status"]): string {
     case "sent":
       return "✓";
     case "due_today":
-      return "●";
+      return "•";
     case "missed":
-      return "✕";
+      return "×";
     default:
       return "○";
   }
@@ -33,14 +33,20 @@ function statusIcon(status: ReminderTimelineEntry["status"]): string {
 function statusClass(status: ReminderTimelineEntry["status"]): string {
   switch (status) {
     case "sent":
-      return "text-emerald-700 bg-emerald-50 border-emerald-200";
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "due_today":
-      return "text-amber-900 bg-amber-50 border-amber-300";
+      return "border-amber-200 bg-amber-50 text-amber-800";
     case "missed":
-      return "text-red-700 bg-red-50 border-red-200";
+      return "border-rose-200 bg-rose-50 text-rose-700";
     default:
-      return "text-slate-600 bg-slate-50 border-slate-200";
+      return "border-slate-200 bg-white text-slate-500";
   }
+}
+
+function reminderLabel(entry: ReminderTimelineEntry, t: (key: string) => string): string {
+  return entry.daysBefore === 0
+    ? t("msg.remind_day_of")
+    : t("msg.remind_days_before").replace("{{days}}", String(entry.daysBefore));
 }
 
 export function AcJobReminderTimeline({
@@ -54,23 +60,17 @@ export function AcJobReminderTimeline({
 
   if (!job.serviceDueDate) return null;
 
-  const timeline = buildReminderTimeline(
-    job.serviceDueDate,
-    settings,
-    logs,
-    job.id,
-  );
+  const timeline = buildReminderTimeline(job.serviceDueDate, settings, logs, job.id);
   const next = nextReminderEntry(timeline);
 
+  // On job cards this is status metadata, not a second panel. Keep it quiet
+  // so the customer, equipment and financial data remain the visual focus.
   if (!settings.autoSendServiceDueSms) {
     return (
-      <div className="mt-2 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-        <span className="font-medium">{t("jobs.reminders_off_short")}</span>
-        {job.phone && (
-          <span className="ml-2 text-slate-500">
-            · {t("jobs.whatsapp_manual")}
-          </span>
-        )}
+      <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-slate-400">
+        <span className="h-1.5 w-1.5 rounded-full bg-slate-300" aria-hidden="true" />
+        <span>{t("jobs.reminders_off_short")}</span>
+        {job.phone && <span>· {t("jobs.whatsapp_manual")}</span>}
       </div>
     );
   }
@@ -78,53 +78,22 @@ export function AcJobReminderTimeline({
   if (timeline.length === 0) return null;
 
   return (
-    <div
-      className={`mt-2 rounded-lg border border-sky-100 bg-sky-50/80 ${compact ? "px-2.5 py-2" : "px-3 py-2.5"}`}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-sky-900">
-          📅 {t("jobs.reminder_timeline")}
-        </p>
-        {next && (
-          <span className="text-[10px] font-medium text-sky-800">
-            {t("jobs.next_sms")}: {next.remindOn}
-          </span>
-        )}
-      </div>
-
-      <ul className={`mt-2 space-y-1 ${compact ? "text-[11px]" : "text-xs"}`}>
-        {timeline.map((entry) => (
-          <li
-            key={`${job.id}-${entry.daysBefore}`}
-            className={`flex items-center justify-between gap-2 rounded-md border px-2 py-1 ${statusClass(entry.status)}`}
-          >
-            <span className="font-medium">
-              {statusIcon(entry.status)}{" "}
-              {entry.daysBefore === 0
-                ? t("msg.remind_day_of")
-                : t("msg.remind_days_before").replace(
-                    "{{days}}",
-                    String(entry.daysBefore),
-                  )}
-            </span>
-            <span className="tabular-nums">{entry.remindOn}</span>
-            <span className="shrink-0 text-[10px] uppercase opacity-80">
-              {entry.status === "sent"
-                ? t("jobs.reminder_sent")
-                : entry.status === "due_today"
-                  ? t("jobs.reminder_today")
-                  : entry.status === "missed"
-                    ? t("jobs.reminder_missed")
-                    : t("jobs.reminder_pending")}
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      {job.phone && (
-        <p className="mt-2 text-[10px] text-slate-500">
-          SMS {t("jobs.reminder_auto")} · {t("jobs.whatsapp_manual")}
-        </p>
+    <div className={`mt-3 flex flex-wrap items-center gap-1.5 ${compact ? "text-[10px]" : "text-[11px]"}`}>
+      <span className="mr-0.5 font-semibold text-slate-500">SMS</span>
+      {timeline.map((entry) => (
+        <span
+          key={`${job.id}-${entry.daysBefore}`}
+          title={`${reminderLabel(entry, t)} · ${entry.remindOn}`}
+          className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 font-semibold ${statusClass(entry.status)}`}
+        >
+          <span aria-hidden="true">{statusIcon(entry.status)}</span>
+          <span>{entry.daysBefore === 0 ? t("msg.remind_day_of") : `${entry.daysBefore}d`}</span>
+        </span>
+      ))}
+      {next && (
+        <span className="ml-0.5 text-slate-400">
+          {t("jobs.next_sms")}: <span className="tabular-nums text-slate-500">{next.remindOn}</span>
+        </span>
       )}
     </div>
   );

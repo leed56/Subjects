@@ -11,6 +11,11 @@ export type VatQuarterBounds = {
   key: string;
 };
 
+export type VatReturnAdjustment = {
+  issuedAt: string;
+  outputVatReversal: number;
+};
+
 /** Split VAT-inclusive retail total into ex-VAT subtotal + output VAT */
 export function splitInclusiveTotal(inclusiveTotal: number): {
   subtotal: number;
@@ -107,7 +112,11 @@ export function isDateInQuarter(isoDate: string, bounds: VatQuarterBounds): bool
 
 export type VatQuarterSummary = {
   bounds: VatQuarterBounds;
+  /** Net output VAT after issued return credit notes in the quarter. */
   outputVat: number;
+  outputVatBeforeReturns: number;
+  returnVatReversal: number;
+  creditNoteCount: number;
   inputVat: number;
   netPayable: number;
   salesCount: number;
@@ -115,9 +124,15 @@ export type VatQuarterSummary = {
   enabled: boolean;
 };
 
+/**
+ * VAT is recognized from invoices and reduced only once the return has an
+ * issued credit note. Physical return intake by itself is deliberately not an
+ * accounting event; callers pass cloud credit-note adjustments explicitly.
+ */
 export function getVatQuarterSummary(
   data: AppData,
   refDate = new Date(),
+  returnAdjustments: VatReturnAdjustment[] = [],
 ): VatQuarterSummary {
   const enabled = isVatEnabled(data.business);
   const fiscalStart = data.business.quarterStartMonth ?? 4;
@@ -129,11 +144,19 @@ export function getVatQuarterSummary(
   const quarterPurchases = data.purchases.filter((p) =>
     isDateInQuarter(p.date, bounds),
   );
+  const quarterCreditNotes = returnAdjustments.filter((adjustment) =>
+    isDateInQuarter(adjustment.issuedAt, bounds),
+  );
 
-  const outputVat = quarterSales.reduce((sum, s) => {
+  const outputVatBeforeReturns = quarterSales.reduce((sum, s) => {
     if (s.outputVat != null) return sum + s.outputVat;
     return sum + splitInclusiveTotal(s.total).vat;
   }, 0);
+  const returnVatReversal = quarterCreditNotes.reduce(
+    (sum, adjustment) => sum + Math.max(0, adjustment.outputVatReversal),
+    0,
+  );
+  const outputVat = outputVatBeforeReturns - returnVatReversal;
 
   const inputVat = quarterPurchases.reduce((sum, p) => {
     if (p.inputVat != null) return sum + p.inputVat;
@@ -143,6 +166,9 @@ export function getVatQuarterSummary(
   return {
     bounds,
     outputVat,
+    outputVatBeforeReturns,
+    returnVatReversal,
+    creditNoteCount: quarterCreditNotes.length,
     inputVat,
     netPayable: outputVat - inputVat,
     salesCount: quarterSales.length,

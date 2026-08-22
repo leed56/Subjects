@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { SectorIcon } from "@/components/sector-icon";
 import type { SectorTemplate } from "@/lib/types";
 
 const ACCENTS: Record<string, string> = {
@@ -28,9 +29,9 @@ export function SectorCard({ sector }: SectorCardProps) {
       className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-teal-200 hover:shadow-lg hover:shadow-teal-500/10 active:scale-[0.99] sm:p-6"
     >
       <div
-        className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl text-xl ${accent} shadow-sm transition-transform duration-300 group-hover:scale-105`}
+        className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl ${accent} shadow-sm transition-transform duration-300 group-hover:scale-105`}
       >
-        {sector.icon}
+        <SectorIcon sectorId={sector.id} className="h-6 w-6" />
       </div>
       <h3 className="text-base font-semibold tracking-tight text-slate-900 sm:text-lg">
         {name}
