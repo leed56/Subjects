@@ -1,20 +1,22 @@
 /**
- * Shared navigation model for the authenticated shop shell (Phase 1).
- *
- * Single source of truth for both the desktop Sidebar and the mobile nav —
- * previously each of the app's 16 shop/settings pages independently rendered
- * <SiteHeader /> with its own inline nav array. Grouping follows the target
- * structure in the product spec, trimmed to routes that actually exist today
- * (no "Invoices"/"Payments"/"Installations"/"AC Assets"/"Schedule" — those
- * are later-phase pages; adding them here would produce dead links).
+ * Shared navigation model for the authenticated shop shell.
+ * Desktop and mobile consume the same structure so routes, role gates and
+ * sector-specific workspaces cannot drift apart.
  */
 import type { FeatureKey } from "@/lib/subscription/types";
+import type { SectorId } from "@/lib/types";
 
 export type NavItem = {
   href: string;
-  labelKey: string;
+  /** Normal translated label. Optional when a sector-specific direct label is supplied. */
+  labelKey?: string;
+  /** Direct labels are useful for new vertical workspaces without forcing a giant translation-file edit. */
+  labelEn?: string;
+  labelSi?: string;
   /** Feature gate key, if this route is plan/addon-gated (see ROUTE_FEATURES). */
   feature?: FeatureKey;
+  /** Show this navigation item only for these provisioned business sectors. */
+  sectorOnly?: SectorId[];
 };
 
 export type NavSection = {
@@ -40,6 +42,12 @@ export const NAV_SECTIONS: NavSection[] = [
     labelKey: "nav.section.inventory",
     items: [
       { href: "/stock", labelKey: "nav.stock" },
+      {
+        href: "/stock/advanced",
+        labelEn: "Inventory control",
+        labelSi: "උසස් තොග පාලනය",
+        sectorOnly: ["pharmacy", "electronics", "mobile_shop", "footwear"],
+      },
       { href: "/suppliers", labelKey: "nav.suppliers", feature: "suppliers" },
       { href: "/vehicles", labelKey: "nav.vehicles", feature: "vehicles" },
     ],
