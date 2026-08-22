@@ -81,6 +81,13 @@ export const NAV_SECTIONS: NavSection[] = [
     labelKey: "nav.section.finance",
     items: [
       { href: "/banking", labelKey: "nav.banking", feature: "banking" },
+      {
+        href: "/banking/pos-routing",
+        labelEn: "POS payment routing",
+        labelSi: "POS ගෙවීම් මාර්ගය",
+        feature: "banking",
+        roleOnly: ["owner"],
+      },
       { href: "/vat", labelKey: "nav.vat" },
       { href: "/expenses", labelKey: "expenses.title" },
       {
