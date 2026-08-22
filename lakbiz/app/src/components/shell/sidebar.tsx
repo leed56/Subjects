@@ -11,7 +11,13 @@ import { SettingsIcon, SignOutIcon } from "@/components/ui/icons";
 import { initialsFor } from "@/lib/format";
 import type { NavItem } from "@/lib/nav-sections";
 
-function NavLink({ item, active, t }: { item: NavItem; active: boolean; t: (key: string) => string }) {
+function navLabel(item: NavItem, locale: "si" | "en", t: (key: string) => string): string {
+  if (locale === "si" && item.labelSi) return item.labelSi;
+  if (locale === "en" && item.labelEn) return item.labelEn;
+  return item.labelKey ? t(item.labelKey) : item.labelEn ?? item.labelSi ?? item.href;
+}
+
+function NavLink({ item, active, locale, t }: { item: NavItem; active: boolean; locale: "si" | "en"; t: (key: string) => string }) {
   const Icon = NAV_ICON_BY_HREF[item.href] ?? SettingsIcon;
   return (
     <Link
@@ -30,7 +36,7 @@ function NavLink({ item, active, t }: { item: NavItem; active: boolean; t: (key:
       >
         <Icon className="h-4.5 w-4.5" />
       </span>
-      <span className="truncate font-sinhala">{t(item.labelKey)}</span>
+      <span className="truncate font-sinhala">{navLabel(item, locale, t)}</span>
       {active && <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-teal-300" />}
     </Link>
   );
@@ -40,7 +46,7 @@ function NavLink({ item, active, t }: { item: NavItem; active: boolean; t: (key:
  * brand anchor and quiet inactive states so the content remains primary. */
 export function Sidebar() {
   const pathname = usePathname();
-  const { t } = useLocale();
+  const { locale, t } = useLocale();
   const { user, logout } = useAuth();
   const { isPlatformAdmin, org } = useSubscription();
   const { sections, managementItems } = useShopNav();
@@ -80,6 +86,7 @@ export function Sidebar() {
                   key={item.href}
                   item={item}
                   active={pathname === item.href || pathname.startsWith(`${item.href}/`)}
+                  locale={locale}
                   t={t}
                 />
               ))}
@@ -94,7 +101,7 @@ export function Sidebar() {
             </p>
             <div className="space-y-1">
               {managementItems.map((item) => (
-                <NavLink key={item.href} item={item} active={pathname === item.href} t={t} />
+                <NavLink key={item.href} item={item} active={pathname === item.href} locale={locale} t={t} />
               ))}
             </div>
           </div>
