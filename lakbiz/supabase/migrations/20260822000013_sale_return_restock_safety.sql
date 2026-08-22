@@ -28,7 +28,7 @@ begin
     return new;
   end if;
 
-  select o.sector_id into v_sector
+  select o.sector into v_sector
   from public.organizations o
   where o.id = new.organization_id;
 
