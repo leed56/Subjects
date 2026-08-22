@@ -13,8 +13,14 @@ import { MenuIcon, CloseIcon, SettingsIcon, SignOutIcon } from "@/components/ui/
 import { initialsFor } from "@/lib/format";
 import type { NavItem } from "@/lib/nav-sections";
 
+function navLabel(item: NavItem, locale: "si" | "en", t: (key: string) => string): string {
+  if (locale === "si" && item.labelSi) return item.labelSi;
+  if (locale === "en" && item.labelEn) return item.labelEn;
+  return item.labelKey ? t(item.labelKey) : item.labelEn ?? item.labelSi ?? item.href;
+}
+
 /** Mobile top bar + slide-out nav drawer — generous touch targets and the
- * same calm hierarchy as the desktop rail without duplicating navigation. */
+ * same hierarchy and sector-aware navigation as the desktop rail. */
 export function MobileNav() {
   const pathname = usePathname();
   const { locale, setLocale, t } = useLocale();
@@ -61,7 +67,7 @@ export function MobileNav() {
         >
           <Icon className="h-5 w-5" />
         </span>
-        <span className="font-sinhala">{t(item.labelKey)}</span>
+        <span className="font-sinhala">{navLabel(item, locale, t)}</span>
       </Link>
     );
   };
