@@ -143,6 +143,14 @@ export function SaleReturnHistory({ saleId }: Props) {
                 {creditNote && <span className="rounded-full bg-teal-50 px-2 py-1 text-teal-700">VAT / revenue reversed</span>}
                 {orgRole === "owner" && (
                   <div className="ml-auto flex flex-wrap items-center gap-1.5 no-print">
+                    {creditNote && isUnsettled(item.settlementStatus) && (
+                      <Link
+                        href={`/bills/${saleId}/returns/${item.id}/exchange`}
+                        className="rounded-lg bg-slate-950 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm transition hover:bg-slate-800"
+                      >
+                        {si ? "Exchange" : "Exchange"}
+                      </Link>
+                    )}
                     {creditNote && (
                       <Link
                         href={`/bills/${saleId}/returns/${item.id}/credit-note`}
