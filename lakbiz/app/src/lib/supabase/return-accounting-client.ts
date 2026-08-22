@@ -4,6 +4,7 @@ import { createBrowserClient } from "@/lib/supabase/client";
 
 export type ReturnAccountingAdjustment = {
   creditNoteId: string;
+  creditNoteNo: string;
   returnId: string;
   saleId: string;
   issuedAt: string;
@@ -43,7 +44,7 @@ export async function fetchOrgReturnAccountingAdjustments(
   const noteResult = await supabase
     .from("sale_credit_notes")
     .select(
-      "id, return_id, sale_id, issued_at, gross_credit, output_vat_reversal, net_revenue_reversal",
+      "id, credit_note_no, return_id, sale_id, issued_at, gross_credit, output_vat_reversal, net_revenue_reversal",
     )
     .eq("organization_id", organizationId)
     .order("issued_at", { ascending: true });
@@ -52,6 +53,7 @@ export async function fetchOrgReturnAccountingAdjustments(
 
   const base: ReturnAccountingAdjustment[] = (noteResult.data ?? []).map((row) => ({
     creditNoteId: String(row.id),
+    creditNoteNo: String(row.credit_note_no ?? row.id),
     returnId: String(row.return_id),
     saleId: String(row.sale_id),
     issuedAt: String(row.issued_at),
