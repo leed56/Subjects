@@ -1,10 +1,10 @@
 -- LakBiz controlled customer-return intake.
 --
 -- This phase deliberately separates PHYSICAL RETURN from FINANCIAL SETTLEMENT.
--- A return can restore inspected merchandise to inventory (including the exact
--- variant/batch/IMEI identity) or hold it out of sellable stock, while the
--- original invoice, VAT, customer balance, cash/bank and cheque records remain
--- unchanged until a later explicit credit-note/refund settlement workflow.
+-- A return puts the physical item back under shop control, but it becomes
+-- sellable again only when the operator explicitly marks it suitable for
+-- restock. The original invoice, VAT, customer balance, cash/bank and cheque
+-- records remain unchanged until a later explicit credit-note/refund workflow.
 --
 -- Why this split matters:
 --   * a returned item is not the same event as paying money back;
@@ -17,9 +17,6 @@
 -- The return document is append-only. The original sale and original sale
 -- allocations remain immutable historical records.
 
--- Stock audit gains one explicit movement kind for merchandise that is actually
--- restored to aggregate sellable/on-hand stock. Non-restocked returns do not
--- write stock_logs because Product.stock_qty does not change for them.
 alter table public.stock_logs drop constraint if exists stock_logs_log_type_check;
 alter table public.stock_logs add constraint stock_logs_log_type_check
   check (log_type in (
@@ -70,6 +67,31 @@ create index if not exists sale_return_lines_original_allocation_idx
   on public.sale_return_lines(original_allocation_id)
   where original_allocation_id is not null;
 
+-- Returned merchandise that is physically back on hand but NOT approved for
+-- resale sits here. This is especially important for pharmacy and for devices
+-- awaiting inspection. The hold counts toward physical identity coverage but
+-- is never considered POS-available inventory.
+create table if not exists public.inventory_return_holds (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  return_id uuid not null references public.sale_returns(id) on delete restrict,
+  return_line_id uuid not null references public.sale_return_lines(id) on delete restrict,
+  product_id text not null references public.products_base(id) on delete restrict,
+  variant_id uuid references public.product_variants(id) on delete set null,
+  lot_id uuid references public.inventory_lots(id) on delete set null,
+  unit_id uuid references public.inventory_units(id) on delete set null,
+  qty numeric(14, 3) not null check (qty > 0),
+  disposition text not null default 'inspection'
+    check (disposition in ('inspection', 'quarantine', 'damaged')),
+  released_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists inventory_return_holds_org_product_idx
+  on public.inventory_return_holds(organization_id, product_id)
+  where released_at is null;
+create index if not exists inventory_return_holds_return_idx
+  on public.inventory_return_holds(return_id);
+
 -- COGS/profit reversal is internal owner-only finance. It is physically split
 -- from the operational return rows, matching the advanced-inventory cost model.
 create table if not exists public.sale_return_financials (
@@ -84,10 +106,12 @@ create index if not exists sale_return_financials_org_idx
 
 alter table public.sale_returns enable row level security;
 alter table public.sale_return_lines enable row level security;
+alter table public.inventory_return_holds enable row level security;
 alter table public.sale_return_financials enable row level security;
 
--- Return documents/lines contain customer-facing sale values, not hidden buy
--- cost. Any member of the organization may read them for traceability.
+-- Return documents/lines/holds contain operational or customer-facing values,
+-- not hidden buy cost. Any member of the organization may read them for
+-- traceability.
 drop policy if exists sale_returns_select_org on public.sale_returns;
 create policy sale_returns_select_org on public.sale_returns
 for select to authenticated using (
@@ -104,18 +128,28 @@ for select to authenticated using (
   )
 );
 
+drop policy if exists inventory_return_holds_select_org on public.inventory_return_holds;
+create policy inventory_return_holds_select_org on public.inventory_return_holds
+for select to authenticated using (
+  organization_id in (
+    select organization_id from public.org_members where user_id = auth.uid()
+  )
+);
+
 -- Profit/COGS reversals remain owner-only.
 drop policy if exists sale_return_financials_select_owner on public.sale_return_financials;
 create policy sale_return_financials_select_owner on public.sale_return_financials
 for select to authenticated using (public.can_see_org_financials(organization_id));
 
--- Direct clients cannot fabricate/edit/delete return history. Trusted workflow
--- RPCs below are SECURITY DEFINER and append the audit atomically.
+-- Direct clients cannot fabricate/edit/delete return history or release a hold.
+-- Trusted workflow RPCs are SECURITY DEFINER and own those transitions.
 revoke insert, update, delete on public.sale_returns from authenticated;
 revoke insert, update, delete on public.sale_return_lines from authenticated;
+revoke insert, update, delete on public.inventory_return_holds from authenticated;
 revoke insert, update, delete on public.sale_return_financials from authenticated;
 grant select on public.sale_returns to authenticated;
 grant select on public.sale_return_lines to authenticated;
+grant select on public.inventory_return_holds to authenticated;
 grant select on public.sale_return_financials to authenticated;
 
 create or replace function public.process_sale_return(
@@ -157,7 +191,7 @@ declare
   v_total_value numeric(14,2) := 0;
   v_total_vat numeric(14,2) := 0;
   v_total_cogs numeric(14,2) := 0;
-  v_total_restocked numeric(14,3) := 0;
+  v_total_resellable numeric(14,3) := 0;
   v_return_line_id uuid;
   v_is_owner boolean;
 begin
@@ -214,8 +248,6 @@ begin
     raise exception 'sale not found' using errcode = 'P0002';
   end if;
 
-  -- The request may contain each invoice line at most once. This keeps return
-  -- quantity accounting deterministic and makes the UI payload easy to audit.
   if exists (
     select 1
     from (
@@ -307,12 +339,19 @@ begin
       and a.reference_id = p_sale_id
       and a.product_id = v_sale_line.product_id;
 
-    -- When a historical advanced sale has exact identity allocations, returning
-    -- it must name those allocations. If a legacy sale predates identity
-    -- allocation, a non-restocked return is still allowed, but restocking into
-    -- advanced stock without knowing the original identity is rejected.
+    -- Simple stock has no identity layer that can safely hide a returned item
+    -- from POS. Until a dedicated simple-stock inspection hold is wired into
+    -- POS availability, a simple item can only be accepted here when it has
+    -- passed inspection and is explicitly restored to sellable stock.
+    if v_mode = 'simple' and not v_restock then
+      raise exception 'simple-stock returns must be approved for restock in this phase' using errcode = '23514';
+    end if;
+
+    -- An advanced legacy sale can be accepted into a non-sellable hold even if
+    -- it predates exact allocation history, but it cannot be put back on sale
+    -- without knowing the original identity.
     if v_mode <> 'simple' and v_sale_alloc_count = 0 and v_restock then
-      raise exception 'exact inventory identity is unavailable for this legacy sale; record it as non-restocked' using errcode = '23514';
+      raise exception 'exact inventory identity is unavailable for this legacy sale; keep it on return hold' using errcode = '23514';
     end if;
 
     if v_mode <> 'simple' and v_sale_alloc_count > 0 then
@@ -328,7 +367,20 @@ begin
       if v_alloc_sum <> v_requested_qty then
         raise exception 'selected identity quantity must equal returned quantity' using errcode = '23514';
       end if;
+    end if;
 
+    -- Aggregate Product.stock_qty is the physical on-hand ledger. A customer
+    -- return is physically back on hand whether or not it is approved for
+    -- resale. Increase aggregate FIRST so the identity-registration guards can
+    -- safely accept a variant/lot/unit restoration later in this transaction.
+    update public.products_base
+    set stock_qty = stock_qty + v_requested_qty,
+        updated_at = now()
+    where id = v_sale_line.product_id
+      and organization_id = p_organization_id;
+    if not found then raise exception 'product not found' using errcode = 'P0002'; end if;
+
+    if v_mode <> 'simple' and v_sale_alloc_count > 0 then
       for v_alloc_json in select value from jsonb_array_elements(v_line->'allocations')
       loop
         v_alloc_id := (v_alloc_json->>'allocation_id')::uuid;
@@ -445,13 +497,25 @@ begin
           v_original_alloc.unit_id, 'return', p_return_id::text, v_alloc_qty
         );
 
+        if not v_restock then
+          insert into public.inventory_return_holds (
+            organization_id, return_id, return_line_id, product_id,
+            variant_id, lot_id, unit_id, qty, disposition
+          ) values (
+            p_organization_id, p_return_id, v_return_line_id,
+            v_sale_line.product_id, v_original_alloc.variant_id,
+            v_original_alloc.lot_id, v_original_alloc.unit_id,
+            v_alloc_qty, 'inspection'
+          );
+        end if;
+
         v_total_value := v_total_value + v_piece_value;
         v_total_vat := v_total_vat + v_piece_vat;
         v_total_cogs := v_total_cogs + v_piece_cogs;
       end loop;
     else
-      -- Simple inventory (or an advanced legacy sale with no historical
-      -- allocation and explicitly NOT restocked) is represented by one line.
+      -- Simple inventory, or an advanced legacy sale with no historical exact
+      -- allocation. Advanced legacy returns reach this branch only as a hold.
       v_piece_value := round(v_sale_line.unit_price * v_requested_qty * v_sale_factor, 2);
       v_piece_vat := round(v_piece_value * v_vat_ratio, 2);
       v_piece_cogs := round(v_sale_line.buy_price * v_requested_qty, 2);
@@ -464,7 +528,7 @@ begin
         p_return_id, p_organization_id, p_sale_id, v_line_order,
         v_sale_line.product_id, v_sale_line.product_name, v_requested_qty,
         v_sale_line.unit_price, v_piece_value, v_piece_vat, null, v_restock
-      );
+      ) returning id into v_return_line_id;
 
       insert into public.inventory_allocations (
         organization_id, product_id, reference_type, reference_id, qty
@@ -473,34 +537,38 @@ begin
         'return', p_return_id::text, v_requested_qty
       );
 
+      if not v_restock then
+        insert into public.inventory_return_holds (
+          organization_id, return_id, return_line_id, product_id, qty, disposition
+        ) values (
+          p_organization_id, p_return_id, v_return_line_id,
+          v_sale_line.product_id, v_requested_qty, 'inspection'
+        );
+      end if;
+
       v_total_value := v_total_value + v_piece_value;
       v_total_vat := v_total_vat + v_piece_vat;
       v_total_cogs := v_total_cogs + v_piece_cogs;
     end if;
 
-    if v_restock then
-      update public.products_base
-      set stock_qty = stock_qty + v_requested_qty,
-          updated_at = now()
-      where id = v_sale_line.product_id
-        and organization_id = p_organization_id;
-      if not found then raise exception 'product not found' using errcode = 'P0002'; end if;
+    insert into public.stock_logs (
+      id, organization_id, product_id, product_name, log_type, qty,
+      note, log_date, user_id
+    ) values (
+      gen_random_uuid()::text,
+      p_organization_id,
+      v_sale_line.product_id,
+      v_sale_line.product_name,
+      'customer_return',
+      v_requested_qty,
+      'Customer return ' || v_return_no || ' · Bill ' || coalesce(v_sale.bill_no, p_sale_id)
+        || case when v_restock then ' · approved for resale' else ' · inspection hold' end,
+      now(),
+      auth.uid()
+    );
 
-      insert into public.stock_logs (
-        id, organization_id, product_id, product_name, log_type, qty,
-        note, log_date, user_id
-      ) values (
-        gen_random_uuid()::text,
-        p_organization_id,
-        v_sale_line.product_id,
-        v_sale_line.product_name,
-        'customer_return',
-        v_requested_qty,
-        'Customer return ' || v_return_no || ' · Bill ' || coalesce(v_sale.bill_no, p_sale_id),
-        now(),
-        auth.uid()
-      );
-      v_total_restocked := v_total_restocked + v_requested_qty;
+    if v_restock then
+      v_total_resellable := v_total_resellable + v_requested_qty;
     end if;
   end loop;
 
@@ -542,7 +610,7 @@ begin
     'merchandise_value', v_total_value,
     'output_vat_reversal', v_total_vat,
     'reversed_profit', case when v_is_owner then v_total_value - v_total_cogs else null end,
-    'restocked_qty', v_total_restocked,
+    'resellable_qty', v_total_resellable,
     'settlement_status', 'pending'
   );
 end;
@@ -552,10 +620,12 @@ revoke all on function public.process_sale_return(uuid, text, uuid, text, jsonb)
 grant execute on function public.process_sale_return(uuid, text, uuid, text, jsonb) to authenticated;
 
 comment on table public.sale_returns is
-  'Immutable customer merchandise-return documents. settlement_status=pending means inventory may have changed but the original sale/VAT/customer/cash/bank records have not yet been financially reversed.';
+  'Immutable customer merchandise-return documents. settlement_status=pending means inventory changed but the original sale/VAT/customer/cash/bank records have not yet been financially reversed.';
 comment on table public.sale_return_lines is
-  'Returned sale-line quantities, optionally tied to the exact original sale inventory allocation. restocked=true means Product.stock_qty and exact advanced identity were restored.';
+  'Returned sale-line quantities, optionally tied to the exact original sale inventory allocation. restocked=true means the exact identity was restored to sellable stock.';
+comment on table public.inventory_return_holds is
+  'Physical customer returns awaiting inspection/quarantine/damage disposition. Counted as on-hand but never POS-available until a trusted release workflow restores sellable identity.';
 comment on table public.sale_return_financials is
-  'Owner-only COGS/profit reversal snapshot for later credit-note/refund settlement and net reporting.';
+  'Owner-only COGS/profit reversal snapshot reserved for later explicit credit-note/refund settlement and net reporting.';
 comment on function public.process_sale_return(uuid, text, uuid, text, jsonb) is
-  'Owner/manager-controlled, idempotent physical return intake. Validates remaining sold quantity, restores exact variant/batch/IMEI only when explicitly restocked, appends immutable return allocations, and leaves financial settlement pending.';
+  'Owner/manager-controlled, idempotent physical return intake. Validates remaining sold quantity, restores aggregate on-hand, restores exact sellable variant/batch/IMEI only when explicitly approved, otherwise creates a return hold, and leaves financial settlement pending.';
