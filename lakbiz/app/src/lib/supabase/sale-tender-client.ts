@@ -40,6 +40,11 @@ export type ConfigurePosBankRouteResult = {
   error?: string;
 };
 
+export type PosBankRouteResult = {
+  bankAccountId: string | null;
+  error: string | null;
+};
+
 export function saleTenderSchemaUnavailable(error: string | null | undefined): boolean {
   const value = (error ?? "").toLowerCase();
   return (
@@ -53,6 +58,27 @@ export function saleTenderSchemaUnavailable(error: string | null | undefined): b
     value.includes("schema cache") ||
     value.includes("does not exist")
   );
+}
+
+/** Owner-only read; RLS intentionally returns no route to nonowners. */
+export async function fetchPosBankRoute(
+  organizationId: string,
+): Promise<PosBankRouteResult> {
+  const supabase = createBrowserClient();
+  if (!supabase) return { bankAccountId: null, error: "Supabase not configured" };
+  if (!organizationId) return { bankAccountId: null, error: "Organization is required" };
+
+  const { data, error } = await supabase
+    .from("pos_payment_routes")
+    .select("bank_account_id")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (error) return { bankAccountId: null, error: error.message };
+  return {
+    bankAccountId: data?.bank_account_id ? String(data.bank_account_id) : null,
+    error: null,
+  };
 }
 
 /**
