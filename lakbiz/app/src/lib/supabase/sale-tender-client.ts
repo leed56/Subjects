@@ -35,12 +35,20 @@ export type FinalizeSaleWithTendersResult = {
   error?: string;
 };
 
+export type ConfigurePosBankRouteResult = {
+  ok: boolean;
+  error?: string;
+};
+
 export function saleTenderSchemaUnavailable(error: string | null | undefined): boolean {
   const value = (error ?? "").toLowerCase();
   return (
     value.includes("sale_tenders") ||
     value.includes("sale_tender_sources") ||
+    value.includes("pos_payment_routes") ||
     value.includes("finalize_sale_with_tenders") ||
+    value.includes("finalize_sale_with_private_tenders") ||
+    value.includes("configure_pos_bank_route") ||
     value.includes("could not find the function") ||
     value.includes("schema cache") ||
     value.includes("does not exist")
@@ -48,11 +56,38 @@ export function saleTenderSchemaUnavailable(error: string | null | undefined): b
 }
 
 /**
+ * Owner-only setup for the hidden bank destination used by operational POS
+ * bank-transfer tenders. Cashier/data-entry sessions never need to receive the
+ * bank-account id or balance; the database resolves this route privately.
+ */
+export async function configurePosBankRoute(
+  organizationId: string,
+  bankAccountId: string,
+): Promise<ConfigurePosBankRouteResult> {
+  const supabase = createBrowserClient();
+  if (!supabase) return { ok: false, error: "Supabase not configured" };
+  if (!organizationId || !bankAccountId) {
+    return { ok: false, error: "Organization and bank account are required" };
+  }
+
+  const { data, error } = await supabase.rpc("configure_pos_bank_route", {
+    p_organization_id: organizationId,
+    p_bank_account_id: bankAccountId,
+  });
+
+  if (error) return { ok: false, error: error.message };
+  const row = (data ?? {}) as Record<string, unknown>;
+  return { ok: row.ok !== false };
+}
+
+/**
  * Calls the database transaction that owns the COMPLETE mixed-tender commit.
  *
- * This client is intentionally not wired into the existing Sales page yet.
- * Switching the POS before migration 00014 is deployed would split authority
- * between the legacy local-first sale path and the atomic tender transaction.
+ * Migration 00015 wraps the core 00014 finalizer so operational staff can accept
+ * bank transfer / cheque without seeing protected owner banking rows. The
+ * current Sales page remains on the legacy path until both migrations are
+ * deployed and verified on the real LakBiz database; there must never be two
+ * authorities decrementing stock or posting receivables for the same checkout.
  */
 export async function finalizeSaleWithTenders(
   organizationId: string,
@@ -66,7 +101,7 @@ export async function finalizeSaleWithTenders(
   if (!input.lines.length) return { ok: false, error: "Add at least one sale item" };
   if (!input.tenders.length) return { ok: false, error: "Add at least one payment tender" };
 
-  const { data, error } = await supabase.rpc("finalize_sale_with_tenders", {
+  const { data, error } = await supabase.rpc("finalize_sale_with_private_tenders", {
     p_organization_id: organizationId,
     p_sale_id: input.saleId,
     p_customer_id: input.customerId ?? null,
@@ -84,8 +119,15 @@ export async function finalizeSaleWithTenders(
       id: tender.id,
       kind: tender.kind,
       amount: tender.amount,
+      // bank_account_id and cheque_id are owner-only optional overrides.
+      // Operational sessions normally omit both and use the privacy-safe
+      // server route / inline cheque capture instead.
       ...(tender.bankAccountId ? { bank_account_id: tender.bankAccountId } : {}),
       ...(tender.chequeId ? { cheque_id: tender.chequeId } : {}),
+      ...(tender.chequeNo?.trim() ? { cheque_no: tender.chequeNo.trim() } : {}),
+      ...(tender.chequeBank?.trim() ? { cheque_bank: tender.chequeBank.trim() } : {}),
+      ...(tender.chequeDate ? { cheque_date: tender.chequeDate } : {}),
+      ...(tender.postDated != null ? { post_dated: tender.postDated } : {}),
       ...(tender.returnId ? { return_id: tender.returnId } : {}),
       ...(tender.note?.trim() ? { note: tender.note.trim() } : {}),
     })),
