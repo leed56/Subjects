@@ -5,6 +5,7 @@ import { AppShell } from "@/components/shell/app-shell";
 import { InvoiceView } from "@/components/invoice-view";
 import { SaleInventoryTrace } from "@/components/sales/sale-inventory-trace";
 import { SaleReturnHistory } from "@/components/sales/sale-return-history";
+import { SaleTenderBreakdown } from "@/components/sales/sale-tender-breakdown";
 import {
   ProButton,
   ProCard,
@@ -111,6 +112,7 @@ export default function BillDetailPage() {
             customerAddress={customer?.address}
             customerVatNumber={customer?.vatNumber}
           />
+          <SaleTenderBreakdown saleId={sale.id} saleTotal={sale.total} />
           <SaleInventoryTrace saleId={sale.id} />
           <SaleReturnHistory saleId={sale.id} />
         </div>
