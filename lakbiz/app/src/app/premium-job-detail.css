@@ -1,162 +1,288 @@
 /*
- * Premium Job Detail navigation + action hierarchy.
- * Scoped to the Job Sheet drawer only; other tabs/buttons across LakBiz are
- * intentionally untouched.
+ * Premium Job Detail — screenshot-driven refinement.
+ *
+ * The Job Sheet is a dense operational workspace, not a generic form.  Keep
+ * the visual treatment scoped to drawers that contain the canonical job
+ * invoice link so other LakBiz drawers do not inherit these rules.
  */
 
-[role="dialog"][aria-labelledby="drawer-title"] [role="tablist"] {
-  position: sticky;
-  top: -1rem;
-  z-index: 16;
-  display: flex;
-  width: calc(100% + 0.75rem);
-  max-width: calc(100% + 0.75rem);
-  margin-inline: -0.375rem;
-  gap: 0.35rem;
-  overflow-x: auto;
-  border: 1px solid rgba(203, 213, 225, 0.85);
-  border-radius: 1.05rem;
-  background:
-    radial-gradient(circle at 85% 0%, rgba(20, 184, 166, 0.11), transparent 45%),
-    rgba(241, 245, 249, 0.94);
-  padding: 0.38rem;
-  box-shadow:
-    0 7px 22px rgba(15, 23, 42, 0.07),
-    inset 0 1px 0 rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+:root {
+  --job-ink: #071827;
+  --job-ink-2: #0b2634;
+  --job-teal: #0d9488;
+  --job-teal-bright: #14b8a6;
+  --job-border: rgba(203, 213, 225, 0.82);
+  --job-surface: #f8fafc;
 }
 
-[role="dialog"][aria-labelledby="drawer-title"] [role="tablist"] button {
-  position: relative;
-  min-height: 2.7rem;
-  flex: 1 0 auto;
-  overflow: hidden;
-  border: 1px solid transparent;
-  border-radius: 0.82rem;
-  padding: 0.72rem 1rem 0.72rem 1.05rem;
+/* ── Job drawer shell ───────────────────────────────────────────────────── */
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"]) {
+  background: var(--job-surface);
+  border-left: 1px solid rgba(148, 163, 184, 0.28);
+  box-shadow: -26px 0 70px rgba(2, 8, 23, 0.2);
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"]) > div:first-child {
+  background:
+    radial-gradient(circle at 92% 0%, rgba(20, 184, 166, 0.12), transparent 42%),
+    linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  border-bottom-color: rgba(203, 213, 225, 0.76);
+  padding-block: 1rem;
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"]) > div:first-child h2 {
+  color: #0f172a;
+  font-size: 1.05rem;
+  font-weight: 760;
+  letter-spacing: -0.018em;
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"]) > div:first-child p {
   color: #64748b;
-  font-size: 0.78rem;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  box-shadow: none;
-  transition:
-    color 160ms ease,
-    background 160ms ease,
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    transform 160ms ease;
+  font-size: 0.82rem;
 }
 
-[role="dialog"][aria-labelledby="drawer-title"] [role="tablist"] button::before {
-  content: "";
-  display: inline-block;
-  width: 0.42rem;
-  height: 0.42rem;
-  margin-right: 0.5rem;
-  border-radius: 999px;
-  background: #cbd5e1;
-  vertical-align: 0.06rem;
-  box-shadow: 0 0 0 3px rgba(203, 213, 225, 0.22);
-  transition: background 160ms ease, box-shadow 160ms ease;
-}
-
-[role="dialog"][aria-labelledby="drawer-title"] [role="tablist"] button:hover:not([aria-selected="true"]) {
-  border-color: rgba(148, 163, 184, 0.28);
-  background: rgba(255, 255, 255, 0.72);
-  color: #334155;
-  transform: translateY(-1px);
-}
-
-[role="dialog"][aria-labelledby="drawer-title"] [role="tablist"] button[aria-selected="true"] {
-  border-color: #0d3a43;
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"]) > div:nth-child(2) {
   background:
-    radial-gradient(circle at 100% 0%, rgba(45, 212, 191, 0.24), transparent 58%),
-    linear-gradient(135deg, #071827 0%, #0b2634 100%);
-  color: #ffffff;
+    radial-gradient(circle at 100% 0%, rgba(20, 184, 166, 0.055), transparent 33%),
+    #f8fafc;
+  scrollbar-color: #94a3b8 transparent;
+  scrollbar-width: thin;
+}
+
+/* The first action strip (invoice / call / navigate / overflow) should read
+   as one compact toolbar rather than loose unrelated buttons. */
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  > div:nth-child(2) > .mb-4.flex.flex-wrap.items-center.gap-2:first-child {
+  margin-inline: -0.15rem;
+  margin-bottom: 0.9rem;
+  padding: 0.15rem;
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  > div:nth-child(2) > .mb-4.flex.flex-wrap.items-center.gap-2:first-child a {
+  min-height: 2.35rem;
+  border-color: #d8e2ec;
+  border-radius: 0.78rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: #334155;
+  font-weight: 650;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.045);
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  > div:nth-child(2) > .mb-4.flex.flex-wrap.items-center.gap-2:first-child a:first-child {
+  border-color: rgba(13, 148, 136, 0.24);
+  color: #0f766e;
+}
+
+/* ── Owner financial anchor ─────────────────────────────────────────────── */
+/* The screenshot already had the right idea here: one dark financial anchor.
+   Refine density and contrast without turning every metric into another card. */
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  > div:nth-child(2) > .mb-4.grid.grid-cols-2.gap-2 {
+  gap: 0 !important;
+  overflow: hidden;
+  border: 1px solid rgba(13, 148, 136, 0.18);
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(20, 184, 166, 0.12), transparent 38%),
+    linear-gradient(135deg, #061724 0%, #082535 100%);
+  box-shadow: 0 10px 26px rgba(2, 8, 23, 0.13);
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  > div:nth-child(2) > .mb-4.grid.grid-cols-2.gap-2 > div {
+  min-width: 0;
+  border-radius: 0 !important;
+  border-right: 1px solid rgba(148, 163, 184, 0.14);
+  background: transparent !important;
+  padding: 0.8rem 0.9rem !important;
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  > div:nth-child(2) > .mb-4.grid.grid-cols-2.gap-2 > div:last-child {
+  border-right: 0;
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  > div:nth-child(2) > .mb-4.grid.grid-cols-2.gap-2 > div p:first-child {
+  color: #8fa8b8 !important;
+  font-size: 0.62rem !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.1em !important;
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  > div:nth-child(2) > .mb-4.grid.grid-cols-2.gap-2 > div p:last-child {
+  margin-top: 0.22rem !important;
+  color: #f8fafc !important;
+  font-size: 0.92rem !important;
+  font-weight: 760 !important;
+}
+
+/* ── Detail navigation ─────────────────────────────────────────────────── */
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"]) [role="tablist"] {
+  position: sticky;
+  top: 0;
+  z-index: 16;
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  gap: 0.3rem !important;
+  overflow: visible !important;
+  border: 1px solid rgba(203, 213, 225, 0.82);
+  border-radius: 1rem !important;
+  background: rgba(238, 243, 247, 0.95) !important;
+  padding: 0.34rem !important;
   box-shadow:
-    0 7px 18px rgba(2, 8, 23, 0.17),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 6px 18px rgba(15, 23, 42, 0.055),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  scrollbar-width: none;
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"]) [role="tablist"]::-webkit-scrollbar {
+  display: none;
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"]) [role="tablist"] button {
+  position: relative;
+  min-width: 0;
+  min-height: 2.75rem;
+  width: 100%;
+  overflow: visible;
+  border: 1px solid transparent !important;
+  border-radius: 0.78rem !important;
+  padding: 0.58rem 0.48rem !important;
+  background: transparent !important;
+  color: #64748b !important;
+  font-size: 0.73rem !important;
+  font-weight: 680 !important;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  white-space: normal !important;
+  text-align: center;
+  box-shadow: none !important;
+  transition:
+    color 150ms ease,
+    background 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+/* Remove the old decorative status dots; the dark selected segment already
+   provides a much clearer active-state signal and reduces visual noise. */
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"]) [role="tablist"] button::before {
+  content: none !important;
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  [role="tablist"] button:hover:not([aria-selected="true"]) {
+  border-color: rgba(148, 163, 184, 0.25) !important;
+  background: rgba(255, 255, 255, 0.72) !important;
+  color: #334155 !important;
   transform: translateY(-1px);
 }
 
-[role="dialog"][aria-labelledby="drawer-title"] [role="tablist"] button[aria-selected="true"]::before {
-  background: #2dd4bf;
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  [role="tablist"] button[aria-selected="true"] {
+  border-color: #0b3340 !important;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(45, 212, 191, 0.22), transparent 58%),
+    linear-gradient(135deg, var(--job-ink) 0%, var(--job-ink-2) 100%) !important;
+  color: #ffffff !important;
   box-shadow:
-    0 0 0 3px rgba(45, 212, 191, 0.16),
-    0 0 14px rgba(45, 212, 191, 0.42);
+    0 7px 17px rgba(2, 8, 23, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  transform: translateY(-1px);
 }
 
-[role="dialog"][aria-labelledby="drawer-title"] [role="tablist"] button:focus-visible {
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"]) [role="tablist"] button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.23);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.2) !important;
 }
 
-/* Parts/Labour action row — distinct hierarchy by material source. */
-[role="dialog"][aria-labelledby="drawer-title"]
+/* ── Parts / materials actions ─────────────────────────────────────────── */
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
   [role="tablist"] ~ .mt-4.space-y-3 > .flex.flex-wrap.gap-2:first-child {
   gap: 0.55rem;
-  padding: 0.2rem 0;
+  margin-top: 0.15rem;
+  padding: 0.15rem 0 0.2rem;
 }
 
-[role="dialog"][aria-labelledby="drawer-title"]
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
   [role="tablist"] ~ .mt-4.space-y-3 > .flex.flex-wrap.gap-2:first-child > button {
   min-height: 2.55rem;
-  border-radius: 0.85rem;
-  padding-inline: 0.95rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  border-radius: 0.82rem !important;
+  padding-inline: 0.95rem !important;
+  font-size: 0.76rem;
+  font-weight: 720;
+  letter-spacing: -0.008em;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
   transition:
-    transform 160ms ease,
-    box-shadow 160ms ease,
-    background 160ms ease,
-    border-color 160ms ease;
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    background 150ms ease,
+    border-color 150ms ease;
 }
 
-[role="dialog"][aria-labelledby="drawer-title"]
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
   [role="tablist"] ~ .mt-4.space-y-3 > .flex.flex-wrap.gap-2:first-child > button:hover:not(:disabled) {
   transform: translateY(-1px);
+  box-shadow: 0 7px 16px rgba(15, 23, 42, 0.08);
 }
 
-/* From Stock */
-[role="dialog"][aria-labelledby="drawer-title"]
+/* From Stock = primary operational action. */
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
   [role="tablist"] ~ .mt-4.space-y-3 > .flex.flex-wrap.gap-2:first-child > button:nth-child(1) {
-  border-color: #0f766e;
-  background: linear-gradient(135deg, #0f766e 0%, #0d9488 58%, #14b8a6 100%);
-  color: white;
-  box-shadow: 0 7px 18px rgba(13, 148, 136, 0.2);
+  border-color: #0f766e !important;
+  background: linear-gradient(135deg, #0f766e 0%, #0d9488 62%, #14b8a6 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 7px 17px rgba(13, 148, 136, 0.19);
 }
 
-/* Manual Part */
-[role="dialog"][aria-labelledby="drawer-title"]
+/* Manual Part = neutral secondary. */
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
   [role="tablist"] ~ .mt-4.space-y-3 > .flex.flex-wrap.gap-2:first-child > button:nth-child(2) {
-  border-color: #d8e2ec;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  color: #334155;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.055);
+  border-color: #d5dee8 !important;
+  background: #ffffff !important;
+  color: #334155 !important;
 }
 
-/* External Purchase — deliberately stronger than Manual because it opens the
-   richer purchasing workflow and usually carries financial consequences. */
-[role="dialog"][aria-labelledby="drawer-title"]
+/* External Purchase = high-value secondary workflow, visually distinct but
+   below the primary stock action. */
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
   [role="tablist"] ~ .mt-4.space-y-3 > .flex.flex-wrap.gap-2:first-child > button:nth-child(3) {
-  border-color: #172b42;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(45, 212, 191, 0.18), transparent 60%),
-    linear-gradient(135deg, #091827 0%, #102b3c 100%);
-  color: #f8fafc;
-  box-shadow: 0 8px 20px rgba(2, 8, 23, 0.16);
+  border-color: #173548 !important;
+  background: linear-gradient(135deg, #0a1c2b 0%, #123246 100%) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 7px 17px rgba(2, 8, 23, 0.13);
 }
 
-/* Filter chips below Parts stay quiet so they don't compete with add actions. */
-[role="dialog"][aria-labelledby="drawer-title"]
+/* Empty states inside the work order should feel intentional rather than like
+   a large unused dashed rectangle. */
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"]) .border-dashed {
+  border-color: rgba(148, 163, 184, 0.32) !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(20, 184, 166, 0.055), transparent 58%),
+    rgba(255, 255, 255, 0.78) !important;
+  min-height: 4.6rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+/* Quiet chips should not compete with add actions. */
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
   [role="tablist"] ~ .mt-4.space-y-3 > .flex.flex-wrap.gap-1\.5 button {
   border-radius: 999px;
   padding: 0.38rem 0.7rem;
 }
 
-/* The multi-line external purchase builder is a denser task modal; increase
-   usable width while keeping the standard Dialog primitive and focus trap. */
+/* Multi-line external purchase builder remains a dense task modal. */
 [data-premium-external-purchase] {
   --purchase-accent: #0d9488;
 }
@@ -167,21 +293,45 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-@media (max-width: 760px) {
-  [role="dialog"][aria-labelledby="drawer-title"] [role="tablist"] {
+@media (max-width: 900px) {
+  [role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"]) [role="tablist"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  [role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"]) [role="tablist"] {
     position: static;
-    width: 100%;
-    margin-inline: 0;
+    display: flex !important;
+    gap: 0.25rem !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x proximity;
   }
 
-  [role="dialog"][aria-labelledby="drawer-title"] [role="tablist"] button {
+  [role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"]) [role="tablist"] button {
     flex: 0 0 auto;
+    width: auto;
+    min-width: 8rem;
+    white-space: nowrap !important;
+    scroll-snap-align: start;
+  }
+
+  [role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+    > div:nth-child(2) > .mb-4.grid.grid-cols-2.gap-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+    > div:nth-child(2) > .mb-4.grid.grid-cols-2.gap-2 > div {
+    border-right: 1px solid rgba(148, 163, 184, 0.14);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.14);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [role="dialog"][aria-labelledby="drawer-title"] [role="tablist"] button,
-  [role="dialog"][aria-labelledby="drawer-title"]
+  [role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"]) [role="tablist"] button,
+  [role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
     [role="tablist"] ~ .mt-4.space-y-3 > .flex.flex-wrap.gap-2:first-child > button {
     transition: none;
     transform: none !important;
