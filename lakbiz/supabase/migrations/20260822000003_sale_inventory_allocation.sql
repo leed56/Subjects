@@ -3,12 +3,19 @@
 -- Bridges the existing sale/stock workflow to the additive advanced identity
 -- layer without double-decrementing products_base.stock_qty. The existing sale
 -- workflow remains authoritative for aggregate product quantity; this function
--- updates only variant/lot/unit identity balances + the allocation audit trail.
+-- updates only the advanced identity balance + allocation audit trail.
+--
+-- Source-of-truth rule:
+--   * pure `variant` stock uses product_variants.stock_qty;
+--   * `variant_lot` stock quantity is derived from inventory_lots;
+--   * `variant_serial` stock quantity is derived from available inventory_units.
+-- Keeping lot/serial modes derived avoids two competing quantity ledgers for the
+-- same physical stock.
 --
 -- Behaviour by tracking mode:
 --   simple         -> no advanced allocation required
 --   lot            -> FEFO allocation across valid batches automatically
---   variant        -> explicit variant required
+--   variant        -> explicit variant required + variant quantity decremented
 --   serial         -> exact available unit ids required
 --   variant_lot    -> explicit variant + FEFO batch allocation
 --   variant_serial -> explicit variant + exact available unit ids
@@ -34,7 +41,6 @@ declare
   v_qty numeric(14,3);
   v_variant_id uuid;
   v_mode text;
-  v_fefo boolean;
   v_sale_qty numeric(14,3);
   v_variant_qty numeric(14,3);
   v_needed numeric(14,3);
@@ -97,8 +103,8 @@ begin
     end if;
 
     -- Never allow advanced identity allocation beyond what the saved sale line
-    -- actually sold. This also prevents a valid staff session being used to
-    -- consume unrelated stock through a crafted RPC call.
+    -- actually sold. This prevents a valid staff session from using the RPC to
+    -- consume unrelated inventory.
     select coalesce(sum(sl.qty), 0) into v_sale_qty
     from public.sale_lines_base sl
     where sl.organization_id = p_organization_id
@@ -110,19 +116,20 @@ begin
         using errcode = '22023';
     end if;
 
-    select p.tracking_mode, p.fefo_enabled
-      into v_mode, v_fefo
+    select p.tracking_mode
+      into v_mode
     from public.product_inventory_profiles p
     where p.organization_id = p_organization_id
       and p.product_id = v_product_id;
 
     v_mode := coalesce(v_mode, 'simple');
-    v_fefo := coalesce(v_fefo, false);
 
     if v_mode = 'simple' then
       continue;
     end if;
 
+    -- Every variant-based mode validates identity/ownership, but only the pure
+    -- variant mode uses product_variants.stock_qty as its quantity ledger.
     if v_mode in ('variant', 'variant_lot', 'variant_serial') then
       if v_variant_id is null then
         raise exception 'variant selection required for product %', v_product_id using errcode = '22023';
@@ -139,7 +146,8 @@ begin
       if not found then
         raise exception 'selected variant is unavailable for product %', v_product_id using errcode = 'P0002';
       end if;
-      if v_variant_qty < v_qty then
+
+      if v_mode = 'variant' and v_variant_qty < v_qty then
         raise exception 'insufficient variant stock for product %', v_product_id using errcode = '23514';
       end if;
     end if;
@@ -161,8 +169,8 @@ begin
     if v_mode in ('lot', 'variant_lot') then
       v_needed := v_qty;
 
-      -- Earliest valid expiry first. NULL expiry sorts last. The FOR UPDATE lock
-      -- closes the classic two-cashiers-selling-the-last-batch race.
+      -- Earliest valid expiry first. NULL expiry sorts last. FOR UPDATE closes
+      -- the two-cashiers-selling-the-last-batch race.
       for v_lot in
         select il.id, il.variant_id, il.qty_on_hand, il.expiry_date, il.received_date
         from public.inventory_lots il
@@ -187,8 +195,13 @@ begin
           organization_id, product_id, variant_id, lot_id,
           reference_type, reference_id, qty
         ) values (
-          p_organization_id, v_product_id, v_variant_id, v_lot.id,
-          'sale', p_sale_id, v_take
+          p_organization_id,
+          v_product_id,
+          case when v_mode = 'variant_lot' then v_variant_id else v_lot.variant_id end,
+          v_lot.id,
+          'sale',
+          p_sale_id,
+          v_take
         );
 
         v_alloc_count := v_alloc_count + 1;
@@ -197,12 +210,6 @@ begin
 
       if v_needed > 0 then
         raise exception 'insufficient non-expired batch stock for product %', v_product_id using errcode = '23514';
-      end if;
-
-      if v_mode = 'variant_lot' then
-        update public.product_variants
-        set stock_qty = stock_qty - v_qty
-        where id = v_variant_id;
       end if;
 
       continue;
@@ -258,16 +265,12 @@ begin
           v_product_id,
           case when v_mode = 'variant_serial' then v_variant_id else v_unit.variant_id end,
           v_unit_id,
-          'sale', p_sale_id, 1
+          'sale',
+          p_sale_id,
+          1
         );
         v_alloc_count := v_alloc_count + 1;
       end loop;
-
-      if v_mode = 'variant_serial' then
-        update public.product_variants
-        set stock_qty = stock_qty - v_qty
-        where id = v_variant_id;
-      end if;
 
       continue;
     end if;
@@ -287,4 +290,4 @@ revoke all on function public.allocate_sale_inventory(uuid, text, text, jsonb) f
 grant execute on function public.allocate_sale_inventory(uuid, text, text, jsonb) to authenticated;
 
 comment on function public.allocate_sale_inventory(uuid, text, text, jsonb) is
-  'Transactionally allocates variants, FEFO lots and serialized units to an already-saved sale. Aggregate products_base.stock_qty remains owned by the existing sale workflow, so this function never double-decrements product stock.';
+  'Transactionally allocates pure variants, FEFO lots and serialized units to an already-saved sale. Lot/serial variant quantities are derived from their identity rows; aggregate products_base.stock_qty remains owned by the existing sale workflow.';
