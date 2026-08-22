@@ -49,9 +49,9 @@ export const NAV_SECTIONS: NavSection[] = [
         sectorOnly: ["pharmacy", "electronics", "mobile_shop", "footwear"],
       },
       {
-        href: "/stock/advanced/receive",
-        labelEn: "Receive tracked stock",
-        labelSi: "ලැබුණු තොග හඳුනාගන්න",
+        href: "/stock/advanced/queue",
+        labelEn: "Receiving queue",
+        labelSi: "ලැබුණු තොග පෝලිම",
         sectorOnly: ["pharmacy", "electronics", "mobile_shop", "footwear"],
       },
       { href: "/suppliers", labelKey: "nav.suppliers", feature: "suppliers" },
