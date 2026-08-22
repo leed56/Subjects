@@ -90,23 +90,46 @@ describe("sale tender allocation", () => {
     )).toContain("Payment allocation exceeds the sale total.");
   });
 
-  it("requires explicit bank, cheque and return references", () => {
+  it("allows staff bank transfer without exposing an owner bank account id", () => {
+    const errors = validateSaleTenders(
+      [tender("bank-1", "bank_transfer", 3_000)],
+      { saleTotal: 3_000, hasCustomerAccount: false },
+    );
+
+    expect(errors).toEqual([]);
+  });
+
+  it("accepts privacy-safe inline cheque details", () => {
     const errors = validateSaleTenders(
       [
-        tender("bank-1", "bank_transfer", 1_000),
+        tender("cheque-1", "cheque", 5_000, {
+          chequeNo: "001234",
+          chequeBank: "Commercial Bank",
+          chequeDate: "2026-08-25",
+          postDated: true,
+        }),
+      ],
+      { saleTotal: 5_000, hasCustomerAccount: false },
+    );
+
+    expect(errors).toEqual([]);
+  });
+
+  it("rejects cheque and return tenders when required operational details are missing", () => {
+    const errors = validateSaleTenders(
+      [
         tender("cheque-1", "cheque", 1_000),
         tender("return-1", "return_credit", 1_000),
       ],
       {
-        saleTotal: 3_000,
+        saleTotal: 2_000,
         hasCustomerAccount: false,
         availableReturnCredit: 1_000,
       },
     );
 
     expect(errors).toEqual(expect.arrayContaining([
-      "Bank transfer requires a destination bank account.",
-      "Cheque payment requires a cheque record.",
+      "Cheque payment requires cheque number, bank and date.",
       "Return credit requires a return document.",
     ]));
   });
