@@ -13,12 +13,16 @@ import { formatLkr } from "@/lib/format";
 import type { Sale } from "@/lib/store/types";
 import { computeJobProfitability, isLowMarginJob, type JobLinkedExpense } from "@/lib/job-profitability";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
+import {
+  fetchOrgReturnAccountingAdjustments,
+  returnAccountingSchemaUnavailable,
+  type ReturnAccountingAdjustment,
+} from "@/lib/supabase/return-accounting-client";
 import { exportReportsCsv, printReportsSummary, type ReportsExportData } from "@/lib/export";
 
 type Period = "7d" | "30d" | "month" | "all";
 
-/** Module-level so "today" isn't computed inline during render (matches
- * the Date.now()-outside-render convention from Phases 4/5/7). */
+/** Module-level so "today" isn't computed inline during render. */
 function periodStartIso(period: Period, now: Date): string | null {
   if (period === "all") return null;
   if (period === "month") return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -34,21 +38,17 @@ function dayLabel(iso: string, locale: "si" | "en"): string {
 
 export default function ReportsPage() {
   const { t, locale } = useLocale();
-  const { org, orgRole, can } = useSubscription();
+  const { org, can, canSeeFinancials } = useSubscription();
   const { data: localData, ready: localReady } = useAppStore();
 
   const [period, setPeriod] = useState<Period>("30d");
 
-  const canSeeFinancials = orgRole === "owner" || orgRole === "manager";
-  // Phase 24 — AC job performance section, gated on the plan feature
-  // (not every sector has ac_jobs at all) same as /job-costing,
-  // /dashboard, and /vat.
+  // `canSeeFinancials` is the same owner-only capability enforced by the DB.
+  // Do not reintroduce the historical owner-or-manager shortcut here.
   const showAcJobs = can("ac_jobs");
   const canExport = can("export");
 
-  // Job-linked expenses (Phase 7) are cloud-only (not part of the
-  // local-first store), same fetch-on-mount pattern already used by
-  // /job-costing, /dashboard, and /vat — see those for the precedent.
+  // Job-linked expenses are cloud-only, same pattern as job-costing/dashboard.
   const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<string, JobLinkedExpense[]> | null>(null);
   useEffect(() => {
     if (!showAcJobs || !canSeeFinancials || !org.isAuthenticated || !org.id) {
@@ -72,7 +72,40 @@ export default function ReportsPage() {
     };
   }, [showAcJobs, canSeeFinancials, org.isAuthenticated, org.id]);
 
-  if (!org.isAuthenticated || !localReady || !localData || !jobLinkedExpenseTotals) {
+  // Issued credit notes are the accounting boundary for returns. Physical
+  // return intake alone must not reduce revenue/profit in this report.
+  const [returnAdjustments, setReturnAdjustments] = useState<ReturnAccountingAdjustment[] | null>(null);
+  const [returnAccountingError, setReturnAccountingError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!canSeeFinancials || !org.isAuthenticated || !org.id) {
+      setReturnAdjustments([]);
+      setReturnAccountingError(null);
+      return;
+    }
+    let cancelled = false;
+    setReturnAdjustments(null);
+    setReturnAccountingError(null);
+    void fetchOrgReturnAccountingAdjustments(org.id, true).then((result) => {
+      if (cancelled) return;
+      if (returnAccountingSchemaUnavailable(result.error)) {
+        // Backward-compatible with a database that has not received the
+        // additive return-accounting migration yet.
+        setReturnAdjustments([]);
+        return;
+      }
+      if (result.error) {
+        setReturnAdjustments([]);
+        setReturnAccountingError(result.error);
+        return;
+      }
+      setReturnAdjustments(result.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [canSeeFinancials, org.isAuthenticated, org.id]);
+
+  if (!org.isAuthenticated || !localReady || !localData || !jobLinkedExpenseTotals || returnAdjustments == null) {
     return (
       <AppShell>
         <ProMain>
@@ -94,20 +127,31 @@ export default function ReportsPage() {
 
   const startIso = periodStartIso(period, new Date());
   const sales: Sale[] = localData.sales.filter((s) => !startIso || s.date >= startIso);
+  const periodReturns = returnAdjustments.filter(
+    (adjustment) => !startIso || adjustment.issuedAt >= startIso,
+  );
 
-  const totalRevenue = sales.reduce((sum, s) => sum + s.total, 0);
-  const totalProfit = sales.reduce((sum, s) => sum + s.profit, 0);
-  const avgSale = sales.length > 0 ? totalRevenue / sales.length : 0;
+  const grossRevenue = sales.reduce((sum, s) => sum + s.total, 0);
+  const grossProfit = sales.reduce((sum, s) => sum + s.profit, 0);
+  const returnRevenueReversal = periodReturns.reduce(
+    (sum, adjustment) => sum + adjustment.grossCredit,
+    0,
+  );
+  const returnProfitReversal = periodReturns.reduce(
+    (sum, adjustment) => sum + (adjustment.reversedProfit ?? 0),
+    0,
+  );
+  const totalRevenue = grossRevenue - returnRevenueReversal;
+  const totalProfit = grossProfit - returnProfitReversal;
 
-  // Daily trend — always the last 14 days of activity within the filtered
-  // set, regardless of period, so the chart stays readable even when
-  // "all" is selected (a multi-year bar chart would be unreadable and
-  // isn't the point of this view; the metrics above already cover totals
-  // for the full period).
-  // Sale.date is a full ISO timestamp (new Date().toISOString() at
-  // creation, see createSale in store/actions.ts), not a plain
-  // YYYY-MM-DD — bucket on the date portion only, or every key here
-  // silently fails to match trendDays' plain-date keys below.
+  // Average sale stays an invoice statistic. Applying later credit notes to an
+  // average invoice would change the meaning of the metric and produce a value
+  // that is neither average invoice size nor average return-adjusted order.
+  const avgSale = sales.length > 0 ? grossRevenue / sales.length : 0;
+
+  // Trend remains invoice activity rather than pretending aggregate credit notes
+  // have line-level/product/customer attribution. The headline financial metrics
+  // above are the authoritative return-adjusted numbers.
   const byDay = new Map<string, number>();
   for (const s of sales) {
     const day = s.date.slice(0, 10);
@@ -121,6 +165,9 @@ export default function ReportsPage() {
   const trendValues = trendDays.map((iso) => byDay.get(iso) ?? 0);
   const trendMax = Math.max(1, ...trendValues);
 
+  // Product/customer rankings remain historical invoiced activity until a
+  // dedicated return-line reporting fetch is added. Do not silently subtract an
+  // aggregate credit note from an arbitrary product/customer.
   const productTotals = new Map<string, { name: string; qty: number; revenue: number }>();
   for (const s of sales) {
     for (const line of s.lines) {
@@ -146,14 +193,7 @@ export default function ReportsPage() {
     .sort((a, b) => b.total - a.total)
     .slice(0, 10);
 
-  // AC job performance (Phase 24 — Reports/job-costing integration).
-  // Reuses computeJobProfitability, the one authoritative job-cost
-  // calculation (Phase 8), exactly as /job-costing, /dashboard, and
-  // /vat already do — no re-derived formula. Period-filtered on
-  // job.date the same way sales above are filtered on s.date, and
-  // excludes cancelled jobs the same way dashboard's own "this month's
-  // job profitability" section does — a cancelled job never happened
-  // and has no real revenue/cost to report.
+  // AC job performance reuses the one authoritative job-cost calculation.
   const jobItemsByJob = new Map<string, typeof localData.jobItems>();
   for (const item of localData.jobItems) {
     const list = jobItemsByJob.get(item.jobId) ?? [];
@@ -183,13 +223,8 @@ export default function ReportsPage() {
       : "reports.period_all",
   );
 
-  // Phase 24 follow-up — CSV/print export, the item explicitly flagged
-  // as not-started when the AC job performance section shipped: the
-  // per-domain export helpers (sales/customers/stock/VAT) don't fit
-  // this page's aggregate shape, so it never had export at all. Mirrors
-  // exactly what's rendered above — including omitting `acJobs`
-  // entirely when this role/org doesn't see that section, never
-  // exporting zeros for data that was never actually computed.
+  // Summary export uses return-adjusted headline revenue/profit. Product and
+  // customer ranking tables remain invoiced activity, matching the screen.
   const reportsExportData: ReportsExportData = {
     periodLabel,
     totalRevenue,
@@ -258,7 +293,7 @@ export default function ReportsPage() {
               />
               {canExport && (
                 <ExportActions
-                  disabled={sales.length === 0 && costedJobs.length === 0}
+                  disabled={sales.length === 0 && costedJobs.length === 0 && periodReturns.length === 0}
                   onExportCsv={() => exportReportsCsv(localData.business, reportsExportData, reportsExportLabels)}
                   onPrintPdf={() =>
                     printReportsSummary(localData.business, reportsExportData, reportsExportLabels, t("reports.title"))
@@ -270,15 +305,33 @@ export default function ReportsPage() {
           metrics={
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard label={t("reports.total_revenue")} value={formatLkr(totalRevenue)} />
-              <MetricCard label={t("reports.total_profit")} value={formatLkr(totalProfit)} tone="positive" />
+              <MetricCard label={t("reports.total_profit")} value={formatLkr(totalProfit)} tone={totalProfit < 0 ? "danger" : "positive"} />
               <MetricCard label={t("reports.sales_count")} value={String(sales.length)} />
               <MetricCard label={t("reports.avg_sale")} value={formatLkr(avgSale)} />
             </div>
           }
         />
 
+        {returnAccountingError && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-900">
+            Return credit-note adjustments could not be loaded, so revenue/profit are temporarily showing invoice values without those adjustments. {returnAccountingError}
+          </div>
+        )}
+
+        {periodReturns.length > 0 && (
+          <div className="mb-4 flex flex-col gap-2 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3 text-xs font-semibold text-teal-900 sm:flex-row sm:items-center sm:justify-between">
+            <span>{periodReturns.length} issued return credit note{periodReturns.length === 1 ? "" : "s"} included in this period</span>
+            <span className="font-mono">Revenue reversal −{formatLkr(returnRevenueReversal)} · Profit reversal −{formatLkr(returnProfitReversal)}</span>
+          </div>
+        )}
+
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <SectionHeader title={t("reports.trend_title")} />
+          {periodReturns.length > 0 && (
+            <p className="mb-3 text-[11px] font-medium leading-5 text-slate-500">
+              Trend bars show historical invoice activity. Return credit notes are applied to the headline revenue/profit totals above and are not assigned to arbitrary invoice days.
+            </p>
+          )}
           {trendValues.every((v) => v === 0) ? (
             <EmptyState title={t("reports.no_sales")} description={t("reports.no_sales_hint")} />
           ) : (
@@ -300,6 +353,9 @@ export default function ReportsPage() {
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <div className="rounded-xl border border-slate-200 bg-white p-5">
             <SectionHeader title={t("reports.top_products")} />
+            {periodReturns.length > 0 && (
+              <p className="mb-2 text-[11px] font-medium leading-5 text-slate-500">Gross invoiced activity; return credit notes are not guessed against product rankings.</p>
+            )}
             {topProducts.length === 0 ? (
               <EmptyState title={t("reports.no_sales")} description={t("reports.no_sales_hint")} />
             ) : (
@@ -319,6 +375,9 @@ export default function ReportsPage() {
 
           <div className="rounded-xl border border-slate-200 bg-white p-5">
             <SectionHeader title={t("reports.top_customers")} />
+            {periodReturns.length > 0 && (
+              <p className="mb-2 text-[11px] font-medium leading-5 text-slate-500">Gross invoiced activity; aggregate credit notes are not assigned to a customer ranking without explicit return-line attribution.</p>
+            )}
             {topCustomers.length === 0 ? (
               <EmptyState title={t("reports.no_customer_sales")} description={t("reports.no_customer_sales_hint")} />
             ) : (
