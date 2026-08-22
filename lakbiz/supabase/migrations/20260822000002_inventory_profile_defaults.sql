@@ -55,7 +55,7 @@ declare
   org_sector text;
   mode text;
 begin
-  select o.sector_id into org_sector
+  select o.sector into org_sector
   from public.organizations o
   where o.id = new.organization_id;
 
@@ -101,10 +101,10 @@ insert into public.product_inventory_profiles (
 select
   p.id,
   p.organization_id,
-  public.default_inventory_mode_for_sector(coalesce(o.sector_id, p.sector_id, 'grocery')),
-  public.default_inventory_axes_for_sector(coalesce(o.sector_id, p.sector_id, 'grocery')),
-  coalesce(o.sector_id, p.sector_id, 'grocery') = 'pharmacy',
-  public.default_inventory_mode_for_sector(coalesce(o.sector_id, p.sector_id, 'grocery')) in ('serial', 'variant_serial')
+  public.default_inventory_mode_for_sector(coalesce(o.sector, p.sector_id, 'grocery')),
+  public.default_inventory_axes_for_sector(coalesce(o.sector, p.sector_id, 'grocery')),
+  coalesce(o.sector, p.sector_id, 'grocery') = 'pharmacy',
+  public.default_inventory_mode_for_sector(coalesce(o.sector, p.sector_id, 'grocery')) in ('serial', 'variant_serial')
 from public.products_base p
 left join public.organizations o on o.id = p.organization_id
 on conflict (product_id) do nothing;
