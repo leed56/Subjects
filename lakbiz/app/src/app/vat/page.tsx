@@ -15,7 +15,10 @@ import {
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
-import { exportVatCsv, printVatReport } from "@/lib/export";
+import {
+  exportVatReconciliationCsv,
+  printVatReconciliationReport,
+} from "@/lib/export/vat-returns";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { getVatQuarterSummary } from "@/lib/vat";
@@ -233,6 +236,10 @@ export default function VatReturnPage() {
     const d = new Date(p.date).getTime();
     return d >= summary.bounds.start.getTime() && d <= summary.bounds.end.getTime();
   });
+  const quarterCreditNotes = returnAdjustments.filter((note) => {
+    const d = new Date(note.issuedAt).getTime();
+    return d >= summary.bounds.start.getTime() && d <= summary.bounds.end.getTime();
+  });
 
   const canExport = can("export");
   const vatExportLabels = {
@@ -246,6 +253,11 @@ export default function VatReturnPage() {
     netPayable: t("vat.net_payable"),
     outputTotal: t("vat.output_vat"),
     inputTotal: t("vat.input_vat"),
+    creditNotes: "Issued return credit notes",
+    creditNoteNo: "Credit note #",
+    originalBill: "Original bill",
+    grossCredit: "Gross credit",
+    returnVatReversal: "VAT reversal from credit notes",
   };
 
   return (
@@ -270,19 +282,21 @@ export default function VatReturnPage() {
                 <ExportActions
                   disabled={quarterSales.length === 0 && quarterPurchases.length === 0 && summary.creditNoteCount === 0}
                   onExportCsv={() =>
-                    exportVatCsv(
+                    exportVatReconciliationCsv(
                       data.business,
                       quarterSales,
                       quarterPurchases,
+                      quarterCreditNotes,
                       summary,
                       vatExportLabels,
                     )
                   }
                   onPrintPdf={() =>
-                    printVatReport(
+                    printVatReconciliationReport(
                       data.business,
                       quarterSales,
                       quarterPurchases,
+                      quarterCreditNotes,
                       summary,
                       vatExportLabels,
                       t("export.vat_report"),
