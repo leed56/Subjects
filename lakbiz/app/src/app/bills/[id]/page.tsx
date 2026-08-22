@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { AppShell } from "@/components/shell/app-shell";
 import { InvoiceView } from "@/components/invoice-view";
 import { SaleInventoryTrace } from "@/components/sales/sale-inventory-trace";
+import { SaleReturnHistory } from "@/components/sales/sale-return-history";
 import {
   ProButton,
   ProCard,
@@ -23,7 +24,7 @@ export default function BillDetailPage() {
   const id = params.id as string;
   const { data, ready } = useAppStore();
   const { t } = useLocale();
-  const { canSeeFinancials } = useSubscription();
+  const { canSeeFinancials, orgRole } = useSubscription();
 
   if (!ready || !data) {
     return (
@@ -55,6 +56,7 @@ export default function BillDetailPage() {
   const customer = sale.customerId
     ? data.customers.find((c) => c.id === sale.customerId)
     : undefined;
+  const canApproveReturn = orgRole === "owner" || orgRole === "manager";
 
   return (
     <AppShell>
@@ -67,6 +69,11 @@ export default function BillDetailPage() {
             actions={
               <>
                 <ProButton href="/bills" variant="secondary">← {t("bills.all_bills")}</ProButton>
+                {canApproveReturn && (
+                  <ProButton href={`/bills/${sale.id}/return`} variant="secondary">
+                    Customer return
+                  </ProButton>
+                )}
                 <button
                   type="button"
                   onClick={() => window.print()}
@@ -105,6 +112,7 @@ export default function BillDetailPage() {
             customerVatNumber={customer?.vatNumber}
           />
           <SaleInventoryTrace saleId={sale.id} />
+          <SaleReturnHistory saleId={sale.id} />
         </div>
       </ProMain>
     </AppShell>
