@@ -22,21 +22,22 @@ import { getVatQuarterSummary } from "@/lib/vat";
 import { getIncomeTaxYearSummary } from "@/lib/income-tax";
 import type { JobLinkedExpense } from "@/lib/job-profitability";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
+import {
+  fetchOrgReturnAccountingAdjustments,
+  returnAccountingSchemaUnavailable,
+  type ReturnAccountingAdjustment,
+} from "@/lib/supabase/return-accounting-client";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { SalesIcon, ReportsIcon, VehiclesIcon, JobsIcon, CostingIcon, BillsIcon, InboxIcon, SuppliersIcon } from "@/components/ui/icons";
 
 export default function VatReturnPage() {
   const { data, ready } = useAppStore();
   const { t } = useLocale();
-  const { can, org, orgRole } = useSubscription();
-
-  const canSeeFinancials = orgRole === "owner" || orgRole === "manager";
+  const { can, org, canSeeFinancials } = useSubscription();
   const orgId = org.isAuthenticated ? org.id : null;
 
-  // Job-linked expenses (Phase 7) are cloud-only (not part of the
-  // local-first store — see expenses-client.ts), so the income-tax
-  // AC-job-profit figure below (fix-all pass) needs its own fetch here,
-  // same pattern already used by /job-costing, /jobs and the dashboard.
+  // Job-linked expenses are cloud-only, so the income-tax AC-job-profit figure
+  // needs the same owner-only fetch used by the dashboard/job-costing pages.
   const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<string, JobLinkedExpense[]> | null>(null);
   useEffect(() => {
     if (!orgId || !canSeeFinancials) {
@@ -60,7 +61,40 @@ export default function VatReturnPage() {
     };
   }, [orgId, canSeeFinancials]);
 
-  if (!ready || !data || !jobLinkedExpenseTotals) {
+  // Credit notes are also cloud-only. Only ISSUED credit notes count here:
+  // physical return intake itself deliberately leaves VAT/revenue unchanged.
+  // If the additive return-accounting migration is not deployed yet, keep the
+  // existing gross report usable rather than breaking VAT for older databases.
+  const [returnAdjustments, setReturnAdjustments] = useState<ReturnAccountingAdjustment[] | null>(null);
+  const [returnAccountingError, setReturnAccountingError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!orgId || !canSeeFinancials) {
+      setReturnAdjustments([]);
+      setReturnAccountingError(null);
+      return;
+    }
+    let cancelled = false;
+    setReturnAdjustments(null);
+    setReturnAccountingError(null);
+    void fetchOrgReturnAccountingAdjustments(orgId, true).then((result) => {
+      if (cancelled) return;
+      if (returnAccountingSchemaUnavailable(result.error)) {
+        setReturnAdjustments([]);
+        return;
+      }
+      if (result.error) {
+        setReturnAdjustments([]);
+        setReturnAccountingError(result.error);
+        return;
+      }
+      setReturnAdjustments(result.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, canSeeFinancials]);
+
+  if (!ready || !data || !jobLinkedExpenseTotals || returnAdjustments == null) {
     return (
       <AppShell>
         <ProMain>
@@ -70,8 +104,32 @@ export default function VatReturnPage() {
     );
   }
 
-  const summary = getVatQuarterSummary(data);
-  const incomeTax = getIncomeTaxYearSummary(data, new Date(), 0, jobLinkedExpenseTotals);
+  // Owner-only is the same capability enforced by can_see_org_financials() at
+  // the database boundary. Do not reintroduce the historical manager shortcut.
+  if (!canSeeFinancials) {
+    return (
+      <AppShell>
+        <ProMain>
+          <ProCard>
+            <ProEmptyState
+              title="Owner-only financial report"
+              description="VAT, income-tax estimates, internal profit and return settlements are restricted to the organization owner."
+              action={<ProButton href="/dashboard">Dashboard</ProButton>}
+            />
+          </ProCard>
+        </ProMain>
+      </AppShell>
+    );
+  }
+
+  const summary = getVatQuarterSummary(data, new Date(), returnAdjustments);
+  const incomeTax = getIncomeTaxYearSummary(
+    data,
+    new Date(),
+    0,
+    jobLinkedExpenseTotals,
+    returnAdjustments,
+  );
 
   const incomeTaxSection = (
     <section id="income-tax" className="mt-10">
@@ -82,12 +140,6 @@ export default function VatReturnPage() {
         actions={<ProButton href="/settings/shop" variant="secondary">{t("tax.rate_setting")}</ProButton>}
       />
 
-      {/* Global premium UI phase, Part 48 — was rounded-xl/shadow-sm/
-       * font-bold, a marketing-hero treatment on an operational report
-       * ("marketing aesthetics inside operational tables" is explicitly
-       * called out to avoid). Kept as a deliberately darker card — this
-       * genuinely is the headline number on the page — but at the same
-       * rounded-xl/no-heavy-shadow/font-bold scale as every other card. */}
       <section className="mb-6 rounded-xl border border-indigo-900 bg-indigo-950 p-6 text-white sm:p-7">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -114,14 +166,14 @@ export default function VatReturnPage() {
         <ProStatCard
           label={t("tax.revenue")}
           value={formatLkr(incomeTax.revenue)}
-          hint={`${incomeTax.salesCount} ${t("vat.sales_in_period")}`}
+          hint={incomeTax.creditNoteCount > 0 ? `${incomeTax.creditNoteCount} credit note${incomeTax.creditNoteCount === 1 ? "" : "s"} netted` : `${incomeTax.salesCount} ${t("vat.sales_in_period")}`}
           icon={<SalesIcon className="h-5 w-5" />}
           tone="blue"
         />
         <ProStatCard
           label={t("tax.sales_profit")}
           value={formatLkr(incomeTax.salesProfit)}
-          hint={t("tax.estimated_profit")}
+          hint={incomeTax.returnProfitReversal !== 0 ? `${formatLkr(incomeTax.returnProfitReversal)} return profit reversed` : t("tax.estimated_profit")}
           icon={<ReportsIcon className="h-5 w-5" />}
           tone="emerald"
         />
@@ -147,6 +199,12 @@ export default function VatReturnPage() {
           tone="amber"
         />
       </section>
+
+      {incomeTax.creditNoteCount > 0 && (
+        <div className="mt-4 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3 text-xs font-semibold leading-5 text-teal-900">
+          Issued return credit notes in this fiscal year reduce reported sales by {formatLkr(incomeTax.returnRevenueReversal)}. The original invoices remain unchanged.
+        </div>
+      )}
     </section>
   );
 
@@ -210,7 +268,7 @@ export default function VatReturnPage() {
             <>
               {canExport && (
                 <ExportActions
-                  disabled={quarterSales.length === 0 && quarterPurchases.length === 0}
+                  disabled={quarterSales.length === 0 && quarterPurchases.length === 0 && summary.creditNoteCount === 0}
                   onExportCsv={() =>
                     exportVatCsv(
                       data.business,
@@ -239,6 +297,12 @@ export default function VatReturnPage() {
           }
         />
 
+        {returnAccountingError && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-900">
+            Return credit-note adjustments could not be loaded, so this view is temporarily showing invoice VAT without those adjustments. {returnAccountingError}
+          </div>
+        )}
+
         <section className="mb-6 overflow-hidden rounded-xl bg-slate-950 p-6 text-white shadow-sm shadow-slate-950/20 ring-1 ring-slate-800 sm:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -255,11 +319,18 @@ export default function VatReturnPage() {
         </section>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("vat.output_vat")} value={formatLkr(summary.outputVat)} hint={`${summary.salesCount} ${t("vat.sales_in_period")}`} icon={<BillsIcon className="h-5 w-5" />} tone="amber" />
+          <ProStatCard label={t("vat.output_vat")} value={formatLkr(summary.outputVat)} hint={summary.creditNoteCount > 0 ? `${summary.creditNoteCount} credit note${summary.creditNoteCount === 1 ? "" : "s"} netted` : `${summary.salesCount} ${t("vat.sales_in_period")}`} icon={<BillsIcon className="h-5 w-5" />} tone="amber" />
           <ProStatCard label={t("vat.input_vat")} value={formatLkr(summary.inputVat)} hint={`${summary.purchasesCount} ${t("vat.purchases_in_period")}`} icon={<InboxIcon className="h-5 w-5" />} tone="teal" />
           <ProStatCard label={t("vat.sales_list")} value={String(quarterSales.length)} hint="Invoices in quarter" icon={<SalesIcon className="h-5 w-5" />} tone="blue" />
           <ProStatCard label={t("vat.purchases_list")} value={String(quarterPurchases.length)} hint="Purchase records" icon={<SuppliersIcon className="h-5 w-5" />} tone="emerald" />
         </section>
+
+        {summary.creditNoteCount > 0 && (
+          <div className="mt-4 flex flex-col gap-2 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3 text-xs font-semibold text-teal-900 sm:flex-row sm:items-center sm:justify-between">
+            <span>{summary.creditNoteCount} issued return credit note{summary.creditNoteCount === 1 ? "" : "s"} in this quarter</span>
+            <span className="font-mono">Output VAT reversal −{formatLkr(summary.returnVatReversal)}</span>
+          </div>
+        )}
 
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
           <ProCard title={t("vat.sales_list")} action={<ProBadge tone="amber">{formatLkr(summary.outputVat)}</ProBadge>}>
@@ -278,6 +349,11 @@ export default function VatReturnPage() {
                   </Link>
                 ))}
               </div>
+            )}
+            {summary.creditNoteCount > 0 && (
+              <p className="mt-3 rounded-lg bg-teal-50 px-3 py-2 text-[11px] font-semibold leading-5 text-teal-800">
+                Invoice rows above remain historical gross VAT. The card total is net of {formatLkr(summary.returnVatReversal)} issued credit-note VAT reversals.
+              </p>
             )}
           </ProCard>
 
