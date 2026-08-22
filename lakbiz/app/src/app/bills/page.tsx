@@ -36,7 +36,7 @@ function customerPhoneForSale(
 export default function BillsPage() {
   const { data, ready, updateBusinessToCloud } = useAppStore();
   const { t } = useLocale();
-  const { canSeeFinancials, can } = useSubscription();
+  const { canSeeFinancials, can, orgRole } = useSubscription();
   const [editBiz, setEditBiz] = useState(false);
   const [savingBiz, setSavingBiz] = useState(false);
   const [bizMessage, setBizMessage] = useState("");
@@ -123,6 +123,9 @@ export default function BillsPage() {
                     })
                   }
                 />
+              )}
+              {orgRole === "owner" && (
+                <ProButton href="/returns" variant="secondary">Returns control</ProButton>
               )}
               <ProButton href="/sales">{t("bills.create_sale")}</ProButton>
               <button
