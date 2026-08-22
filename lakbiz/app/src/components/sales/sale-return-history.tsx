@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import {
   fetchSaleReturns,
   saleReturnSchemaUnavailable,
+  type SaleCreditNoteRecord,
   type SaleReturnLineRecord,
   type SaleReturnRecord,
 } from "@/lib/supabase/sale-return-client";
@@ -13,12 +15,17 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 type Props = { saleId: string };
 
+function isUnsettled(status: SaleReturnRecord["settlementStatus"]): boolean {
+  return status === "pending" || status === "partial";
+}
+
 export function SaleReturnHistory({ saleId }: Props) {
-  const { org } = useSubscription();
+  const { org, orgRole } = useSubscription();
   const { locale } = useLocale();
   const si = locale === "si";
   const [returns, setReturns] = useState<SaleReturnRecord[]>([]);
   const [lines, setLines] = useState<SaleReturnLineRecord[]>([]);
+  const [creditNotes, setCreditNotes] = useState<SaleCreditNoteRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,6 +38,7 @@ export function SaleReturnHistory({ saleId }: Props) {
       if (cancelled) return;
       setReturns(result.returns);
       setLines(result.lines);
+      setCreditNotes(result.creditNotes);
       setError(result.error);
       setLoading(false);
     });
@@ -49,6 +57,11 @@ export function SaleReturnHistory({ saleId }: Props) {
     return map;
   }, [lines]);
 
+  const creditNoteByReturn = useMemo(
+    () => new Map(creditNotes.map((note) => [note.returnId, note] as const)),
+    [creditNotes],
+  );
+
   if (!org.isAuthenticated || saleReturnSchemaUnavailable(error)) return null;
   if (loading) {
     return (
@@ -60,7 +73,7 @@ export function SaleReturnHistory({ saleId }: Props) {
   if (error || returns.length === 0) return null;
 
   const totalReturned = returns.reduce((sum, item) => sum + item.merchandiseValue, 0);
-  const pendingCount = returns.filter((item) => item.settlementStatus === "pending").length;
+  const pendingCount = returns.filter((item) => isUnsettled(item.settlementStatus)).length;
 
   return (
     <section className="mt-4 rounded-xl border border-amber-200 bg-white p-4 print:break-inside-avoid">
@@ -73,12 +86,12 @@ export function SaleReturnHistory({ saleId }: Props) {
             {returns.length} {si ? "return document" : returns.length === 1 ? "return document" : "return documents"} · {formatLkr(totalReturned)}
           </h2>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            {si ? "Original invoice එක වෙනස් කර නැත. Return documents වෙනම audit trail එකක් ලෙස තබා ඇත." : "The original invoice is unchanged. Returns are preserved as separate immutable audit documents."}
+            {si ? "Original invoice එක වෙනස් කර නැත. Return documents සහ credit notes වෙනම audit trail ලෙස තබා ඇත." : "The original invoice is unchanged. Return documents and credit notes are preserved as separate audit records."}
           </p>
         </div>
         {pendingCount > 0 && (
           <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800 ring-1 ring-amber-200">
-            {pendingCount} {si ? "settlement pending" : "settlement pending"}
+            {pendingCount} {si ? "financial action pending" : "financial action pending"}
           </span>
         )}
       </div>
@@ -86,6 +99,7 @@ export function SaleReturnHistory({ saleId }: Props) {
       <div className="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-200">
         {returns.map((item) => {
           const itemLines = linesByReturn.get(item.id) ?? [];
+          const creditNote = creditNoteByReturn.get(item.id);
           const restockedQty = itemLines
             .filter((line) => line.restocked)
             .reduce((sum, line) => sum + line.qty, 0);
@@ -100,10 +114,15 @@ export function SaleReturnHistory({ saleId }: Props) {
                   <p className="mt-1 text-[11px] text-slate-500">
                     {new Date(item.returnedAt).toLocaleString("en-LK")} · {item.reason}
                   </p>
+                  {creditNote && (
+                    <p className="mt-1 font-mono text-[11px] font-semibold text-teal-700">
+                      {creditNote.creditNoteNo} · {si ? "credit note" : "credit note"}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="font-mono text-sm font-bold text-slate-950">{formatLkr(item.merchandiseValue)}</p>
-                  <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                  <p className={`mt-0.5 text-[10px] font-bold uppercase tracking-wide ${isUnsettled(item.settlementStatus) ? "text-amber-700" : "text-emerald-700"}`}>
                     {item.settlementStatus.replaceAll("_", " ")}
                   </p>
                 </div>
@@ -118,9 +137,18 @@ export function SaleReturnHistory({ saleId }: Props) {
                 ))}
               </div>
 
-              <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-wide">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wide">
                 {restockedQty > 0 && <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">{restockedQty} approved for resale</span>}
                 {holdQty > 0 && <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-800">{holdQty} on return hold</span>}
+                {creditNote && <span className="rounded-full bg-teal-50 px-2 py-1 text-teal-700">VAT / revenue reversed</span>}
+                {orgRole === "owner" && (
+                  <Link
+                    href={`/bills/${saleId}/returns/${item.id}`}
+                    className="ml-auto rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800 no-print"
+                  >
+                    {creditNote ? (si ? "Settlement" : "Settlement") : (si ? "Issue credit note" : "Issue credit note")}
+                  </Link>
+                )}
               </div>
             </div>
           );
@@ -129,7 +157,7 @@ export function SaleReturnHistory({ saleId }: Props) {
 
       {pendingCount > 0 && (
         <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] font-semibold leading-5 text-amber-900 no-print">
-          {si ? "Pending කියන්නේ physical return එක record කර ඇති නමුත් refund / credit note / exchange financial settlement තවම කර නැති බවයි." : "Pending means the physical return is recorded, but refund / credit-note / exchange financial settlement has not yet been posted."}
+          {si ? "Pending/partial කියන්නේ physical return එක record කර ඇති නමුත් credit note හෝ refund / receivable settlement සම්පූර්ණ නැති බවයි." : "Pending/partial means the physical return is recorded, but its credit note or refund / receivable settlement is not fully completed yet."}
         </p>
       )}
     </section>
