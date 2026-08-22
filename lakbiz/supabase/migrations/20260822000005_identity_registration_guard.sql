@@ -30,11 +30,18 @@ begin
     raise exception 'product not found for lot registration' using errcode = 'P0002';
   end if;
 
-  select coalesce(sum(l.qty_on_hand), 0) into v_other_qty
-  from public.inventory_lots l
-  where l.organization_id = new.organization_id
-    and l.product_id = new.product_id
-    and (tg_op = 'INSERT' or l.id <> old.id);
+  if tg_op = 'UPDATE' then
+    select coalesce(sum(l.qty_on_hand), 0) into v_other_qty
+    from public.inventory_lots l
+    where l.organization_id = new.organization_id
+      and l.product_id = new.product_id
+      and l.id <> old.id;
+  else
+    select coalesce(sum(l.qty_on_hand), 0) into v_other_qty
+    from public.inventory_lots l
+    where l.organization_id = new.organization_id
+      and l.product_id = new.product_id;
+  end if;
 
   if v_other_qty + coalesce(new.qty_on_hand, 0) > v_product_qty then
     raise exception 'registered batch stock (%) exceeds aggregate product stock (%)',
@@ -67,12 +74,20 @@ begin
   end if;
 
   -- Sold and written-off units are no longer part of on-hand Product stock.
-  select count(*) into v_other_units
-  from public.inventory_units u
-  where u.organization_id = new.organization_id
-    and u.product_id = new.product_id
-    and u.status not in ('sold', 'written_off')
-    and (tg_op = 'INSERT' or u.id <> old.id);
+  if tg_op = 'UPDATE' then
+    select count(*) into v_other_units
+    from public.inventory_units u
+    where u.organization_id = new.organization_id
+      and u.product_id = new.product_id
+      and u.status not in ('sold', 'written_off')
+      and u.id <> old.id;
+  else
+    select count(*) into v_other_units
+    from public.inventory_units u
+    where u.organization_id = new.organization_id
+      and u.product_id = new.product_id
+      and u.status not in ('sold', 'written_off');
+  end if;
 
   v_new_on_hand := case when new.status not in ('sold', 'written_off') then 1 else 0 end;
   if v_other_units + v_new_on_hand > floor(v_product_qty) then
