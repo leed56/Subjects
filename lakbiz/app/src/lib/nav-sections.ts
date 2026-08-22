@@ -3,7 +3,7 @@
  * Desktop and mobile consume the same structure so routes, role gates and
  * sector-specific workspaces cannot drift apart.
  */
-import type { FeatureKey } from "@/lib/subscription/types";
+import type { OrgRole, FeatureKey } from "@/lib/subscription/types";
 import type { SectorId } from "@/lib/types";
 
 export type NavItem = {
@@ -17,6 +17,8 @@ export type NavItem = {
   feature?: FeatureKey;
   /** Show this navigation item only for these provisioned business sectors. */
   sectorOnly?: SectorId[];
+  /** Additional presentation gate for operational workspaces with stricter roles than their parent route. */
+  roleOnly?: OrgRole[];
 };
 
 export type NavSection = {
@@ -54,6 +56,13 @@ export const NAV_SECTIONS: NavSection[] = [
         labelSi: "ලැබුණු තොග පෝලිම",
         sectorOnly: ["pharmacy", "electronics", "mobile_shop", "footwear"],
       },
+      {
+        href: "/stock/advanced/returns",
+        labelEn: "Return inspection",
+        labelSi: "ආපසු භාණ්ඩ පරීක්ෂාව",
+        sectorOnly: ["pharmacy", "electronics", "mobile_shop", "footwear"],
+        roleOnly: ["owner", "manager"],
+      },
       { href: "/suppliers", labelKey: "nav.suppliers", feature: "suppliers" },
       { href: "/vehicles", labelKey: "nav.vehicles", feature: "vehicles" },
     ],
@@ -74,6 +83,12 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/banking", labelKey: "nav.banking", feature: "banking" },
       { href: "/vat", labelKey: "nav.vat" },
       { href: "/expenses", labelKey: "expenses.title" },
+      {
+        href: "/returns",
+        labelEn: "Returns control",
+        labelSi: "ආපසු භාණ්ඩ පාලනය",
+        roleOnly: ["owner"],
+      },
       { href: "/job-costing", labelKey: "costing.title", feature: "ac_jobs" },
       { href: "/reports", labelKey: "reports.title" },
     ],
