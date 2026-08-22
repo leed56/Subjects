@@ -54,6 +54,7 @@ export function saleTenderSchemaUnavailable(error: string | null | undefined): b
     value.includes("finalize_sale_with_tenders") ||
     value.includes("finalize_sale_with_private_tenders") ||
     value.includes("finalize_sale_with_private_tenders_v2") ||
+    value.includes("finalize_sale_with_private_tenders_v3") ||
     value.includes("configure_pos_bank_route") ||
     value.includes("could not find the function") ||
     value.includes("schema cache") ||
@@ -110,11 +111,11 @@ export async function configurePosBankRoute(
 /**
  * Calls the database transaction that owns the COMPLETE mixed-tender commit.
  *
- * Migration 00015 wraps the core 00014 finalizer so operational staff can accept
- * bank transfer / cheque without seeing protected owner banking rows. Migration
- * 00016 adds the outer idempotency boundary so a retry after a successful hidden
- * bank/cheque normalization returns the committed sale instead of replaying the
- * raw staff payload into the inner finalizer.
+ * Migration 00015 protects bank / cheque source identifiers, 00016 hardens
+ * retries before hidden-source normalization, and 00017 allows a shop whose
+ * plan/sector genuinely has no Banking module to record a customer bank-transfer
+ * tender without fabricating an internal bank account or bank-ledger posting.
+ * Banking-enabled shops still require the owner's private POS bank route.
  *
  * The current Sales page remains on the legacy path until these migrations are
  * deployed and verified on the real LakBiz database; there must never be two
@@ -132,7 +133,7 @@ export async function finalizeSaleWithTenders(
   if (!input.lines.length) return { ok: false, error: "Add at least one sale item" };
   if (!input.tenders.length) return { ok: false, error: "Add at least one payment tender" };
 
-  const { data, error } = await supabase.rpc("finalize_sale_with_private_tenders_v2", {
+  const { data, error } = await supabase.rpc("finalize_sale_with_private_tenders_v3", {
     p_organization_id: organizationId,
     p_sale_id: input.saleId,
     p_customer_id: input.customerId ?? null,
