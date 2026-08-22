@@ -2,11 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { PureVariantStockAssignment } from "@/components/stock/pure-variant-stock-assignment";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
-import { PageHeader, StatusBadge, EmptyState } from "@/components/ui/primitives";
+import { EmptyState, PageHeader, StatusBadge } from "@/components/ui/primitives";
 import { useLocale } from "@/lib/i18n/locale-provider";
-import { inventoryModeLabel, inventoryTrackingPreset, type InventoryTrackingMode } from "@/lib/inventory-tracking";
+import {
+  inventoryModeLabel,
+  inventoryTrackingPreset,
+  type InventoryTrackingMode,
+} from "@/lib/inventory-tracking";
 import {
   createInventoryLot,
   createInventoryUnit,
@@ -33,7 +38,16 @@ const secondary = "inline-flex h-10 items-center justify-center rounded-xl borde
 function schemaMissing(error: string | null): boolean {
   if (!error) return false;
   const value = error.toLowerCase();
-  return value.includes("does not exist") || value.includes("schema cache") || value.includes("could not find the table");
+  return (
+    value.includes("does not exist") ||
+    value.includes("schema cache") ||
+    value.includes("could not find the table") ||
+    value.includes("adjust_product_variant_stock")
+  );
+}
+
+function identityLabel(unit: InventoryUnit): string {
+  return unit.imei || unit.serialNo || unit.barcode || unit.id.slice(0, 8);
 }
 
 export default function AdvancedInventoryPage() {
@@ -73,11 +87,33 @@ export default function AdvancedInventoryPage() {
   const [unitVariantId, setUnitVariantId] = useState("");
 
   const preset = inventoryTrackingPreset(org.sector);
-  const selected = data?.products.find((p) => p.id === productId) ?? null;
+  const selected = data?.products.find((product) => product.id === productId) ?? null;
   const mode = profile?.trackingMode ?? preset.defaultMode;
-  const usesVariants = mode === "variant" || mode === "variant_serial" || mode === "variant_lot";
+  const usesVariants = ["variant", "variant_serial", "variant_lot"].includes(mode);
   const usesLots = mode === "lot" || mode === "variant_lot";
   const usesSerial = mode === "serial" || mode === "variant_serial";
+
+  const axisNames = useMemo(() => {
+    const values = profile?.variantAxes?.length ? profile.variantAxes : preset.variantAxes;
+    return [values[0] ?? "variant", values[1] ?? "option"];
+  }, [profile?.variantAxes, preset.variantAxes]);
+
+  const availableLots = lots.filter(
+    (lot) =>
+      lot.status === "available" &&
+      lot.qtyOnHand > 0 &&
+      (!lot.expiryDate || lot.expiryDate >= new Date().toISOString().slice(0, 10)),
+  );
+  const availableUnits = units.filter((unit) => unit.status === "available");
+  const identityOnHand =
+    mode === "variant"
+      ? variants.reduce((sum, variant) => sum + variant.stockQty, 0)
+      : usesLots
+        ? lots.reduce((sum, lot) => sum + lot.qtyOnHand, 0)
+        : usesSerial
+          ? units.filter((unit) => !["sold", "written_off"].includes(unit.status)).length
+          : selected?.stockQty ?? 0;
+  const unregisteredQty = Math.max(0, (selected?.stockQty ?? 0) - identityOnHand);
 
   useEffect(() => {
     if (!productId && data?.products.length) setProductId(data.products[0].id);
@@ -93,7 +129,8 @@ export default function AdvancedInventoryPage() {
       fetchInventoryLots(id, canSeeFinancials),
       fetchInventoryUnits(id, canSeeFinancials),
     ]);
-    const firstError = profileResult.error || variantResult.error || lotResult.error || unitResult.error;
+    const firstError =
+      profileResult.error || variantResult.error || lotResult.error || unitResult.error;
     if (schemaMissing(firstError)) {
       setDbUpgradeNeeded(true);
       setProfile(null);
@@ -117,30 +154,6 @@ export default function AdvancedInventoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId, org.id, org.isAuthenticated, canSeeFinancials]);
 
-  const axisNames = useMemo(() => {
-    const values = profile?.variantAxes?.length ? profile.variantAxes : preset.variantAxes;
-    return [values[0] ?? "variant", values[1] ?? "option"];
-  }, [profile?.variantAxes, preset.variantAxes]);
-
-  if (!ready || !data) {
-    return (
-      <AppShell>
-        <ProMain><ProLoadingState label={si ? "පූරණය වෙමින්…" : "Loading inventory…"} /></ProMain>
-      </AppShell>
-    );
-  }
-
-  if (!org.isAuthenticated) {
-    return (
-      <AppShell>
-        <ProMain>
-          <PageHeader title={si ? "උසස් තොග පාලනය" : "Advanced inventory"} />
-          <EmptyState title={si ? "Cloud shop account එකක් අවශ්‍යයි" : "A cloud shop account is required"} description={si ? "Batch, variant සහ IMEI/serial තොරතුරු ආරක්ෂිත cloud වාර්තා ලෙස පවත්වාගෙන යයි." : "Batch, variant and IMEI/serial identities are maintained as protected cloud records."} />
-        </ProMain>
-      </AppShell>
-    );
-  }
-
   async function saveProfile(nextMode: InventoryTrackingMode) {
     if (!selected || !org.id) return;
     setSaving(true);
@@ -150,8 +163,10 @@ export default function AdvancedInventoryPage() {
       organizationId: org.id,
       trackingMode: nextMode,
       variantAxes: preset.variantAxes,
-      fefoEnabled: nextMode === "lot" || nextMode === "variant_lot" ? preset.fefo : false,
-      requireSerialOnSale: nextMode === "serial" || nextMode === "variant_serial",
+      fefoEnabled:
+        nextMode === "lot" || nextMode === "variant_lot" ? preset.fefo : false,
+      requireSerialOnSale:
+        nextMode === "serial" || nextMode === "variant_serial",
       allowNegativeStock: false,
     });
     setSaving(false);
@@ -196,14 +211,19 @@ export default function AdvancedInventoryPage() {
     if (!selected || !org.id || !batchNo.trim() || Number(lotQty) <= 0) return;
     setSaving(true);
     setMessage(null);
-    const result = await createInventoryLot(org.id, {
-      productId: selected.id,
-      variantId: lotVariantId || null,
-      batchNo: batchNo.trim(),
-      expiryDate: expiryDate || null,
-      qty: Number(lotQty),
-      unitCost: canSeeFinancials && lotCost !== "" ? Number(lotCost) : undefined,
-    }, canSeeFinancials);
+    const result = await createInventoryLot(
+      org.id,
+      {
+        productId: selected.id,
+        variantId: lotVariantId || null,
+        batchNo: batchNo.trim(),
+        expiryDate: expiryDate || null,
+        qty: Number(lotQty),
+        unitCost:
+          canSeeFinancials && lotCost !== "" ? Number(lotCost) : undefined,
+      },
+      canSeeFinancials,
+    );
     setSaving(false);
     if (result.error) {
       setMessage(result.error);
@@ -218,19 +238,28 @@ export default function AdvancedInventoryPage() {
   }
 
   async function addUnit() {
-    if (!selected || !org.id || !serialNo.trim() && !imei.trim() && !unitBarcode.trim()) return;
+    if (
+      !selected ||
+      !org.id ||
+      (!serialNo.trim() && !imei.trim() && !unitBarcode.trim())
+    ) return;
     setSaving(true);
     setMessage(null);
-    const result = await createInventoryUnit(org.id, {
-      productId: selected.id,
-      variantId: unitVariantId || null,
-      serialNo: serialNo.trim() || undefined,
-      imei: imei.trim() || undefined,
-      secondaryImei: secondaryImei.trim() || undefined,
-      barcode: unitBarcode.trim() || undefined,
-      warrantyExpiry: warrantyExpiry || null,
-      unitCost: canSeeFinancials && unitCost !== "" ? Number(unitCost) : undefined,
-    }, canSeeFinancials);
+    const result = await createInventoryUnit(
+      org.id,
+      {
+        productId: selected.id,
+        variantId: unitVariantId || null,
+        serialNo: serialNo.trim() || undefined,
+        imei: imei.trim() || undefined,
+        secondaryImei: secondaryImei.trim() || undefined,
+        barcode: unitBarcode.trim() || undefined,
+        warrantyExpiry: warrantyExpiry || null,
+        unitCost:
+          canSeeFinancials && unitCost !== "" ? Number(unitCost) : undefined,
+      },
+      canSeeFinancials,
+    );
     setSaving(false);
     if (result.error) {
       setMessage(result.error);
@@ -246,17 +275,41 @@ export default function AdvancedInventoryPage() {
     await refresh(selected.id);
   }
 
+  if (!ready || !data) {
+    return (
+      <AppShell>
+        <ProMain>
+          <ProLoadingState label={si ? "පූරණය වෙමින්…" : "Loading inventory…"} />
+        </ProMain>
+      </AppShell>
+    );
+  }
+
+  if (!org.isAuthenticated) {
+    return (
+      <AppShell>
+        <ProMain>
+          <PageHeader title={si ? "උසස් තොග පාලනය" : "Inventory control"} />
+          <EmptyState
+            title={si ? "Cloud shop account එකක් අවශ්‍යයි" : "A cloud shop account is required"}
+            description={si ? "Batch, variant සහ IMEI/serial තොරතුරු ආරක්ෂිත cloud වාර්තා ලෙස පවත්වාගෙන යයි." : "Batch, variant and IMEI/serial identities are maintained as protected cloud records."}
+          />
+        </ProMain>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
       <ProMain>
         <PageHeader
-          title={si ? "උසස් තොග පාලනය" : "Advanced inventory"}
-          description={si ? "Batch, expiry, size/colour variants සහ IMEI/serial identity — ව්‍යාපාර වර්ගයට ගැළපෙන ලෙස." : "Batch, expiry, size/colour variants and IMEI/serial identity — adapted to your business type."}
+          title={si ? "උසස් තොග පාලනය" : "Inventory control"}
+          description={si ? "Batch, expiry, size/colour variants සහ IMEI/serial identity — ඔබේ ව්‍යාපාර වර්ගයට ගැළපෙන ලෙස." : "Batch, expiry, size/colour variants and IMEI/serial identity — adapted to your business type."}
           actions={<Link href="/stock" className={secondary}>{si ? "සාමාන්‍ය තොගයට" : "Back to stock"}</Link>}
         />
 
         <div className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className={card}>
+          <section className={card}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700">{si ? "ව්‍යාපාර තොග රීතිය" : "Sector inventory strategy"}</p>
@@ -265,27 +318,36 @@ export default function AdvancedInventoryPage() {
               </div>
               <StatusBadge tone="info">{org.sector.replaceAll("_", " ")}</StatusBadge>
             </div>
-          </div>
-          <div className={card}>
+          </section>
+
+          <section className={card}>
             <label className={label}>{si ? "භාණ්ඩය තෝරන්න" : "Select product"}</label>
-            <select className={input} value={productId} onChange={(e) => setProductId(e.target.value)}>
-              {data.products.map((product) => <option key={product.id} value={product.id}>{product.name}{product.sku ? ` · ${product.sku}` : ""}</option>)}
+            <select className={input} value={productId} onChange={(event) => setProductId(event.target.value)}>
+              {data.products.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name}{product.sku ? ` · ${product.sku}` : ""}
+                </option>
+              ))}
             </select>
-          </div>
+          </section>
         </div>
 
         {data.products.length === 0 ? (
-          <EmptyState title={si ? "පළමුව භාණ්ඩයක් එක් කරන්න" : "Add a product first"} description={si ? "උසස් තොග identity එකක් භාණ්ඩයකට සම්බන්ධ වේ." : "Advanced inventory identities are attached to a product."} action={<Link href="/stock" className={primary}>{si ? "භාණ්ඩයක් එක් කරන්න" : "Add product"}</Link>} />
+          <EmptyState
+            title={si ? "පළමුව භාණ්ඩයක් එක් කරන්න" : "Add a product first"}
+            description={si ? "Batch / variant / serial identity එකක් සාමාන්‍ය stock භාණ්ඩයකට සම්බන්ධ වේ." : "Batch, variant and serial identities attach to a normal stock product."}
+            action={<Link href="/stock" className={primary}>{si ? "භාණ්ඩයක් එක් කරන්න" : "Add product"}</Link>}
+          />
         ) : dbUpgradeNeeded ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
             <p className="text-sm font-semibold text-amber-950">{si ? "Advanced inventory database upgrade එක තවම live database එකට යොදා නැත." : "The advanced-inventory database upgrade has not been applied to the live database yet."}</p>
-            <p className="mt-2 text-sm leading-6 text-amber-800">{si ? "මෙය UI දෝෂයක් නොවේ. Migration apply කළ පසු මෙම screen එක ස්වයංක්‍රීයව batch / IMEI / variant data පෙන්වයි." : "This is not a UI failure. Once the migration is applied, this workspace automatically becomes active for batch, IMEI and variant records."}</p>
+            <p className="mt-2 text-sm leading-6 text-amber-800">{si ? "Migration apply කළ පසු මෙම workspace එක batch / IMEI / variant data සමඟ ස්වයංක්‍රීයව සක්‍රීය වේ." : "Once the migration is applied, this workspace automatically activates batch, IMEI and variant records."}</p>
           </div>
         ) : loadingDetail ? (
           <div className={card}><p className="text-sm text-slate-500">{si ? "තොරතුරු පූරණය වෙමින්…" : "Loading tracking details…"}</p></div>
         ) : selected ? (
           <div className="space-y-5">
-            {message && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{message}</div>}
+            {message && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">{message}</div>}
 
             <section className={card}>
               <div className="flex flex-wrap items-start justify-between gap-4">
@@ -296,70 +358,171 @@ export default function AdvancedInventoryPage() {
                 </div>
                 <div className="min-w-[230px]">
                   <label className={label}>{si ? "Tracking ආකාරය" : "Tracking mode"}</label>
-                  <select className={input} value={mode} disabled={saving} onChange={(e) => void saveProfile(e.target.value as InventoryTrackingMode)}>
-                    {preset.allowedModes.map((value) => <option key={value} value={value}>{inventoryModeLabel(value, locale)}</option>)}
+                  <select className={input} value={mode} disabled={saving} onChange={(event) => void saveProfile(event.target.value as InventoryTrackingMode)}>
+                    {preset.allowedModes.map((value) => (
+                      <option key={value} value={value}>{inventoryModeLabel(value, locale)}</option>
+                    ))}
                   </select>
                 </div>
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{si ? "Variants" : "Variants"}</p><p className="mt-1 text-xl font-semibold text-slate-950">{variants.length}</p></div>
-                <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{si ? "Batches" : "Batches"}</p><p className="mt-1 text-xl font-semibold text-slate-950">{lots.filter((lot) => lot.qtyOnHand > 0).length}</p></div>
-                <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{si ? "Serialized units" : "Serialized units"}</p><p className="mt-1 text-xl font-semibold text-slate-950">{units.filter((unit) => unit.status === "available").length}</p></div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-xl bg-slate-950 p-3 text-white">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{si ? "මුළු Stock quantity" : "Aggregate stock"}</p>
+                  <p className="mt-1 text-xl font-semibold">{selected.stockQty}</p>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{si ? "Identity මගින් හඳුනාගත්" : "Identity-covered"}</p>
+                  <p className="mt-1 text-xl font-semibold text-slate-950">{identityOnHand}</p>
+                </div>
+                <div className={`rounded-xl p-3 ${unregisteredQty > 0 ? "bg-amber-50" : "bg-emerald-50"}`}>
+                  <p className={`text-[10px] font-bold uppercase tracking-[0.12em] ${unregisteredQty > 0 ? "text-amber-700" : "text-emerald-700"}`}>{si ? "තව හඳුනාගත යුතු" : "Still unassigned"}</p>
+                  <p className={`mt-1 text-xl font-semibold ${unregisteredQty > 0 ? "text-amber-950" : "text-emerald-900"}`}>{unregisteredQty}</p>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{usesLots ? (si ? "Valid batches" : "Valid batches") : usesSerial ? (si ? "Available units" : "Available units") : (si ? "Variants" : "Variants")}</p>
+                  <p className="mt-1 text-xl font-semibold text-slate-950">{usesLots ? availableLots.length : usesSerial ? availableUnits.length : variants.length}</p>
+                </div>
               </div>
+
+              {mode !== "simple" && unregisteredQty > 0 && (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+                  {si ? `Stock page එකේ ${selected.stockQty} units තිබේ. ඒවායින් ${unregisteredQty} තවම ${usesLots ? "batch" : usesSerial ? "IMEI/serial" : "variant"} identity එකකට වෙන් කර නැත.` : `${selected.stockQty} units exist in aggregate Stock. ${unregisteredQty} still need a ${usesLots ? "batch" : usesSerial ? "serial/IMEI" : "variant"} identity.`}
+                </div>
+              )}
             </section>
 
             {usesVariants && (
               <section className={card}>
-                <div className="flex items-end justify-between gap-3">
-                  <div><h3 className="text-base font-semibold text-slate-950">{si ? "ප්‍රභේද / Variants" : "Variants"}</h3><p className="mt-1 text-sm text-slate-500">{si ? "ප්‍රමාණ, වර්ණ, storage වැනි විකල්ප වෙන වෙනම හඳුනාගන්න." : "Keep size, colour, storage or other options as separate stock identities."}</p></div>
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-950">{si ? "ප්‍රභේද / Variants" : "Variants"}</h3>
+                    <p className="mt-1 text-sm text-slate-500">{si ? "ප්‍රමාණ, වර්ණ, storage වැනි විකල්ප වෙන වෙනම හඳුනාගන්න." : "Keep size, colour, storage or other options as separate stock identities."}</p>
+                  </div>
                   <StatusBadge tone="neutral">{axisNames.join(" + ")}</StatusBadge>
                 </div>
+
                 <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                  <label className={label}>{si ? "පෙන්වන නම" : "Variant label"}<input className={input} value={variantLabel} onChange={(e) => setVariantLabel(e.target.value)} placeholder={org.sector === "footwear" ? "Black · EU 42" : "256GB · Black"} /></label>
-                  <label className={label}>{axisNames[0]}<input className={input} value={variantAxisA} onChange={(e) => setVariantAxisA(e.target.value)} /></label>
-                  <label className={label}>{axisNames[1]}<input className={input} value={variantAxisB} onChange={(e) => setVariantAxisB(e.target.value)} /></label>
-                  <label className={label}>SKU<input className={input} value={variantSku} onChange={(e) => setVariantSku(e.target.value)} /></label>
-                  <label className={label}>Barcode<input className={input} value={variantBarcode} onChange={(e) => setVariantBarcode(e.target.value)} /></label>
+                  <label className={label}>{si ? "පෙන්වන නම" : "Variant label"}<input className={input} value={variantLabel} onChange={(event) => setVariantLabel(event.target.value)} placeholder={org.sector === "footwear" ? "Black · EU 42" : "256GB · Black"} /></label>
+                  <label className={label}>{axisNames[0]}<input className={input} value={variantAxisA} onChange={(event) => setVariantAxisA(event.target.value)} /></label>
+                  <label className={label}>{axisNames[1]}<input className={input} value={variantAxisB} onChange={(event) => setVariantAxisB(event.target.value)} /></label>
+                  <label className={label}>SKU<input className={input} value={variantSku} onChange={(event) => setVariantSku(event.target.value)} /></label>
+                  <label className={label}>Barcode<input className={input} value={variantBarcode} onChange={(event) => setVariantBarcode(event.target.value)} /></label>
                 </div>
                 <button type="button" className={`${primary} mt-4`} disabled={saving || !variantLabel.trim()} onClick={() => void addVariant()}>{si ? "Variant එක් කරන්න" : "Add variant"}</button>
+
+                {mode === "variant" && org.id && (
+                  <PureVariantStockAssignment
+                    organizationId={org.id}
+                    productId={selected.id}
+                    productQty={selected.stockQty}
+                    variants={variants}
+                    disabled={saving}
+                    onUpdated={() => refresh(selected.id)}
+                  />
+                )}
+
                 <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
-                  {variants.length === 0 ? <p className="p-5 text-sm text-slate-500">{si ? "Variants තවම නැත." : "No variants yet."}</p> : variants.map((variant) => <div key={variant.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0"><div><p className="text-sm font-semibold text-slate-900">{variant.label}</p><p className="mt-0.5 text-xs text-slate-500">{Object.entries(variant.attributes).map(([key, value]) => `${key}: ${value}`).join(" · ") || variant.sku || "—"}</p></div><StatusBadge tone={variant.active ? "positive" : "neutral"}>{variant.active ? (si ? "සක්‍රීය" : "Active") : (si ? "අක්‍රීය" : "Inactive")}</StatusBadge></div>)}
+                  {variants.length === 0 ? (
+                    <p className="p-5 text-sm text-slate-500">{si ? "Variants තවම නැත." : "No variants yet."}</p>
+                  ) : (
+                    variants.map((variant) => {
+                      const derivedQty = mode === "variant_lot"
+                        ? lots.filter((lot) => lot.variantId === variant.id).reduce((sum, lot) => sum + lot.qtyOnHand, 0)
+                        : mode === "variant_serial"
+                          ? units.filter((unit) => unit.variantId === variant.id && unit.status === "available").length
+                          : variant.stockQty;
+                      return (
+                        <div key={variant.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">{variant.label}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">{Object.entries(variant.attributes).map(([key, value]) => `${key}: ${value}`).join(" · ") || variant.sku || "—"}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{derivedQty} {si ? "තිබේ" : "available"}</span>
+                            <StatusBadge tone={variant.active ? "positive" : "neutral"}>{variant.active ? (si ? "සක්‍රීය" : "Active") : (si ? "අක්‍රීය" : "Inactive")}</StatusBadge>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </section>
             )}
 
             {usesLots && (
               <section className={card}>
-                <div><h3 className="text-base font-semibold text-slate-950">{si ? "Batch / expiry තොග" : "Batch / expiry stock"}</h3><p className="mt-1 text-sm text-slate-500">{si ? "එකම ඖෂධයේ batches සහ expiry dates වෙන වෙනම තබා FEFO සඳහා සූදානම් කරන්න." : "Keep each batch and expiry separately so pharmacy FEFO allocation can use the right stock."}</p></div>
-                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                  {usesVariants && <label className={label}>{si ? "Variant" : "Variant"}<select className={input} value={lotVariantId} onChange={(e) => setLotVariantId(e.target.value)}><option value="">{si ? "ප්‍රධාන භාණ්ඩය" : "Base product"}</option>{variants.map((variant) => <option key={variant.id} value={variant.id}>{variant.label}</option>)}</select></label>}
-                  <label className={label}>{si ? "Batch / lot අංකය" : "Batch / lot no."}<input className={input} value={batchNo} onChange={(e) => setBatchNo(e.target.value)} /></label>
-                  <label className={label}>{si ? "කල් ඉකුත් දිනය" : "Expiry date"}<input type="date" className={input} value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} /></label>
-                  <label className={label}>{si ? "ප්‍රමාණය" : "Quantity"}<input type="number" min="0.001" step="0.001" className={input} value={lotQty} onChange={(e) => setLotQty(e.target.value)} /></label>
-                  {canSeeFinancials && <label className={label}>{si ? "ඒකක අභ්‍යන්තර පිරිවැය (LKR)" : "Internal unit cost (LKR)"}<input type="number" min="0" className={input} value={lotCost} onChange={(e) => setLotCost(e.target.value)} /></label>}
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-950">{si ? "Batch / expiry තොග" : "Batch / expiry stock"}</h3>
+                    <p className="mt-1 text-sm text-slate-500">{si ? "එකම භාණ්ඩයේ batches සහ expiry dates වෙන වෙනම තබා POS එකට FEFO නිකුත් කිරීම සූදානම් කරන්න." : "Keep batches and expiry dates separately so POS can issue the earliest valid stock automatically by FEFO."}</p>
+                  </div>
+                  <Link href="/stock" className="text-xs font-semibold text-teal-700 hover:underline">{si ? "Stock in මුලින් කරන්න →" : "Stock in first →"}</Link>
                 </div>
-                <button type="button" className={`${primary} mt-4`} disabled={saving || !batchNo.trim() || Number(lotQty) <= 0} onClick={() => void addLot()}>{si ? "Batch එක එක් කරන්න" : "Add batch"}</button>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  {usesVariants && <label className={label}>Variant<select className={input} value={lotVariantId} onChange={(event) => setLotVariantId(event.target.value)}><option value="">{si ? "තෝරන්න" : "Select variant"}</option>{variants.map((variant) => <option key={variant.id} value={variant.id}>{variant.label}</option>)}</select></label>}
+                  <label className={label}>{si ? "Batch / lot අංකය" : "Batch / lot no."}<input className={input} value={batchNo} onChange={(event) => setBatchNo(event.target.value)} /></label>
+                  <label className={label}>{si ? "කල් ඉකුත් දිනය" : "Expiry date"}<input type="date" className={input} value={expiryDate} onChange={(event) => setExpiryDate(event.target.value)} /></label>
+                  <label className={label}>{si ? "ප්‍රමාණය" : "Quantity"}<input type="number" min="0.001" step="0.001" className={input} value={lotQty} onChange={(event) => setLotQty(event.target.value)} /></label>
+                  {canSeeFinancials && <label className={label}>{si ? "ඒකක අභ්‍යන්තර පිරිවැය (LKR)" : "Internal unit cost (LKR)"}<input type="number" min="0" className={input} value={lotCost} onChange={(event) => setLotCost(event.target.value)} /></label>}
+                </div>
+                <button type="button" className={`${primary} mt-4`} disabled={saving || !batchNo.trim() || Number(lotQty) <= 0 || (usesVariants && !lotVariantId)} onClick={() => void addLot()}>{si ? "Batch එක ලියාපදිංචි කරන්න" : "Register batch"}</button>
+
                 <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
-                  {lots.length === 0 ? <p className="p-5 text-sm text-slate-500">{si ? "Batch වාර්තා තවම නැත." : "No batch records yet."}</p> : lots.map((lot) => <div key={lot.id} className="grid gap-2 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:grid-cols-[1fr_auto_auto] sm:items-center"><div><p className="text-sm font-semibold text-slate-900">{lot.batchNo}</p><p className="mt-0.5 text-xs text-slate-500">{lot.expiryDate ? `${si ? "Expiry" : "Expiry"}: ${lot.expiryDate}` : (si ? "Expiry නැත" : "No expiry set")}</p></div><div className="text-right"><p className="text-sm font-semibold text-slate-900">{lot.qtyOnHand}</p><p className="text-[10px] uppercase tracking-wide text-slate-400">{si ? "තිබෙන තොගය" : "on hand"}</p></div><StatusBadge tone={lot.status === "available" ? "positive" : lot.status === "expired" || lot.status === "recalled" ? "danger" : "warning"}>{lot.status}</StatusBadge></div>)}
+                  {lots.length === 0 ? (
+                    <p className="p-5 text-sm text-slate-500">{si ? "Batch වාර්තා තවම නැත." : "No batch records yet."}</p>
+                  ) : (
+                    lots.map((lot) => (
+                      <div key={lot.id} className="grid gap-2 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{lot.batchNo}</p>
+                          <p className="mt-0.5 text-xs text-slate-500">{lot.expiryDate ? `Expiry: ${lot.expiryDate}` : (si ? "Expiry නැත" : "No expiry set")}</p>
+                        </div>
+                        <div className="text-right"><p className="text-sm font-semibold text-slate-900">{lot.qtyOnHand}</p><p className="text-[10px] uppercase tracking-wide text-slate-400">{si ? "තිබෙන තොගය" : "on hand"}</p></div>
+                        <StatusBadge tone={lot.status === "available" ? "positive" : lot.status === "expired" || lot.status === "recalled" ? "danger" : "warning"}>{lot.status}</StatusBadge>
+                      </div>
+                    ))
+                  )}
                 </div>
               </section>
             )}
 
             {usesSerial && (
               <section className={card}>
-                <div><h3 className="text-base font-semibold text-slate-950">{si ? "IMEI / serial ඒකක" : "IMEI / serial units"}</h3><p className="mt-1 text-sm text-slate-500">{si ? "එක් එක් භෞතික උපාංගය වෙනම identity එකක් ලෙස සටහන් කරන්න." : "Record each physical device as its own identity for warranty, sale and return traceability."}</p></div>
-                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  {usesVariants && <label className={label}>Variant<select className={input} value={unitVariantId} onChange={(e) => setUnitVariantId(e.target.value)}><option value="">{si ? "ප්‍රධාන භාණ්ඩය" : "Base product"}</option>{variants.map((variant) => <option key={variant.id} value={variant.id}>{variant.label}</option>)}</select></label>}
-                  <label className={label}>IMEI<input className={input} value={imei} onChange={(e) => setImei(e.target.value)} /></label>
-                  <label className={label}>{si ? "දෙවන IMEI" : "Secondary IMEI"}<input className={input} value={secondaryImei} onChange={(e) => setSecondaryImei(e.target.value)} /></label>
-                  <label className={label}>{si ? "Serial අංකය" : "Serial number"}<input className={input} value={serialNo} onChange={(e) => setSerialNo(e.target.value)} /></label>
-                  <label className={label}>Barcode<input className={input} value={unitBarcode} onChange={(e) => setUnitBarcode(e.target.value)} /></label>
-                  <label className={label}>{si ? "වගකීම් අවසන් දිනය" : "Warranty expiry"}<input type="date" className={input} value={warrantyExpiry} onChange={(e) => setWarrantyExpiry(e.target.value)} /></label>
-                  {canSeeFinancials && <label className={label}>{si ? "අභ්‍යන්තර ඒකක පිරිවැය (LKR)" : "Internal unit cost (LKR)"}<input type="number" min="0" className={input} value={unitCost} onChange={(e) => setUnitCost(e.target.value)} /></label>}
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-950">{si ? "IMEI / serial ඒකක" : "IMEI / serial units"}</h3>
+                    <p className="mt-1 text-sm text-slate-500">{si ? "එක් එක් භෞතික උපාංගය වෙනම identity එකක් ලෙස ලියාපදිංචි කර POS sale, warranty සහ return එකට සම්බන්ධ කරන්න." : "Register each physical device as its own identity so POS, warranty and returns can trace the exact unit."}</p>
+                  </div>
+                  <Link href="/stock" className="text-xs font-semibold text-teal-700 hover:underline">{si ? "Stock in මුලින් කරන්න →" : "Stock in first →"}</Link>
                 </div>
-                <button type="button" className={`${primary} mt-4`} disabled={saving || !imei.trim() && !serialNo.trim() && !unitBarcode.trim()} onClick={() => void addUnit()}>{si ? "Serialized unit එක් කරන්න" : "Add serialized unit"}</button>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {usesVariants && <label className={label}>Variant<select className={input} value={unitVariantId} onChange={(event) => setUnitVariantId(event.target.value)}><option value="">{si ? "තෝරන්න" : "Select variant"}</option>{variants.map((variant) => <option key={variant.id} value={variant.id}>{variant.label}</option>)}</select></label>}
+                  <label className={label}>IMEI<input className={input} value={imei} onChange={(event) => setImei(event.target.value)} /></label>
+                  <label className={label}>{si ? "දෙවන IMEI" : "Secondary IMEI"}<input className={input} value={secondaryImei} onChange={(event) => setSecondaryImei(event.target.value)} /></label>
+                  <label className={label}>{si ? "Serial අංකය" : "Serial number"}<input className={input} value={serialNo} onChange={(event) => setSerialNo(event.target.value)} /></label>
+                  <label className={label}>Barcode<input className={input} value={unitBarcode} onChange={(event) => setUnitBarcode(event.target.value)} /></label>
+                  <label className={label}>{si ? "වගකීම් අවසන් දිනය" : "Warranty expiry"}<input type="date" className={input} value={warrantyExpiry} onChange={(event) => setWarrantyExpiry(event.target.value)} /></label>
+                  {canSeeFinancials && <label className={label}>{si ? "අභ්‍යන්තර ඒකක පිරිවැය (LKR)" : "Internal unit cost (LKR)"}<input type="number" min="0" className={input} value={unitCost} onChange={(event) => setUnitCost(event.target.value)} /></label>}
+                </div>
+                <button type="button" className={`${primary} mt-4`} disabled={saving || (!imei.trim() && !serialNo.trim() && !unitBarcode.trim()) || (usesVariants && !unitVariantId)} onClick={() => void addUnit()}>{si ? "Serialized unit ලියාපදිංචි කරන්න" : "Register serialized unit"}</button>
+
                 <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
-                  {units.length === 0 ? <p className="p-5 text-sm text-slate-500">{si ? "Serialized units තවම නැත." : "No serialized units yet."}</p> : units.map((unit) => <div key={unit.id} className="grid gap-2 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:grid-cols-[1fr_auto] sm:items-center"><div><p className="font-mono text-sm font-semibold text-slate-900">{unit.imei || unit.serialNo || unit.barcode}</p><p className="mt-0.5 text-xs text-slate-500">{unit.imei && unit.serialNo ? `Serial ${unit.serialNo}` : unit.warrantyExpiry ? `${si ? "Warranty" : "Warranty"}: ${unit.warrantyExpiry}` : "—"}</p></div><StatusBadge tone={unit.status === "available" ? "positive" : unit.status === "sold" ? "neutral" : "warning"}>{unit.status}</StatusBadge></div>)}
+                  {units.length === 0 ? (
+                    <p className="p-5 text-sm text-slate-500">{si ? "Serialized units තවම නැත." : "No serialized units yet."}</p>
+                  ) : (
+                    units.map((unit) => (
+                      <div key={unit.id} className="grid gap-2 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:grid-cols-[1fr_auto] sm:items-center">
+                        <div>
+                          <p className="font-mono text-sm font-semibold text-slate-900">{identityLabel(unit)}</p>
+                          <p className="mt-0.5 text-xs text-slate-500">{unit.imei && unit.serialNo ? `Serial ${unit.serialNo}` : unit.warrantyExpiry ? `Warranty: ${unit.warrantyExpiry}` : "—"}</p>
+                        </div>
+                        <StatusBadge tone={unit.status === "available" ? "positive" : unit.status === "sold" ? "neutral" : "warning"}>{unit.status}</StatusBadge>
+                      </div>
+                    ))
+                  )}
                 </div>
               </section>
             )}
@@ -367,12 +530,12 @@ export default function AdvancedInventoryPage() {
             {mode === "simple" && (
               <section className={card}>
                 <h3 className="text-base font-semibold text-slate-950">{si ? "සරල තොග පාලනය" : "Simple stock control"}</h3>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{si ? "මෙම භාණ්ඩය දැනට LakBiz හි සාමාන්‍ය quantity + stock movement ක්‍රමය භාවිතා කරයි. අවශ්‍ය ව්‍යාපාරවලට ඉහළ tracking mode එකක් තෝරාගත හැක." : "This product currently uses LakBiz's standard quantity + stock-movement workflow. Switch to an allowed advanced mode only when the physical stock needs lot, variant or serial identity."}</p>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{si ? "මෙම භාණ්ඩය දැනට LakBiz හි සාමාන්‍ය quantity + stock movement ක්‍රමය භාවිතා කරයි." : "This product currently uses LakBiz's standard quantity + stock-movement workflow. Use an advanced mode only when the physical stock needs lot, variant or serial identity."}</p>
               </section>
             )}
 
             <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-900">
-              {si ? "සුරක්ෂිත rollout: advanced identity layer එක additive ය. POS/GRN allocation integration සම්පූර්ණ වන තුරු existing Stock quantity එක double-update නොකරයි." : "Safe rollout: the advanced identity layer is additive. It does not double-update the existing Stock quantity while POS/GRN allocation integration is being completed."}
+              {si ? "Stock quantity එක මුල් ledger එකයි. මෙම workspace එක එම තොගයට batch / size-colour / IMEI identity ලබා දෙයි. POS එක දැන් එම exact identity එකම නිකුත් කරයි." : "Aggregate Stock quantity remains the primary ledger. This workspace assigns batch, size/colour or IMEI identity to that stock, and POS now issues the exact identity."}
             </div>
           </div>
         ) : null}
