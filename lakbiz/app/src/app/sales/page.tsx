@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
+import { AdvancedSaleSelector, type AdvancedSaleLineState } from "@/components/sales/advanced-sale-selector";
 import {
   ProBadge,
   ProButton,
@@ -20,10 +21,12 @@ import { formatLkr } from "@/lib/format";
 import { buildQuoteTextFromLines, whatsappShareUrl } from "@/lib/invoice";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
+import { buildSaleInventoryAllocationLine } from "@/lib/inventory-sale-allocation";
 import { splitInclusiveTotal } from "@/lib/vat";
 import { customerPrimaryLabel } from "@/lib/contact-type";
 import { effectiveUnitPrice, wholesalePriceFor } from "@/lib/company-pricing";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { allocateSaleInventory } from "@/lib/supabase/sale-inventory-client";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -31,14 +34,19 @@ import type { PaymentMethod, ProductCondition } from "@/lib/types";
 
 type ConditionFilter = "all" | ProductCondition;
 
+const ADVANCED_POS_SECTORS = new Set(["pharmacy", "mobile_shop", "electronics", "footwear"]);
+
 export default function SalesPage() {
   const { data, ready, createSaleToCloud } = useAppStore();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { org, can, canSeeFinancials } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
+  const si = locale === "si";
   const showAcBuyerPanel = org.sector === "ac_hvac" && can("ac_jobs");
+  const advancedPosEnabled = ADVANCED_POS_SECTORS.has(org.sector);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
+  const [inventoryStates, setInventoryStates] = useState<Record<string, AdvancedSaleLineState>>({});
   const [search, setSearch] = useState("");
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
   const [discount, setDiscount] = useState(0);
@@ -81,6 +89,10 @@ export default function SalesPage() {
   const billVat = vatEnabled ? splitInclusiveTotal(netTotal) : null;
   const changeDue = cashReceived === "" ? 0 : Math.max(0, Number(cashReceived) - netTotal);
   const cartCount = lines.reduce((s, l) => s + l.qty, 0);
+  const advancedInventoryBlocked = advancedPosEnabled && lines.some((line) => {
+    const state = inventoryStates[line.product.id];
+    return !state || state.loading || !state.ready;
+  });
 
   if (!ready || !data) {
     return (
@@ -114,6 +126,14 @@ export default function SalesPage() {
   const setQty = (id: string, qty: number, max: number) => {
     const clamped = Math.max(0, Math.min(max, Number.isFinite(qty) ? qty : 0));
     setCart((c) => ({ ...c, [id]: clamped }));
+    if (clamped <= 0) {
+      setInventoryStates((current) => {
+        if (!current[id]) return current;
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+    }
   };
 
   const setOverride = (id: string, value: number) => {
@@ -130,6 +150,7 @@ export default function SalesPage() {
   const resetAfterSale = () => {
     setCart({});
     setPriceOverrides({});
+    setInventoryStates({});
     setWalkInName("");
     setBuyerPhone("");
     setBuyerAddress("");
@@ -161,6 +182,14 @@ export default function SalesPage() {
 
   const handleSale = async () => {
     if (saving || lines.length === 0) return;
+    if (advancedInventoryBlocked) {
+      setMessage(
+        si
+          ? "Checkout කිරීමට පෙර batch / variant / IMEI තේරීම් සම්පූර්ණ කරන්න."
+          : "Complete the batch, variant or IMEI selection before checkout.",
+      );
+      return;
+    }
     if (payment === "credit" && !customerId) {
       setMessage(t("sales.credit_need_customer"));
       return;
@@ -194,6 +223,26 @@ export default function SalesPage() {
       }
     }
 
+    const inventoryAllocationLines = [];
+    if (advancedPosEnabled) {
+      try {
+        for (const line of lines) {
+          const state = inventoryStates[line.product.id];
+          if (!state || state.degraded || state.mode === "simple") continue;
+          const allocation = buildSaleInventoryAllocationLine(
+            line.product.id,
+            line.qty,
+            state.mode,
+            state.selection,
+          );
+          if (allocation) inventoryAllocationLines.push(allocation);
+        }
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Inventory selection is incomplete.");
+        return;
+      }
+    }
+
     setSaving(true);
     setMessage("");
     const result = await createSaleToCloud(
@@ -217,14 +266,35 @@ export default function SalesPage() {
         postDated: payment === "cheque" ? postDated : undefined,
       },
     );
-    setSaving(false);
 
     if (!result.ok || !result.saleId) {
+      setSaving(false);
       setMessage(result.error ?? t("sales.failed"));
       return;
     }
 
     const saleId = result.saleId;
+    if (inventoryAllocationLines.length > 0 && org.id) {
+      const allocationResult = await allocateSaleInventory(
+        org.id,
+        saleId,
+        customerId || undefined,
+        inventoryAllocationLines,
+      );
+      if (!allocationResult.ok) {
+        setSaving(false);
+        resetAfterSale();
+        setLastBillId(saleId);
+        setMessage(
+          si
+            ? `විකිණීම සුරැකුණා. නමුත් exact batch/IMEI allocation එක සම්පූර්ණ නොවීය: ${allocationResult.error ?? "Unknown error"}. Inventory Control තුළ reconcile කරන්න.`
+            : `Sale saved, but the exact batch/IMEI allocation could not be completed: ${allocationResult.error ?? "Unknown error"}. Reconcile it in Inventory Control.`,
+        );
+        return;
+      }
+    }
+
+    setSaving(false);
     resetAfterSale();
     setLastBillId(saleId);
     const savedCustomer = showAcBuyerPanel && addToCustomers && !customerId;
@@ -454,7 +524,7 @@ export default function SalesPage() {
                   {lines.length === 0 ? (
                     <ProEmptyState title={t("sales.no_selected")} description={t("sales.choose_products_desc")} />
                   ) : (
-                    <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                    <div className="max-h-[30rem] space-y-3 overflow-y-auto pr-1">
                       {lines.map((l) => (
                         <div key={l.product.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                           <div className="flex justify-between gap-3">
@@ -475,6 +545,19 @@ export default function SalesPage() {
                               className="w-28 rounded-xl border border-slate-200 bg-white px-2 py-1.5 text-right text-xs font-bold text-slate-700 outline-none focus:border-teal-300"
                             />
                           </label>
+                          {advancedPosEnabled && (
+                            <AdvancedSaleSelector
+                              productId={l.product.id}
+                              qty={l.qty}
+                              value={inventoryStates[l.product.id]?.selection}
+                              onChange={(next) =>
+                                setInventoryStates((current) => ({
+                                  ...current,
+                                  [l.product.id]: next,
+                                }))
+                              }
+                            />
+                          )}
                         </div>
                       ))}
                     </div>
@@ -704,12 +787,12 @@ export default function SalesPage() {
                   )}
 
                   <button
-                    disabled={lines.length === 0 || !canWrite || saving}
-                    title={!canWrite ? (disabledHint ?? undefined) : undefined}
+                    disabled={lines.length === 0 || !canWrite || saving || advancedInventoryBlocked}
+                    title={!canWrite ? (disabledHint ?? undefined) : advancedInventoryBlocked ? (si ? "Batch / variant / IMEI තේරීම සම්පූර්ණ කරන්න" : "Complete inventory identity selection") : undefined}
                     onClick={() => void handleSale()}
                     className="w-full rounded-2xl bg-teal-600 py-4 text-sm font-bold text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {saving ? t("common.saving") : t("sales.complete")}
+                    {saving ? t("common.saving") : advancedInventoryBlocked ? (si ? "තොග හඳුනාගැනීම අවශ්‍යයි" : "Inventory selection required") : t("sales.complete")}
                   </button>
                 </div>
               </ProCard>
@@ -781,11 +864,11 @@ export default function SalesPage() {
               <p className="text-lg font-bold text-slate-950">{formatLkr(netTotal)}</p>
             </div>
             <button
-              disabled={!canWrite || saving}
+              disabled={!canWrite || saving || advancedInventoryBlocked}
               onClick={() => void handleSale()}
               className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {saving ? t("common.saving") : t("sales.complete")}
+              {saving ? t("common.saving") : advancedInventoryBlocked ? (si ? "තොග තේරීම" : "Select stock") : t("sales.complete")}
             </button>
           </div>
         </div>
