@@ -7,7 +7,19 @@ export type ReceivingQueueItem = {
   productId: string;
   mode: InventoryTrackingMode;
   identityCoverage: number;
+  /** Physical quantity already identified as a customer-return hold. It counts
+   * toward on-hand identity coverage but is deliberately NOT POS-available. */
+  returnHoldQty: number;
 };
+
+function relationMissing(error: { message?: string } | null | undefined): boolean {
+  const value = error?.message?.toLowerCase() ?? "";
+  return (
+    value.includes("does not exist") ||
+    value.includes("schema cache") ||
+    value.includes("could not find the table")
+  );
+}
 
 /**
  * Returns identity coverage for every advanced-tracked product in one shop.
@@ -15,11 +27,17 @@ export type ReceivingQueueItem = {
  * AppData store already owns that value. The caller joins these rows to its
  * current products and computes `stockQty - identityCoverage`.
  *
- * Availability sources mirror the registration guards and POS semantics:
+ * Physical-coverage sources mirror the registration guards:
  * - pure variant: explicit product_variants.stock_qty
- * - lot / variant_lot: physical qty_on_hand across all lots
+ * - lot / variant_lot: qty_on_hand across lots
  * - serial / variant_serial: every physical unit still on hand, including
  *   reserved/service/returned/damaged but excluding sold/written_off
+ * - customer-return holds: non-resellable returned quantity that is physically
+ *   back on hand but intentionally excluded from POS availability
+ *
+ * A serialized return with a known unit_id is already counted by the unit row
+ * after its status becomes `returned`, so its hold is not counted a second
+ * time. Identity-less legacy serialized holds do count here.
  */
 export async function fetchTrackedReceivingCoverage(
   organizationId: string,
@@ -54,7 +72,7 @@ export async function fetchTrackedReceivingCoverage(
     return mode === "serial" || mode === "variant_serial";
   });
 
-  const [variantResult, lotResult, unitResult] = await Promise.all([
+  const [variantResult, lotResult, unitResult, holdResult] = await Promise.all([
     needsVariants.length
       ? supabase
           .from("product_variants")
@@ -76,13 +94,26 @@ export async function fetchTrackedReceivingCoverage(
           .eq("organization_id", organizationId)
           .in("product_id", needsUnits)
       : Promise.resolve({ data: [], error: null }),
+    supabase
+      .from("inventory_return_holds")
+      .select("product_id, unit_id, qty")
+      .eq("organization_id", organizationId)
+      .is("released_at", null)
+      .in("product_id", productIds),
   ]);
 
-  const error = variantResult.error ?? lotResult.error ?? unitResult.error;
-  if (error) return { data: [], error: error.message };
+  const coreError = variantResult.error ?? lotResult.error ?? unitResult.error;
+  if (coreError) return { data: [], error: coreError.message };
+  if (holdResult.error && !relationMissing(holdResult.error)) {
+    return { data: [], error: holdResult.error.message };
+  }
 
   const coverage = new Map<string, number>();
-  for (const id of productIds) coverage.set(id, 0);
+  const holdQty = new Map<string, number>();
+  for (const id of productIds) {
+    coverage.set(id, 0);
+    holdQty.set(id, 0);
+  }
 
   for (const row of variantResult.data ?? []) {
     const id = String(row.product_id);
@@ -101,11 +132,31 @@ export async function fetchTrackedReceivingCoverage(
     coverage.set(id, (coverage.get(id) ?? 0) + 1);
   }
 
+  if (!holdResult.error) {
+    for (const row of holdResult.data ?? []) {
+      const id = String(row.product_id);
+      const mode = modes.get(id);
+      if (!mode) continue;
+
+      // Known serialized returns are already represented by their unit row in
+      // status=returned. Only legacy serialized holds with no unit identity add
+      // separate coverage here.
+      if ((mode === "serial" || mode === "variant_serial") && row.unit_id) {
+        continue;
+      }
+
+      const qty = Math.max(0, Number(row.qty ?? 0));
+      coverage.set(id, (coverage.get(id) ?? 0) + qty);
+      holdQty.set(id, (holdQty.get(id) ?? 0) + qty);
+    }
+  }
+
   return {
     data: productIds.map((productId) => ({
       productId,
       mode: modes.get(productId)!,
       identityCoverage: coverage.get(productId) ?? 0,
+      returnHoldQty: holdQty.get(productId) ?? 0,
     })),
     error: null,
   };
