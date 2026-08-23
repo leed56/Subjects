@@ -1,0 +1,103 @@
+name: LakBiz Demo Provision Observable
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/lakbiz-demo-provision-observable.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lakbiz-demo-business-provision
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    name: Ensure and verify Sri Lanka demo shops
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: lakbiz/app
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://zestppstpwjxriwcuykc.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      DEMO_PHARMACY_EMAIL: ${{ secrets.DEMO_PHARMACY_EMAIL }}
+      DEMO_PHARMACY_PASSWORD: ${{ secrets.DEMO_PHARMACY_PASSWORD }}
+      DEMO_PHARMACY_CASHIER_EMAIL: ${{ secrets.DEMO_PHARMACY_CASHIER_EMAIL }}
+      DEMO_PHARMACY_CASHIER_PASSWORD: ${{ secrets.DEMO_PHARMACY_CASHIER_PASSWORD }}
+      DEMO_GROCERY_EMAIL: ${{ secrets.DEMO_GROCERY_EMAIL }}
+      DEMO_GROCERY_PASSWORD: ${{ secrets.DEMO_GROCERY_PASSWORD }}
+      DEMO_GROCERY_CASHIER_EMAIL: ${{ secrets.DEMO_GROCERY_CASHIER_EMAIL }}
+      DEMO_GROCERY_CASHIER_PASSWORD: ${{ secrets.DEMO_GROCERY_CASHIER_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Verify required secrets and inspect live demo state
+        id: precheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            SUPABASE_SERVICE_ROLE_KEY
+            DEMO_PHARMACY_EMAIL DEMO_PHARMACY_PASSWORD
+            DEMO_PHARMACY_CASHIER_EMAIL DEMO_PHARMACY_CASHIER_PASSWORD
+            DEMO_GROCERY_EMAIL DEMO_GROCERY_PASSWORD
+            DEMO_GROCERY_CASHIER_EMAIL DEMO_GROCERY_CASHIER_PASSWORD
+          )
+          for name in "${required[@]}"; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required secret: $name"
+              exit 1
+            fi
+          done
+          node --input-type=module <<'NODE' > /tmp/demo-precheck.txt
+          import { createClient } from '@supabase/supabase-js';
+          const client = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+          const { data, error } = await client.from('organizations').select('name,sector').in('name', ['LakBiz Pharmacy Demo','LakBiz Grocery Demo']);
+          if (error) throw error;
+          const ok = data?.length === 2 && data.some((r) => r.name === 'LakBiz Pharmacy Demo' && r.sector === 'pharmacy') && data.some((r) => r.name === 'LakBiz Grocery Demo' && r.sector === 'grocery');
+          console.log(ok ? 'false' : 'true');
+          NODE
+          need_provision="$(tail -n 1 /tmp/demo-precheck.txt)"
+          echo "need_provision=$need_provision" >> "$GITHUB_OUTPUT"
+          echo "Need provisioning: $need_provision"
+
+      - name: Acquire fresh Sri Lanka factual catalog
+        if: steps.precheck.outputs.need_provision == 'true'
+        run: |
+          node scripts/fetch-sri-lanka-demo-catalog.mjs \
+            --verify-regulatory \
+            --out=/tmp/lakbiz-sri-lanka-demo-catalog.json \
+            --max-grocery=1600 \
+            --max-pharmacy-retail=900 \
+            --delay-ms=350
+
+      - name: Strict catalog validation
+        if: steps.precheck.outputs.need_provision == 'true'
+        run: |
+          node scripts/validate-demo-catalog.mjs \
+            --catalog=/tmp/lakbiz-sri-lanka-demo-catalog.json \
+            --summary-out=/tmp/lakbiz-demo-summary.json
+
+      - name: Importer dry run
+        if: steps.precheck.outputs.need_provision == 'true'
+        run: node scripts/import-demo-businesses.mjs --catalog=/tmp/lakbiz-sri-lanka-demo-catalog.json
+
+      - name: Provision Auth users and seed demo businesses
+        if: steps.precheck.outputs.need_provision == 'true'
+        run: node scripts/import-demo-businesses.mjs --apply --catalog=/tmp/lakbiz-sri-lanka-demo-catalog.json
+
+      - name: Verify live shops, FEFO fixtures and role isolation
+        run: node scripts/verify-demo-businesses.mjs
