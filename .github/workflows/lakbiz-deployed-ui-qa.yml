@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   visual-qa:
-    name: Pharmacy and Grocery deployed UI
+    name: HVAC, Pharmacy and Grocery deployed UI
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -27,6 +27,7 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: https://zestppstpwjxriwcuykc.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       LAKBIZ_PREVIEW_URL: https://subjects-git-claude-global-premium-ui-nexuserp.vercel.app
+      LAKBIZ_EXPECTED_BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       LAKBIZ_UI_QA_DIR: /tmp/lakbiz-ui-qa
 
     steps:
@@ -56,8 +57,12 @@ jobs:
             echo "SUPABASE_SERVICE_ROLE_KEY is required for disposable visual-QA identities."
             exit 1
           fi
+          if [ -z "${LAKBIZ_EXPECTED_BUILD_SHA:-}" ]; then
+            echo "LAKBIZ_EXPECTED_BUILD_SHA is required to prevent stale-preview QA."
+            exit 1
+          fi
 
-      - name: Run deployed Pharmacy and Grocery UI QA
+      - name: Run deployed HVAC, Pharmacy and Grocery UI QA
         run: node scripts/qa-deployed-ui.mjs
 
       - name: Upload UI screenshots
