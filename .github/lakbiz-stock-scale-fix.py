@@ -1,0 +1,460 @@
+from pathlib import Path
+
+
+def replace_once(path: str, old: str, new: str):
+    p = Path(path)
+    text = p.read_text()
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"{path}: expected exactly 1 match, found {count}\n--- pattern ---\n{old[:500]}")
+    p.write_text(text.replace(old, new, 1))
+
+
+business = "lakbiz/app/src/lib/supabase/business-sync.ts"
+replace_once(
+    business,
+    '''  const { error } = await supabase.from(table).upsert(rows, { onConflict: "id" });
+  return error?.message ?? null;
+''',
+    '''  // Large catalogues can contain thousands of rows. Keep every
+  // PostgREST JSON request bounded instead of sending one unbounded body.
+  const batchSize = 200;
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const { error } = await supabase
+      .from(table)
+      .upsert(rows.slice(i, i + batchSize), { onConflict: "id" });
+    if (error) return error.message;
+  }
+  return null;
+''',
+)
+replace_once(
+    business,
+    '''  const ids = rows.map((row) => String(row.id));
+  const { data: existing, error: fetchErr } = await supabase
+    .from(table)
+    .select("id")
+    .eq("organization_id", organizationId)
+    .in("id", ids);
+  if (fetchErr) return fetchErr.message;
+
+  const existingIds = new Set((existing ?? []).map((row) => String(row.id)));
+''',
+    '''  const ids = rows.map((row) => String(row.id));
+  // `.in()` is encoded in the request URL. A 1,000–1,600 SKU catalogue can
+  // exceed gateway/query-string limits and surface only as HTTP 400 / Bad
+  // Request. Resolve existing ids in bounded URL-sized chunks instead.
+  const existingIds = new Set<string>();
+  for (const idBatch of chunk(ids, 100)) {
+    const { data: existing, error: fetchErr } = await supabase
+      .from(table)
+      .select("id")
+      .eq("organization_id", organizationId)
+      .in("id", idBatch);
+    if (fetchErr) return fetchErr.message;
+    for (const row of existing ?? []) existingIds.add(String(row.id));
+  }
+''',
+)
+replace_once(
+    business,
+    '''  if (toInsert.length > 0) {
+    const { error } = await supabase.from(table).insert(toInsert);
+    if (error) return error.message;
+  }
+''',
+    '''  for (const rowBatch of chunk(toInsert, BULK_UPDATE_BATCH_SIZE)) {
+    const { error } = await supabase.from(table).insert(rowBatch);
+    if (error) return error.message;
+  }
+''',
+)
+replace_once(
+    business,
+    '''      const { data: rows } = await supabase
+        .from("products")
+        .select("id, buy_price")
+        .eq("organization_id", organizationId);
+''',
+    '''      const { data: rows } = await fetchAllPages((from, to) =>
+        supabase
+          .from("products")
+          .select("id, buy_price")
+          .eq("organization_id", organizationId)
+          .range(from, to),
+      );
+''',
+)
+
+stock = "lakbiz/app/src/app/stock/page.tsx"
+replace_once(
+    stock,
+    '''const STOCK_PAGE_SIZE = 50;
+
+export default function StockPage() {
+''',
+    '''const STOCK_PAGE_SIZE = 50;
+
+function StockPagination({
+  page,
+  totalPages,
+  start,
+  end,
+  total,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  start: number;
+  end: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-sm text-slate-600 shadow-[0_6px_20px_rgba(15,23,42,0.035)]">
+      <p>
+        <span className="font-semibold text-slate-900">{start}–{end}</span> of {total.toLocaleString()} items
+        <span className="ml-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">· {STOCK_PAGE_SIZE} per page</span>
+      </p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button type="button" disabled={page <= 1} onClick={() => onPageChange(1)} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">First</button>
+        <button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))} className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">←</button>
+        <span className="min-w-[92px] text-center text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Page {page} / {totalPages}</span>
+        <button type="button" aria-label="Next page" disabled={page >= totalPages} onClick={() => onPageChange(Math.min(totalPages, page + 1))} className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">→</button>
+        <button type="button" disabled={page >= totalPages} onClick={() => onPageChange(totalPages)} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">Last</button>
+      </div>
+    </div>
+  );
+}
+
+export default function StockPage() {
+''',
+)
+replace_once(
+    stock,
+    '''  const { t } = useLocale();
+  const { toast } = useToast();
+''',
+    '''  const { t } = useLocale();
+  const { toast } = useToast();
+  const conditionFilterRelevant = org.sector !== "pharmacy" && org.sector !== "grocery";
+''',
+)
+replace_once(
+    stock,
+    '''  useEffect(() => {
+    setPage(1);
+  }, [search, conditionFilter, showInactive, showLowStockOnly, categoryFilter]);
+''',
+    '''  useEffect(() => {
+    setPage(1);
+  }, [search, conditionFilter, showInactive, showLowStockOnly, categoryFilter]);
+
+  useEffect(() => {
+    if (!conditionFilterRelevant && conditionFilter !== "all") setConditionFilter("all");
+  }, [conditionFilterRelevant, conditionFilter]);
+''',
+)
+replace_once(
+    stock,
+    '''  const byCondition = conditionFilter === "all" ? searched : searched.filter((p) => p.condition === conditionFilter);
+''',
+    '''  const byCondition = !conditionFilterRelevant || conditionFilter === "all"
+    ? searched
+    : searched.filter((p) => p.condition === conditionFilter);
+''',
+)
+replace_once(
+    stock,
+    '''              <ProductConditionBadge condition={p.condition} />
+''',
+    '''              {conditionFilterRelevant && <ProductConditionBadge condition={p.condition} />}
+''',
+)
+replace_once(
+    stock,
+    '''          <div className="flex gap-1.5">
+            {(
+              [
+                { id: "all" as const, label: t("stock.filter_all"), count: data.products.length },
+                { id: "new" as const, label: t("stock.condition_new"), count: newCount },
+                { id: "used" as const, label: t("stock.condition_used"), count: usedCount },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setConditionFilter(tab.id)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                  conditionFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
+                }`}
+              >
+                {tab.label} <span className="opacity-70">({tab.count})</span>
+              </button>
+            ))}
+          </div>
+''',
+    '''          {conditionFilterRelevant && (
+            <div className="flex gap-1.5">
+              {(
+                [
+                  { id: "all" as const, label: t("stock.filter_all"), count: data.products.length },
+                  { id: "new" as const, label: t("stock.condition_new"), count: newCount },
+                  { id: "used" as const, label: t("stock.condition_used"), count: usedCount },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setConditionFilter(tab.id)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                    conditionFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
+                  }`}
+                >
+                  {tab.label} <span className="opacity-70">({tab.count})</span>
+                </button>
+              ))}
+            </div>
+          )}
+''',
+)
+replace_once(
+    stock,
+    '''          <>
+            <DataTable columns={columns} rows={pageProducts} emptyState={<EmptyState title={t("sales.no_match")} description={t("stock.search_no_match_desc")} />} />
+            {products.length > STOCK_PAGE_SIZE && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-sm text-slate-600 shadow-[0_6px_20px_rgba(15,23,42,0.035)]">
+                <span className="font-medium">
+                  {pageStart + 1}–{Math.min(pageStart + STOCK_PAGE_SIZE, products.length)} / {products.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label="Previous page"
+                    disabled={currentPage <= 1}
+                    onClick={() => setPage((value) => Math.max(1, value - 1))}
+                    className="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ←
+                  </button>
+                  <span className="min-w-[88px] text-center text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Next page"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+                    className="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+''',
+    '''          <>
+            <div className="mb-3">
+              <StockPagination
+                page={currentPage}
+                totalPages={totalPages}
+                start={pageStart + 1}
+                end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
+                total={products.length}
+                onPageChange={setPage}
+              />
+            </div>
+            <DataTable columns={columns} rows={pageProducts} emptyState={<EmptyState title={t("sales.no_match")} description={t("stock.search_no_match_desc")} />} />
+            {products.length > STOCK_PAGE_SIZE && (
+              <div className="mt-3">
+                <StockPagination
+                  page={currentPage}
+                  totalPages={totalPages}
+                  start={pageStart + 1}
+                  end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
+                  total={products.length}
+                  onPageChange={setPage}
+                />
+              </div>
+            )}
+          </>
+''',
+)
+replace_once(
+    stock,
+    '''        <Drawer
+          open={formOpen}
+          onClose={() => setFormOpen(false)}
+''',
+    '''        <Drawer
+          open={formOpen}
+          onClose={() => setFormOpen(false)}
+          size="lg"
+''',
+)
+
+form = "lakbiz/app/src/components/product-form.tsx"
+replace_once(
+    form,
+    '''  const units = useMemo(
+    () => unitsForSector(lockedSectorId ?? form.sectorId),
+    [lockedSectorId, form.sectorId],
+  );
+''',
+    '''  const units = useMemo(
+    () => unitsForSector(lockedSectorId ?? form.sectorId),
+    [lockedSectorId, form.sectorId],
+  );
+  const effectiveSectorId = lockedSectorId ?? form.sectorId;
+  const conditionRelevant = effectiveSectorId !== "pharmacy" && effectiveSectorId !== "grocery";
+''',
+)
+replace_once(
+    form,
+    '''      sectorId,
+      category: defaultCategoryForSector(sectorId),
+      sectorCustom: Object.fromEntries(
+''',
+    '''      sectorId,
+      category: defaultCategoryForSector(sectorId),
+      condition: "new",
+      sectorCustom: Object.fromEntries(
+''',
+)
+replace_once(
+    form,
+    '''      category: categoriesForSector(sectorId).includes(rest.category)
+        ? rest.category
+        : defaultCategoryForSector(sectorId),
+      customFields: sectorCustom,
+''',
+    '''      category: categoriesForSector(sectorId).includes(rest.category)
+        ? rest.category
+        : defaultCategoryForSector(sectorId),
+      // Condition is meaningful for resale/asset sectors, not normal pharmacy
+      // or grocery catalogue items. Keep the persisted invariant as `new`.
+      condition: sectorId === "pharmacy" || sectorId === "grocery" ? "new" : rest.condition,
+      customFields: sectorCustom,
+''',
+)
+replace_once(
+    form,
+    '''          <label className="block">
+            <span className={fieldLabel}>{t("stock.condition")}</span>
+            <select
+              value={form.condition ?? "new"}
+              onChange={(e) => set("condition", e.target.value as ProductInput["condition"])}
+              className={inputClass}
+            >
+              <option value="new">{t("stock.condition_new")}</option>
+              <option value="used">{t("stock.condition_used")}</option>
+            </select>
+          </label>
+''',
+    '''          {conditionRelevant && (
+            <label className="block">
+              <span className={fieldLabel}>{t("stock.condition")}</span>
+              <select
+                value={form.condition ?? "new"}
+                onChange={(e) => set("condition", e.target.value as ProductInput["condition"])}
+                className={inputClass}
+              >
+                <option value="new">{t("stock.condition_new")}</option>
+                <option value="used">{t("stock.condition_used")}</option>
+              </select>
+            </label>
+          )}
+''',
+)
+
+sales = "lakbiz/app/src/app/sales/page.tsx"
+replace_once(
+    sales,
+    '''  const showAcBuyerPanel = org.sector === "ac_hvac" && can("ac_jobs");
+  const advancedPosEnabled = ADVANCED_POS_SECTORS.has(org.sector);
+''',
+    '''  const showAcBuyerPanel = org.sector === "ac_hvac" && can("ac_jobs");
+  const advancedPosEnabled = ADVANCED_POS_SECTORS.has(org.sector);
+  const conditionFilterRelevant = org.sector !== "pharmacy" && org.sector !== "grocery";
+''',
+)
+replace_once(
+    sales,
+    '''  const filtered =
+    conditionFilter === "all"
+      ? searched
+      : searched.filter((p) => p.condition === conditionFilter);
+''',
+    '''  const filtered =
+    !conditionFilterRelevant || conditionFilter === "all"
+      ? searched
+      : searched.filter((p) => p.condition === conditionFilter);
+''',
+)
+replace_once(
+    sales,
+    '''                <div className="mt-3 flex flex-wrap gap-2">
+                  {(
+                    [
+                      { id: "all" as const, label: t("stock.filter_all") },
+                      { id: "new" as const, label: t("stock.condition_new") },
+                      { id: "used" as const, label: t("stock.condition_used") },
+                    ] as const
+                  ).map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setConditionFilter(tab.id)}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                        conditionFilter === tab.id
+                          ? "bg-teal-600 text-white"
+                          : "bg-slate-100 text-slate-600 hover:bg-teal-50"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+''',
+    '''                {conditionFilterRelevant && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(
+                      [
+                        { id: "all" as const, label: t("stock.filter_all") },
+                        { id: "new" as const, label: t("stock.condition_new") },
+                        { id: "used" as const, label: t("stock.condition_used") },
+                      ] as const
+                    ).map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setConditionFilter(tab.id)}
+                        className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                          conditionFilter === tab.id
+                            ? "bg-teal-600 text-white"
+                            : "bg-slate-100 text-slate-600 hover:bg-teal-50"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+''',
+)
+replace_once(
+    sales,
+    '''                              <ProductConditionBadge condition={p.condition} />
+''',
+    '''                              {conditionFilterRelevant && <ProductConditionBadge condition={p.condition} />}
+''',
+)
+
+for path in [
+    ".github/workflows/lakbiz-stock-scale-fix.yml",
+    ".github/workflows/lakbiz-stock-scale-fix-pr.yml",
+    ".github/lakbiz-stock-scale-fix.trigger",
+    ".github/lakbiz-stock-scale-fix.py",
+]:
+    Path(path).unlink(missing_ok=True)
