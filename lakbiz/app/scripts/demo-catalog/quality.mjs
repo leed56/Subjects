@@ -119,5 +119,7 @@ export function catalogNameQualityIssue(name) {
   if (/^[-–—\s]*LKR\s*[0-9]/i.test(text)) return "price_only";
   if (/^(?:LKR|Rs\.?)\s*[0-9]/i.test(text)) return "price_only";
   if (!/[A-Za-z]/.test(text)) return "no_letters";
+  const alphaTokens = text.toUpperCase().match(/[A-Z]+/g) ?? [];
+  if (!alphaTokens.some((token) => token.length >= 3)) return "insufficient_identity";
   return null;
 }
