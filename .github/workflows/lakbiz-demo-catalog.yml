@@ -8,12 +8,14 @@ on:
     paths:
       - "lakbiz/app/scripts/demo-catalog/**"
       - "lakbiz/app/scripts/fetch-sri-lanka-demo-catalog.mjs"
+      - "lakbiz/app/scripts/import-demo-businesses.mjs"
       - "lakbiz/app/src/lib/sector-category-blueprints.ts"
       - ".github/workflows/lakbiz-demo-catalog.yml"
   pull_request:
     paths:
       - "lakbiz/app/scripts/demo-catalog/**"
       - "lakbiz/app/scripts/fetch-sri-lanka-demo-catalog.mjs"
+      - "lakbiz/app/scripts/import-demo-businesses.mjs"
       - "lakbiz/app/src/lib/sector-category-blueprints.ts"
       - ".github/workflows/lakbiz-demo-catalog.yml"
 
@@ -40,6 +42,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      - name: Install locked dependencies
+        run: npm ci
 
       - name: Acquire public factual catalog
         run: |
@@ -107,6 +112,9 @@ jobs:
             throw new Error("Duplicate catalog identities detected");
           }
           NODE
+
+      - name: Dry-run importer contract
+        run: node scripts/import-demo-businesses.mjs --catalog=/tmp/lakbiz-sri-lanka-demo-catalog.json
 
       - name: Upload normalized catalog artifact
         uses: actions/upload-artifact@v4
