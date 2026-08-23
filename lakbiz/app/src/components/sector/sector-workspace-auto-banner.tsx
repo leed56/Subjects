@@ -10,14 +10,15 @@ export function SectorWorkspaceAutoBanner() {
   const { data, ready } = useAppStore();
   const { org } = useSubscription();
 
-  const surface = pathname === "/dashboard" ? "dashboard" : pathname === "/sales" ? "sales" : null;
-  if (!surface || !ready || !data) return null;
+  // Dashboard already has its own richer retail command centre. Injecting the
+  // generic sector banner there creates two competing hero surfaces. Keep this
+  // contextual banner only on Sales/POS, where it provides useful fast actions
+  // and catalogue context without duplicating the page's primary hierarchy.
+  if (pathname !== "/sales" || !ready || !data) return null;
   if (org.sector !== "pharmacy" && org.sector !== "grocery") return null;
 
   const activeProducts = data.products.filter((product) => product.active);
-  const catalogueCount = surface === "sales"
-    ? activeProducts.filter((product) => product.stockQty > 0).length
-    : activeProducts.length;
+  const catalogueCount = activeProducts.filter((product) => product.stockQty > 0).length;
   const lowStockCount = activeProducts.filter(
     (product) => product.reorderLevel != null && product.stockQty <= product.reorderLevel,
   ).length;
@@ -35,7 +36,7 @@ export function SectorWorkspaceAutoBanner() {
       <SectorWorkspaceBanner
         sector={org.sector}
         role={org.role}
-        surface={surface}
+        surface="sales"
         shopName={data.business.name || org.name || "LakBiz"}
         catalogueCount={catalogueCount}
         lowStockCount={lowStockCount}
