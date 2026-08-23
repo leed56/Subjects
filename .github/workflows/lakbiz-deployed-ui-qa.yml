@@ -1,0 +1,70 @@
+name: LakBiz Deployed UI QA
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - lakbiz/app/src/**
+      - lakbiz/app/scripts/qa-deployed-ui.mjs
+      - .github/workflows/lakbiz-deployed-ui-qa.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lakbiz-deployed-ui-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual-qa:
+    name: Pharmacy and Grocery deployed UI
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: lakbiz/app
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://zestppstpwjxriwcuykc.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      LAKBIZ_PREVIEW_URL: https://subjects-git-claude-global-premium-ui-nexuserp.vercel.app
+      LAKBIZ_UI_QA_DIR: /tmp/lakbiz-ui-qa
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Install Playwright browser for QA only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Verify secure browser-QA capability
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "SUPABASE_SERVICE_ROLE_KEY is required for disposable visual-QA identities."
+            exit 1
+          fi
+
+      - name: Run deployed Pharmacy and Grocery UI QA
+        run: node scripts/qa-deployed-ui.mjs
+
+      - name: Upload UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lakbiz-deployed-ui-qa
+          path: /tmp/lakbiz-ui-qa/*.png
+          if-no-files-found: warn
+          retention-days: 7
