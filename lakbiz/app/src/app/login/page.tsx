@@ -61,12 +61,6 @@ export default function LoginPage() {
     return next;
   };
 
-  // Part 19 — gates the compact "You're already signed in" card (and
-  // hides the sign-in/sign-up form beneath it) whenever there's a real
-  // signed-in user and the auth state has actually resolved. Always
-  // false during SSR/first hydration (user/authLoading come from context
-  // that only resolves client-side), so `continueDestination`'s
-  // window.location.search read below never causes a hydration mismatch.
   const alreadySignedIn = !!user && !authLoading;
   const continueDestination = safeNextPath() ?? "/dashboard";
 
@@ -94,18 +88,11 @@ export default function LoginPage() {
         router.push("/dashboard");
       } else {
         await signIn(email, password);
-        const supabase = createBrowserClient();
-        const isAdmin =
-          !!supabase && (await isPlatformAdminClient(supabase));
-        const nextPath = safeNextPath();
-
-        if (nextPath === "/admin" && !isAdmin) {
-          setMessage(t("admin.not_platform_admin"));
-          return;
-        }
-
-        const destination = nextPath ?? (isAdmin ? "/admin" : "/dashboard");
-        window.location.assign(destination);
+        // Do not perform another Supabase query between successful auth and
+        // navigation. Shop authorization has already been checked by the auth
+        // action, while /admin has its own protected gate. A duplicate admin
+        // lookup here could leave a valid user stranded on /login.
+        window.location.assign(safeNextPath() ?? "/dashboard");
         return;
       }
     } catch (err) {
@@ -179,17 +166,6 @@ export default function LoginPage() {
           )}
         </div>
 
-        {/* Global premium UI phase, Part 19/35 — root cause: this branch
-         * used to render <SignedInBanner> (no timer, no auto-redirect)
-         * ABOVE the still-fully-rendered sign-in/sign-up form, forever.
-         * Visiting /login while already authenticated now shows this
-         * compact card ONLY — the tabs/form below are skipped entirely
-         * (`alreadySignedIn` gates the whole card at the bottom of this
-         * block) — matching "show a clean compact state immediately...
-         * do not show a full login form unnecessarily below it." The
-         * post-submit sign-in path already navigates immediately via
-         * window.location.assign with no lingering message; unaffected
-         * by this change. */}
         {alreadySignedIn && (
           <div
             className={`mt-6 rounded-xl border p-6 text-center sm:p-7 ${
@@ -225,10 +201,6 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* Centered auth card — the login form no longer floats directly on
-            the page background, matching the rest of the redesigned
-            surfaces (docs/UI_POLISH_AUDIT.md Part 12). Skipped entirely
-            while already signed in — see the compact card above. */}
         {!alreadySignedIn && (
         <div
           className={`mt-6 rounded-xl border p-6 shadow-sm sm:p-7 ${
