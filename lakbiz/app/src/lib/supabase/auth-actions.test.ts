@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const createBrowserClient = vi.fn();
+const mocks = vi.hoisted(() => ({
+  createBrowserClient: vi.fn(),
+}));
 
 vi.mock("./client", () => ({
-  createBrowserClient,
+  createBrowserClient: mocks.createBrowserClient,
 }));
 
 import {
@@ -69,7 +71,7 @@ function signInClient({ platformAdmin = false, orgId = null as string | null } =
 
 describe("admin-only workspace provisioning", () => {
   beforeEach(() => {
-    createBrowserClient.mockReset();
+    mocks.createBrowserClient.mockReset();
   });
 
   it("always refuses public shop signup before touching Supabase", async () => {
@@ -82,7 +84,7 @@ describe("admin-only workspace provisioning", () => {
       }),
     ).rejects.toMatchObject({ code: "auth" });
 
-    expect(createBrowserClient).not.toHaveBeenCalled();
+    expect(mocks.createBrowserClient).not.toHaveBeenCalled();
   });
 
   it("returns an already assigned workspace without invoking a bootstrap RPC", async () => {
@@ -110,7 +112,7 @@ describe("admin-only workspace provisioning", () => {
 
   it("signs out a normal authenticated user who has no assigned workspace", async () => {
     const client = signInClient({ platformAdmin: false, orgId: null });
-    createBrowserClient.mockReturnValue(client);
+    mocks.createBrowserClient.mockReturnValue(client);
 
     await expect(signInWithEmail("user@example.com", "password123")).rejects.toMatchObject({
       code: "org",
@@ -121,7 +123,7 @@ describe("admin-only workspace provisioning", () => {
 
   it("allows a platform administrator to sign in without a shop membership", async () => {
     const client = signInClient({ platformAdmin: true, orgId: null });
-    createBrowserClient.mockReturnValue(client);
+    mocks.createBrowserClient.mockReturnValue(client);
 
     await expect(signInWithEmail("admin@example.com", "password123")).resolves.toMatchObject({
       user: { id: "user-1" },
