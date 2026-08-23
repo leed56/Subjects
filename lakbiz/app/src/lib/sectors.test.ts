@@ -23,11 +23,7 @@ describe("sector presets", () => {
   it("gives pharmacy a modern retail taxonomy beyond medicines", () => {
     const blueprint = categoryBlueprintForSector("pharmacy");
     const departments = new Set(blueprint.map((entry) => entry.department));
-    expect(departments).toEqual(
-      expect.objectContaining({
-        size: expect.any(Number),
-      }),
-    );
+    expect(departments.size).toBeGreaterThanOrEqual(6);
     expect([...departments]).toEqual(
       expect.arrayContaining([
         "Pharmaceutical",
