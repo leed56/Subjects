@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { ProductForm } from "@/components/product-form";
+import { StockCommandHeader } from "@/components/stock/stock-command-header";
 import { ExportActions } from "@/components/export/export-actions";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
-import { PageHeader, MetricCard, EmptyState, StatusBadge, SearchInput, FilterBar, ActionMenu } from "@/components/ui/primitives";
+import { EmptyState, StatusBadge, SearchInput, FilterBar, ActionMenu } from "@/components/ui/primitives";
 import { Drawer, Dialog, ConfirmDialog } from "@/components/ui/overlay";
 import { FormField, TextInput } from "@/components/ui/form";
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
@@ -84,11 +85,12 @@ export default function StockPage() {
   // HVAC platform Phase 12 — a real filtered view of exactly what needs
   // reordering, not just the metric-card count that existed before.
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [page, setPage] = useState(1);
 
   useEffect(() => {
     setPage(1);
-  }, [search, conditionFilter, showInactive, showLowStockOnly]);
+  }, [search, conditionFilter, showInactive, showLowStockOnly, categoryFilter]);
 
   if (!ready || !data) {
     return (
@@ -111,9 +113,10 @@ export default function StockPage() {
     : data.products;
   const byCondition = conditionFilter === "all" ? searched : searched.filter((p) => p.condition === conditionFilter);
   const byActive = showInactive ? byCondition : byCondition.filter((p) => p.active);
+  const byCategory = categoryFilter === "all" ? byActive : byActive.filter((p) => p.category === categoryFilter);
   const lowStock = getLowStockProducts(data.products);
   const lowStockIds = new Set(lowStock.map((p) => p.id));
-  const products = showLowStockOnly ? byActive.filter((p) => lowStockIds.has(p.id)) : byActive;
+  const products = showLowStockOnly ? byCategory.filter((p) => lowStockIds.has(p.id)) : byCategory;
   const totalPages = Math.max(1, Math.ceil(products.length / STOCK_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * STOCK_PAGE_SIZE;
@@ -124,8 +127,16 @@ export default function StockPage() {
   const newCount = data.products.filter((p) => p.condition === "new").length;
   const usedCount = data.products.filter((p) => p.condition === "used").length;
   const inactiveCount = data.products.filter((p) => !p.active).length;
+  const outOfStockCount = data.products.filter((p) => p.active && p.stockQty <= 0).length;
   const inventoryValue = data.products.reduce((sum, p) => sum + p.stockQty * p.buyPrice, 0);
   const sellValue = data.products.reduce((sum, p) => sum + p.stockQty * p.sellPrice, 0);
+  const categoryCounts = [...new Set(data.products.filter((p) => p.active).map((p) => p.category || "Other"))]
+    .map((name) => ({
+      name,
+      count: data.products.filter((p) => p.active && (p.category || "Other") === name).length,
+    }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, 10);
   const stockInProduct = stockInId ? data.products.find((p) => p.id === stockInId) : null;
   const stockOutProduct = stockOutId ? data.products.find((p) => p.id === stockOutId) : null;
   const stockInQtyNumber = Number(stockInQty) || 0;
@@ -364,9 +375,19 @@ export default function StockPage() {
   return (
     <AppShell>
       <ProMain>
-        <PageHeader
-          title={t("stock.title")}
-          description={`${products.length === data.products.length ? data.products.length : `${products.length} / ${data.products.length}`} ${t("common.items")} · ${t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}`}
+        <StockCommandHeader
+          sector={org.sector}
+          shopName={data.business.name || org.name || "LakBiz"}
+          itemCount={data.products.length}
+          lowStockCount={lowStock.length}
+          outOfStockCount={outOfStockCount}
+          costValue={inventoryValue}
+          sellValue={sellValue}
+          canSeeFinancials={canSeeFinancials}
+          filteredCount={products.length}
+          categories={categoryCounts}
+          selectedCategory={categoryFilter}
+          onCategoryChange={setCategoryFilter}
           actions={
             <>
               {canExport && (
@@ -387,25 +408,12 @@ export default function StockPage() {
                 disabled={!canWrite}
                 title={!canWrite ? disabledHint ?? undefined : undefined}
                 onClick={openCreate}
-                className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-teal-500 px-4 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(20,184,166,0.2)] transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <PlusIcon className="h-4 w-4" />
                 {t("stock.add_item")}
               </button>
             </>
-          }
-          metrics={
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard label={t("common.items")} value={String(data.products.length)} icon={<StockIcon className="h-4 w-4" />} />
-              <MetricCard
-                label={t("dash.low_stock")}
-                value={String(lowStock.length)}
-                hint={lowStock.length > 0 ? t("dash.low_stock_alert") : t("dash.all_good_stock")}
-                tone={lowStock.length > 0 ? "warning" : "default"}
-              />
-              {canSeeFinancials && <MetricCard label={t("stock.cost_value")} value={formatLkr(inventoryValue)} hint={t("stock.buy_price")} />}
-              <MetricCard label={t("stock.sell_value")} value={formatLkr(sellValue)} hint={t("stock.sell_price")} tone="positive" />
-            </div>
           }
         />
 
