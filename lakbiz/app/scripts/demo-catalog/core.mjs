@@ -245,6 +245,12 @@ export function classifyRetailProduct(name, sector) {
     return { department: "Wellness", category: "Preventive Care", subcategory: "Health & Wellness" };
   }
 
+  // Grocery classification must prioritize non-food identities before broad
+  // food tokens. Otherwise names such as "hair oil" or "tea tree face wash"
+  // are incorrectly captured by Oil & Fats / Beverages.
+  if (has(/FABRIC CONDITIONER|LAUNDRY|WASHING POWDER|DETERGENT|DISH[ -]?WASH|FLOOR CLEAN|TOILET CLEAN|BLEACH|SURFACE CLEAN|CLEANER|AIR FRESH|PEST|INSECTICIDE|TISSUE|PAPER TOWEL|TOILET ROLL|GARBAGE BAG|\bVIM\b|\bSURF\b/)) return { department: "Household", category: "Cleaning", subcategory: "Household" };
+  if (has(/FACE WASH|BODY WASH|SHOWER GEL|SHAMPOO|CONDITIONER|HAIR OIL|HAIR GEL|DEODORANT|BODY SPRAY|COLOGNE|PERFUME|EAU DE|HAND ?WASH|BEAUTY BAR|TOOTHPASTE|TOOTHBRUSH|MOUTHWASH|LOTION|SERUM|MOISTUR|SUNSCREEN|SUN SCREEN|ALOE VERA GEL|\bSOAP\b|SANITARY|PANTY LINER|DIAPER|NAPPY|BABY WIPES?|FACE CREAM|BODY CREAM|HAND CREAM|SKIN CREAM|BEAUTY CREAM|FACE SCRUB|FACIAL|LIP BALM|NAIL POLISH|RAZOR|SHAVING|\bBABY\b/)) return { department: "Personal & Baby", category: "Personal Care", subcategory: "Personal & Baby" };
+  if (has(/\bPET\b|\bDOG\b|\bCAT\b/)) return { department: "Pet Care", category: "Pet Food & Care", subcategory: "Pet Care" };
   if (has(/RICE|ATTA|FLOUR|OATS|CEREAL|GRAIN/)) return { department: "Grocery & Staples", category: "Rice, Flour & Grains", subcategory: "Rice, Flour & Grains" };
   if (has(/DHAL|LENTIL|CHICKPEA|BEAN|PULSE/)) return { department: "Grocery & Staples", category: "Pulses", subcategory: "Dhal & Pulses" };
   if (has(/SUGAR|SALT|SPICE|CHILLI|CURRY|PEPPER|SEASONING|CINNAMON/)) return { department: "Grocery & Staples", category: "Spices & Seasoning", subcategory: "Staples & Seasoning" };
@@ -258,9 +264,6 @@ export function classifyRetailProduct(name, sector) {
   if (has(/YOGURT|YOGHURT|CURD|CHEESE|BUTTER|FRESH MILK/)) return { department: "Chilled & Dairy", category: "Milk & Dairy", subcategory: "Dairy" };
   if (has(/FROZEN|ICE CREAM/)) return { department: "Frozen", category: "Frozen Foods", subcategory: "Frozen" };
   if (has(/BREAD|BUN|CAKE/)) return { department: "Bakery", category: "Bread & Buns", subcategory: "Bakery" };
-  if (has(/SOAP|SHAMPOO|TOOTH|SANITARY|DIAPER|BABY/)) return { department: "Personal & Baby", category: "Personal Care", subcategory: "Personal & Baby" };
-  if (has(/DETERGENT|DISHWASH|CLEANER|TISSUE|AIR FRESH|PEST|BATTERY|VIM|SURF/)) return { department: "Household", category: "Cleaning", subcategory: "Household" };
-  if (has(/PET|DOG|CAT/)) return { department: "Pet Care", category: "Pet Food & Care", subcategory: "Pet Care" };
   return { department: "Packaged Food", category: "Packaged Food", subcategory: "General Grocery" };
 }
 
