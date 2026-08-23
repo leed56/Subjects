@@ -8,6 +8,14 @@ import {
 import { parseHealthguardListingText } from "./healthguard-fallback.mjs";
 
 describe("demo catalog quality guards", () => {
+  it("rejects pack-only and fragment-only product identities", () => {
+    expect(catalogNameQualityIssue("100G")).toBe("insufficient_identity");
+    expect(catalogNameQualityIssue("60 S")).toBe("insufficient_identity");
+    expect(catalogNameQualityIssue("AD S")).toBe("insufficient_identity");
+    expect(catalogNameQualityIssue("ORS 100ML")).toBeNull();
+    expect(catalogNameQualityIssue("3M Micropore Tape 1IN")).toBeNull();
+  });
+
   it("rejects price-only Healthguard pseudo-products", () => {
     const html = `
       <div>- LKR9,999.99</div><div>LKR10,000.00</div>
