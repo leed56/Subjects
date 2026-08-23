@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   assertLakBizTarget,
   ensureDemoShop,
+  ensureDemoStaff,
   importCatalog,
   seedDemoHistory,
 } from "./demo-catalog/importer.mjs";
@@ -27,6 +28,8 @@ const specs = [
     phone: "0110000201",
     ownerEmail: process.env.DEMO_PHARMACY_EMAIL ?? "",
     ownerPassword: process.env.DEMO_PHARMACY_PASSWORD ?? "",
+    cashierEmail: process.env.DEMO_PHARMACY_CASHIER_EMAIL ?? "",
+    cashierPassword: process.env.DEMO_PHARMACY_CASHIER_PASSWORD ?? "",
   },
   {
     sector: "grocery",
@@ -34,6 +37,8 @@ const specs = [
     phone: "0110000202",
     ownerEmail: process.env.DEMO_GROCERY_EMAIL ?? "",
     ownerPassword: process.env.DEMO_GROCERY_PASSWORD ?? "",
+    cashierEmail: process.env.DEMO_GROCERY_CASHIER_EMAIL ?? "",
+    cashierPassword: process.env.DEMO_GROCERY_CASHIER_PASSWORD ?? "",
   },
 ];
 
@@ -49,11 +54,12 @@ async function main() {
     grocery: payload.grocery.length,
     sourceCounts: payload.sourceCounts,
     mode: apply ? "APPLY" : "DRY-RUN",
+    roleAccountsPerShop: ["owner", "cashier"],
   };
   console.log(JSON.stringify(summary, null, 2));
 
   if (!apply) {
-    console.log("Dry run only. Re-run with --apply and server-side secrets to create/update demo shops.");
+    console.log("Dry run only. Re-run with --apply and server-side secrets to create/update demo shops and role accounts.");
     return;
   }
 
@@ -61,10 +67,12 @@ async function main() {
   assertLakBizTarget(url);
 
   for (const spec of specs) {
-    if (!spec.ownerEmail || !spec.ownerPassword) {
-      throw new Error(`Missing ${spec.sector === "pharmacy" ? "DEMO_PHARMACY" : "DEMO_GROCERY"}_EMAIL/PASSWORD`);
-    }
-    if (spec.ownerPassword.length < 12) throw new Error(`${spec.name} password must be at least 12 characters`);
+    const prefix = spec.sector === "pharmacy" ? "DEMO_PHARMACY" : "DEMO_GROCERY";
+    if (!spec.ownerEmail || !spec.ownerPassword) throw new Error(`Missing ${prefix}_EMAIL/PASSWORD`);
+    if (!spec.cashierEmail || !spec.cashierPassword) throw new Error(`Missing ${prefix}_CASHIER_EMAIL/CASHIER_PASSWORD`);
+    if (spec.ownerEmail.toLowerCase() === spec.cashierEmail.toLowerCase()) throw new Error(`${spec.name} owner and cashier must use different Auth identities`);
+    if (spec.ownerPassword.length < 12) throw new Error(`${spec.name} owner password must be at least 12 characters`);
+    if (spec.cashierPassword.length < 12) throw new Error(`${spec.name} cashier password must be at least 12 characters`);
   }
 
   const admin = createClient(url, serviceRole, {
@@ -75,13 +83,20 @@ async function main() {
   for (const spec of specs) {
     const products = payload[spec.sector];
     const shop = await ensureDemoShop(admin, spec);
+    const cashier = await ensureDemoStaff(admin, {
+      orgId: shop.orgId,
+      email: spec.cashierEmail,
+      password: spec.cashierPassword,
+      role: "cashier",
+      displayName: `${spec.name} Cashier`,
+    });
     const catalog = await importCatalog(admin, shop.orgId, spec.sector, products);
     const history = await seedDemoHistory(admin, shop.orgId, spec.sector, products);
-    final[spec.sector] = { ...shop, ...catalog, ...history };
+    final[spec.sector] = { ...shop, cashier, ...catalog, ...history };
     console.log(`${spec.name}:`, final[spec.sector]);
   }
 
-  console.log("Demo import completed. Credentials were read from environment only and were not written to the repository.");
+  console.log("Demo import completed. Credentials were read from environment only and were not written to the repository or logs.");
   console.log(JSON.stringify(final, null, 2));
 }
 
