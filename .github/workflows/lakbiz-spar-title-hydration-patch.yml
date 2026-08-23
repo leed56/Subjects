@@ -1,0 +1,51 @@
+name: LakBiz SPAR Title Hydration One Shot
+
+on:
+  push:
+    branches:
+      - claude/global-premium-ui
+    paths:
+      - ".github/workflows/lakbiz-spar-title-hydration-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/global-premium-ui
+          fetch-depth: 0
+
+      - name: Wire truncated-title hydration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lakbiz/app/scripts/fetch-sri-lanka-demo-catalog.mjs')
+          text = path.read_text()
+
+          anchor = '''import {\n  classifyPharmacyRetailProduct,\n  conservativeMediVerifyMatch,\n} from "./demo-catalog/quality.mjs";'''
+          replacement = anchor + '''\nimport {\n  needsSparTitleHydration,\n  parseSparProductTitle,\n} from "./demo-catalog/spar-detail.mjs";'''
+          if 'parseSparProductTitle' not in text:
+              if anchor not in text:
+                  raise SystemExit('Refusing patch: quality import anchor not found')
+              text = text.replace(anchor, replacement, 1)
+
+          old = '''  return rows;\n}\n\nasync function fetchHealthguard(maxProducts) {'''
+          new = '''  const truncated = rows.filter(needsSparTitleHydration);\n  let hydrated = 0;\n  for (const row of truncated) {\n    const detail = await fetchText(row.sourceUrl);\n    if (!detail) continue;\n    const fullTitle = parseSparProductTitle(detail);\n    if (!fullTitle) continue;\n    row.productName = fullTitle;\n    row.packSize = parsePackSizeFromName(fullTitle);\n    row.unit = inferUnitFromName(fullTitle);\n    row.taxonomy = { ...classifyRetailProduct(fullTitle, "grocery"), taxonomyMethod: "normalization_heuristic" };\n    hydrated += 1;\n  }\n  if (truncated.length) console.log(`SPAR2U title hydration: ${hydrated}/${truncated.length} truncated listing names resolved from public product pages`);\n  return rows;\n}\n\nasync function fetchHealthguard(maxProducts) {'''
+          if old not in text:
+              raise SystemExit('Refusing patch: fetchSpar return anchor not found')
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+
+      - name: Remove one-shot workflow and commit
+        run: |
+          git rm .github/workflows/lakbiz-spar-title-hydration-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lakbiz/app/scripts/fetch-sri-lanka-demo-catalog.mjs
+          git commit -m "fix(lakbiz): hydrate truncated SPAR catalog titles"
+          git push origin HEAD:claude/global-premium-ui
