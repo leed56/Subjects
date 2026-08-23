@@ -3,7 +3,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import {
   classifyRetailProduct,
-  exactMediVerifyMatch,
   extractSpcBrand,
   parseHealthguardProducts,
   parseMediVerifyResults,
@@ -15,6 +14,10 @@ import {
   parseHealthguardListingText,
   pharmacyRetailCandidatesFromSpar,
 } from "./demo-catalog/healthguard-fallback.mjs";
+import {
+  classifyPharmacyRetailProduct,
+  conservativeMediVerifyMatch,
+} from "./demo-catalog/quality.mjs";
 
 const args = new Set(process.argv.slice(2));
 const valueArg = (name, fallback) => {
@@ -154,7 +157,7 @@ async function fetchSpc() {
     const searchUrl = `https://mediverify.lk/search/similar/?direct=1&query=${encodeURIComponent(brand)}`;
     const page = await fetchText(searchUrl);
     if (!page) continue;
-    const match = exactMediVerifyMatch(row, parseMediVerifyResults(page, searchUrl));
+    const match = conservativeMediVerifyMatch(row, parseMediVerifyResults(page, searchUrl));
     if (match) {
       row.regulatory = match;
       verified += 1;
@@ -206,7 +209,7 @@ async function fetchHealthguard(maxProducts) {
         const key = sourceKey(row);
         if (seen.has(key)) continue;
         seen.add(key);
-        const inferred = classifyRetailProduct(row.productName, "pharmacy");
+        const inferred = classifyPharmacyRetailProduct(row.productName);
         row.taxonomy = {
           department: inferred.department === "Wellness" && department !== "Wellness" ? department : inferred.department,
           category: inferred.category === "Preventive Care" ? category : inferred.category,
@@ -231,7 +234,7 @@ function pharmacyRowsFromSpar(spar, maxProducts) {
   return pharmacyRetailCandidatesFromSpar(spar, maxProducts).map((row) => ({
     ...row,
     taxonomy: {
-      ...classifyRetailProduct(row.productName, "pharmacy"),
+      ...classifyPharmacyRetailProduct(row.productName),
       productKind: "retail",
       taxonomyMethod: "spar_public_retail_normalization",
     },
