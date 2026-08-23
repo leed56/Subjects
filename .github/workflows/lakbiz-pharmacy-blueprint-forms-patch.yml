@@ -1,0 +1,45 @@
+name: LakBiz Pharmacy Form Blueprint One Shot
+
+on:
+  push:
+    branches:
+      - claude/global-premium-ui
+    paths:
+      - ".github/workflows/lakbiz-pharmacy-blueprint-forms-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/global-premium-ui
+          fetch-depth: 0
+
+      - name: Add neutral medicine-form subcategories
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lakbiz/app/src/lib/sector-category-blueprints.ts')
+          text = path.read_text()
+          anchor = '  { department: "Pharmaceutical", category: "Medicines", subcategory: "Unclassified Medicine", defaultTrackingMode: "lot", fefo: true },\n'
+          insert = anchor + '''  { department: "Pharmaceutical", category: "Medicines", subcategory: "Tablets", defaultTrackingMode: "lot", fefo: true },\n  { department: "Pharmaceutical", category: "Medicines", subcategory: "Capsules", defaultTrackingMode: "lot", fefo: true },\n  { department: "Pharmaceutical", category: "Medicines", subcategory: "Injections", defaultTrackingMode: "lot", fefo: true },\n  { department: "Pharmaceutical", category: "Medicines", subcategory: "Syrups & Suspensions", defaultTrackingMode: "lot", fefo: true },\n  { department: "Pharmaceutical", category: "Medicines", subcategory: "Creams, Ointments & Gels", defaultTrackingMode: "lot", fefo: true },\n  { department: "Pharmaceutical", category: "Medicines", subcategory: "Eye & Ear Drops", defaultTrackingMode: "lot", fefo: true },\n  { department: "Pharmaceutical", category: "Medicines", subcategory: "Inhalers & Inhalation", defaultTrackingMode: "lot", fefo: true },\n  { department: "Pharmaceutical", category: "Medicines", subcategory: "Suppositories", defaultTrackingMode: "lot", fefo: true },\n  { department: "Pharmaceutical", category: "Medicines", subcategory: "Solutions", defaultTrackingMode: "lot", fefo: true },\n  { department: "Pharmaceutical", category: "Medicines", subcategory: "Other Medicines", defaultTrackingMode: "lot", fefo: true },\n'''
+          if 'subcategory: "Tablets", defaultTrackingMode: "lot"' in text:
+              print('Neutral medicine-form blueprint already present')
+          elif anchor in text:
+              path.write_text(text.replace(anchor, insert, 1))
+          else:
+              raise SystemExit('Refusing patch: pharmacy blueprint anchor not found')
+          PY
+
+      - name: Remove one-shot workflow and commit
+        run: |
+          git rm .github/workflows/lakbiz-pharmacy-blueprint-forms-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lakbiz/app/src/lib/sector-category-blueprints.ts
+          git commit -m "feat(lakbiz): align pharmacy blueprint with medicine forms"
+          git push origin HEAD:claude/global-premium-ui
