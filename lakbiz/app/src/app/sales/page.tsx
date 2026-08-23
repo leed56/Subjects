@@ -30,11 +30,16 @@ import { allocateSaleInventory } from "@/lib/supabase/sale-inventory-client";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useAppStore } from "@/lib/store/use-app-store";
-import type { PaymentMethod, ProductCondition } from "@/lib/types";
+import type { PaymentMethod, Product, ProductCondition } from "@/lib/types";
 
 type ConditionFilter = "all" | ProductCondition;
 
 const ADVANCED_POS_SECTORS = new Set(["pharmacy", "mobile_shop", "electronics", "footwear"]);
+
+function productSearchText(product: Product): string {
+  return [product.name, product.sku, product.category, product.customFields.barcode, product.customFields.genericName, product.customFields.brand, product.customFields.strength, product.customFields.packSize]
+    .filter(Boolean).map(String).join(" ").toLowerCase();
+}
 
 export default function SalesPage() {
   const { data, ready, createSaleToCloud } = useAppStore();
@@ -45,11 +50,14 @@ export default function SalesPage() {
   const showAcBuyerPanel = org.sector === "ac_hvac" && can("ac_jobs");
   const advancedPosEnabled = ADVANCED_POS_SECTORS.has(org.sector);
   const conditionFilterRelevant = org.sector !== "pharmacy" && org.sector !== "grocery";
+  const fastRetailPos = org.sector === "pharmacy" || org.sector === "grocery";
   const [cart, setCart] = useState<Record<string, number>>({});
   const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
   const [inventoryStates, setInventoryStates] = useState<Record<string, AdvancedSaleLineState>>({});
   const [search, setSearch] = useState("");
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [resultLimit, setResultLimit] = useState(24);
   const [discount, setDiscount] = useState(0);
   const [cashReceived, setCashReceived] = useState<number | "">("");
   const [payment, setPayment] = useState<PaymentMethod>("cash");
@@ -137,6 +145,13 @@ export default function SalesPage() {
     }
   };
 
+  const addOneToCart = (product: Product) => {
+    setQty(product.id, (cart[product.id] ?? 0) + 1, product.stockQty);
+    setSearch("");
+    setCategoryFilter("all");
+    setResultLimit(24);
+  };
+
   const setOverride = (id: string, value: number) => {
     setPriceOverrides((o) => ({ ...o, [id]: Math.max(0, value) }));
   };
@@ -162,6 +177,8 @@ export default function SalesPage() {
     setDiscount(0);
     setCashReceived("");
     setSearch("");
+    setCategoryFilter("all");
+    setResultLimit(24);
   };
 
   const buyerName = customerId
@@ -318,18 +335,15 @@ export default function SalesPage() {
 
   const inStock = data.products.filter((p) => p.stockQty > 0 && p.active);
   const query = search.trim().toLowerCase();
-  const searched = query
-    ? inStock.filter(
-        (p) =>
-          p.name.toLowerCase().includes(query) ||
-          (p.sku ?? "").toLowerCase().includes(query) ||
-          p.category.toLowerCase().includes(query),
-      )
-    : inStock;
-  const filtered =
-    !conditionFilterRelevant || conditionFilter === "all"
-      ? searched
-      : searched.filter((p) => p.condition === conditionFilter);
+  const searched = query ? inStock.filter((p) => productSearchText(p).includes(query)) : inStock;
+  const categoryFiltered = fastRetailPos && categoryFilter !== "all" ? searched.filter((p) => p.category === categoryFilter) : searched;
+  const filtered = !conditionFilterRelevant || conditionFilter === "all" ? categoryFiltered : categoryFiltered.filter((p) => p.condition === conditionFilter);
+  const categoryCounts = new Map<string, number>();
+  if (fastRetailPos) for (const p of inStock) categoryCounts.set(p.category || "General", (categoryCounts.get(p.category || "General") ?? 0) + 1);
+  const fastRetailCategories = Array.from(categoryCounts.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, 12);
+  const exactRetailMatch = query ? filtered.find((p) => (p.sku ?? "").trim().toLowerCase() === query || String(p.customFields.barcode ?? "").trim().toLowerCase() === query) : undefined;
+  const quickAddCandidate = exactRetailMatch ?? filtered[0];
+  const visibleProducts = fastRetailPos ? filtered.slice(0, resultLimit) : filtered;
 
   return (
     <AppShell>
@@ -387,12 +401,33 @@ export default function SalesPage() {
                   <input
                     type="search"
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder={t("sales.search_placeholder")}
+                    autoFocus={fastRetailPos}
+                    autoComplete="off"
+                    onChange={(e) => { setSearch(e.target.value); if (fastRetailPos) setResultLimit(24); }}
+                    onKeyDown={(e) => {
+                      if (!fastRetailPos) return;
+                      if (e.key === "Enter" && quickAddCandidate) { e.preventDefault(); addOneToCart(quickAddCandidate); }
+                      if (e.key === "Escape") setSearch("");
+                    }}
+                    placeholder={fastRetailPos ? (org.sector === "pharmacy" ? "Search medicine, generic, brand, code or barcode…" : "Scan barcode or search product, brand or code…") : t("sales.search_placeholder")}
                     className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pl-11 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
                   />
                   <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
                 </div>
+                {fastRetailPos && (
+                  <>
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold text-slate-500">
+                      <span>{org.sector === "pharmacy" ? "Name · generic · brand · strength · code · barcode" : "Name · brand · code · barcode"}</span>
+                      <span className="rounded-lg bg-slate-100 px-2 py-1 text-slate-600">Enter adds first match · Esc clears</span>
+                    </div>
+                    <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      <button type="button" onClick={() => { setCategoryFilter("all"); setResultLimit(24); }} className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold ${categoryFilter === "all" ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600"}`}>All <span className="opacity-70">{inStock.length}</span></button>
+                      {fastRetailCategories.map((category) => (
+                        <button key={category.name} type="button" onClick={() => { setCategoryFilter(category.name); setResultLimit(24); }} className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold ${categoryFilter === category.name ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600"}`}>{category.name} <span className="opacity-70">{category.count}</span></button>
+                      ))}
+                    </div>
+                  </>
+                )}
                 {conditionFilterRelevant && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {(
@@ -424,8 +459,8 @@ export default function SalesPage() {
                   <ProEmptyState title={t("sales.no_match")} description={t("sales.search_no_match_desc")} />
                 </ProCard>
               ) : (
-                <div className="grid gap-3 md:grid-cols-2">
-                  {filtered.map((p) => {
+                <div className={fastRetailPos ? "grid gap-2 md:grid-cols-2 2xl:grid-cols-3" : "grid gap-3 md:grid-cols-2"}>
+                  {visibleProducts.map((p) => {
                     const unit = String(p.customFields.unit ?? "pcs");
                     const qty = cart[p.id] ?? 0;
                     const selected = qty > 0;
@@ -463,6 +498,9 @@ export default function SalesPage() {
                             <p className="mt-1 text-xs font-semibold text-slate-500">
                               {p.sku ? `${p.sku} · ` : ""}{p.category || "General"}
                             </p>
+                            {org.sector === "pharmacy" && (
+                              <p className="mt-1 line-clamp-1 text-[11px] font-medium text-slate-500">{[p.customFields.genericName, p.customFields.strength, p.customFields.brand, p.customFields.packSize].filter(Boolean).map(String).join(" · ") || "Batch-controlled stock"}</p>
+                            )}
                           </div>
                           <div className="shrink-0 text-right">
                             {showWholesale ? (
@@ -517,6 +555,12 @@ export default function SalesPage() {
                       </article>
                     );
                   })}
+                  {fastRetailPos && filtered.length > visibleProducts.length && (
+                    <button type="button" onClick={() => setResultLimit((n) => n + 24)} className="min-h-24 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-left hover:border-teal-300 hover:bg-teal-50">
+                      <span className="block text-sm font-bold text-slate-800">Show more products</span>
+                      <span className="mt-1 block text-xs text-slate-500">Showing {visibleProducts.length} of {filtered.length}. Search or choose a category for faster access.</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>

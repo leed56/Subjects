@@ -28,8 +28,8 @@ import { fetchRetailDashboardLots } from "@/lib/supabase/retail-dashboard-client
 
 const copy = {
   en: {
-    pharmacyEyebrow: "Pharmacy operations",
-    groceryEyebrow: "Retail command center",
+    pharmacyEyebrow: "Operations workspace",
+    groceryEyebrow: "Operations workspace",
     pharmacySubtitle: "Batch-aware inventory, FEFO attention and daily retail performance in one operating view.",
     grocerySubtitle: "Sales velocity, replenishment and category performance for a fast-moving supermarket floor.",
     live: "Live workspace",
