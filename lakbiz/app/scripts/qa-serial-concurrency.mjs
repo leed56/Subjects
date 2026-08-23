@@ -166,8 +166,10 @@ try {
     "QA product insert",
   );
 
+  // Product creation may auto-create the sector-default inventory profile.
+  // Upsert the QA tracking contract rather than assuming the profile is absent.
   await must(
-    admin.from("product_inventory_profiles").insert({
+    admin.from("product_inventory_profiles").upsert({
       product_id: productId,
       organization_id: orgId,
       tracking_mode: "serial",
@@ -175,8 +177,8 @@ try {
       fefo_enabled: false,
       require_serial_on_sale: true,
       allow_negative_stock: false,
-    }),
-    "QA inventory profile insert",
+    }, { onConflict: "product_id" }),
+    "QA inventory profile upsert",
   );
 
   await must(
