@@ -25,39 +25,19 @@ function orgLookupClient(rows: Array<{ organization_id: string }> = []) {
   return { from, rpc, select, eq, limit };
 }
 
-function signInClient({ platformAdmin = false, orgId = null as string | null } = {}) {
+function signInClient({ withSession = true } = {}) {
   const signOut = vi.fn(() => Promise.resolve({ error: null }));
   const signInWithPassword = vi.fn(() =>
     Promise.resolve({
-      data: { user: { id: "user-1", user_metadata: {} }, session: { access_token: "test" } },
+      data: {
+        user: withSession ? { id: "user-1", user_metadata: {} } : null,
+        session: withSession ? { access_token: "test" } : null,
+      },
       error: null,
     }),
   );
-  const orgLimit = vi.fn(() =>
-    Promise.resolve({ data: orgId ? [{ organization_id: orgId }] : [], error: null }),
-  );
-
-  const from = vi.fn((table: string) => {
-    if (table === "platform_admins") {
-      return {
-        select: vi.fn(() => ({
-          maybeSingle: vi.fn(() =>
-            Promise.resolve({
-              data: platformAdmin ? { user_id: "user-1" } : null,
-              error: null,
-            }),
-          ),
-        })),
-      };
-    }
-    if (table === "org_members") {
-      return {
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({ limit: orgLimit })),
-        })),
-      };
-    }
-    throw new Error(`Unexpected table ${table}`);
+  const from = vi.fn(() => {
+    throw new Error("Sign-in must not make post-auth table queries");
   });
 
   return {
@@ -65,7 +45,6 @@ function signInClient({ platformAdmin = false, orgId = null as string | null } =
     from,
     signOut,
     signInWithPassword,
-    orgLimit,
   };
 }
 
@@ -110,26 +89,32 @@ describe("admin-only workspace provisioning", () => {
     expect(client.rpc).not.toHaveBeenCalled();
   });
 
-  it("signs out a normal authenticated user who has no assigned workspace", async () => {
-    const client = signInClient({ platformAdmin: false, orgId: null });
+  it("returns immediately after a successful password exchange without workspace/admin queries", async () => {
+    const client = signInClient();
+    mocks.createBrowserClient.mockReturnValue(client);
+
+    await expect(signInWithEmail("user@example.com", "password123")).resolves.toMatchObject({
+      user: { id: "user-1" },
+      session: { access_token: "test" },
+    });
+
+    expect(client.signInWithPassword).toHaveBeenCalledWith({
+      email: "user@example.com",
+      password: "password123",
+    });
+    expect(client.from).not.toHaveBeenCalled();
+    expect(client.signOut).not.toHaveBeenCalled();
+  });
+
+  it("rejects a password exchange that does not return a usable session", async () => {
+    const client = signInClient({ withSession: false });
     mocks.createBrowserClient.mockReturnValue(client);
 
     await expect(signInWithEmail("user@example.com", "password123")).rejects.toMatchObject({
-      code: "org",
+      code: "auth",
     });
 
-    expect(client.signOut).toHaveBeenCalledTimes(1);
-  });
-
-  it("allows a platform administrator to sign in without a shop membership", async () => {
-    const client = signInClient({ platformAdmin: true, orgId: null });
-    mocks.createBrowserClient.mockReturnValue(client);
-
-    await expect(signInWithEmail("admin@example.com", "password123")).resolves.toMatchObject({
-      user: { id: "user-1" },
-    });
-
+    expect(client.from).not.toHaveBeenCalled();
     expect(client.signOut).not.toHaveBeenCalled();
-    expect(client.orgLimit).not.toHaveBeenCalled();
   });
 });
