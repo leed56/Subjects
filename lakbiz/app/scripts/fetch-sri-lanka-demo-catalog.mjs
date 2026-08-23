@@ -17,8 +17,10 @@ import {
   pharmacyRetailCandidatesFromSpar,
 } from "./demo-catalog/healthguard-fallback.mjs";
 import {
+  catalogNameQualityIssue,
   classifyPharmacyRetailProduct,
   conservativeMediVerifyMatch,
+  isPharmacyRetailCandidate,
 } from "./demo-catalog/quality.mjs";
 import {
   needsSparTitleHydration,
@@ -216,6 +218,7 @@ async function fetchHealthguard(maxProducts) {
   const seen = new Set();
   let textFallbackPages = 0;
   for (const [baseUrl, department, category, subcategory] of HEALTHGUARD_TARGETS) {
+    const broadConvenienceTarget = /\/(?:household|food-beverage)(?:[/?]|$)/i.test(baseUrl);
     for (let page = 1; rows.length < maxProducts && page <= 80; page += 1) {
       const separator = baseUrl.includes("?") ? "&" : "?";
       const url = `${baseUrl}${separator}p=${page}`;
@@ -226,6 +229,13 @@ async function fetchHealthguard(maxProducts) {
       if (!structured.length && pageRows.length) textFallbackPages += 1;
       let added = 0;
       for (const row of pageRows) {
+        if (catalogNameQualityIssue(row.productName)) continue;
+        // Healthguard's broad Household and Food & Beverage categories can
+        // contain arbitrary consumer goods. A Pharmacy demo keeps only rows
+        // that independently match our conservative health/personal-care/
+        // convenience vocabulary; source-category membership alone is not
+        // enough to turn an item into a pharmacy product.
+        if (broadConvenienceTarget && !isPharmacyRetailCandidate(row.productName)) continue;
         const key = sourceKey(row);
         if (seen.has(key)) continue;
         seen.add(key);
