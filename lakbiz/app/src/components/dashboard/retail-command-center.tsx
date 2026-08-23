@@ -86,8 +86,8 @@ const copy = {
     operationalHealth: "Inventory readiness",
   },
   si: {
-    pharmacyEyebrow: "ඖෂධ අලෙවිසැල් මෙහෙයුම්",
-    groceryEyebrow: "සිල්ලර මෙහෙයුම් මධ්‍යස්ථානය",
+    pharmacyEyebrow: "මෙහෙයුම් වැඩබිම",
+    groceryEyebrow: "මෙහෙයුම් වැඩබිම",
     pharmacySubtitle: "බැච්, FEFO, කල් ඉකුත් අවදානම් සහ දෛනික විකුණුම් එකම දසුනකින් පාලනය කරන්න.",
     grocerySubtitle: "වේගවත් විකුණුම්, නැවත ඇණවුම් සහ කාණ්ඩ කාර්යසාධනය එකම දසුනකින් බලන්න.",
     live: "සජීවී වැඩබිම",
