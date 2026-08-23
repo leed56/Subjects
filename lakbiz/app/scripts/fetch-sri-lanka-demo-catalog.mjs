@@ -11,6 +11,10 @@ import {
   parseSpcRows,
   toNormalizedDemoProduct,
 } from "./demo-catalog/core.mjs";
+import {
+  parseHealthguardListingText,
+  pharmacyRetailCandidatesFromSpar,
+} from "./demo-catalog/healthguard-fallback.mjs";
 
 const args = new Set(process.argv.slice(2));
 const valueArg = (name, fallback) => {
@@ -22,12 +26,14 @@ const valueArg = (name, fallback) => {
 const outputPath = resolve(valueArg("--out", "/tmp/lakbiz-sri-lanka-demo-catalog.json"));
 const maxGrocery = Number(valueArg("--max-grocery", "1600"));
 const maxPharmacyRetail = Number(valueArg("--max-pharmacy-retail", "900"));
+const maxSparPharmacy = Number(valueArg("--max-spar-pharmacy", "450"));
 const verifyRegulatory = args.has("--verify-regulatory");
 const delayMs = Math.max(250, Number(valueArg("--delay-ms", "500")));
 const retrievedAt = new Date().toISOString();
 
-const USER_AGENT = "LakBizDemoCatalog/1.0 (+public factual catalog research; no images/descriptions)";
+const USER_AGENT = "LakBizDemoCatalog/1.1 (+public factual catalog research; no images/descriptions)";
 const robotsCache = new Map();
+let requestChain = Promise.resolve();
 let lastRequestAt = 0;
 
 const HEALTHGUARD_TARGETS = [
@@ -47,9 +53,13 @@ function sleep(ms) {
 }
 
 async function throttle() {
-  const elapsed = Date.now() - lastRequestAt;
-  if (elapsed < delayMs) await sleep(delayMs - elapsed);
-  lastRequestAt = Date.now();
+  const run = async () => {
+    const elapsed = Date.now() - lastRequestAt;
+    if (elapsed < delayMs) await sleep(delayMs - elapsed);
+    lastRequestAt = Date.now();
+  };
+  requestChain = requestChain.then(run, run);
+  await requestChain;
 }
 
 function parseRobots(text) {
@@ -181,13 +191,16 @@ async function fetchSpar(maxProducts) {
 async function fetchHealthguard(maxProducts) {
   const rows = [];
   const seen = new Set();
+  let textFallbackPages = 0;
   for (const [baseUrl, department, category, subcategory] of HEALTHGUARD_TARGETS) {
     for (let page = 1; rows.length < maxProducts && page <= 80; page += 1) {
       const separator = baseUrl.includes("?") ? "&" : "?";
       const url = `${baseUrl}${separator}p=${page}`;
       const html = await fetchText(url);
       if (!html) break;
-      const pageRows = parseHealthguardProducts(html, url);
+      const structured = parseHealthguardProducts(html, url);
+      const pageRows = structured.length ? structured : parseHealthguardListingText(html, url);
+      if (!structured.length && pageRows.length) textFallbackPages += 1;
       let added = 0;
       for (const row of pageRows) {
         const key = sourceKey(row);
@@ -199,7 +212,7 @@ async function fetchHealthguard(maxProducts) {
           category: inferred.category === "Preventive Care" ? category : inferred.category,
           subcategory: inferred.subcategory === "Health & Wellness" ? subcategory : inferred.subcategory,
           productKind: "retail",
-          taxonomyMethod: "source_category_plus_normalization",
+          taxonomyMethod: structured.length ? "source_category_plus_normalization" : "source_listing_text_plus_normalization",
         };
         rows.push(row);
         added += 1;
@@ -210,7 +223,19 @@ async function fetchHealthguard(maxProducts) {
     console.log(`Healthguard: ${rows.length} unique non-SPC products after ${baseUrl}`);
     if (rows.length >= maxProducts) break;
   }
+  console.log(`Healthguard text fallback pages used: ${textFallbackPages}`);
   return rows;
+}
+
+function pharmacyRowsFromSpar(spar, maxProducts) {
+  return pharmacyRetailCandidatesFromSpar(spar, maxProducts).map((row) => ({
+    ...row,
+    taxonomy: {
+      ...classifyRetailProduct(row.productName, "pharmacy"),
+      productKind: "retail",
+      taxonomyMethod: "spar_public_retail_normalization",
+    },
+  }));
 }
 
 async function main() {
@@ -219,13 +244,15 @@ async function main() {
   console.log(`Output: ${outputPath}`);
   console.log(`Regulatory enrichment: ${verifyRegulatory ? "exact-match MediVerify enabled" : "disabled"}`);
 
-  const [spc, spar, healthguard] = await Promise.all([
-    fetchSpc(),
-    fetchSpar(maxGrocery),
-    fetchHealthguard(maxPharmacyRetail),
-  ]);
+  // Keep source acquisition serialized so the shared delay is a real global
+  // rate limit rather than three concurrent fetch loops racing each other.
+  const spc = await fetchSpc();
+  const spar = await fetchSpar(maxGrocery);
+  const healthguard = await fetchHealthguard(maxPharmacyRetail);
+  const sparPharmacy = pharmacyRowsFromSpar(spar, maxSparPharmacy);
+  console.log(`SPAR2U modern-pharmacy fallback: ${sparPharmacy.length} factual retail items`);
 
-  const pharmacyRaw = mergeUnique([...spc, ...healthguard]);
+  const pharmacyRaw = mergeUnique([...spc, ...healthguard, ...sparPharmacy]);
   const groceryRaw = mergeUnique(spar);
   const pharmacy = pharmacyRaw.map((row) => toNormalizedDemoProduct(row, "pharmacy", retrievedAt));
   const grocery = groceryRaw.map((row) => toNormalizedDemoProduct(row, "grocery", retrievedAt));
@@ -237,11 +264,13 @@ async function main() {
       regulatory: "NMRA has publicly disclosed a medicine-registration database update limitation. Registration fields are populated only when an exact MediVerify match is obtained; otherwise they remain null.",
       retailerData: "Only public factual names/prices/identifiers are retained. Product descriptions and images are not copied.",
       taxonomy: "Retail taxonomy is normalized for LakBiz and is marked with taxonomyMethod; it is not represented as a regulator-supplied classification.",
+      healthguardIdentity: "When Healthguard product-card URLs are not present in server markup, listing-name hashes are used only as deterministic source identifiers; the source URL remains the public category page.",
     },
     sourceCounts: {
       spc: spc.length,
       healthguard: healthguard.length,
       spar2u: spar.length,
+      spar2u_pharmacy: sparPharmacy.length,
     },
     pharmacy,
     grocery,
