@@ -92,6 +92,7 @@ describe("Sri Lanka demo catalog normalization", () => {
 
   it("prioritizes grocery personal-care and household identity over broad food tokens", () => {
     expect(classifyRetailProduct("4 EVER Venivel Face Wash Whitening, 100ml", "grocery")).toMatchObject({ category: "Personal Care" });
+    expect(classifyRetailProduct("4 EVER Aloe Vera Gel 90%, 100g", "grocery")).toMatchObject({ category: "Personal Care" });
     expect(classifyRetailProduct("Tea Tree Face Wash, 100ml", "grocery")).toMatchObject({ category: "Personal Care" });
     expect(classifyRetailProduct("Herbal Hair Oil, 200ml", "grocery")).toMatchObject({ category: "Personal Care" });
     expect(classifyRetailProduct("Comfort Lily Fresh Fabric Conditioner, 860ml", "grocery")).toMatchObject({ category: "Cleaning" });
