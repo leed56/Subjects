@@ -10,6 +10,12 @@ on:
       - "lakbiz/app/scripts/fetch-sri-lanka-demo-catalog.mjs"
       - "lakbiz/app/src/lib/sector-category-blueprints.ts"
       - ".github/workflows/lakbiz-demo-catalog.yml"
+  pull_request:
+    paths:
+      - "lakbiz/app/scripts/demo-catalog/**"
+      - "lakbiz/app/scripts/fetch-sri-lanka-demo-catalog.mjs"
+      - "lakbiz/app/src/lib/sector-category-blueprints.ts"
+      - ".github/workflows/lakbiz-demo-catalog.yml"
 
 permissions:
   contents: read
