@@ -1,0 +1,69 @@
+name: LakBiz Demo Importer One Shot
+
+on:
+  push:
+    branches:
+      - claude/global-premium-ui
+    paths:
+      - ".github/workflows/lakbiz-demo-importer-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/global-premium-ui
+          fetch-depth: 0
+
+      - name: Patch importer exactly
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lakbiz/app/scripts/demo-catalog/importer.mjs')
+          text = path.read_text()
+
+          old = 'import { stableHash, syntheticStock } from "./core.mjs";'
+          new = '''import { stableHash, syntheticStock } from "./core.mjs";\nimport { buildDemoLotRows, ensureTrackedDemoStock } from "./lot-fixtures.mjs";'''
+          if old not in text:
+              raise SystemExit('Refusing patch: importer import anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''export async function importCatalog(client, orgId, sector, products) {\n  const rows = products.map((product) => productDbRow(orgId, sector, product));\n  await upsertChunks(client, "products_base", rows, { onConflict: "id" });\n\n  if (sector === "pharmacy") {\n    const profiles = products.map((product) => inventoryProfileRow(orgId, product));\n    await upsertChunks(client, "product_inventory_profiles", profiles, { onConflict: "product_id" });\n\n    const tracked = products.filter(shouldTrackLot);\n    const rowById = new Map(rows.map((row) => [row.id, row]));\n    const lots = tracked.map((product, index) => inventoryLotRow(orgId, product, index, rowById.get(product.id)?.stock_qty ?? 0));\n    await upsertChunks(client, "inventory_lots", lots, { onConflict: "id" });\n  }\n\n  return { products: rows.length, trackedLots: sector === "pharmacy" ? products.filter(shouldTrackLot).length : 0 };\n}'''
+          new = '''export async function importCatalog(client, orgId, sector, products) {\n  const rows = products.map((product) => productDbRow(orgId, sector, product));\n  const tracked = sector === "pharmacy" ? products.filter(shouldTrackLot) : [];\n  const trackedIndexById = new Map(tracked.map((product, index) => [product.id, index]));\n\n  // Keep the first three pharmacy workflow fixtures well-stocked enough to\n  // demonstrate expired+valid, FEFO near+later, and quarantine+valid lots.\n  for (const row of rows) {\n    const trackedIndex = trackedIndexById.get(row.id);\n    if (trackedIndex != null) row.stock_qty = ensureTrackedDemoStock(row.stock_qty, trackedIndex);\n  }\n\n  await upsertChunks(client, "products_base", rows, { onConflict: "id" });\n\n  let lotRows = 0;\n  if (sector === "pharmacy") {\n    const profiles = products.map((product) => inventoryProfileRow(orgId, product));\n    await upsertChunks(client, "product_inventory_profiles", profiles, { onConflict: "product_id" });\n\n    const rowById = new Map(rows.map((row) => [row.id, row]));\n    const lots = tracked.flatMap((product, index) =>\n      buildDemoLotRows(orgId, product, index, rowById.get(product.id)?.stock_qty ?? 0),\n    );\n    await upsertChunks(client, "inventory_lots", lots, { onConflict: "id" });\n    lotRows = lots.length;\n  }\n\n  return { products: rows.length, trackedProducts: tracked.length, trackedLots: lotRows };\n}'''
+          if old not in text:
+              raise SystemExit('Refusing patch: importCatalog block did not match')
+          text = text.replace(old, new, 1)
+
+          anchor = '''  await upsertChunks(client, "purchases", purchases, { onConflict: "id" });\n  await upsertChunks(client, "purchase_lines", purchaseLines, { onConflict: "id" });'''
+          replacement = '''  // Keep supplier liability consistent with the synthetic credit purchases.\n  for (const purchase of purchases) {\n    if (Number(purchase.credit_amount) <= 0 || !purchase.supplier_id) continue;\n    const supplier = suppliers.find((row) => row.id === purchase.supplier_id);\n    if (supplier) supplier.payable_balance = Number(supplier.payable_balance || 0) + Number(purchase.credit_amount);\n  }\n\n  await upsertChunks(client, "purchases", purchases, { onConflict: "id" });\n  await upsertChunks(client, "purchase_lines", purchaseLines, { onConflict: "id" });\n  await upsertChunks(client, "suppliers", suppliers, { onConflict: "id" });'''
+          if anchor not in text:
+              raise SystemExit('Refusing patch: purchase integrity anchor not found')
+          text = text.replace(anchor, replacement, 1)
+
+          anchor = '''  const bankTransactions = [];\n\n  for (let s = 0; s < methods.length; s += 1) {'''
+          replacement = '''  const bankTransactions = [];\n  if (bankAccount) {\n    bankTransactions.push({\n      id: `demo:${sector}:banktxn:opening`,\n      organization_id: orgId,\n      account_id: bankAccount.id,\n      type: "adjustment",\n      amount: 125000,\n      description: "Synthetic demo opening bank balance",\n      reference: "DEMO-OPENING",\n      txn_date: daysAgo(30),\n    });\n  }\n\n  for (let s = 0; s < methods.length; s += 1) {'''
+          if anchor not in text:
+              raise SystemExit('Refusing patch: bank opening anchor not found')
+          text = text.replace(anchor, replacement, 1)
+
+          anchor = '''  await upsertChunks(client, "sales_base", sales, { onConflict: "id" });'''
+          replacement = '''  if (bankAccount) {\n    bankAccount.balance = bankTransactions.reduce((balance, transaction) => {\n      const amount = Number(transaction.amount || 0);\n      return ["withdrawal", "fee"].includes(transaction.type) ? balance - amount : balance + amount;\n    }, 0);\n    await upsertChunks(client, "bank_accounts", [bankAccount], { onConflict: "id" });\n  }\n\n  await upsertChunks(client, "sales_base", sales, { onConflict: "id" });'''
+          if anchor not in text:
+              raise SystemExit('Refusing patch: bank reconciliation anchor not found')
+          text = text.replace(anchor, replacement, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Remove one-shot workflow and commit
+        run: |
+          git rm .github/workflows/lakbiz-demo-importer-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lakbiz/app/scripts/demo-catalog/importer.mjs
+          git commit -m "fix(lakbiz): keep demo inventory and balances coherent"
+          git push origin HEAD:claude/global-premium-ui
