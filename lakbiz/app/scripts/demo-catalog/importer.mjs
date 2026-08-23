@@ -4,6 +4,7 @@ import { buildDemoLotRows, ensureTrackedDemoStock } from "./lot-fixtures.mjs";
 
 export const LAKBIZ_PROJECT_REF = "zestppstpwjxriwcuykc";
 export const LAKBIZ_PROJECT_HOST = `${LAKBIZ_PROJECT_REF}.supabase.co`;
+export const DEMO_HISTORY_SALE_COUNT = 185;
 
 export function assertLakBizTarget(url) {
   const parsed = new URL(url);
@@ -341,7 +342,7 @@ export async function seedDemoHistory(client, orgId, sector, products) {
   await upsertChunks(client, "customers", customers, { onConflict: "id" });
   await upsertChunks(client, "suppliers", suppliers, { onConflict: "id" });
 
-  const saleable = products.filter((product) => !shouldTrackLot(product) && Number(product.sellPrice) > 0).slice(0, 12);
+  const saleable = products.filter((product) => !shouldTrackLot(product) && Number(product.sellPrice) > 0).slice(0, 240);
   const purchasable = products.filter((product) => Number(product.buyPrice) > 0).slice(0, 12);
   if (saleable.length < 4 || purchasable.length < 4) {
     return { customers: customers.length, suppliers: suppliers.length, purchases: 0, sales: 0 };
@@ -423,6 +424,68 @@ export async function seedDemoHistory(client, orgId, sector, products) {
       bankTransactions.push({ id: `demo:${sector}:banktxn:${s + 1}`, organization_id: orgId, account_id: bankAccount.id, type: "deposit", amount: total, description: "Synthetic demo POS transfer", reference: sales[s].bill_no, txn_date: daysAgo(12 - s * 2) });
     }
     if (method === "credit") customer.credit_balance = total;
+  }
+
+  // Add enough deterministic synthetic activity for dashboard trends to be
+  // meaningful. These extra rows intentionally use only cash/card tenders so
+  // the original five fixtures remain the focused examples for credit, cheque
+  // and bank-transfer workflows. Current stock is a separate seeded snapshot.
+  for (let s = methods.length; s < DEMO_HISTORY_SALE_COUNT; s += 1) {
+    const productA = saleable[(s * 13) % saleable.length];
+    const productB = saleable[(s * 29 + 7) % saleable.length];
+    const customer = customers[s % customers.length];
+    const saleId = `demo:${sector}:sale:${s + 1}`;
+    const qtyA = 1 + (s % 3);
+    const qtyB = 1 + ((s + 1) % 2);
+    const totalA = Number(productA.sellPrice) * qtyA;
+    const totalB = Number(productB.sellPrice) * qtyB;
+    const total = Math.round((totalA + totalB) * 100) / 100;
+    const cost = Number(productA.buyPrice || 0) * qtyA + Number(productB.buyPrice || 0) * qtyB;
+    const profit = Math.round((total - cost) * 100) / 100;
+    const method = s % 4 === 0 ? "card" : "cash";
+    const walkIn = s % 4 === 1;
+    const date = saleDate((s - methods.length) % 30);
+
+    sales.push({
+      id: saleId,
+      organization_id: orgId,
+      bill_no: `DEMO-${sector === "pharmacy" ? "PH" : "GR"}-${String(s + 1).padStart(4, "0")}`,
+      sale_date: date,
+      subtotal: total,
+      output_vat: 0,
+      total,
+      profit,
+      payment_method: method,
+      customer_id: walkIn ? null : customer.id,
+      customer_name: walkIn ? "Walk-in Customer" : customer.name,
+      credit_amount: 0,
+      cheque_id: null,
+      discount: 0,
+    });
+    [
+      { product: productA, qty: qtyA },
+      { product: productB, qty: qtyB },
+    ].forEach(({ product, qty }, index) => lines.push({
+      id: uuidFromSeed(`${saleId}:${index}`),
+      sale_id: saleId,
+      organization_id: orgId,
+      product_id: product.id,
+      product_name: product.productName,
+      qty,
+      unit_price: product.sellPrice || 0,
+      buy_price: product.buyPrice || 0,
+      line_order: index,
+    }));
+    tenders.push({
+      id: `demo:${sector}:tender:${s + 1}`,
+      organization_id: orgId,
+      sale_id: saleId,
+      kind: method,
+      amount: total,
+      note: "Synthetic demo sales history; not factual customer activity.",
+      created_by: null,
+      created_at: date,
+    });
   }
 
   if (bankAccount) {

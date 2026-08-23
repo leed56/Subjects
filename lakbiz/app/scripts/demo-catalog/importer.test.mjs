@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertLakBizTarget,
+  DEMO_HISTORY_SALE_COUNT,
   inventoryLotRow,
   inventoryProfileRow,
   productDbRow,
@@ -12,6 +13,10 @@ describe("LakBiz demo importer guards", () => {
   it("refuses every Supabase project except the verified nexus-erp project", () => {
     expect(() => assertLakBizTarget("https://zestppstpwjxriwcuykc.supabase.co")).not.toThrow();
     expect(() => assertLakBizTarget("https://baobnskkrgkwdaefzulc.supabase.co")).toThrow(/Refusing demo import/);
+  });
+
+  it("seeds a non-toy deterministic 30-day sales history", () => {
+    expect(DEMO_HISTORY_SALE_COUNT).toBe(185);
   });
 
   it("creates stable UUIDs for idempotent lot rows", () => {
