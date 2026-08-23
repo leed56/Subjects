@@ -54,6 +54,16 @@ export default function LoginPage() {
     });
   }, [adminLogin, configured, authLoading, user]);
 
+  // A normal authenticated shop user should never remain on /login. This is
+  // independent of the submit handler so an auth-state update cannot leave the
+  // stale "already signed in" card visible while another async check settles.
+  useEffect(() => {
+    if (adminLogin || authLoading || !user) return;
+    const next = new URLSearchParams(window.location.search).get("next");
+    const destination = next?.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+    window.location.replace(destination);
+  }, [adminLogin, authLoading, user]);
+
   const safeNextPath = (): string | null => {
     if (typeof window === "undefined") return null;
     const next = new URLSearchParams(window.location.search).get("next");
@@ -90,8 +100,7 @@ export default function LoginPage() {
         await signIn(email, password);
         // Do not perform another Supabase query between successful auth and
         // navigation. Shop authorization has already been checked by the auth
-        // action, while /admin has its own protected gate. A duplicate admin
-        // lookup here could leave a valid user stranded on /login.
+        // action, while /admin has its own protected gate.
         window.location.assign(safeNextPath() ?? "/dashboard");
         return;
       }
