@@ -1,0 +1,43 @@
+name: LakBiz SPAR Hydration Import Fix
+
+on:
+  push:
+    branches:
+      - claude/global-premium-ui
+    paths:
+      - ".github/workflows/lakbiz-spar-hydration-import-fix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/global-premium-ui
+          fetch-depth: 0
+      - name: Add required core imports
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lakbiz/app/scripts/fetch-sri-lanka-demo-catalog.mjs')
+          text = path.read_text()
+          anchor = '''  extractSpcBrand,\n  parseHealthguardProducts,'''
+          replacement = '''  extractSpcBrand,\n  inferUnitFromName,\n  parseHealthguardProducts,\n  parsePackSizeFromName,'''
+          if 'inferUnitFromName,' in text and 'parsePackSizeFromName,' in text:
+              print('Hydration imports already present')
+          elif anchor in text:
+              path.write_text(text.replace(anchor, replacement, 1))
+          else:
+              raise SystemExit('Refusing patch: core import anchor not found')
+          PY
+      - name: Remove one-shot workflow and commit
+        run: |
+          git rm .github/workflows/lakbiz-spar-hydration-import-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lakbiz/app/scripts/fetch-sri-lanka-demo-catalog.mjs
+          git commit -m "fix(lakbiz): import SPAR title hydration helpers"
+          git push origin HEAD:claude/global-premium-ui
