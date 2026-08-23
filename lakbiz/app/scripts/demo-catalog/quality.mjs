@@ -27,25 +27,44 @@ function strengthTokens(value) {
     .map((match) => match[0].replace(/\s+/g, ""));
 }
 
+function brandMatchesSourceIdentity(registryBrand, sourceBrand, sourceStrengths) {
+  const registry = normalizeIdentity(registryBrand);
+  const source = normalizeIdentity(sourceBrand);
+  if (!registry || !source) return false;
+  if (registry === source) return true;
+
+  // SPC often omits a numeric strength suffix from the brand in parentheses,
+  // while the registry includes it (for example GLUCAR vs GLUCAR 50). Accept
+  // only sourceBrand + an explicit strength number from the same SPC row.
+  return [...sourceStrengths].some((strength) => {
+    const numeric = String(strength).match(/^\d+(?:\.\d+)?/)?.[0];
+    if (!numeric) return false;
+    return registry === `${source}${normalizeIdentity(numeric)}`;
+  });
+}
+
 /**
- * Regulatory enrichment is deliberately conservative. Brand equality alone is
- * not enough: require one unique exact brand, at least one generic-name anchor
- * from the SPC item, and compatible strength whenever both sides expose one.
+ * Regulatory enrichment is deliberately conservative. Require one unique
+ * brand identity, at least one generic-name anchor from the SPC item, and
+ * compatible strength whenever both sides expose one. The sole brand
+ * normalization allowed beyond exact equality is an explicit source strength
+ * suffix such as GLUCAR -> GLUCAR 50 for an SPC 50MG product.
  */
 export function conservativeMediVerifyMatch(spcProduct, results) {
   const brand = extractSpcBrand(spcProduct?.productName);
   if (!brand) return null;
-  const targetBrand = normalizeIdentity(brand);
-  const exactBrandRows = (results ?? []).filter((row) => normalizeIdentity(row?.brand) === targetBrand);
-  if (exactBrandRows.length !== 1) return null;
+  const sourceStrengths = new Set(strengthTokens(spcProduct.productName));
+  const compatibleBrandRows = (results ?? []).filter((row) =>
+    brandMatchesSourceIdentity(row?.brand, brand, sourceStrengths),
+  );
+  if (compatibleBrandRows.length !== 1) return null;
 
-  const match = exactBrandRows[0];
+  const match = compatibleBrandRows[0];
   const generic = normalizeIdentity(match.genericName ?? "");
   const anchors = genericAnchorTokens(spcProduct.productName);
   if (!anchors.length) return null;
   if (!anchors.some((token) => generic.includes(normalizeIdentity(token)))) return null;
 
-  const sourceStrengths = new Set(strengthTokens(spcProduct.productName));
   const registryStrengths = new Set(strengthTokens(match.genericName));
   if (sourceStrengths.size && registryStrengths.size) {
     const overlaps = [...sourceStrengths].some((token) => registryStrengths.has(token));
