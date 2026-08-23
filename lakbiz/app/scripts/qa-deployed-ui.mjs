@@ -8,10 +8,11 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const previewUrl = (process.env.LAKBIZ_PREVIEW_URL ?? "https://subjects-git-claude-global-premium-ui-nexuserp.vercel.app").replace(/\/$/, "");
 const screenshotDir = process.env.LAKBIZ_UI_QA_DIR ?? "/tmp/lakbiz-ui-qa";
+const expectedBuildSha = (process.env.LAKBIZ_EXPECTED_BUILD_SHA ?? "").trim();
 const expectedHost = "zestppstpwjxriwcuykc.supabase.co";
 
 if (!supabaseUrl || !serviceRole) throw new Error("Supabase URL and service-role key are required");
-if (new URL(supabaseUrl).hostname !== expectedHost) throw new Error(`Refusing UI QA against unexpected Supabase host`);
+if (new URL(supabaseUrl).hostname !== expectedHost) throw new Error("Refusing UI QA against unexpected Supabase host");
 if (!/^https:\/\//.test(previewUrl)) throw new Error("LAKBIZ_PREVIEW_URL must be HTTPS");
 
 const admin = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -19,6 +20,7 @@ const runTag = String(process.env.GITHUB_RUN_ID ?? Date.now()).replace(/[^A-Za-z
 const password = `${randomBytes(20).toString("base64url")}A9!`;
 const createdUsers = [];
 const memberships = [];
+const screenshots = [];
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -67,14 +69,61 @@ function safeName(value) {
   return value.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
 }
 
+async function readPreviewIdentity(page) {
+  await page.goto(`${previewUrl}/login`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  const body = page.locator("body");
+  return {
+    buildSha: (await body.getAttribute("data-lakbiz-build-sha"))?.trim() ?? "",
+    supabaseHost: (await body.getAttribute("data-lakbiz-supabase-host"))?.trim() ?? "",
+  };
+}
+
+async function waitForExpectedPreview(page) {
+  let last = { buildSha: "", supabaseHost: "" };
+  for (let attempt = 1; attempt <= 24; attempt += 1) {
+    last = await readPreviewIdentity(page);
+    if (last.supabaseHost && last.supabaseHost !== expectedHost) {
+      throw new Error(`Preview points to unexpected Supabase host: ${last.supabaseHost}`);
+    }
+    if (!expectedBuildSha || last.buildSha === expectedBuildSha) {
+      if (expectedBuildSha) console.log(`Preview build verified: ${last.buildSha}`);
+      return;
+    }
+    if (attempt < 24) {
+      console.log(`Preview not on expected commit yet (${last.buildSha || "build identity unavailable"}); retrying.`);
+      await page.waitForTimeout(10_000);
+    }
+  }
+  throw new Error(
+    `Preview deployment is stale or unavailable. Expected commit ${expectedBuildSha}, found ${last.buildSha || "no build identity"}.`,
+  );
+}
+
+async function saveDiagnostic(page, user, label) {
+  const file = `${screenshotDir}/${safeName(`${user.sector}-${user.role}-${label}`)}.png`;
+  await page.screenshot({ path: file, fullPage: true }).catch(() => {});
+  screenshots.push(file);
+  const visibleText = (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ").trim().slice(0, 1600);
+  console.error(JSON.stringify({
+    diagnostic: label,
+    sector: user.sector,
+    role: user.role,
+    url: page.url(),
+    visibleText,
+  }, null, 2));
+}
+
 async function login(page, user) {
   await page.goto(`${previewUrl}/login`, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.locator('input[type="email"]').fill(user.email);
   await page.locator('input[type="password"]').fill(password);
-  await Promise.all([
-    page.waitForURL(/\/dashboard(?:\?|$)/, { timeout: 60_000 }),
-    page.locator('button[type="submit"]').click(),
-  ]);
+  await page.locator('button[type="submit"]').click();
+  try {
+    await page.waitForURL(/\/dashboard(?:\?|$)/, { timeout: 60_000 });
+  } catch (error) {
+    await saveDiagnostic(page, user, "login-failure");
+    throw new Error(`${user.sector}/${user.role}: login did not reach /dashboard. ${error instanceof Error ? error.message : "Unknown login failure"}`);
+  }
   await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
 }
 
@@ -92,7 +141,7 @@ async function assertClientSurface(page, { role }) {
   }
   assert(body.includes("lakbiz"), "LakBiz application shell was not visible");
 
-  if (role === "cashier") {
+  if (["cashier", "technician", "data_entry", "manager"].includes(role)) {
     for (const financial of [
       "owner financial snapshot",
       "stock cost value",
@@ -100,7 +149,7 @@ async function assertClientSurface(page, { role }) {
       "gross profit",
       "buy price (lkr)",
     ]) {
-      assert(!body.includes(financial), `Cashier UI exposed owner-only financial phrase: ${financial}`);
+      assert(!body.includes(financial), `${role} UI exposed owner-only financial phrase: ${financial}`);
     }
   }
 }
@@ -109,9 +158,12 @@ async function capture(page, user, route, suffix = "desktop") {
   await page.goto(`${previewUrl}${route}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
   await page.waitForTimeout(500);
+  const actualPath = new URL(page.url()).pathname;
+  assert(actualPath === route, `${user.sector}/${user.role}: ${route} redirected to ${actualPath}`);
   await assertClientSurface(page, user);
   const file = `${screenshotDir}/${safeName(`${user.sector}-${user.role}-${route === "/" ? "home" : route}-${suffix}`)}.png`;
   await page.screenshot({ path: file, fullPage: true });
+  screenshots.push(file);
   return file;
 }
 
@@ -124,7 +176,8 @@ async function openAddItem(page, user) {
   await page.waitForTimeout(300);
   const required = page.locator('input[required]').first();
   if (await required.isVisible()) {
-    await required.fill(user.sector === "pharmacy" ? "aci" : "tea");
+    const searchSeed = user.sector === "pharmacy" ? "aci" : user.sector === "ac_hvac" ? "compressor" : "tea";
+    await required.fill(searchSeed);
     await page.waitForTimeout(900);
   }
   await assertClientSurface(page, user);
@@ -132,6 +185,7 @@ async function openAddItem(page, user) {
   assert(!text.includes("sector template"), "Add Item leaked sector template wording");
   const file = `${screenshotDir}/${user.sector}-${user.role}-stock-add-item-desktop.png`;
   await page.screenshot({ path: file, fullPage: true });
+  screenshots.push(file);
 }
 
 async function runViewport(browser, user, viewport, suffix, routes) {
@@ -149,33 +203,51 @@ async function runViewport(browser, user, viewport, suffix, routes) {
 await mkdir(screenshotDir, { recursive: true });
 let browser;
 try {
-  const [pharmacyOrg, groceryOrg] = await Promise.all([
+  const [pharmacyOrg, groceryOrg, hvacOrg] = await Promise.all([
     lookupOrg("LakBiz Pharmacy Demo"),
     lookupOrg("LakBiz Grocery Demo"),
+    lookupOrg("IMT Test 2"),
   ]);
   assert(pharmacyOrg.sector === "pharmacy", "Pharmacy demo sector mismatch");
   assert(groceryOrg.sector === "grocery", "Grocery demo sector mismatch");
+  assert(hvacOrg.sector === "ac_hvac", "HVAC QA sector mismatch");
+
+  browser = await chromium.launch({ headless: true });
+  const preflightContext = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  try {
+    await waitForExpectedPreview(await preflightContext.newPage());
+  } finally {
+    await preflightContext.close();
+  }
 
   const users = {
     pharmacyOwner: await createQaUser(pharmacyOrg, "owner", "pharmacy"),
     pharmacyCashier: await createQaUser(pharmacyOrg, "cashier", "pharmacy"),
     groceryOwner: await createQaUser(groceryOrg, "owner", "grocery"),
     groceryCashier: await createQaUser(groceryOrg, "cashier", "grocery"),
+    hvacOwner: await createQaUser(hvacOrg, "owner", "ac_hvac"),
+    hvacTechnician: await createQaUser(hvacOrg, "technician", "ac_hvac"),
   };
 
-  browser = await chromium.launch({ headless: true });
-  const ownerRoutes = ["/dashboard", "/sales", "/stock", "/returns", "/banking", "/reports", "/settings/shop"];
-  const cashierRoutes = ["/dashboard", "/sales", "/stock"];
+  const retailOwnerRoutes = ["/dashboard", "/sales", "/stock", "/returns", "/banking", "/reports", "/settings/shop"];
+  const retailCashierRoutes = ["/dashboard", "/sales", "/stock"];
+  const hvacOwnerRoutes = ["/dashboard", "/jobs", "/sales", "/stock", "/job-costing", "/reports"];
+  const hvacTechnicianRoutes = ["/dashboard", "/jobs"];
 
-  await runViewport(browser, users.pharmacyOwner, { width: 1440, height: 1000 }, "desktop", ownerRoutes);
-  await runViewport(browser, users.groceryOwner, { width: 1440, height: 1000 }, "desktop", ownerRoutes);
-  await runViewport(browser, users.pharmacyCashier, { width: 820, height: 1180 }, "tablet", cashierRoutes);
-  await runViewport(browser, users.groceryCashier, { width: 820, height: 1180 }, "tablet", cashierRoutes);
+  await runViewport(browser, users.pharmacyOwner, { width: 1440, height: 1000 }, "desktop", retailOwnerRoutes);
+  await runViewport(browser, users.groceryOwner, { width: 1440, height: 1000 }, "desktop", retailOwnerRoutes);
+  await runViewport(browser, users.hvacOwner, { width: 1440, height: 1000 }, "desktop", hvacOwnerRoutes);
+
+  await runViewport(browser, users.pharmacyCashier, { width: 820, height: 1180 }, "tablet", retailCashierRoutes);
+  await runViewport(browser, users.groceryCashier, { width: 820, height: 1180 }, "tablet", retailCashierRoutes);
+  await runViewport(browser, users.hvacTechnician, { width: 820, height: 1180 }, "tablet", hvacTechnicianRoutes);
+
   await runViewport(browser, users.pharmacyOwner, { width: 390, height: 844 }, "mobile", ["/dashboard", "/sales", "/stock"]);
   await runViewport(browser, users.groceryOwner, { width: 390, height: 844 }, "mobile", ["/dashboard", "/sales", "/stock"]);
+  await runViewport(browser, users.hvacOwner, { width: 390, height: 844 }, "mobile", ["/dashboard", "/jobs"]);
 
   console.log("DEPLOYED_UI_QA_PASSED");
-  console.log(JSON.stringify({ previewUrl, screenshotDir, screenshots: 22 }, null, 2));
+  console.log(JSON.stringify({ previewUrl, expectedBuildSha, screenshotDir, screenshots: screenshots.length }, null, 2));
 } finally {
   if (browser) await browser.close();
   await cleanup();
