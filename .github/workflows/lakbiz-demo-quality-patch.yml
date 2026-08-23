@@ -1,0 +1,69 @@
+name: LakBiz Demo Quality One Shot
+
+on:
+  push:
+    branches:
+      - claude/global-premium-ui
+    paths:
+      - ".github/workflows/lakbiz-demo-quality-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/global-premium-ui
+          fetch-depth: 0
+
+      - name: Wire conservative quality helpers
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lakbiz/app/scripts/fetch-sri-lanka-demo-catalog.mjs')
+          text = path.read_text()
+
+          old = '''  classifyRetailProduct,\n  exactMediVerifyMatch,\n  extractSpcBrand,'''
+          new = '''  classifyRetailProduct,\n  extractSpcBrand,'''
+          if old not in text:
+              raise SystemExit('Refusing patch: core import block did not match')
+          text = text.replace(old, new, 1)
+
+          old = '''import {\n  parseHealthguardListingText,\n  pharmacyRetailCandidatesFromSpar,\n} from "./demo-catalog/healthguard-fallback.mjs";'''
+          new = '''import {\n  parseHealthguardListingText,\n  pharmacyRetailCandidatesFromSpar,\n} from "./demo-catalog/healthguard-fallback.mjs";\nimport {\n  classifyPharmacyRetailProduct,\n  conservativeMediVerifyMatch,\n} from "./demo-catalog/quality.mjs";'''
+          if old not in text:
+              raise SystemExit('Refusing patch: fallback import block did not match')
+          text = text.replace(old, new, 1)
+
+          old = 'const match = exactMediVerifyMatch(row, parseMediVerifyResults(page, searchUrl));'
+          new = 'const match = conservativeMediVerifyMatch(row, parseMediVerifyResults(page, searchUrl));'
+          if old not in text:
+              raise SystemExit('Refusing patch: regulatory matcher call did not match')
+          text = text.replace(old, new, 1)
+
+          old = 'const inferred = classifyRetailProduct(row.productName, "pharmacy");'
+          new = 'const inferred = classifyPharmacyRetailProduct(row.productName);'
+          if old not in text:
+              raise SystemExit('Refusing patch: Healthguard classifier call did not match')
+          text = text.replace(old, new, 1)
+
+          old = '...classifyRetailProduct(row.productName, "pharmacy"),'
+          new = '...classifyPharmacyRetailProduct(row.productName),'
+          if old not in text:
+              raise SystemExit('Refusing patch: SPAR pharmacy classifier call did not match')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Remove one-shot workflow and commit
+        run: |
+          git rm .github/workflows/lakbiz-demo-quality-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lakbiz/app/scripts/fetch-sri-lanka-demo-catalog.mjs
+          git commit -m "fix(lakbiz): enforce conservative demo catalog quality"
+          git push origin HEAD:claude/global-premium-ui
