@@ -10,6 +10,11 @@ const previewUrl = (process.env.LAKBIZ_PREVIEW_URL ?? "https://subjects-git-clau
 const screenshotDir = process.env.LAKBIZ_UI_QA_DIR ?? "/tmp/lakbiz-ui-qa";
 const expectedBuildSha = (process.env.LAKBIZ_EXPECTED_BUILD_SHA ?? "").trim();
 const expectedHost = "zestppstpwjxriwcuykc.supabase.co";
+const githubRepository = process.env.GITHUB_REPOSITORY ?? "leed56/Subjects";
+const QA_ONLY_PATHS = new Set([
+  "lakbiz/app/scripts/qa-deployed-ui.mjs",
+  ".github/workflows/lakbiz-deployed-ui-qa.yml",
+]);
 
 if (!supabaseUrl || !serviceRole) throw new Error("Supabase URL and service-role key are required");
 if (new URL(supabaseUrl).hostname !== expectedHost) throw new Error("Refusing UI QA against unexpected Supabase host");
@@ -78,6 +83,35 @@ async function readPreviewIdentity(page) {
   };
 }
 
+async function isQaOnlyPreviewDrift(deployedSha, expectedSha) {
+  if (!deployedSha || !expectedSha || deployedSha === expectedSha) return false;
+  if (!/^[0-9a-f]{40}$/i.test(deployedSha) || !/^[0-9a-f]{40}$/i.test(expectedSha)) return false;
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(githubRepository)) return false;
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${githubRepository}/compare/${deployedSha}...${expectedSha}`,
+      {
+        headers: {
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "lakbiz-deployed-ui-qa",
+        },
+      },
+    );
+    if (!response.ok) return false;
+    const comparison = await response.json();
+    if (comparison.status !== "ahead" || !Array.isArray(comparison.files) || comparison.files.length === 0) return false;
+    const changedPaths = comparison.files.map((file) => String(file.filename ?? ""));
+    const qaOnly = changedPaths.every((path) => QA_ONLY_PATHS.has(path));
+    if (qaOnly) {
+      console.log(`Preview build ${deployedSha} accepted for QA-only head ${expectedSha}; changed files: ${changedPaths.join(", ")}`);
+    }
+    return qaOnly;
+  } catch {
+    return false;
+  }
+}
+
 async function waitForExpectedPreview(page) {
   let last = { buildSha: "", supabaseHost: "" };
   for (let attempt = 1; attempt <= 24; attempt += 1) {
@@ -89,6 +123,11 @@ async function waitForExpectedPreview(page) {
       if (expectedBuildSha) console.log(`Preview build verified: ${last.buildSha}`);
       return;
     }
+    // Vercel's Free tier can reject a build even when a commit changes only
+    // this QA harness. In that narrow case, compare GitHub trees and permit the
+    // previously deployed build only when every intervening path is QA-only.
+    // Any runtime/app/config/migration drift still fails closed.
+    if (await isQaOnlyPreviewDrift(last.buildSha, expectedBuildSha)) return;
     if (attempt < 24) {
       console.log(`Preview not on expected commit yet (${last.buildSha || "build identity unavailable"}); retrying.`);
       await page.waitForTimeout(10_000);
