@@ -310,6 +310,8 @@ export function toNormalizedDemoProduct(row, sector, retrievedAt = new Date().to
     registrationDate: row.regulatory?.registrationDate ?? null,
     registrationValidity: row.regulatory?.validity ?? null,
     regulatorySchedule: row.regulatory?.schedule ?? null,
+    regulatorySource: row.regulatory ? "mediverify" : null,
+    regulatorySourceUrl: row.regulatory?.sourceUrl ?? null,
     regulatorySourceStatus: row.regulatory ? NMRA_PUBLIC_DATA_STATUS : null,
     active: true,
   };

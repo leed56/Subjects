@@ -87,6 +87,8 @@ export function productDbRow(orgId, sector, product) {
       regulatoryRegistrationDate: product.registrationDate,
       regulatoryValidity: product.registrationValidity,
       regulatorySchedule: product.regulatorySchedule,
+      regulatorySource: product.regulatorySource,
+      regulatorySourceUrl: product.regulatorySourceUrl,
       regulatorySourceStatus: product.regulatorySourceStatus,
       sourcePriceDate: product.sourcePriceDate,
       costSource: product.costSource,
