@@ -24,6 +24,7 @@ import type {
 } from "@/lib/store/types";
 import { businessFromOrg, fetchOrgShopSettings } from "./org-settings";
 import { createBrowserClient } from "./client";
+import { fetchAllPages } from "./pagination";
 import {
   hasSyncConflict,
   localHasUnsyncedRecordsFromData,
@@ -210,63 +211,30 @@ export async function pullBusinessData(
     vehiclesRes,
     business,
   ] = await Promise.all([
-    supabase.from("products").select("*").eq("organization_id", organizationId),
-    supabase.from("customers").select("*").eq("organization_id", organizationId),
-    supabase.from("suppliers").select("*").eq("organization_id", organizationId),
-    supabase.from("sales").select("*").eq("organization_id", organizationId),
-    supabase.from("sale_lines").select("*").eq("organization_id", organizationId),
-    supabase.from("purchases").select("*").eq("organization_id", organizationId),
-    supabase
-      .from("purchase_lines")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("purchase_orders")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("purchase_order_lines")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("customer_payments")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("customer_product_prices")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("supplier_payments")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase.from("stock_logs").select("*").eq("organization_id", organizationId),
-    supabase
-      .from("bank_accounts")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("bank_transactions")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("bank_transfers")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase.from("cheques").select("*").eq("organization_id", organizationId),
-    supabase.from("ac_jobs").select("*").eq("organization_id", organizationId),
-    supabase.from("job_items").select("*").eq("organization_id", organizationId),
-    supabase
-      .from("job_status_history")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase.from("technicians").select("*").eq("organization_id", organizationId),
-    supabase.from("contractors").select("*").eq("organization_id", organizationId),
-    supabase
-      .from("contractor_payments")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase.from("vehicles").select("*").eq("organization_id", organizationId),
+    fetchAllPages((from, to) => supabase.from("products").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("customers").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("suppliers").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("sales").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("sale_lines").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("purchases").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("purchase_lines").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("purchase_orders").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("purchase_order_lines").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("customer_payments").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("customer_product_prices").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("supplier_payments").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("stock_logs").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("bank_accounts").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("bank_transactions").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("bank_transfers").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("cheques").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("ac_jobs").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("job_items").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("job_status_history").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("technicians").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("contractors").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("contractor_payments").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("vehicles").select("*").eq("organization_id", organizationId).range(from, to)),
     fetchOrgShopSettings(organizationId),
   ]);
 
@@ -1074,10 +1042,13 @@ async function productsWithPreservedBuyPrices(
   if (!preserveBuyPrices) return products;
   const supabase = createBrowserClient();
   if (!supabase) return products;
-  const { data: rows } = await supabase
-    .from("products")
-    .select("id, buy_price")
-    .eq("organization_id", organizationId);
+  const { data: rows } = await fetchAllPages((from, to) =>
+    supabase
+      .from("products")
+      .select("id, buy_price")
+      .eq("organization_id", organizationId)
+      .range(from, to),
+  );
   const buyMap = new Map(
     (rows ?? []).map((row) => [row.id as string, num(row.buy_price)]),
   );

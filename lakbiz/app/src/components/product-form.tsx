@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Product, SectorId } from "@/lib/types";
 import { sectors, defaultCategoryForSector, categoriesForSector, sectorById } from "@/lib/sectors";
 import {
@@ -88,6 +88,20 @@ export function ProductForm({
     }
     return emptyForm(shopSectorId);
   });
+
+  useEffect(() => {
+    if (initial) return;
+    const sectorId = lockedSectorId ?? defaultSectorId;
+    setForm((current) => {
+      if (
+        current.sectorId === sectorId &&
+        categoriesForSector(sectorId).includes(current.category)
+      ) {
+        return current;
+      }
+      return emptyForm(sectorId);
+    });
+  }, [initial, lockedSectorId, defaultSectorId]);
 
   const categories = useMemo(
     () => categoriesForSector(lockedSectorId ?? form.sectorId),

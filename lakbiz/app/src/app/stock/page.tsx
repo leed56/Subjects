@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ProductForm } from "@/components/product-form";
 import { ExportActions } from "@/components/export/export-actions";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
@@ -25,6 +25,8 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { Product, ProductCondition } from "@/lib/types";
 
 type ConditionFilter = "all" | ProductCondition;
+
+const STOCK_PAGE_SIZE = 50;
 
 export default function StockPage() {
   const {
@@ -82,6 +84,11 @@ export default function StockPage() {
   // HVAC platform Phase 12 — a real filtered view of exactly what needs
   // reordering, not just the metric-card count that existed before.
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, conditionFilter, showInactive, showLowStockOnly]);
 
   if (!ready || !data) {
     return (
@@ -107,6 +114,10 @@ export default function StockPage() {
   const lowStock = getLowStockProducts(data.products);
   const lowStockIds = new Set(lowStock.map((p) => p.id));
   const products = showLowStockOnly ? byActive.filter((p) => lowStockIds.has(p.id)) : byActive;
+  const totalPages = Math.max(1, Math.ceil(products.length / STOCK_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * STOCK_PAGE_SIZE;
+  const pageProducts = products.slice(pageStart, pageStart + STOCK_PAGE_SIZE);
   const reorderSuggestions = showLowStockOnly ? getReorderSuggestions(data) : [];
   const reorderByProductId = new Map(reorderSuggestions.map((r) => [r.product.id, r] as const));
 
@@ -355,7 +366,7 @@ export default function StockPage() {
       <ProMain>
         <PageHeader
           title={t("stock.title")}
-          description={`${products.length} ${t("common.items")} · ${t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}`}
+          description={`${products.length === data.products.length ? data.products.length : `${products.length} / ${data.products.length}`} ${t("common.items")} · ${t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}`}
           actions={
             <>
               {canExport && (
@@ -458,7 +469,39 @@ export default function StockPage() {
             }
           />
         ) : (
-          <DataTable columns={columns} rows={products} emptyState={<EmptyState title={t("sales.no_match")} description={t("stock.search_no_match_desc")} />} />
+          <>
+            <DataTable columns={columns} rows={pageProducts} emptyState={<EmptyState title={t("sales.no_match")} description={t("stock.search_no_match_desc")} />} />
+            {products.length > STOCK_PAGE_SIZE && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-sm text-slate-600 shadow-[0_6px_20px_rgba(15,23,42,0.035)]">
+                <span className="font-medium">
+                  {pageStart + 1}–{Math.min(pageStart + STOCK_PAGE_SIZE, products.length)} / {products.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label="Previous page"
+                    disabled={currentPage <= 1}
+                    onClick={() => setPage((value) => Math.max(1, value - 1))}
+                    className="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ←
+                  </button>
+                  <span className="min-w-[88px] text-center text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Next page"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+                    className="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Create / edit drawer — always opens immediately. */}
@@ -468,7 +511,7 @@ export default function StockPage() {
           title={editing ? editing.name : t("stock.add_item")}
           description={editing ? t("stock.edit_inventory_eyebrow") : t("stock.create_inventory_eyebrow")}
         >
-          {editing ? (
+          {formOpen && (editing ? (
             <ProductForm
               initial={editing}
               lockedSectorId={org.isAuthenticated ? org.sector : undefined}
@@ -511,7 +554,7 @@ export default function StockPage() {
                 toast({ tone: "success", title: t("stock.added"), description: input.name });
               }}
             />
-          )}
+          ))}
         </Drawer>
 
         {/* Stock in */}

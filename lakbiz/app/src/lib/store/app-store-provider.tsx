@@ -367,8 +367,15 @@ function normalizeProductForShop(
 
 function useAppStoreState(): AppStoreValue {
   const { user } = useAuth();
-  const { org, isReadOnly, subscription, can, orgRole, canSeeFinancials } =
-    useSubscription();
+  const {
+    ready: subscriptionReady,
+    org,
+    isReadOnly,
+    subscription,
+    can,
+    orgRole,
+    canSeeFinancials,
+  } = useSubscription();
   const isOnline = useOnlineStatus();
   const [data, setData] = useState<AppData | null>(null);
   const [ready, setReady] = useState(false);
@@ -414,6 +421,11 @@ function useAppStoreState(): AppStoreValue {
   }, []);
 
   useEffect(() => {
+    if (!subscriptionReady || (user && !org.isAuthenticated)) {
+      setReady(false);
+      return;
+    }
+
     setStorageOrgId(org.id);
     const initial = loadAppData(org.id);
     setData(initial);
@@ -438,7 +450,7 @@ function useAppStoreState(): AppStoreValue {
       retryTimerRef.current = null;
     }
     retryAttemptRef.current = 0;
-  }, [org.id, refreshOfflinePendingState]);
+  }, [subscriptionReady, user, org.id, org.isAuthenticated, refreshOfflinePendingState]);
 
   useEffect(() => {
     if (!isOnline) {
