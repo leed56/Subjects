@@ -4,7 +4,9 @@ import { dirname, resolve } from "node:path";
 import {
   classifyRetailProduct,
   extractSpcBrand,
+  inferUnitFromName,
   parseHealthguardProducts,
+  parsePackSizeFromName,
   parseMediVerifyResults,
   parseSparCollectionProducts,
   parseSpcRows,
