@@ -14,6 +14,10 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import {
+  buildMigrationNameCounts,
+  migrationAppliedBy,
+} from "./migration-state.mjs";
 
 const PROJECT_REF = "zestppstpwjxriwcuykc";
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -65,13 +69,7 @@ function connectionString() {
 const files = readdirSync(migrationsDir)
   .filter((f) => f.endsWith(".sql"))
   .sort();
-
-function isMigrationApplied(filename, applied) {
-  if (applied.has(filename)) return true;
-  const legacy = LEGACY_ALIASES[filename];
-  if (legacy && applied.has(legacy)) return true;
-  return false;
-}
+const migrationNameCounts = buildMigrationNameCounts(files);
 
 async function ensureMigrationTable(client) {
   await client.query(`
@@ -82,7 +80,30 @@ async function ensureMigrationTable(client) {
   `);
 }
 
-async function bootstrapPriorMigrations(client) {
+async function loadNativeMigrationNames(client) {
+  try {
+    const { rows } = await client.query(`
+      select name
+      from supabase_migrations.schema_migrations
+      where name is not null and name <> ''
+    `);
+    return new Set(rows.map((row) => String(row.name)));
+  } catch (error) {
+    console.warn(
+      "Warning: could not read Supabase native migration history; using the custom filename ledger only.",
+      error instanceof Error ? error.message : error,
+    );
+    return new Set();
+  }
+}
+
+/**
+ * Older LakBiz databases may already have schema but no custom filename
+ * ledger. Never mark every repository file as applied: that can swallow a
+ * genuinely new migration. Bootstrap only filenames that are independently
+ * proven by Supabase's native migration history.
+ */
+async function bootstrapPriorMigrations(client, nativeMigrationNames) {
   const { rows } = await client.query(
     "select count(*)::int as n from public.schema_migrations",
   );
@@ -96,11 +117,19 @@ async function bootstrapPriorMigrations(client) {
   `);
   if (orgAppData.length === 0) return;
 
+  let bootstrapped = 0;
   for (const file of files) {
+    const reason = migrationAppliedBy(file, {
+      nativeMigrationNames,
+      migrationNameCounts,
+      legacyAliases: LEGACY_ALIASES,
+    });
+    if (reason !== "native") continue;
     await client.query(
       "insert into public.schema_migrations (filename) values ($1) on conflict do nothing",
       [file],
     );
+    bootstrapped += 1;
   }
 
   for (const removed of REMOVED_MIGRATIONS) {
@@ -110,7 +139,15 @@ async function bootstrapPriorMigrations(client) {
     );
   }
 
-  console.log("Bootstrapped prior migrations (schema already present).");
+  if (bootstrapped > 0) {
+    console.log(
+      `Bootstrapped ${bootstrapped} migration filename(s) from Supabase native history.`,
+    );
+  } else {
+    console.warn(
+      "Existing LakBiz schema detected but no native migration names could prove repository files applied; no migration was auto-marked.",
+    );
+  }
 }
 
 async function recordLegacyAliases(client, filename) {
@@ -132,7 +169,8 @@ try {
   console.log(`Connected to ${PROJECT_REF}.`);
 
   await ensureMigrationTable(client);
-  await bootstrapPriorMigrations(client);
+  const nativeMigrationNames = await loadNativeMigrationNames(client);
+  await bootstrapPriorMigrations(client, nativeMigrationNames);
 
   const { rows: appliedRows } = await client.query(
     "select filename from public.schema_migrations",
@@ -141,8 +179,15 @@ try {
 
   let appliedCount = 0;
   for (const file of files) {
-    if (isMigrationApplied(file, applied)) {
-      console.log(`skip ${file}`);
+    const appliedBy = migrationAppliedBy(file, {
+      appliedFilenames: applied,
+      nativeMigrationNames,
+      migrationNameCounts,
+      legacyAliases: LEGACY_ALIASES,
+    });
+    if (appliedBy) {
+      const suffix = appliedBy === "native" ? " (Supabase native history)" : "";
+      console.log(`skip ${file}${suffix}`);
       continue;
     }
 
@@ -157,6 +202,7 @@ try {
       );
       await recordLegacyAliases(client, file);
       await client.query("commit");
+      applied.add(file);
       appliedCount += 1;
     } catch (error) {
       await client.query("rollback");
