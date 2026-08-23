@@ -170,8 +170,13 @@ async function capture(page, user, route, suffix = "desktop") {
 async function openAddItem(page, user) {
   await page.goto(`${previewUrl}/stock`, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
-  const add = page.getByRole("button", { name: /add item/i }).first();
-  assert(await add.isVisible(), `${user.sector}: Add item button is not visible`);
+  // The app can render in English or Sinhala. Do not make visual QA fail merely
+  // because the localized accessible name changed from the English default.
+  const add = page.getByRole("button", { name: /(?:add item|භාණ්ඩයක්\s+එකතු\s+කරන්න)/i }).first();
+  if (!(await add.isVisible().catch(() => false))) {
+    await saveDiagnostic(page, user, "stock-add-item-control-missing");
+    throw new Error(`${user.sector}: localized Add item button is not visible`);
+  }
   await add.click();
   await page.waitForTimeout(300);
   const required = page.locator('input[required]').first();
