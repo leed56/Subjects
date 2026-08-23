@@ -28,6 +28,19 @@ describe("demo catalog quality guards", () => {
     });
   });
 
+  it("classifies infant formula as Baby Nutrition so lot+FEFO defaults can apply", () => {
+    expect(classifyPharmacyRetailProduct("LACTOGEN 2 Infant Formula 350g")).toMatchObject({
+      department: "Mother & Baby",
+      category: "Baby Nutrition",
+      subcategory: "Milk Formula",
+    });
+    expect(isPharmacyRetailCandidate("SIMILAC Infant Formula 400g")).toBe(true);
+    expect(classifyPharmacyRetailProduct("BABY WIPES 80 PCS")).toMatchObject({
+      department: "Mother & Baby",
+      category: "Baby Care",
+    });
+  });
+
   it("rejects obvious grocery cream products from the pharmacy fallback", () => {
     expect(isPharmacyRetailCandidate("ANCHOR Full Cream Milk Powder, 400g")).toBe(false);
     expect(isPharmacyRetailCandidate("MALIBAN Biscuit Custard Cream, 100g")).toBe(true);
