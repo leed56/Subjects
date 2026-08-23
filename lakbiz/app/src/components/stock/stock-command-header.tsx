@@ -40,9 +40,9 @@ export function StockCommandHeader({
   const label = template?.nameEn ?? "Inventory";
   const health = itemCount > 0 ? Math.max(0, Math.round(((itemCount - lowStockCount) / itemCount) * 100)) : 100;
   const sectorCopy = sector === "pharmacy"
-    ? "Medicine, wellness and convenience inventory with batch-aware operational control."
+    ? "Medicine, wellness and convenience inventory with batch, expiry and FEFO control."
     : sector === "grocery"
-      ? "Fast-moving retail catalogue with replenishment and merchandising visibility."
+      ? "Fast-moving supermarket inventory with category-led replenishment and stock visibility."
       : "Operational inventory catalogue and stock control.";
 
   return (
