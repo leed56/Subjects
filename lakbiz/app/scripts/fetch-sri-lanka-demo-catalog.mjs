@@ -18,6 +18,10 @@ import {
   classifyPharmacyRetailProduct,
   conservativeMediVerifyMatch,
 } from "./demo-catalog/quality.mjs";
+import {
+  needsSparTitleHydration,
+  parseSparProductTitle,
+} from "./demo-catalog/spar-detail.mjs";
 
 const args = new Set(process.argv.slice(2));
 const valueArg = (name, fallback) => {
@@ -188,6 +192,20 @@ async function fetchSpar(maxProducts) {
     if (!added) break;
     if (page % 10 === 0) console.log(`SPAR2U: ${rows.length} unique products after page ${page}`);
   }
+  const truncated = rows.filter(needsSparTitleHydration);
+  let hydrated = 0;
+  for (const row of truncated) {
+    const detail = await fetchText(row.sourceUrl);
+    if (!detail) continue;
+    const fullTitle = parseSparProductTitle(detail);
+    if (!fullTitle) continue;
+    row.productName = fullTitle;
+    row.packSize = parsePackSizeFromName(fullTitle);
+    row.unit = inferUnitFromName(fullTitle);
+    row.taxonomy = { ...classifyRetailProduct(fullTitle, "grocery"), taxonomyMethod: "normalization_heuristic" };
+    hydrated += 1;
+  }
+  if (truncated.length) console.log(`SPAR2U title hydration: ${hydrated}/${truncated.length} truncated listing names resolved from public product pages`);
   return rows;
 }
 
