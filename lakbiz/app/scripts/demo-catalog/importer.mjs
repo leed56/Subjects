@@ -167,8 +167,16 @@ export async function ensureDemoShop(client, spec) {
     if (existingOrgs[0].sector !== spec.sector) throw new Error(`Existing ${spec.name} has sector ${existingOrgs[0].sector}, expected ${spec.sector}`);
     const { data: members, error: memberError } = await client.from("org_members").select("user_id,role").eq("organization_id", existingOrgs[0].id);
     if (memberError) throw new Error(`membership lookup failed: ${memberError.message}`);
-    if (!(members ?? []).some((member) => member.role === "owner")) throw new Error(`Existing ${spec.name} has no owner; refusing to adopt it`);
-    return { orgId: existingOrgs[0].id, created: false };
+    const ownerMember = (members ?? []).find((member) => member.role === "owner");
+    if (!ownerMember) throw new Error(`Existing ${spec.name} has no owner; refusing to adopt it`);
+    const configuredOwner = await findAuthUser(client, spec.ownerEmail);
+    if (!configuredOwner || configuredOwner.id !== ownerMember.user_id) {
+      throw new Error(`Existing ${spec.name} is not owned by configured demo owner ${spec.ownerEmail}; refusing to adopt it`);
+    }
+    const { data: adminRow, error: adminError } = await client.from("platform_admins").select("user_id").eq("user_id", configuredOwner.id).maybeSingle();
+    if (adminError) throw new Error(`platform admin lookup failed: ${adminError.message}`);
+    if (adminRow) throw new Error(`Refusing to use platform-admin identity ${spec.ownerEmail} as a shop owner`);
+    return { orgId: existingOrgs[0].id, created: false, ownerUserId: configuredOwner.id };
   }
 
   const existingUser = await findAuthUser(client, spec.ownerEmail);
@@ -209,9 +217,58 @@ export async function ensureDemoShop(client, spec) {
       p_period_end: end.toISOString(),
     });
     if (error || !orgId) throw new Error(error?.message ?? "provision_shop returned no organization id");
-    return { orgId, created: true };
+    return { orgId, created: true, ownerUserId: owner.id };
   } catch (error) {
     if (createdAuthUser) await client.auth.admin.deleteUser(owner.id);
+    throw error;
+  }
+}
+
+export async function ensureDemoStaff(client, spec) {
+  let user = await findAuthUser(client, spec.email);
+  let createdAuthUser = false;
+
+  if (user) {
+    const { data: adminRow, error: adminError } = await client.from("platform_admins").select("user_id").eq("user_id", user.id).maybeSingle();
+    if (adminError) throw new Error(`platform admin lookup failed: ${adminError.message}`);
+    if (adminRow) throw new Error(`Refusing to use platform-admin identity ${spec.email} as demo staff`);
+
+    const { data: memberships, error: membershipError } = await client
+      .from("org_members")
+      .select("organization_id,role")
+      .eq("user_id", user.id);
+    if (membershipError) throw new Error(`staff membership lookup failed: ${membershipError.message}`);
+    if ((memberships ?? []).length) {
+      const membership = memberships[0];
+      if (membership.organization_id !== spec.orgId || membership.role !== spec.role) {
+        throw new Error(`Demo staff ${spec.email} is already attached to another shop/role`);
+      }
+      return { userId: user.id, created: false, role: spec.role };
+    }
+  }
+
+  if (!user) {
+    const { data, error } = await client.auth.admin.createUser({
+      email: spec.email,
+      password: spec.password,
+      email_confirm: true,
+      user_metadata: { full_name: spec.displayName, lakbiz_demo: true, demo_role: spec.role },
+    });
+    if (error || !data.user) throw new Error(`Auth createUser failed for ${spec.email}: ${error?.message ?? "no user returned"}`);
+    user = data.user;
+    createdAuthUser = true;
+  }
+
+  try {
+    const { error } = await client.from("org_members").insert({
+      organization_id: spec.orgId,
+      user_id: user.id,
+      role: spec.role,
+    });
+    if (error) throw new Error(`org_members insert failed for ${spec.email}: ${error.message}`);
+    return { userId: user.id, created: true, role: spec.role };
+  } catch (error) {
+    if (createdAuthUser) await client.auth.admin.deleteUser(user.id);
     throw error;
   }
 }
