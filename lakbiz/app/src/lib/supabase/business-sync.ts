@@ -678,8 +678,16 @@ async function upsertOrgRows(
   const supabase = createBrowserClient();
   if (!supabase) return "Supabase not configured";
 
-  const { error } = await supabase.from(table).upsert(rows, { onConflict: "id" });
-  return error?.message ?? null;
+  // Large catalogues can contain thousands of rows. Keep every
+  // PostgREST JSON request bounded instead of sending one unbounded body.
+  const batchSize = 200;
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const { error } = await supabase
+      .from(table)
+      .upsert(rows.slice(i, i + batchSize), { onConflict: "id" });
+    if (error) return error.message;
+  }
+  return null;
 }
 
 function customerRowsForOrg(
@@ -744,19 +752,24 @@ async function upsertMaskedViewRows(
   if (!supabase) return "Supabase not configured";
 
   const ids = rows.map((row) => String(row.id));
-  const { data: existing, error: fetchErr } = await supabase
-    .from(table)
-    .select("id")
-    .eq("organization_id", organizationId)
-    .in("id", ids);
-  if (fetchErr) return fetchErr.message;
-
-  const existingIds = new Set((existing ?? []).map((row) => String(row.id)));
+  // `.in()` is encoded in the request URL. A 1,000–1,600 SKU catalogue can
+  // exceed gateway/query-string limits and surface only as HTTP 400 / Bad
+  // Request. Resolve existing ids in bounded URL-sized chunks instead.
+  const existingIds = new Set<string>();
+  for (const idBatch of chunk(ids, 100)) {
+    const { data: existing, error: fetchErr } = await supabase
+      .from(table)
+      .select("id")
+      .eq("organization_id", organizationId)
+      .in("id", idBatch);
+    if (fetchErr) return fetchErr.message;
+    for (const row of existing ?? []) existingIds.add(String(row.id));
+  }
   const toInsert = rows.filter((row) => !existingIds.has(String(row.id)));
   const toUpdate = rows.filter((row) => existingIds.has(String(row.id)));
 
-  if (toInsert.length > 0) {
-    const { error } = await supabase.from(table).insert(toInsert);
+  for (const rowBatch of chunk(toInsert, BULK_UPDATE_BATCH_SIZE)) {
+    const { error } = await supabase.from(table).insert(rowBatch);
     if (error) return error.message;
   }
 
@@ -2257,10 +2270,13 @@ export async function pushBusinessData(
   if (options?.preserveBuyPrices) {
     const supabase = createBrowserClient();
     if (supabase) {
-      const { data: rows } = await supabase
-        .from("products")
-        .select("id, buy_price")
-        .eq("organization_id", organizationId);
+      const { data: rows } = await fetchAllPages((from, to) =>
+        supabase
+          .from("products")
+          .select("id, buy_price")
+          .eq("organization_id", organizationId)
+          .range(from, to),
+      );
       const buyMap = new Map(
         (rows ?? []).map((row) => [row.id as string, num(row.buy_price)]),
       );

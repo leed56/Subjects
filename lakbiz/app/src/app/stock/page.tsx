@@ -29,6 +29,38 @@ type ConditionFilter = "all" | ProductCondition;
 
 const STOCK_PAGE_SIZE = 50;
 
+function StockPagination({
+  page,
+  totalPages,
+  start,
+  end,
+  total,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  start: number;
+  end: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-sm text-slate-600 shadow-[0_6px_20px_rgba(15,23,42,0.035)]">
+      <p>
+        <span className="font-semibold text-slate-900">{start}–{end}</span> of {total.toLocaleString()} items
+        <span className="ml-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">· {STOCK_PAGE_SIZE} per page</span>
+      </p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button type="button" disabled={page <= 1} onClick={() => onPageChange(1)} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">First</button>
+        <button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))} className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">←</button>
+        <span className="min-w-[92px] text-center text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Page {page} / {totalPages}</span>
+        <button type="button" aria-label="Next page" disabled={page >= totalPages} onClick={() => onPageChange(Math.min(totalPages, page + 1))} className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">→</button>
+        <button type="button" disabled={page >= totalPages} onClick={() => onPageChange(totalPages)} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">Last</button>
+      </div>
+    </div>
+  );
+}
+
 export default function StockPage() {
   const {
     data,
@@ -44,6 +76,7 @@ export default function StockPage() {
   const { canWrite, disabledHint } = useWriteAccess();
   const { t } = useLocale();
   const { toast } = useToast();
+  const conditionFilterRelevant = org.sector !== "pharmacy" && org.sector !== "grocery";
 
   // Create/edit drawer — form only exists in the DOM while open.
   const [formOpen, setFormOpen] = useState(false);
@@ -92,6 +125,10 @@ export default function StockPage() {
     setPage(1);
   }, [search, conditionFilter, showInactive, showLowStockOnly, categoryFilter]);
 
+  useEffect(() => {
+    if (!conditionFilterRelevant && conditionFilter !== "all") setConditionFilter("all");
+  }, [conditionFilterRelevant, conditionFilter]);
+
   if (!ready || !data) {
     return (
       <AppShell>
@@ -111,7 +148,9 @@ export default function StockPage() {
           p.category.toLowerCase().includes(query),
       )
     : data.products;
-  const byCondition = conditionFilter === "all" ? searched : searched.filter((p) => p.condition === conditionFilter);
+  const byCondition = !conditionFilterRelevant || conditionFilter === "all"
+    ? searched
+    : searched.filter((p) => p.condition === conditionFilter);
   const byActive = showInactive ? byCondition : byCondition.filter((p) => p.active);
   const byCategory = categoryFilter === "all" ? byActive : byActive.filter((p) => p.category === categoryFilter);
   const lowStock = getLowStockProducts(data.products);
@@ -284,7 +323,7 @@ export default function StockPage() {
               <button type="button" onClick={() => openEdit(p)} className={`font-semibold hover:text-teal-700 hover:underline ${p.active ? "text-slate-900" : "text-slate-400"}`}>
                 {p.name}
               </button>
-              <ProductConditionBadge condition={p.condition} />
+              {conditionFilterRelevant && <ProductConditionBadge condition={p.condition} />}
               {!p.active && <StatusBadge tone="neutral">{t("stock.inactive_badge")}</StatusBadge>}
             </div>
             <p className="mt-0.5 text-xs text-slate-500">
@@ -421,26 +460,28 @@ export default function StockPage() {
 
         <FilterBar>
           <SearchInput value={search} onChange={setSearch} placeholder={t("stock.search_placeholder")} className="min-w-[220px] flex-1" />
-          <div className="flex gap-1.5">
-            {(
-              [
-                { id: "all" as const, label: t("stock.filter_all"), count: data.products.length },
-                { id: "new" as const, label: t("stock.condition_new"), count: newCount },
-                { id: "used" as const, label: t("stock.condition_used"), count: usedCount },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setConditionFilter(tab.id)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                  conditionFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
-                }`}
-              >
-                {tab.label} <span className="opacity-70">({tab.count})</span>
-              </button>
-            ))}
-          </div>
+          {conditionFilterRelevant && (
+            <div className="flex gap-1.5">
+              {(
+                [
+                  { id: "all" as const, label: t("stock.filter_all"), count: data.products.length },
+                  { id: "new" as const, label: t("stock.condition_new"), count: newCount },
+                  { id: "used" as const, label: t("stock.condition_used"), count: usedCount },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setConditionFilter(tab.id)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                    conditionFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
+                  }`}
+                >
+                  {tab.label} <span className="opacity-70">({tab.count})</span>
+                </button>
+              ))}
+            </div>
+          )}
           {lowStock.length > 0 && (
             <button
               type="button"
@@ -478,35 +519,27 @@ export default function StockPage() {
           />
         ) : (
           <>
+            <div className="mb-3">
+              <StockPagination
+                page={currentPage}
+                totalPages={totalPages}
+                start={pageStart + 1}
+                end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
+                total={products.length}
+                onPageChange={setPage}
+              />
+            </div>
             <DataTable columns={columns} rows={pageProducts} emptyState={<EmptyState title={t("sales.no_match")} description={t("stock.search_no_match_desc")} />} />
             {products.length > STOCK_PAGE_SIZE && (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-sm text-slate-600 shadow-[0_6px_20px_rgba(15,23,42,0.035)]">
-                <span className="font-medium">
-                  {pageStart + 1}–{Math.min(pageStart + STOCK_PAGE_SIZE, products.length)} / {products.length}
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    aria-label="Previous page"
-                    disabled={currentPage <= 1}
-                    onClick={() => setPage((value) => Math.max(1, value - 1))}
-                    className="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    ←
-                  </button>
-                  <span className="min-w-[88px] text-center text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
-                    {currentPage} / {totalPages}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label="Next page"
-                    disabled={currentPage >= totalPages}
-                    onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
-                    className="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    →
-                  </button>
-                </div>
+              <div className="mt-3">
+                <StockPagination
+                  page={currentPage}
+                  totalPages={totalPages}
+                  start={pageStart + 1}
+                  end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
+                  total={products.length}
+                  onPageChange={setPage}
+                />
               </div>
             )}
           </>
@@ -516,6 +549,7 @@ export default function StockPage() {
         <Drawer
           open={formOpen}
           onClose={() => setFormOpen(false)}
+          size="lg"
           title={editing ? editing.name : t("stock.add_item")}
           description={editing ? t("stock.edit_inventory_eyebrow") : t("stock.create_inventory_eyebrow")}
         >

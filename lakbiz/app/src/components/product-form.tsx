@@ -100,6 +100,8 @@ export function ProductForm({
     () => unitsForSector(lockedSectorId ?? form.sectorId),
     [lockedSectorId, form.sectorId],
   );
+  const effectiveSectorId = lockedSectorId ?? form.sectorId;
+  const conditionRelevant = effectiveSectorId !== "pharmacy" && effectiveSectorId !== "grocery";
 
   useEffect(() => {
     if (initial) return;
@@ -134,6 +136,7 @@ export function ProductForm({
       ...f,
       sectorId,
       category: defaultCategoryForSector(sectorId),
+      condition: "new",
       sectorCustom: Object.fromEntries(
         Object.entries(emptyCustomFieldsForSector(sectorId)).map(([k, v]) => [k, String(v)]),
       ),
@@ -151,6 +154,9 @@ export function ProductForm({
       category: categoriesForSector(sectorId).includes(rest.category)
         ? rest.category
         : defaultCategoryForSector(sectorId),
+      // Condition is meaningful for resale/asset sectors, not normal pharmacy
+      // or grocery catalogue items. Keep the persisted invariant as `new`.
+      condition: sectorId === "pharmacy" || sectorId === "grocery" ? "new" : rest.condition,
       customFields: sectorCustom,
     });
     if (!initial) setForm(emptyForm(shopSectorId));
@@ -225,17 +231,19 @@ export function ProductForm({
             )}
           </div>
 
-          <label className="block">
-            <span className={fieldLabel}>{t("stock.condition")}</span>
-            <select
-              value={form.condition ?? "new"}
-              onChange={(e) => set("condition", e.target.value as ProductInput["condition"])}
-              className={inputClass}
-            >
-              <option value="new">{t("stock.condition_new")}</option>
-              <option value="used">{t("stock.condition_used")}</option>
-            </select>
-          </label>
+          {conditionRelevant && (
+            <label className="block">
+              <span className={fieldLabel}>{t("stock.condition")}</span>
+              <select
+                value={form.condition ?? "new"}
+                onChange={(e) => set("condition", e.target.value as ProductInput["condition"])}
+                className={inputClass}
+              >
+                <option value="new">{t("stock.condition_new")}</option>
+                <option value="used">{t("stock.condition_used")}</option>
+              </select>
+            </label>
+          )}
         </div>
       </section>
 
