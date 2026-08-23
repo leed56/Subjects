@@ -136,18 +136,20 @@ export async function signInWithEmail(email: string, password: string) {
     throw new AuthFlowError(error.message, "auth");
   }
 
-  const isPlatformAdmin = await isPlatformAdminClient(supabase);
-  if (!isPlatformAdmin) {
-    const existingOrgId = await findUserOrgId(supabase, data.user!.id);
-    if (!existingOrgId) {
-      await supabase.auth.signOut();
-      throw new AuthFlowError(
-        "This login has no LakBiz workspace assigned. Contact your LakBiz administrator.",
-        "org",
-      );
-    }
+  if (!data.user || !data.session) {
+    throw new AuthFlowError(
+      "Sign-in completed without a usable session. Please try again.",
+      "auth",
+    );
   }
 
+  // Keep the auth critical path limited to establishing the Supabase session.
+  // A successful password exchange must be allowed to return immediately so
+  // the login page can navigate while the browser client still owns the fresh
+  // session. Workspace membership, role and platform-admin authorization are
+  // loaded by SubscriptionProvider and are independently enforced by RLS and
+  // server middleware. Blocking navigation on extra PostgREST queries here
+  // caused intermittent successful-logins to remain stranded on /login.
   return data;
 }
 
