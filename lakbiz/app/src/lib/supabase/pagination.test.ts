@@ -32,6 +32,24 @@ describe("fetchAllPages", () => {
     expect(result.data?.at(-1)).toBe("grocery-1599");
   });
 
+  it("terminates with one empty probe when the row count exactly fills pages", async () => {
+    const source = Array.from({ length: 1000 }, (_, index) => index);
+    const calls: Array<[number, number]> = [];
+
+    const result = await fetchAllPages(async (from, to) => {
+      calls.push([from, to]);
+      return { data: source.slice(from, to + 1), error: null };
+    }, 500);
+
+    expect(result.error).toBeNull();
+    expect(result.data).toHaveLength(1000);
+    expect(calls).toEqual([
+      [0, 499],
+      [500, 999],
+      [1000, 1499],
+    ]);
+  });
+
   it("returns an empty collection cleanly", async () => {
     const result = await fetchAllPages(async () => ({ data: [], error: null }));
     expect(result).toEqual({ data: [], error: null });
