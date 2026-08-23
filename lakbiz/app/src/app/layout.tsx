@@ -12,6 +12,7 @@ import "./premium-ops.css";
 import "./premium-ops-final.css";
 import "./premium-ops-realistic.css";
 import "./premium-job-detail.css";
+import "./atomic-pos-layout.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
