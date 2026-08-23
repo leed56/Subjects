@@ -117,9 +117,12 @@ function asPurchaseOrderStatus(value: string | null | undefined): PurchaseOrderS
 function asSectorId(value: string | null | undefined): SectorId {
   const allowed: SectorId[] = [
     "grocery",
+    "pharmacy",
     "electronics",
+    "mobile_shop",
     "electricals",
     "spare_parts",
+    "footwear",
     "ac_hvac",
     "car_sales",
   ];
