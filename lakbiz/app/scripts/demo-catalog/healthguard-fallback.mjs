@@ -6,6 +6,10 @@ import {
   parsePackSizeFromName,
   stableHash,
 } from "./core.mjs";
+import {
+  catalogNameQualityIssue,
+  isPharmacyRetailCandidate,
+} from "./quality.mjs";
 
 const UI_LINE = /^(?:sort by|per page|shop by|shopping options|category|price|color|size|new product|next|previous|add to cart|out of stock|in stock|clear all|remove this item|contact us)$/i;
 
@@ -25,11 +29,10 @@ function listingLines(html) {
 function looksLikeProductName(line) {
   if (!line || line.length < 3 || line.length > 180) return false;
   if (UI_LINE.test(line)) return false;
+  if (catalogNameQualityIssue(line)) return false;
   if (/^\(?\d+(?:\.\d+)?%?\)?$/.test(line)) return false;
-  if (/^LKR\s*[0-9]/i.test(line)) return false;
   if (/^(?:LKR)?[0-9,.]+\s*(?:items?)?$/i.test(line)) return false;
   if (/^\d+\s+items?$/i.test(line)) return false;
-  if (!/[A-Za-z]/.test(line)) return false;
 
   const letters = line.replace(/[^A-Za-z]/g, "");
   if (!letters) return false;
@@ -83,12 +86,10 @@ export function parseHealthguardListingText(html, pageUrl) {
   return products;
 }
 
-const PHARMACY_RETAIL_TERMS = /(?:BABY|INFANT|DIAPER|WIPE|FORMULA|FEED|VITAMIN|MULTIVITAMIN|COLLAGEN|BIOTIN|SUPPLEMENT|WHEY|PROTEIN|NUTRITION|ENSURE|APPETON|GLUCOMETER|BLOOD PRESSURE|THERMOMETER|LANCET|MASK|SUPPORT|BRACE|NEBULIZER|TOOTH|MOUTH|ORAL|SHAMPOO|CONDITIONER|HAIR|SOAP|BODY WASH|SHOWER|DEODORANT|SANITARY|INTIMATE|CREAM|LOTION|SERUM|SUNSCREEN|SUN SCREEN|MOISTUR|FACE WASH|CLEANSER|BISCUIT|CRACKER|CHOCOLATE|CANDY|GUM|MINT|CHIPS|SNACK|WATER|DRINK|JUICE|ENERGY|TISSUE|DISINFECT|SANITIZER|MOSQUITO|REPELLENT)/i;
-
 export function pharmacyRetailCandidatesFromSpar(rows, maxProducts = 450) {
   const selected = [];
   for (const row of rows) {
-    if (!PHARMACY_RETAIL_TERMS.test(String(row.productName ?? ""))) continue;
+    if (!isPharmacyRetailCandidate(row.productName)) continue;
     selected.push({ ...row });
     if (selected.length >= maxProducts) break;
   }
