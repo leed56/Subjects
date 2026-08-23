@@ -1,0 +1,56 @@
+name: LakBiz Demo Auth Provisioning One Shot
+
+on:
+  push:
+    branches:
+      - claude/global-premium-ui
+    paths:
+      - ".github/workflows/lakbiz-demo-auth-provisioning-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/global-premium-ui
+          fetch-depth: 0
+
+      - name: Patch demo auth provisioning exactly
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lakbiz/app/scripts/demo-catalog/importer.mjs')
+          text = path.read_text()
+
+          old = '''  if (existingOrgs?.[0]) {\n    if (existingOrgs[0].sector !== spec.sector) throw new Error(`Existing ${spec.name} has sector ${existingOrgs[0].sector}, expected ${spec.sector}`);\n    const { data: members, error: memberError } = await client.from("org_members").select("user_id,role").eq("organization_id", existingOrgs[0].id);\n    if (memberError) throw new Error(`membership lookup failed: ${memberError.message}`);\n    if (!(members ?? []).some((member) => member.role === "owner")) throw new Error(`Existing ${spec.name} has no owner; refusing to adopt it`);\n    return { orgId: existingOrgs[0].id, created: false };\n  }'''
+          new = '''  if (existingOrgs?.[0]) {\n    if (existingOrgs[0].sector !== spec.sector) throw new Error(`Existing ${spec.name} has sector ${existingOrgs[0].sector}, expected ${spec.sector}`);\n    const { data: members, error: memberError } = await client.from("org_members").select("user_id,role").eq("organization_id", existingOrgs[0].id);\n    if (memberError) throw new Error(`membership lookup failed: ${memberError.message}`);\n    const ownerMember = (members ?? []).find((member) => member.role === "owner");\n    if (!ownerMember) throw new Error(`Existing ${spec.name} has no owner; refusing to adopt it`);\n    const configuredOwner = await findAuthUser(client, spec.ownerEmail);\n    if (!configuredOwner || configuredOwner.id !== ownerMember.user_id) {\n      throw new Error(`Existing ${spec.name} is not owned by configured demo owner ${spec.ownerEmail}; refusing to adopt it`);\n    }\n    const { data: adminRow, error: adminError } = await client.from("platform_admins").select("user_id").eq("user_id", configuredOwner.id).maybeSingle();\n    if (adminError) throw new Error(`platform admin lookup failed: ${adminError.message}`);\n    if (adminRow) throw new Error(`Refusing to use platform-admin identity ${spec.ownerEmail} as a shop owner`);\n    return { orgId: existingOrgs[0].id, created: false, ownerUserId: configuredOwner.id };\n  }'''
+          if old not in text:
+              raise SystemExit('Refusing patch: existing demo org block did not match')
+          text = text.replace(old, new, 1)
+
+          old = '''    if (error || !orgId) throw new Error(error?.message ?? "provision_shop returned no organization id");\n    return { orgId, created: true };'''
+          new = '''    if (error || !orgId) throw new Error(error?.message ?? "provision_shop returned no organization id");\n    return { orgId, created: true, ownerUserId: owner.id };'''
+          if old not in text:
+              raise SystemExit('Refusing patch: created shop return block did not match')
+          text = text.replace(old, new, 1)
+
+          anchor = '''\nexport async function importCatalog(client, orgId, sector, products) {'''
+          addition = '''\nexport async function ensureDemoStaff(client, spec) {\n  let user = await findAuthUser(client, spec.email);\n  let createdAuthUser = false;\n\n  if (user) {\n    const { data: adminRow, error: adminError } = await client.from("platform_admins").select("user_id").eq("user_id", user.id).maybeSingle();\n    if (adminError) throw new Error(`platform admin lookup failed: ${adminError.message}`);\n    if (adminRow) throw new Error(`Refusing to use platform-admin identity ${spec.email} as demo staff`);\n\n    const { data: memberships, error: membershipError } = await client\n      .from("org_members")\n      .select("organization_id,role")\n      .eq("user_id", user.id);\n    if (membershipError) throw new Error(`staff membership lookup failed: ${membershipError.message}`);\n    if ((memberships ?? []).length) {\n      const membership = memberships[0];\n      if (membership.organization_id !== spec.orgId || membership.role !== spec.role) {\n        throw new Error(`Demo staff ${spec.email} is already attached to another shop/role`);\n      }\n      return { userId: user.id, created: false, role: spec.role };\n    }\n  }\n\n  if (!user) {\n    const { data, error } = await client.auth.admin.createUser({\n      email: spec.email,\n      password: spec.password,\n      email_confirm: true,\n      user_metadata: { full_name: spec.displayName, lakbiz_demo: true, demo_role: spec.role },\n    });\n    if (error || !data.user) throw new Error(`Auth createUser failed for ${spec.email}: ${error?.message ?? "no user returned"}`);\n    user = data.user;\n    createdAuthUser = true;\n  }\n\n  try {\n    const { error } = await client.from("org_members").insert({\n      organization_id: spec.orgId,\n      user_id: user.id,\n      role: spec.role,\n    });\n    if (error) throw new Error(`org_members insert failed for ${spec.email}: ${error.message}`);\n    return { userId: user.id, created: true, role: spec.role };\n  } catch (error) {\n    if (createdAuthUser) await client.auth.admin.deleteUser(user.id);\n    throw error;\n  }\n}\n\nexport async function importCatalog(client, orgId, sector, products) {'''
+          if anchor not in text:
+              raise SystemExit('Refusing patch: importCatalog anchor not found')
+          text = text.replace(anchor, addition, 1)
+          path.write_text(text)
+          PY
+
+      - name: Remove one-shot workflow and commit
+        run: |
+          git rm .github/workflows/lakbiz-demo-auth-provisioning-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lakbiz/app/scripts/demo-catalog/importer.mjs
+          git commit -m "fix(lakbiz): provision demo cashier identities safely"
+          git push origin HEAD:claude/global-premium-ui
