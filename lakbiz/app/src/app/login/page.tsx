@@ -35,7 +35,8 @@ export default function LoginPage() {
   const [adminLogin, setAdminLogin] = useState(false);
 
   const configured = isSupabaseConfigured();
-  const adminOnly = process.env.NEXT_PUBLIC_ADMIN_ONLY === "true";
+  // Shop/sector provisioning is exclusively a platform-admin operation.
+  const adminOnly = true;
 
   useEffect(() => {
     const next = new URLSearchParams(window.location.search).get("next");
