@@ -44,6 +44,16 @@ export const metadata: Metadata = {
   },
 };
 
+function publicSupabaseHost(): string {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  if (!url) return "";
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -54,7 +64,11 @@ export default function RootLayout({
       lang="si"
       className={`${geistSans.variable} ${geistMono.variable} ${notoSinhala.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sinhala">
+      <body
+        className="min-h-full flex flex-col font-sinhala"
+        data-lakbiz-build-sha={process.env.VERCEL_GIT_COMMIT_SHA ?? ""}
+        data-lakbiz-supabase-host={publicSupabaseHost()}
+      >
         <LocaleProvider>
           <AuthProvider>
             <SubscriptionProvider>
