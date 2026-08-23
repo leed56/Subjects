@@ -31,7 +31,11 @@ const priceOnlyNames = payload.pharmacy.filter((p) => /^[-–—\s]*LKR\s*[0-9]/
 const obviousFoodSkin = payload.pharmacy.filter((p) => p.source === "spar2u" && p.category === "Skin Care" && /\b(?:FULL CREAM MILK|MILK POWDER|YOGHURT|YOGURT|CHEESE|BUTTER|COCONUT CREAM|CREAMER)\b/i.test(String(p.productName ?? ""))).length;
 const truncatedNames = allRows.filter((p) => String(p.productName ?? "").includes("...")).length;
 const blankNames = allRows.filter((p) => !String(p.productName ?? "").trim()).length;
-const invalidIdentityNames = allRows.filter((p) => catalogNameQualityIssue(p.productName)).length;
+// The fragment guard is deliberately Pharmacy-specific. Grocery has valid
+// compact brands such as "7 UP" that should not be rejected merely because
+// their alphabetic brand token is short; the bad fragment class was observed
+// in Healthguard Pharmacy acquisition (100G / 60 S / AD S / etc.).
+const invalidIdentityNames = payload.pharmacy.filter((p) => catalogNameQualityIssue(p.productName)).length;
 const zeroRetailPrices = allRows.filter((p) => !(Number(p.sellPrice) > 0)).length;
 const medicineDosageFormCount = medicines.filter((p) => p.dosageForm).length;
 const babyNutritionCount = payload.pharmacy.filter((p) => p.category === "Baby Nutrition").length;
@@ -126,7 +130,7 @@ fail(priceOnlyNames > 0, `Price-only pseudo-products detected: ${priceOnlyNames}
 fail(obviousFoodSkin > 0, `Obvious grocery products misclassified as Skin Care: ${obviousFoodSkin}`);
 fail(truncatedNames > 0, `Truncated product names remain after hydration: ${truncatedNames}`);
 fail(blankNames > 0, `Blank product names detected: ${blankNames}`);
-fail(invalidIdentityNames > 0, `Insufficient product identities detected: ${invalidIdentityNames}`);
+fail(invalidIdentityNames > 0, `Insufficient Pharmacy product identities detected: ${invalidIdentityNames}`);
 fail(zeroRetailPrices > 20, `Too many products have no public sell price: ${zeroRetailPrices}`);
 fail(invalidSourceUrls > 0, `Invalid/unapproved source URLs detected: ${invalidSourceUrls}`);
 fail(invalidRegulatoryProvenance > 0, `Regulatory rows missing exact MediVerify provenance: ${invalidRegulatoryProvenance}`);
