@@ -8,12 +8,16 @@ on:
     paths:
       - lakbiz/app/scripts/qa-serial-concurrency.mjs
       - .github/workflows/lakbiz-serial-concurrency.yml
+  pull_request:
+    paths:
+      - lakbiz/app/scripts/qa-serial-concurrency.mjs
+      - .github/workflows/lakbiz-serial-concurrency.yml
 
 permissions:
   contents: read
 
 concurrency:
-  group: lakbiz-serial-concurrency-qa
+  group: lakbiz-serial-concurrency-qa-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
