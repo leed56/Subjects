@@ -7,16 +7,17 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: lakbiz-demo-business-provision
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   provision:
     name: Ensure and verify Sri Lanka demo shops
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: lakbiz/app
@@ -31,6 +32,7 @@ jobs:
       DEMO_GROCERY_PASSWORD: ${{ secrets.DEMO_GROCERY_PASSWORD }}
       DEMO_GROCERY_CASHIER_EMAIL: ${{ secrets.DEMO_GROCERY_CASHIER_EMAIL }}
       DEMO_GROCERY_CASHIER_PASSWORD: ${{ secrets.DEMO_GROCERY_CASHIER_PASSWORD }}
+      GH_TOKEN: ${{ github.token }}
 
     steps:
       - name: Checkout
@@ -74,15 +76,18 @@ jobs:
           echo "need_provision=$need_provision" >> "$GITHUB_OUTPUT"
           echo "Need provisioning: $need_provision"
 
-      - name: Acquire fresh Sri Lanka factual catalog
+      - name: Download validated catalog artifact
         if: steps.precheck.outputs.need_provision == 'true'
+        shell: bash
         run: |
-          node scripts/fetch-sri-lanka-demo-catalog.mjs \
-            --verify-regulatory \
-            --out=/tmp/lakbiz-sri-lanka-demo-catalog.json \
-            --max-grocery=1600 \
-            --max-pharmacy-retail=900 \
-            --delay-ms=350
+          set -euo pipefail
+          rm -rf /tmp/lakbiz-catalog-artifact
+          mkdir -p /tmp/lakbiz-catalog-artifact
+          gh run download 32620328528 \
+            --repo leed56/Subjects \
+            --name lakbiz-sri-lanka-demo-catalog \
+            --dir /tmp/lakbiz-catalog-artifact
+          cp /tmp/lakbiz-catalog-artifact/lakbiz-sri-lanka-demo-catalog.json /tmp/lakbiz-sri-lanka-demo-catalog.json
 
       - name: Strict catalog validation
         if: steps.precheck.outputs.need_provision == 'true'
