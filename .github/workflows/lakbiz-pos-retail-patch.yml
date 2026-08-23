@@ -20,12 +20,12 @@ jobs:
         with:
           ref: claude/global-premium-ui
           fetch-depth: 0
-      - name: Apply POS interaction patch
+      - name: Finalize and clean patch assets
         run: python .github/lakbiz-pos-retail-patch.py
-      - name: Commit patched application files
+      - name: Commit cleanup
         run: |
           git config user.name "lakbiz-ui-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add lakbiz/app/src/app/sales/page.tsx lakbiz/app/src/components/dashboard/retail-command-center.tsx
-          git commit -m "feat: accelerate pharmacy and grocery POS search"
+          git add -A
+          git commit -m "chore: remove temporary retail POS patch runner"
           git push origin HEAD:claude/global-premium-ui
