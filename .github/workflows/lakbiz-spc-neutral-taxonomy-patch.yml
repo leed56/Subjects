@@ -1,0 +1,49 @@
+name: LakBiz SPC Neutral Taxonomy One Shot
+
+on:
+  push:
+    branches:
+      - claude/global-premium-ui
+    paths:
+      - ".github/workflows/lakbiz-spc-neutral-taxonomy-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/global-premium-ui
+          fetch-depth: 0
+
+      - name: Patch SPC classification exactly
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('lakbiz/app/scripts/demo-catalog/core.mjs')
+          text = path.read_text()
+          old = '''export function classifySpcProduct(name) {\n  const upper = String(name ?? "").toUpperCase();\n  const device = /(GAUZE|COTTON WOOL|SYRINGE|NEEDLE|DIAPER|MASK|URINE BAG|BED PAN|GLOVE|BANDAGE|CATHETER|THERMOMETER|TEST STRIP|LANCET)/.test(upper);\n  if (device) {\n    return { department: "Pharmaceutical", category: "Medical Devices", subcategory: "Medical & First Aid Supplies", productKind: "medical_supply", taxonomyMethod: "conservative_keyword" };\n  }\n  return { department: "Pharmaceutical", category: "Medicines", subcategory: "Unclassified Medicine", productKind: "medicine", taxonomyMethod: "source_context" };\n}'''
+          new = '''export function parseSpcDosageForm(name) {\n  const upper = String(name ?? "").toUpperCase();\n  const forms = [\n    [/\\b(?:TAB|TABLET|TABLETS)\\b/, "Tablet", "Tablets"],\n    [/\\b(?:CAP|CAPS|CAPSULE|CAPSULES)\\b/, "Capsule", "Capsules"],\n    [/\\b(?:INJ|INJECTION|INJECTIONS)\\b/, "Injection", "Injections"],\n    [/\\b(?:SUSP|SUSPENSION|SYRUP)\\b/, "Oral liquid", "Syrups & Suspensions"],\n    [/\\b(?:CREAM|OINT|OINTMENT|GEL)\\b/, "Topical", "Creams, Ointments & Gels"],\n    [/\\b(?:EAR DROP|EYE DROP|EYE DROPS|DROPS|DROP|OPHTH)\\b/, "Drops", "Eye & Ear Drops"],\n    [/\\b(?:INHA|INHALER|INHALATION)\\b/, "Inhaled", "Inhalers & Inhalation"],\n    [/\\b(?:SUPPO|SUPPOSITORY|SUPPOSITORIES)\\b/, "Suppository", "Suppositories"],\n    [/\\b(?:SOLU|SOLUTION)\\b/, "Solution", "Solutions"],\n  ];\n  for (const [pattern, dosageForm, subcategory] of forms) {\n    if (pattern.test(upper)) return { dosageForm, subcategory };\n  }\n  return { dosageForm: null, subcategory: "Other Medicines" };\n}\n\nexport function classifySpcProduct(name) {\n  const upper = String(name ?? "").toUpperCase();\n  const device = /\\b(?:GAUZE|COTTON WOOL|SYRINGE|NEEDLE|DIAPER|MASK|URINE BAG|BED PAN|GLOVE|BANDAGE|CATHETER|THERMOMETER|TEST STRIP|LANCET)\\b/.test(upper);\n  if (device) {\n    return { department: "Pharmaceutical", category: "Medical Devices", subcategory: "Medical & First Aid Supplies", productKind: "medical_supply", taxonomyMethod: "conservative_keyword", dosageForm: null };\n  }\n  const form = parseSpcDosageForm(upper);\n  return { department: "Pharmaceutical", category: "Medicines", subcategory: form.subcategory, productKind: "medicine", taxonomyMethod: "explicit_source_dosage_form", dosageForm: form.dosageForm };\n}'''
+          if old not in text:
+              raise SystemExit('Refusing patch: classifySpcProduct block did not match exactly')
+          text = text.replace(old, new, 1)
+
+          old = 'dosageForm: row.regulatory?.dosageForm ?? null,'
+          new = 'dosageForm: row.regulatory?.dosageForm ?? taxonomy.dosageForm ?? null,'
+          if old not in text:
+              raise SystemExit('Refusing patch: dosageForm normalization line not found')
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+
+      - name: Remove one-shot workflow and commit
+        run: |
+          git rm .github/workflows/lakbiz-spc-neutral-taxonomy-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lakbiz/app/scripts/demo-catalog/core.mjs
+          git commit -m "fix(lakbiz): classify SPC medicines by explicit dosage form"
+          git push origin HEAD:claude/global-premium-ui
