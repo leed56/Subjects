@@ -5,6 +5,7 @@ import {
   parseHealthguardProducts,
   parseMediVerifyResults,
   parseSparCollectionProducts,
+  parseSpcDosageForm,
   parseSpcRows,
   stableDemoId,
   syntheticDemoCost,
@@ -26,6 +27,15 @@ describe("Sri Lanka demo catalog normalization", () => {
     expect(normalized.costSource).toBe("spc_wholesale");
     expect(normalized.registrationNumber).toBeNull();
     expect(normalized.productKind).toBe("medicine");
+    expect(normalized.dosageForm).toBe("Tablet");
+    expect(normalized.subcategory).toBe("Tablets");
+  });
+
+  it("uses only explicit SPC dosage-form words for neutral medicine subcategories", () => {
+    expect(parseSpcDosageForm("AMOXYCILLIN CAP 500MG BP")).toEqual({ dosageForm: "Capsule", subcategory: "Capsules" });
+    expect(parseSpcDosageForm("CEFTRIAXONE INJ 1G")).toEqual({ dosageForm: "Injection", subcategory: "Injections" });
+    expect(parseSpcDosageForm("BETAMETH CREAM 0.1%")).toEqual({ dosageForm: "Topical", subcategory: "Creams, Ointments & Gels" });
+    expect(parseSpcDosageForm("ANAESTHETIC ETHER B.P.")).toEqual({ dosageForm: null, subcategory: "Other Medicines" });
   });
 
   it("keeps deterministic IDs and clearly synthetic cost separate from factual retail price", () => {
@@ -72,6 +82,10 @@ describe("Sri Lanka demo catalog normalization", () => {
 
   it("conservatively separates devices/supplies from medicines", () => {
     expect(classifySpcProduct("DISP HYPOD NEEDLE 21G").productKind).toBe("medical_supply");
-    expect(classifySpcProduct("AMOXYCILLIN CAP 500MG").productKind).toBe("medicine");
+    expect(classifySpcProduct("AMOXYCILLIN CAP 500MG")).toMatchObject({
+      productKind: "medicine",
+      subcategory: "Capsules",
+      dosageForm: "Capsule",
+    });
   });
 });
