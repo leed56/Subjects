@@ -1,0 +1,231 @@
+name: LakBiz retail premium patch
+
+on:
+  push:
+    branches: [claude/global-premium-ui]
+    paths:
+      - .github/workflows/lakbiz-retail-premium-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/global-premium-ui
+          fetch-depth: 0
+      - name: Apply audited retail UI and catalog patches
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"Expected patch anchor missing in {path}: {old[:100]!r}")
+              if text.count(old) != 1:
+                  raise SystemExit(f"Patch anchor not unique in {path}: {old[:100]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          # Dashboard: retail sectors use the dedicated command center;
+          # all other sector/technician behavior remains on the existing page.
+          dashboard = "lakbiz/app/src/app/dashboard/page.tsx"
+          replace_once(
+              dashboard,
+              'import { OfflineSyncNotice } from "@/components/offline-sync-notice";\n',
+              'import { OfflineSyncNotice } from "@/components/offline-sync-notice";\nimport { RetailCommandCenter } from "@/components/dashboard/retail-command-center";\n',
+          )
+          replace_once(
+              dashboard,
+              '  const canSeeJobs = showAcJobs && orgRole !== "cashier";\n\n  // Job profitability this month',
+              '  const canSeeJobs = showAcJobs && orgRole !== "cashier";\n\n  // Pharmacy and Grocery are retail operating systems, not generic admin\n  // dashboards. Keep the shared shell/security/store, but give these sectors\n  // a purpose-built command center. Technician workspaces keep the existing\n  // job-first dashboard below.\n  if (!isTechnician && (org.sector === "pharmacy" || org.sector === "grocery")) {\n    return (\n      <AppShell>\n        <ProMain>\n          <RetailCommandCenter data={data} sector={org.sector} />\n        </ProMain>\n      </AppShell>\n    );\n  }\n\n  // Job profitability this month',
+          )
+
+          # Stock: sector command header + category navigation + category filter.
+          stock = "lakbiz/app/src/app/stock/page.tsx"
+          replace_once(
+              stock,
+              'import { ProductForm } from "@/components/product-form";\n',
+              'import { ProductForm } from "@/components/product-form";\nimport { StockCommandHeader } from "@/components/stock/stock-command-header";\n',
+          )
+          replace_once(
+              stock,
+              'import { PageHeader, MetricCard, EmptyState, StatusBadge, SearchInput, FilterBar, ActionMenu } from "@/components/ui/primitives";',
+              'import { EmptyState, StatusBadge, SearchInput, FilterBar, ActionMenu } from "@/components/ui/primitives";',
+          )
+          replace_once(
+              stock,
+              '  const [showLowStockOnly, setShowLowStockOnly] = useState(false);\n  const [page, setPage] = useState(1);',
+              '  const [showLowStockOnly, setShowLowStockOnly] = useState(false);\n  const [categoryFilter, setCategoryFilter] = useState("all");\n  const [page, setPage] = useState(1);',
+          )
+          replace_once(
+              stock,
+              '  }, [search, conditionFilter, showInactive, showLowStockOnly]);',
+              '  }, [search, conditionFilter, showInactive, showLowStockOnly, categoryFilter]);',
+          )
+          replace_once(
+              stock,
+              '  const byActive = showInactive ? byCondition : byCondition.filter((p) => p.active);\n  const lowStock = getLowStockProducts(data.products);\n  const lowStockIds = new Set(lowStock.map((p) => p.id));\n  const products = showLowStockOnly ? byActive.filter((p) => lowStockIds.has(p.id)) : byActive;',
+              '  const byActive = showInactive ? byCondition : byCondition.filter((p) => p.active);\n  const byCategory = categoryFilter === "all" ? byActive : byActive.filter((p) => p.category === categoryFilter);\n  const lowStock = getLowStockProducts(data.products);\n  const lowStockIds = new Set(lowStock.map((p) => p.id));\n  const products = showLowStockOnly ? byCategory.filter((p) => lowStockIds.has(p.id)) : byCategory;',
+          )
+          replace_once(
+              stock,
+              '  const inactiveCount = data.products.filter((p) => !p.active).length;\n  const inventoryValue = data.products.reduce((sum, p) => sum + p.stockQty * p.buyPrice, 0);\n  const sellValue = data.products.reduce((sum, p) => sum + p.stockQty * p.sellPrice, 0);',
+              '  const inactiveCount = data.products.filter((p) => !p.active).length;\n  const outOfStockCount = data.products.filter((p) => p.active && p.stockQty <= 0).length;\n  const inventoryValue = data.products.reduce((sum, p) => sum + p.stockQty * p.buyPrice, 0);\n  const sellValue = data.products.reduce((sum, p) => sum + p.stockQty * p.sellPrice, 0);\n  const categoryCounts = [...new Set(data.products.filter((p) => p.active).map((p) => p.category || "Other"))]\n    .map((name) => ({ name, count: data.products.filter((p) => p.active && (p.category || "Other") === name).length }))\n    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))\n    .slice(0, 10);',
+          )
+          p = Path(stock)
+          text = p.read_text()
+          start = text.index('        <PageHeader\n          title={t("stock.title")}')
+          end = text.index('\n\n        <WriteDisabledHint', start)
+          replacement = '''        <StockCommandHeader
+          sector={org.sector}
+          shopName={data.business.name || org.name || "LakBiz"}
+          itemCount={data.products.length}
+          lowStockCount={lowStock.length}
+          outOfStockCount={outOfStockCount}
+          costValue={inventoryValue}
+          sellValue={sellValue}
+          canSeeFinancials={canSeeFinancials}
+          filteredCount={products.length}
+          categories={categoryCounts}
+          selectedCategory={categoryFilter}
+          onCategoryChange={setCategoryFilter}
+          actions={
+            <>
+              {canExport && (
+                <ExportActions
+                  compact
+                  disabled={products.length === 0}
+                  onExportCsv={() =>
+                    exportStockCsv(data.business, products, {
+                      includeBuyPrice: canSeeFinancials,
+                      labels: stockExportLabels,
+                      conditionLabel: (c) => t(c === "used" ? "stock.condition_used" : "stock.condition_new"),
+                    })
+                  }
+                />
+              )}
+              <button
+                type="button"
+                disabled={!canWrite}
+                title={!canWrite ? disabledHint ?? undefined : undefined}
+                onClick={openCreate}
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-teal-500 px-4 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(20,184,166,0.2)] transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <PlusIcon className="h-4 w-4" />
+                {t("stock.add_item")}
+              </button>
+            </>
+          }
+        />'''
+          p.write_text(text[:start] + replacement + text[end:])
+
+          # Product form: sector-appropriate unit vocabulary without changing
+          # persisted shape or the financial visibility gate.
+          form = "lakbiz/app/src/components/product-form.tsx"
+          replace_once(
+              form,
+              'const units = ["pcs", "kg", "m", "box", "unit", "set"];',
+              '''function unitsForSector(sectorId: SectorId): string[] {
+  if (sectorId === "pharmacy") return ["pcs", "tablet", "capsule", "strip", "box", "bottle", "tube", "vial", "ampoule", "pack", "ml"];
+  if (sectorId === "grocery") return ["pcs", "g", "kg", "ml", "L", "pack", "bottle", "tin", "bag", "box"];
+  return ["pcs", "kg", "m", "box", "unit", "set"];
+}''',
+          )
+          replace_once(
+              form,
+              '  const [form, setForm] = useState<FormState>(() => {',
+              '  const [form, setForm] = useState<FormState>(() => {',
+          )
+          # Insert after the useState initializer's closing `});` immediately
+          # before the sector reset effect.
+          p = Path(form)
+          text = p.read_text()
+          anchor = '    return emptyForm(shopSectorId);\n  });\n\n  useEffect(() => {'
+          if anchor not in text:
+              raise SystemExit("ProductForm unit insertion anchor missing")
+          text = text.replace(
+              anchor,
+              '    return emptyForm(shopSectorId);\n  });\n  const units = useMemo(() => unitsForSector(lockedSectorId ?? form.sectorId), [lockedSectorId, form.sectorId]);\n\n  useEffect(() => {',
+              1,
+          )
+          p.write_text(text)
+
+          # Catalog quality: reject pack/fragment-only identities and gate broad
+          # Healthguard household/food categories to pharmacy-relevant items.
+          quality = "lakbiz/app/scripts/demo-catalog/quality.mjs"
+          replace_once(
+              quality,
+              '  if (!/[A-Za-z]/.test(text)) return "no_letters";\n  return null;',
+              '''  if (!/[A-Za-z]/.test(text)) return "no_letters";
+  const alphaTokens = text.toUpperCase().match(/[A-Z]+/g) ?? [];
+  if (!alphaTokens.some((token) => token.length >= 3)) return "insufficient_identity";
+  return null;''',
+          )
+
+          fetcher = "lakbiz/app/scripts/fetch-sri-lanka-demo-catalog.mjs"
+          replace_once(
+              fetcher,
+              'import {\n  classifyPharmacyRetailProduct,\n  conservativeMediVerifyMatch,\n} from "./demo-catalog/quality.mjs";',
+              'import {\n  catalogNameQualityIssue,\n  classifyPharmacyRetailProduct,\n  conservativeMediVerifyMatch,\n  isPharmacyRetailCandidate,\n} from "./demo-catalog/quality.mjs";',
+          )
+          replace_once(
+              fetcher,
+              '      for (const row of pageRows) {\n        const key = sourceKey(row);',
+              '      for (const row of pageRows) {\n        const broadConvenienceTarget = /\\/(?:household|food-beverage)(?:[/?]|$)/i.test(baseUrl);\n        if (catalogNameQualityIssue(row.productName)) continue;\n        if (broadConvenienceTarget && !isPharmacyRetailCandidate(row.productName)) continue;\n        const key = sourceKey(row);',
+          )
+
+          validator = "lakbiz/app/scripts/validate-demo-catalog.mjs"
+          replace_once(
+              validator,
+              'import { resolve } from "node:path";\n',
+              'import { resolve } from "node:path";\nimport { catalogNameQualityIssue } from "./demo-catalog/quality.mjs";\n',
+          )
+          replace_once(
+              validator,
+              'const blankNames = allRows.filter((p) => !String(p.productName ?? "").trim()).length;\n',
+              'const blankNames = allRows.filter((p) => !String(p.productName ?? "").trim()).length;\nconst invalidIdentityNames = allRows.filter((p) => catalogNameQualityIssue(p.productName)).length;\n',
+          )
+          replace_once(
+              validator,
+              '  blankNames,\n  zeroRetailPrices,',
+              '  blankNames,\n  invalidIdentityNames,\n  zeroRetailPrices,',
+          )
+          replace_once(
+              validator,
+              'fail(blankNames > 0, `Blank product names detected: ${blankNames}`);\n',
+              'fail(blankNames > 0, `Blank product names detected: ${blankNames}`);\nfail(invalidIdentityNames > 0, `Insufficient product identities detected: ${invalidIdentityNames}`);\n',
+          )
+
+          qtest = "lakbiz/app/scripts/demo-catalog/quality.test.mjs"
+          p = Path(qtest)
+          text = p.read_text()
+          marker = 'describe("demo catalog quality guards", () => {\n'
+          if marker not in text:
+              raise SystemExit("quality.test describe anchor missing")
+          insertion = '''describe("demo catalog quality guards", () => {
+  it("rejects pack-only and fragment-only product identities", () => {
+    expect(catalogNameQualityIssue("100G")).toBe("insufficient_identity");
+    expect(catalogNameQualityIssue("60 S")).toBe("insufficient_identity");
+    expect(catalogNameQualityIssue("AD S")).toBe("insufficient_identity");
+    expect(catalogNameQualityIssue("ORS 100ML")).toBeNull();
+    expect(catalogNameQualityIssue("3M Micropore Tape 1IN")).toBeNull();
+  });
+'''
+          p.write_text(text.replace(marker, insertion, 1))
+
+          # Self-delete; this workflow is a one-shot transport for an exact,
+          # reviewed multi-file patch and must not remain callable afterward.
+          Path(".github/workflows/lakbiz-retail-premium-patch.yml").unlink()
+          PY
+
+          git config user.name "LakBiz UI automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: premium pharmacy and grocery operating experience"
+          git push origin HEAD:claude/global-premium-ui
