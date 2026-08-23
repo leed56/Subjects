@@ -19,6 +19,7 @@
       }
     ],
     "paths": {
+      "@/lib/supabase/business-sync": ["./src/lib/supabase/business-sync-v2.ts"],
       "@/*": ["./src/*"]
     }
   },
