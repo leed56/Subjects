@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { stableHash, syntheticStock } from "./core.mjs";
+import { buildDemoLotRows, ensureTrackedDemoStock } from "./lot-fixtures.mjs";
 
 export const LAKBIZ_PROJECT_REF = "zestppstpwjxriwcuykc";
 export const LAKBIZ_PROJECT_HOST = `${LAKBIZ_PROJECT_REF}.supabase.co`;
@@ -217,19 +218,32 @@ export async function ensureDemoShop(client, spec) {
 
 export async function importCatalog(client, orgId, sector, products) {
   const rows = products.map((product) => productDbRow(orgId, sector, product));
+  const tracked = sector === "pharmacy" ? products.filter(shouldTrackLot) : [];
+  const trackedIndexById = new Map(tracked.map((product, index) => [product.id, index]));
+
+  // Keep the first three pharmacy workflow fixtures well-stocked enough to
+  // demonstrate expired+valid, FEFO near+later, and quarantine+valid lots.
+  for (const row of rows) {
+    const trackedIndex = trackedIndexById.get(row.id);
+    if (trackedIndex != null) row.stock_qty = ensureTrackedDemoStock(row.stock_qty, trackedIndex);
+  }
+
   await upsertChunks(client, "products_base", rows, { onConflict: "id" });
 
+  let lotRows = 0;
   if (sector === "pharmacy") {
     const profiles = products.map((product) => inventoryProfileRow(orgId, product));
     await upsertChunks(client, "product_inventory_profiles", profiles, { onConflict: "product_id" });
 
-    const tracked = products.filter(shouldTrackLot);
     const rowById = new Map(rows.map((row) => [row.id, row]));
-    const lots = tracked.map((product, index) => inventoryLotRow(orgId, product, index, rowById.get(product.id)?.stock_qty ?? 0));
+    const lots = tracked.flatMap((product, index) =>
+      buildDemoLotRows(orgId, product, index, rowById.get(product.id)?.stock_qty ?? 0),
+    );
     await upsertChunks(client, "inventory_lots", lots, { onConflict: "id" });
+    lotRows = lots.length;
   }
 
-  return { products: rows.length, trackedLots: sector === "pharmacy" ? products.filter(shouldTrackLot).length : 0 };
+  return { products: rows.length, trackedProducts: tracked.length, trackedLots: lotRows };
 }
 
 function demoCustomers(orgId, sector) {
@@ -284,8 +298,16 @@ export async function seedDemoHistory(client, orgId, sector, products) {
     purchases.push({ id, organization_id: orgId, grn_no: `DEMO-GRN-${String(p + 1).padStart(3, "0")}`, purchase_date: saleDate(25 - p * 5), supplier_id: supplier.id, supplier_name: supplier.name, subtotal: total, input_vat: 0, total, payment_method: p === 2 ? "credit" : "cash", credit_amount: p === 2 ? total : 0, note: "Synthetic demo purchase history; product/cost provenance remains in product master." });
     selected.forEach((product, index) => purchaseLines.push({ id: uuidFromSeed(`${id}:${product.id}`), purchase_id: id, organization_id: orgId, product_id: product.id, product_name: product.productName, qty: 12, unit_cost: product.buyPrice || 0, line_order: index }));
   }
+  // Keep supplier liability consistent with the synthetic credit purchases.
+  for (const purchase of purchases) {
+    if (Number(purchase.credit_amount) <= 0 || !purchase.supplier_id) continue;
+    const supplier = suppliers.find((row) => row.id === purchase.supplier_id);
+    if (supplier) supplier.payable_balance = Number(supplier.payable_balance || 0) + Number(purchase.credit_amount);
+  }
+
   await upsertChunks(client, "purchases", purchases, { onConflict: "id" });
   await upsertChunks(client, "purchase_lines", purchaseLines, { onConflict: "id" });
+  await upsertChunks(client, "suppliers", suppliers, { onConflict: "id" });
 
   let bankAccount = null;
   if (sector === "pharmacy") {
@@ -303,6 +325,18 @@ export async function seedDemoHistory(client, orgId, sector, products) {
   const tenderSources = [];
   const cheques = [];
   const bankTransactions = [];
+  if (bankAccount) {
+    bankTransactions.push({
+      id: `demo:${sector}:banktxn:opening`,
+      organization_id: orgId,
+      account_id: bankAccount.id,
+      type: "adjustment",
+      amount: 125000,
+      description: "Synthetic demo opening bank balance",
+      reference: "DEMO-OPENING",
+      txn_date: daysAgo(30),
+    });
+  }
 
   for (let s = 0; s < methods.length; s += 1) {
     const method = methods[s];
@@ -330,6 +364,14 @@ export async function seedDemoHistory(client, orgId, sector, products) {
       bankTransactions.push({ id: `demo:${sector}:banktxn:${s + 1}`, organization_id: orgId, account_id: bankAccount.id, type: "deposit", amount: total, description: "Synthetic demo POS transfer", reference: sales[s].bill_no, txn_date: daysAgo(12 - s * 2) });
     }
     if (method === "credit") customer.credit_balance = total;
+  }
+
+  if (bankAccount) {
+    bankAccount.balance = bankTransactions.reduce((balance, transaction) => {
+      const amount = Number(transaction.amount || 0);
+      return ["withdrawal", "fee"].includes(transaction.type) ? balance - amount : balance + amount;
+    }, 0);
+    await upsertChunks(client, "bank_accounts", [bankAccount], { onConflict: "id" });
   }
 
   await upsertChunks(client, "sales_base", sales, { onConflict: "id" });
