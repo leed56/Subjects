@@ -3,6 +3,7 @@ import { TrialBanner } from "@/components/trial-banner";
 import { CloudSyncBanner } from "@/components/cloud-sync-banner";
 import { OfflineBanner } from "@/components/offline-banner";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
+import { SectorWorkspaceAutoBanner } from "@/components/sector/sector-workspace-auto-banner";
 import { Sidebar } from "@/components/shell/sidebar";
 import { MobileNav } from "@/components/shell/mobile-nav";
 
@@ -23,6 +24,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <PwaInstallPrompt />
         <OfflineBanner />
         <CloudSyncBanner />
+        <SectorWorkspaceAutoBanner />
         <div className="flex-1">{children}</div>
       </div>
     </div>
