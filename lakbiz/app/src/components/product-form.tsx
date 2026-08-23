@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Product, SectorId } from "@/lib/types";
-import { sectors, defaultCategoryForSector, categoriesForSector, sectorById } from "@/lib/sectors";
+import { sectors, defaultCategoryForSector, categoriesForSector } from "@/lib/sectors";
 import {
   customFieldsFromProduct,
   emptyCustomFieldsForSector,
   sectorFormFields,
 } from "@/lib/sector-fields";
 import { useLocale } from "@/lib/i18n/locale-provider";
-import { SectorIcon } from "@/components/sector-icon";
+import { ProductReferenceCombobox } from "@/components/product-reference-combobox";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { ProductInput } from "@/lib/store/types";
 
@@ -97,8 +97,11 @@ export function ProductForm({
     return emptyForm(shopSectorId);
   });
   const units = useMemo(
-    () => unitsForSector(lockedSectorId ?? form.sectorId),
-    [lockedSectorId, form.sectorId],
+    () => Array.from(new Set([
+      ...unitsForSector(lockedSectorId ?? form.sectorId),
+      form.unit,
+    ].filter(Boolean))),
+    [lockedSectorId, form.sectorId, form.unit],
   );
   const effectiveSectorId = lockedSectorId ?? form.sectorId;
   const conditionRelevant = effectiveSectorId !== "pharmacy" && effectiveSectorId !== "grocery";
@@ -121,7 +124,6 @@ export function ProductForm({
     () => categoriesForSector(lockedSectorId ?? form.sectorId),
     [lockedSectorId, form.sectorId],
   );
-  const lockedSector = lockedSectorId ? sectorById(lockedSectorId) : undefined;
   const sectorFields = useMemo(() => sectorFormFields(form.sectorId), [form.sectorId]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -171,10 +173,10 @@ export function ProductForm({
   const inventoryHint = isSinhala
     ? "තොග ප්‍රමාණය, මිල සහ අඩු තොග සීමාව පාලනය කරන්න."
     : "Control quantity, pricing and the low-stock threshold in one place.";
-  const sectorTitle = isSinhala ? "ව්‍යාපාර-විශේෂ තොරතුරු" : "Sector-specific details";
+  const sectorTitle = isSinhala ? "අමතර භාණ්ඩ තොරතුරු" : "Additional item details";
   const sectorHint = isSinhala
     ? "ඔබේ ව්‍යාපාර වර්ගයට පමණක් අදාළ අමතර තොරතුරු."
-    : "Only the extra fields required by this business type.";
+    : "Additional identity and handling information used for this item.";
 
   return (
     <form data-product-form="true" onSubmit={handleSubmit} className="space-y-5 pb-24">
@@ -190,16 +192,48 @@ export function ProductForm({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block sm:col-span-2">
-            <span className={fieldLabel}>{t("stock.item_name")}</span>
-            <input
-              required
-              autoFocus
+          {!initial && lockedSectorId ? (
+            <ProductReferenceCombobox
+              label={t("stock.item_name")}
               value={form.name}
-              onChange={(e) => set("name", e.target.value)}
-              className={inputClass}
+              autoFocus
+              onChange={(value) => set("name", value)}
+              onSelect={(suggestion) => {
+                setForm((current) => ({
+                  ...current,
+                  name: suggestion.name,
+                  sku: suggestion.sku ?? current.sku,
+                  unit: suggestion.unit ?? current.unit,
+                  sectorCustom: {
+                    ...current.sectorCustom,
+                    ...(suggestion.source ? { source: suggestion.source } : {}),
+                    ...(suggestion.sourceUrl ? { sourceUrl: suggestion.sourceUrl } : {}),
+                    ...(suggestion.packSize ? { packSize: suggestion.packSize } : {}),
+                    ...(suggestion.brand ? { brand: suggestion.brand } : {}),
+                    ...(suggestion.genericName ? { genericName: suggestion.genericName } : {}),
+                    ...(suggestion.strength ? { strength: suggestion.strength } : {}),
+                    ...(suggestion.dosageForm ? { dosageForm: suggestion.dosageForm } : {}),
+                    ...(suggestion.manufacturer ? { manufacturer: suggestion.manufacturer } : {}),
+                    ...(suggestion.manufacturingCountry ? { manufacturingCountry: suggestion.manufacturingCountry } : {}),
+                    ...(suggestion.regulatoryRegistrationNumber ? { regulatoryRegistrationNumber: suggestion.regulatoryRegistrationNumber } : {}),
+                    ...(suggestion.regulatorySource ? { regulatorySource: suggestion.regulatorySource } : {}),
+                    ...(suggestion.regulatorySourceUrl ? { regulatorySourceUrl: suggestion.regulatorySourceUrl } : {}),
+                  },
+                }));
+              }}
             />
-          </label>
+          ) : (
+            <label className="block sm:col-span-2">
+              <span className={fieldLabel}>{t("stock.item_name")}</span>
+              <input
+                required
+                autoFocus
+                value={form.name}
+                onChange={(e) => set("name", e.target.value)}
+                className={inputClass}
+              />
+            </label>
+          )}
 
           <label className="block">
             <span className={fieldLabel}>{t("stock.sku")}</span>
@@ -213,23 +247,16 @@ export function ProductForm({
             </select>
           </label>
 
-          <div className="block">
-            <span className={fieldLabel}>{t("stock.sector")}</span>
-            {lockedSectorId && lockedSector ? (
-              <div className="mt-1.5 flex min-h-11 items-center rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 text-sm font-semibold text-slate-800">
-                <span className="mr-2.5 flex h-7 w-7 items-center justify-center rounded-lg bg-white text-teal-700 ring-1 ring-slate-200/80">
-                  <SectorIcon sectorId={lockedSector.id} className="h-4 w-4" />
-                </span>
-                {isSinhala ? lockedSector.nameSi : lockedSector.nameEn}
-              </div>
-            ) : (
+          {!lockedSectorId && (
+            <label className="block">
+              <span className={fieldLabel}>{t("stock.sector")}</span>
               <select value={form.sectorId} onChange={(e) => handleSectorChange(e.target.value as SectorId)} className={inputClass}>
                 {sectors.map((s) => (
                   <option key={s.id} value={s.id}>{s.nameSi} / {s.nameEn}</option>
                 ))}
               </select>
-            )}
-          </div>
+            </label>
+          )}
 
           {conditionRelevant && (
             <label className="block">
@@ -328,11 +355,6 @@ export function ProductForm({
               <h3 className="text-base font-semibold tracking-[-0.015em] text-slate-950">{sectorTitle}</h3>
               <p className="mt-1 text-xs leading-5 text-slate-500">{sectorHint}</p>
             </div>
-            {lockedSector && (
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
-                {isSinhala ? lockedSector.nameSi : lockedSector.nameEn}
-              </span>
-            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

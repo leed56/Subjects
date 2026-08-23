@@ -70,7 +70,7 @@ function retailVelocityModel(data: AppData, sector: SectorId, now: Date): Sector
     .sort((a, b) => b.qty - a.qty)[0];
   const labels: Partial<Record<SectorId, { eyebrow: string; title: string; description: string }>> = {
     grocery: {
-      eyebrow: "Grocery intelligence",
+      eyebrow: "Stock intelligence",
       title: "Shelf movement & replenishment",
       description: "Focus on fast movers, dormant shelf stock and reorder pressure without exposing internal cost.",
     },
@@ -166,7 +166,7 @@ function buildSectorModel(
       });
     }
     return {
-      eyebrow: "Pharmacy intelligence",
+      eyebrow: "Stock intelligence",
       title: "Expiry & batch safety",
       description: "FEFO-focused operational control. Cost remains owner-only; this panel uses batch identity and sellable quantity only.",
       metrics: [

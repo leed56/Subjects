@@ -1,10 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { SectorIcon } from "@/components/sector-icon";
 import { AlertTriangleIcon, CheckIcon, StockIcon } from "@/components/ui/icons";
 import { formatLkr } from "@/lib/format";
-import { sectorById } from "@/lib/sectors";
 import type { SectorId } from "@/lib/types";
 
 export function StockCommandHeader({
@@ -36,8 +34,6 @@ export function StockCommandHeader({
   onCategoryChange: (category: string) => void;
   actions: ReactNode;
 }) {
-  const template = sectorById(sector);
-  const label = template?.nameEn ?? "Inventory";
   const health = itemCount > 0 ? Math.max(0, Math.round(((itemCount - lowStockCount) / itemCount) * 100)) : 100;
   const sectorCopy = sector === "pharmacy"
     ? "Medicine, wellness and convenience inventory with batch, expiry and FEFO control."
@@ -52,9 +48,9 @@ export function StockCommandHeader({
         <div className="relative flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.055] text-teal-300"><SectorIcon sectorId={sector} className="h-4.5 w-4.5" /></span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.055] text-teal-300"><StockIcon className="h-4.5 w-4.5" /></span>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-teal-300">{label} inventory</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-teal-300">Inventory operations</p>
                 <p className="mt-0.5 text-xs text-slate-500">{shopName}</p>
               </div>
             </div>
