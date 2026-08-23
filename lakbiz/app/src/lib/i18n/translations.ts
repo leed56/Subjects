@@ -417,7 +417,7 @@ const si: Dict = {
   // Stock
   "stock.title": "තොග",
   "stock.subtitle": "භාණ්ඩ — බ්‍රවුසරයේ සුරකින ලදී",
-  "stock.add_item": "+ භාණ්ඩය එකතු කරන්න",
+  "stock.add_item": "භාණ්ඩය එකතු කරන්න",
   "stock.search_placeholder": "භාණ්ඩ සොයන්න (නම / SKU / කාණ්ඩය)…",
   "stock.add_new": "නව භාණ්ඩය එකතු කරන්න",
   "stock.edit_item": "භාණ්ඩය සංස්කරණය",
@@ -2095,7 +2095,7 @@ const en: Dict = {
 
   "stock.title": "Stock",
   "stock.subtitle": "items · saved in browser",
-  "stock.add_item": "+ Add item",
+  "stock.add_item": "Add item",
   "stock.search_placeholder": "Search items (name / SKU / category)…",
   "stock.add_new": "Add new item",
   "stock.edit_item": "Edit item",
