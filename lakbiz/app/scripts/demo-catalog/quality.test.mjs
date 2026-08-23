@@ -69,4 +69,24 @@ describe("demo catalog quality guards", () => {
       [{ brand: "SOFT", genericName: "AMLODIPINE TABLETS 5MG", registrationNumber: "WRONG" }],
     )).toBeNull();
   });
+
+  it("accepts only a matching source-strength suffix when SPC omits it from the brand", () => {
+    const rows = [
+      { brand: "GLUCAR 50", genericName: "ACARBOSE TABLETS 50MG", registrationNumber: "M011416" },
+    ];
+    expect(conservativeMediVerifyMatch(
+      { productName: "ACARBOSE TAB 50MG (GLUCAR)(120)" },
+      rows,
+    )?.registrationNumber).toBe("M011416");
+
+    expect(conservativeMediVerifyMatch(
+      { productName: "ACARBOSE TAB 100MG (GLUCAR)(120)" },
+      rows,
+    )).toBeNull();
+
+    expect(conservativeMediVerifyMatch(
+      { productName: "SITAGLIPTIN TAB 50MG (GLUCAR)(120)" },
+      rows,
+    )).toBeNull();
+  });
 });
