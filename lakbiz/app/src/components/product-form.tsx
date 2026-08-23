@@ -13,7 +13,15 @@ import { SectorIcon } from "@/components/sector-icon";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { ProductInput } from "@/lib/store/types";
 
-const units = ["pcs", "kg", "m", "box", "unit", "set"];
+function unitsForSector(sectorId: SectorId): string[] {
+  if (sectorId === "pharmacy") {
+    return ["pcs", "tablet", "capsule", "strip", "box", "bottle", "tube", "vial", "ampoule", "pack", "ml"];
+  }
+  if (sectorId === "grocery") {
+    return ["pcs", "g", "kg", "ml", "L", "pack", "bottle", "tin", "bag", "box"];
+  }
+  return ["pcs", "kg", "m", "box", "unit", "set"];
+}
 
 type FormState = ProductInput & {
   sectorCustom: Record<string, string>;
@@ -88,6 +96,10 @@ export function ProductForm({
     }
     return emptyForm(shopSectorId);
   });
+  const units = useMemo(
+    () => unitsForSector(lockedSectorId ?? form.sectorId),
+    [lockedSectorId, form.sectorId],
+  );
 
   useEffect(() => {
     if (initial) return;
