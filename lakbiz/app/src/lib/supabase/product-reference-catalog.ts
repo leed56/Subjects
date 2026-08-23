@@ -7,6 +7,7 @@ export type ProductReferenceSuggestion = {
   name: string;
   sku: string | null;
   unit: string | null;
+  category: string | null;
   source: string | null;
   sourceUrl: string | null;
   packSize: string | null;
@@ -46,6 +47,7 @@ export async function searchProductReferenceCatalog(
     name: String(row.name ?? ""),
     sku: row.sku ? String(row.sku) : null,
     unit: row.unit ? String(row.unit) : null,
+    category: row.category ? String(row.category) : null,
     source: row.source ? String(row.source) : null,
     sourceUrl: row.source_url ? String(row.source_url) : null,
     packSize: row.pack_size ? String(row.pack_size) : null,

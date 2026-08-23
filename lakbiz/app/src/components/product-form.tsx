@@ -204,6 +204,9 @@ export function ProductForm({
                   name: suggestion.name,
                   sku: suggestion.sku ?? current.sku,
                   unit: suggestion.unit ?? current.unit,
+                  category: suggestion.category && categoriesForSector(lockedSectorId ?? current.sectorId).includes(suggestion.category)
+                    ? suggestion.category
+                    : current.category,
                   sectorCustom: {
                     ...current.sectorCustom,
                     ...(suggestion.source ? { source: suggestion.source } : {}),

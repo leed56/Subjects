@@ -89,7 +89,7 @@ export function ProductReferenceCombobox({
         : (si ? "ගැළපීමක් නැහැ" : "No match");
 
   return (
-    <div ref={rootRef} className="relative z-30 sm:col-span-2">
+    <div ref={rootRef} className="relative sm:col-span-2">
       <label className="block">
         <span className="text-[13px] font-semibold text-slate-600">{label}</span>
         <div className="relative mt-1.5">
@@ -145,7 +145,7 @@ export function ProductReferenceCombobox({
           id={listboxId}
           role="listbox"
           aria-label={si ? "භාණ්ඩ ගැළපීම්" : "Product matches"}
-          className="absolute left-0 right-0 z-[80] mt-2 max-h-80 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_24px_70px_rgba(15,23,42,0.22)]"
+          className="relative z-20 mt-2 max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_45px_rgba(15,23,42,0.14)]"
         >
           {loading ? (
             <div role="status" className="flex items-center gap-3 px-3 py-4 text-sm font-medium text-slate-500">
@@ -170,6 +170,7 @@ export function ProductReferenceCombobox({
               </div>
               {suggestions.map((suggestion, index) => {
                 const meta = [
+                  suggestion.category,
                   suggestion.genericName,
                   suggestion.strength,
                   suggestion.packSize,
