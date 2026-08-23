@@ -1,0 +1,292 @@
+name: LakBiz Sector UI Patch
+
+on:
+  push:
+    branches:
+      - claude/global-premium-ui
+    paths:
+      - .github/workflows/lakbiz-sector-ui-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/global-premium-ui
+          fetch-depth: 0
+
+      - name: Integrate pharmacy and grocery command UI
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              if old not in text:
+                  raise SystemExit(f"missing patch anchor: {label}")
+              if text.count(old) != 1:
+                  raise SystemExit(f"non-unique patch anchor: {label} ({text.count(old)})")
+              return text.replace(old, new, 1)
+
+          dashboard_path = Path("lakbiz/app/src/app/dashboard/page.tsx")
+          dashboard = dashboard_path.read_text()
+          dashboard = replace_once(
+              dashboard,
+              'import { OfflineSyncNotice } from "@/components/offline-sync-notice";\n',
+              'import { OfflineSyncNotice } from "@/components/offline-sync-notice";\nimport { SectorWorkspaceBanner } from "@/components/sector/sector-workspace-banner";\n',
+              "dashboard import",
+          )
+          dashboard = replace_once(
+              dashboard,
+              '  const teamGroupList = Array.from(teamGroups.values()).sort((a, b) => (a.key === "unassigned" ? 1 : b.key === "unassigned" ? -1 : b.jobs.length - a.jobs.length));\n\n  return (',
+              '''  const teamGroupList = Array.from(teamGroups.values()).sort((a, b) => (a.key === "unassigned" ? 1 : b.key === "unassigned" ? -1 : b.jobs.length - a.jobs.length));
+  const dashboardCategoryCounts = [...new Set(data.products.filter((p) => p.active).map((p) => p.category || "Other"))]
+    .map((name) => ({
+      name,
+      count: data.products.filter((p) => p.active && (p.category || "Other") === name).length,
+    }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, 12);
+  const dashboardOutOfStockCount = data.products.filter((p) => p.active && p.stockQty <= 0).length;
+
+  return (''',
+              "dashboard sector metrics",
+          )
+          dashboard = replace_once(
+              dashboard,
+              '        <OfflineSyncNotice />\n',
+              '''        <SectorWorkspaceBanner
+          sector={org.sector}
+          role={orgRole}
+          surface="dashboard"
+          shopName={shopName}
+          catalogueCount={data.products.filter((p) => p.active).length}
+          lowStockCount={stats.lowStockCount}
+          outOfStockCount={dashboardOutOfStockCount}
+          categories={dashboardCategoryCounts}
+        />
+
+        <OfflineSyncNotice />
+''',
+              "dashboard banner",
+          )
+          dashboard_path.write_text(dashboard)
+
+          sales_path = Path("lakbiz/app/src/app/sales/page.tsx")
+          sales = sales_path.read_text()
+          sales = replace_once(
+              sales,
+              'import { ProductConditionBadge } from "@/components/product-condition-badge";\n',
+              'import { ProductConditionBadge } from "@/components/product-condition-badge";\nimport { SectorWorkspaceBanner } from "@/components/sector/sector-workspace-banner";\n',
+              "sales import",
+          )
+          sales = replace_once(
+              sales,
+              '  const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");\n',
+              '  const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");\n  const [categoryFilter, setCategoryFilter] = useState("all");\n',
+              "sales category state",
+          )
+          sales = replace_once(
+              sales,
+              '    setSearch("");\n',
+              '    setSearch("");\n    setCategoryFilter("all");\n',
+              "sales reset category",
+          )
+          sales = replace_once(
+              sales,
+              '''  const inStock = data.products.filter((p) => p.stockQty > 0 && p.active);
+  const query = search.trim().toLowerCase();
+  const searched = query
+    ? inStock.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          (p.sku ?? "").toLowerCase().includes(query) ||
+          p.category.toLowerCase().includes(query),
+      )
+    : inStock;
+  const filtered =
+    conditionFilter === "all"
+      ? searched
+      : searched.filter((p) => p.condition === conditionFilter);
+''',
+              '''  const inStock = data.products.filter((p) => p.stockQty > 0 && p.active);
+  const query = search.trim().toLowerCase();
+  const searchableText = (p: (typeof data.products)[number]) =>
+    [
+      p.name,
+      p.sku ?? "",
+      p.category,
+      String(p.customFields.brand ?? ""),
+      String(p.customFields.genericName ?? p.customFields.generic ?? ""),
+      String(p.customFields.barcode ?? ""),
+      String(p.customFields.registrationNo ?? ""),
+      String(p.customFields.manufacturer ?? ""),
+      String(p.customFields.packSize ?? ""),
+    ]
+      .join(" ")
+      .toLowerCase();
+  const searched = query ? inStock.filter((p) => searchableText(p).includes(query)) : inStock;
+  const byCategory = categoryFilter === "all" ? searched : searched.filter((p) => (p.category || "Other") === categoryFilter);
+  const filtered =
+    conditionFilter === "all"
+      ? byCategory
+      : byCategory.filter((p) => p.condition === conditionFilter);
+  const categoryCounts = [...new Set(inStock.map((p) => p.category || "Other"))]
+    .map((name) => ({ name, count: inStock.filter((p) => (p.category || "Other") === name).length }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, 14);
+  const lowStockCount = data.products.filter(
+    (p) => p.active && p.reorderLevel != null && p.stockQty <= p.reorderLevel,
+  ).length;
+  const outOfStockCount = data.products.filter((p) => p.active && p.stockQty <= 0).length;
+  const simpleRetailConditions = org.sector === "pharmacy" || org.sector === "grocery";
+''',
+              "sales search and category model",
+          )
+          sales = replace_once(
+              sales,
+              '        <WriteDisabledHint className="mb-5" />\n',
+              '''        <SectorWorkspaceBanner
+          sector={org.sector}
+          role={org.role}
+          surface="sales"
+          shopName={data.business.name || org.name || "LakBiz"}
+          catalogueCount={inStock.length}
+          lowStockCount={lowStockCount}
+          outOfStockCount={outOfStockCount}
+          categories={categoryCounts}
+          selectedCategory={categoryFilter}
+          onCategoryChange={setCategoryFilter}
+        />
+
+        <WriteDisabledHint className="mb-5" />
+''',
+              "sales banner",
+          )
+          sales = replace_once(
+              sales,
+              '''                <div className="mt-3 flex flex-wrap gap-2">
+                  {(
+                    [
+                      { id: "all" as const, label: t("stock.filter_all") },
+                      { id: "new" as const, label: t("stock.condition_new") },
+                      { id: "used" as const, label: t("stock.condition_used") },
+                    ] as const
+                  ).map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setConditionFilter(tab.id)}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                        conditionFilter === tab.id
+                          ? "bg-teal-600 text-white"
+                          : "bg-slate-100 text-slate-600 hover:bg-teal-50"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+''',
+              '''                {!simpleRetailConditions && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(
+                      [
+                        { id: "all" as const, label: t("stock.filter_all") },
+                        { id: "new" as const, label: t("stock.condition_new") },
+                        { id: "used" as const, label: t("stock.condition_used") },
+                      ] as const
+                    ).map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setConditionFilter(tab.id)}
+                        className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${
+                          conditionFilter === tab.id
+                            ? "bg-teal-600 text-white"
+                            : "bg-slate-100 text-slate-600 hover:bg-teal-50"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+''',
+              "sales condition filters",
+          )
+          sales = replace_once(
+              sales,
+              '                              <ProductConditionBadge condition={p.condition} />\n',
+              '                              {!simpleRetailConditions && <ProductConditionBadge condition={p.condition} />}\n',
+              "sales condition badge",
+          )
+          sales_path.write_text(sales)
+
+          stock_path = Path("lakbiz/app/src/app/stock/page.tsx")
+          stock = stock_path.read_text()
+          stock = replace_once(
+              stock,
+              '''          <div className="flex gap-1.5">
+            {(
+              [
+                { id: "all" as const, label: t("stock.filter_all"), count: data.products.length },
+                { id: "new" as const, label: t("stock.condition_new"), count: newCount },
+                { id: "used" as const, label: t("stock.condition_used"), count: usedCount },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setConditionFilter(tab.id)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                  conditionFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
+                }`}
+              >
+                {tab.label} <span className="opacity-70">({tab.count})</span>
+              </button>
+            ))}
+          </div>
+''',
+              '''          {org.sector !== "pharmacy" && org.sector !== "grocery" && (
+            <div className="flex gap-1.5">
+              {(
+                [
+                  { id: "all" as const, label: t("stock.filter_all"), count: data.products.length },
+                  { id: "new" as const, label: t("stock.condition_new"), count: newCount },
+                  { id: "used" as const, label: t("stock.condition_used"), count: usedCount },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setConditionFilter(tab.id)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                    conditionFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
+                  }`}
+                >
+                  {tab.label} <span className="opacity-70">({tab.count})</span>
+                </button>
+              ))}
+            </div>
+          )}
+''',
+              "stock condition filters",
+          )
+          stock_path.write_text(stock)
+          PY
+
+      - name: Remove one-shot workflow and commit
+        shell: bash
+        run: |
+          rm -f .github/workflows/lakbiz-sector-ui-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lakbiz/app/src/app/dashboard/page.tsx lakbiz/app/src/app/sales/page.tsx lakbiz/app/src/app/stock/page.tsx .github/workflows/lakbiz-sector-ui-patch.yml
+          git diff --cached --check
+          git commit -m "feat(lakbiz): tailor pharmacy and grocery workspaces"
+          git push origin HEAD:claude/global-premium-ui
