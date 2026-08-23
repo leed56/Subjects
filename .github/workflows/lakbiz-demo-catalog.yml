@@ -108,6 +108,7 @@ jobs:
           if (regulatory < 1) throw new Error("Regulatory enrichment produced zero conservative exact matches");
           if (priceOnlyNames) throw new Error(`Price-only pseudo-products detected: ${priceOnlyNames}`);
           if (obviousFoodSkin) throw new Error(`Obvious grocery products misclassified as Skin Care: ${obviousFoodSkin}`);
+          if (truncatedNames) throw new Error(`Truncated product names remain after hydration: ${truncatedNames}`);
           if (summary.pharmacyDuplicateSourceIds || summary.groceryDuplicateSourceIds || summary.pharmacyDuplicateIds || summary.groceryDuplicateIds) {
             throw new Error("Duplicate catalog identities detected");
           }
