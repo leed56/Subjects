@@ -8,6 +8,8 @@ on:
       - ".github/workflows/lakbiz-verify.yml"
   push:
     branches:
+      - main
+      - claude/job-parts-materials
       - claude/global-premium-ui
     paths:
       - "lakbiz/app/**"
