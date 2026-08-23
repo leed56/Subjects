@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { useAppStore } from "@/lib/store/use-app-store";
 import type { InventoryTrackingMode } from "@/lib/inventory-tracking";
 import {
   inventorySelectionReadiness,
@@ -43,13 +44,27 @@ function schemaUnavailable(error: string | null): boolean {
   );
 }
 
+function prescriptionFlag(value: unknown): boolean {
+  if (value === true) return true;
+  if (typeof value === "string") return value.trim().toLowerCase() === "true";
+  return false;
+}
+
 export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props) {
   const { locale } = useLocale();
+  const { data } = useAppStore();
   const si = locale === "si";
   const [options, setOptions] = useState<SaleInventoryOptions | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [prescriptionVerified, setPrescriptionVerified] = useState(false);
   const selection = value ?? {};
+  const product = data?.products.find((row) => row.id === productId);
+  const prescriptionRequired = prescriptionFlag(product?.customFields.requiresPrescription);
+
+  useEffect(() => {
+    setPrescriptionVerified(false);
+  }, [productId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,7 +145,8 @@ export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props)
     !needsVariant ||
     (Boolean(selection.variantId) && selectedVariantAvailable >= qty);
   const degraded = schemaUnavailable(error);
-  const ready = degraded || (readiness.complete && lotReady && variantReady && !error);
+  const inventoryReady = degraded || (readiness.complete && lotReady && variantReady && !error);
+  const ready = inventoryReady && (!prescriptionRequired || prescriptionVerified);
 
   useEffect(() => {
     onChange({
@@ -156,9 +172,14 @@ export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props)
 
   if (degraded) {
     return (
-      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-800">
-        <span className="font-bold">{si ? "Advanced tracking තවම database එකට සක්‍රීය කර නැත." : "Advanced tracking is not active on the live database yet."}</span>{" "}
-        {si ? "මෙම විකිණීම සාමාන්‍ය stock quantity මත දිගටම සිදුවේ." : "This sale will continue on the existing aggregate stock quantity."}
+      <div className="mt-3 space-y-2">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-800">
+          <span className="font-bold">{si ? "Advanced tracking තවම database එකට සක්‍රීය කර නැත." : "Advanced tracking is not active on the live database yet."}</span>{" "}
+          {si ? "මෙම විකිණීම සාමාන්‍ය stock quantity මත දිගටම සිදුවේ." : "This sale will continue on the existing aggregate stock quantity."}
+        </div>
+        {prescriptionRequired && (
+          <PrescriptionCheck si={si} checked={prescriptionVerified} onChange={setPrescriptionVerified} />
+        )}
       </div>
     );
   }
@@ -171,7 +192,11 @@ export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props)
     );
   }
 
-  if (mode === "simple") return null;
+  if (mode === "simple") {
+    return prescriptionRequired ? (
+      <PrescriptionCheck si={si} checked={prescriptionVerified} onChange={setPrescriptionVerified} />
+    ) : null;
+  }
 
   const nextLot = visibleLots.find((lot) => lot.qtyOnHand > 0);
 
@@ -205,6 +230,10 @@ export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props)
           {ready ? (si ? "සූදානම්" : "Ready") : (si ? "තේරීම අවශ්‍යයි" : "Action needed")}
         </span>
       </div>
+
+      {prescriptionRequired && (
+        <PrescriptionCheck si={si} checked={prescriptionVerified} onChange={setPrescriptionVerified} compact />
+      )}
 
       {needsVariant && (
         <label className="mt-3 block text-xs font-semibold text-slate-700">
@@ -297,5 +326,38 @@ export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props)
         <p className="mt-2 text-[11px] font-semibold text-amber-800">{readiness.reason}</p>
       )}
     </div>
+  );
+}
+
+function PrescriptionCheck({
+  si,
+  checked,
+  onChange,
+  compact = false,
+}: {
+  si: boolean;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  compact?: boolean;
+}) {
+  return (
+    <label className={`${compact ? "mt-3" : "mt-3"} flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-950`}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+      />
+      <span className="min-w-0">
+        <span className="block text-xs font-bold">
+          {si ? "වෛද්‍ය වට්ටෝරුව අවශ්‍යයි" : "Prescription required"}
+        </span>
+        <span className="mt-0.5 block text-[11px] leading-4 text-amber-800">
+          {checked
+            ? (si ? "විකිණීමට පෙර වට්ටෝරුව පරීක්ෂා කළ බව තහවුරු කර ඇත." : "Prescription verification confirmed for this checkout.")
+            : (si ? "Checkout කිරීමට පෙර වලංගු වට්ටෝරුව පරීක්ෂා කර මෙම කොටුව සලකුණු කරන්න." : "Verify the applicable prescription before checkout, then confirm here.")}
+        </span>
+      </span>
+    </label>
   );
 }
