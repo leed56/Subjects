@@ -17,6 +17,7 @@ describe("LakBiz demo importer guards", () => {
 
   it("seeds a non-toy deterministic 30-day sales history", () => {
     expect(DEMO_HISTORY_SALE_COUNT).toBe(185);
+    expect(DEMO_HISTORY_SALE_COUNT).toBeGreaterThan(30);
   });
 
   it("creates stable UUIDs for idempotent lot rows", () => {
