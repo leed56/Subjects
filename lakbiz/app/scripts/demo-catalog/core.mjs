@@ -198,13 +198,33 @@ export function exactMediVerifyMatch(spcProduct, results) {
   return exact[0];
 }
 
+export function parseSpcDosageForm(name) {
+  const upper = String(name ?? "").toUpperCase();
+  const forms = [
+    [/\b(?:TAB|TABLET|TABLETS)\b/, "Tablet", "Tablets"],
+    [/\b(?:CAP|CAPS|CAPSULE|CAPSULES)\b/, "Capsule", "Capsules"],
+    [/\b(?:INJ|INJECTION|INJECTIONS)\b/, "Injection", "Injections"],
+    [/\b(?:SUSP|SUSPENSION|SYRUP)\b/, "Oral liquid", "Syrups & Suspensions"],
+    [/\b(?:CREAM|OINT|OINTMENT|GEL)\b/, "Topical", "Creams, Ointments & Gels"],
+    [/\b(?:EAR DROP|EYE DROP|EYE DROPS|DROPS|DROP|OPHTH)\b/, "Drops", "Eye & Ear Drops"],
+    [/\b(?:INHA|INHALER|INHALATION)\b/, "Inhaled", "Inhalers & Inhalation"],
+    [/\b(?:SUPPO|SUPPOSITORY|SUPPOSITORIES)\b/, "Suppository", "Suppositories"],
+    [/\b(?:SOLU|SOLUTION)\b/, "Solution", "Solutions"],
+  ];
+  for (const [pattern, dosageForm, subcategory] of forms) {
+    if (pattern.test(upper)) return { dosageForm, subcategory };
+  }
+  return { dosageForm: null, subcategory: "Other Medicines" };
+}
+
 export function classifySpcProduct(name) {
   const upper = String(name ?? "").toUpperCase();
-  const device = /(GAUZE|COTTON WOOL|SYRINGE|NEEDLE|DIAPER|MASK|URINE BAG|BED PAN|GLOVE|BANDAGE|CATHETER|THERMOMETER|TEST STRIP|LANCET)/.test(upper);
+  const device = /\b(?:GAUZE|COTTON WOOL|SYRINGE|NEEDLE|DIAPER|MASK|URINE BAG|BED PAN|GLOVE|BANDAGE|CATHETER|THERMOMETER|TEST STRIP|LANCET)\b/.test(upper);
   if (device) {
-    return { department: "Pharmaceutical", category: "Medical Devices", subcategory: "Medical & First Aid Supplies", productKind: "medical_supply", taxonomyMethod: "conservative_keyword" };
+    return { department: "Pharmaceutical", category: "Medical Devices", subcategory: "Medical & First Aid Supplies", productKind: "medical_supply", taxonomyMethod: "conservative_keyword", dosageForm: null };
   }
-  return { department: "Pharmaceutical", category: "Medicines", subcategory: "Unclassified Medicine", productKind: "medicine", taxonomyMethod: "source_context" };
+  const form = parseSpcDosageForm(upper);
+  return { department: "Pharmaceutical", category: "Medicines", subcategory: form.subcategory, productKind: "medicine", taxonomyMethod: "explicit_source_dosage_form", dosageForm: form.dosageForm };
 }
 
 export function classifyRetailProduct(name, sector) {
@@ -269,7 +289,7 @@ export function toNormalizedDemoProduct(row, sector, retrievedAt = new Date().to
     brand: row.regulatory?.brand ?? row.brand ?? null,
     genericName: row.regulatory?.genericName ?? null,
     strength: row.regulatory?.strength ?? null,
-    dosageForm: row.regulatory?.dosageForm ?? null,
+    dosageForm: row.regulatory?.dosageForm ?? taxonomy.dosageForm ?? null,
     packSize: row.regulatory?.packSize ?? row.packSize ?? parsePackSizeFromName(row.productName),
     unit: row.unit || inferUnitFromName(row.productName),
     department: taxonomy.department,
