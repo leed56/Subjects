@@ -20,6 +20,18 @@ describe("fetchAllPages", () => {
     expect(calls[1]?.[0]).toBe(173);
   });
 
+  it("loads the 1600-row grocery demo across exact 500-row pages", async () => {
+    const source = Array.from({ length: 1600 }, (_, index) => `grocery-${index}`);
+    const result = await fetchAllPages(async (from, to) => ({
+      data: source.slice(from, Math.min(to + 1, source.length)),
+      error: null,
+    }), 500);
+
+    expect(result.error).toBeNull();
+    expect(result.data).toHaveLength(1600);
+    expect(result.data?.at(-1)).toBe("grocery-1599");
+  });
+
   it("returns an empty collection cleanly", async () => {
     const result = await fetchAllPages(async () => ({ data: [], error: null }));
     expect(result).toEqual({ data: [], error: null });
