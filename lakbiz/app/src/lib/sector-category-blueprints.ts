@@ -12,6 +12,16 @@ export type SectorCategoryBlueprint = {
 
 const PHARMACY_BLUEPRINT: readonly SectorCategoryBlueprint[] = [
   { department: "Pharmaceutical", category: "Medicines", subcategory: "Unclassified Medicine", defaultTrackingMode: "lot", fefo: true },
+  { department: "Pharmaceutical", category: "Medicines", subcategory: "Tablets", defaultTrackingMode: "lot", fefo: true },
+  { department: "Pharmaceutical", category: "Medicines", subcategory: "Capsules", defaultTrackingMode: "lot", fefo: true },
+  { department: "Pharmaceutical", category: "Medicines", subcategory: "Injections", defaultTrackingMode: "lot", fefo: true },
+  { department: "Pharmaceutical", category: "Medicines", subcategory: "Syrups & Suspensions", defaultTrackingMode: "lot", fefo: true },
+  { department: "Pharmaceutical", category: "Medicines", subcategory: "Creams, Ointments & Gels", defaultTrackingMode: "lot", fefo: true },
+  { department: "Pharmaceutical", category: "Medicines", subcategory: "Eye & Ear Drops", defaultTrackingMode: "lot", fefo: true },
+  { department: "Pharmaceutical", category: "Medicines", subcategory: "Inhalers & Inhalation", defaultTrackingMode: "lot", fefo: true },
+  { department: "Pharmaceutical", category: "Medicines", subcategory: "Suppositories", defaultTrackingMode: "lot", fefo: true },
+  { department: "Pharmaceutical", category: "Medicines", subcategory: "Solutions", defaultTrackingMode: "lot", fefo: true },
+  { department: "Pharmaceutical", category: "Medicines", subcategory: "Other Medicines", defaultTrackingMode: "lot", fefo: true },
   { department: "Pharmaceutical", category: "Prescription Medicines", subcategory: "Prescription Medicines", defaultTrackingMode: "lot", fefo: true },
   { department: "Pharmaceutical", category: "OTC Medicines", subcategory: "Pain & Fever", defaultTrackingMode: "lot", fefo: true },
   { department: "Pharmaceutical", category: "OTC Medicines", subcategory: "Cough, Cold & Allergy", defaultTrackingMode: "lot", fefo: true },
