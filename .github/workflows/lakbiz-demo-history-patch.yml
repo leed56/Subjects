@@ -1,0 +1,32 @@
+name: LakBiz Demo History Patch
+
+on:
+  pull_request:
+    branches:
+      - claude/job-parts-materials
+    paths:
+      - .github/lakbiz-demo-history-patch.py
+      - .github/workflows/lakbiz-demo-history-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'claude/global-premium-ui'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/global-premium-ui
+          fetch-depth: 0
+      - name: Apply richer demo-history importer patch
+        run: python .github/lakbiz-demo-history-patch.py
+      - name: Commit patch and remove temporary runner
+        run: |
+          rm -f .github/lakbiz-demo-history-patch.py .github/workflows/lakbiz-demo-history-patch.yml
+          git config user.name "lakbiz-ui-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: seed richer demo sales history"
+          git push origin HEAD:claude/global-premium-ui
