@@ -7,7 +7,6 @@ vi.mock("./client", () => ({
 }));
 
 import {
-  AuthFlowError,
   ensureUserOrg,
   signInWithEmail,
   signUpWithShop,
@@ -81,7 +80,7 @@ describe("admin-only workspace provisioning", () => {
         shopName: "Client-created shop",
         sector: "grocery",
       }),
-    ).rejects.toMatchObject<AuthFlowError>({ code: "auth" });
+    ).rejects.toMatchObject({ code: "auth" });
 
     expect(createBrowserClient).not.toHaveBeenCalled();
   });
@@ -102,7 +101,7 @@ describe("admin-only workspace provisioning", () => {
   it("refuses to create a workspace when a user has no membership", async () => {
     const client = orgLookupClient([]);
 
-    await expect(ensureUserOrg(client as never, "user-1")).rejects.toMatchObject<AuthFlowError>({
+    await expect(ensureUserOrg(client as never, "user-1")).rejects.toMatchObject({
       code: "org",
     });
 
@@ -113,7 +112,7 @@ describe("admin-only workspace provisioning", () => {
     const client = signInClient({ platformAdmin: false, orgId: null });
     createBrowserClient.mockReturnValue(client);
 
-    await expect(signInWithEmail("user@example.com", "password123")).rejects.toMatchObject<AuthFlowError>({
+    await expect(signInWithEmail("user@example.com", "password123")).rejects.toMatchObject({
       code: "org",
     });
 
