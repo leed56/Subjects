@@ -1,16 +1,8 @@
 import type { SectorTemplate } from "./types";
 import type { SectorId } from "./types";
+import { categoryNamesFromBlueprint } from "./sector-category-blueprints";
 
-/**
- * Sector templates are operational presets, not cosmetic labels. A newly
- * provisioned shop is locked to one of these sectors, which drives its stock
- * categories, sector-specific item fields, feature/module gates and reports.
- *
- * The presets intentionally follow common Sri Lankan SME workflows: LKR
- * pricing, credit customers, supplier purchasing, expiry/batch tracking where
- * relevant, IMEI/serial/warranty for devices, fitment/bin locations for parts,
- * and job/service lifecycle for HVAC.
- */
+/** Operational sector presets used by onboarding, stock and reporting. */
 export const sectors: SectorTemplate[] = [
   {
     id: "grocery",
@@ -25,18 +17,7 @@ export const sectors: SectorTemplate[] = [
     nameEn: "Pharmacy",
     nameSi: "ඖෂධ අලෙවිසැල",
     description: "Medicine catalogue, batch/expiry, dosage/strength and prescription-aware retail.",
-    extraFields: [
-      "genericName",
-      "brand",
-      "manufacturer",
-      "dosageForm",
-      "strength",
-      "packSize",
-      "batchNo",
-      "expiryDate",
-      "barcode",
-      "requiresPrescription",
-    ],
+    extraFields: ["genericName", "brand", "manufacturer", "dosageForm", "strength", "packSize", "batchNo", "expiryDate", "barcode", "requiresPrescription"],
     reports: ["Expiry risk", "Near-expiry stock", "Low stock & reorder", "Sales by medicine/category", "Batch reference"],
   },
   {
@@ -52,20 +33,7 @@ export const sectors: SectorTemplate[] = [
     nameEn: "Mobile Phones & Repair Parts",
     nameSi: "ජංගම දුරකථන සහ අමතර කොටස්",
     description: "IMEI/serial devices plus model-compatible repair parts, accessories and warranties.",
-    extraFields: [
-      "brand",
-      "model",
-      "imei",
-      "serialNo",
-      "storageGb",
-      "color",
-      "warrantyMonths",
-      "partNo",
-      "supplierPartNo",
-      "compatibleModels",
-      "binLocation",
-      "barcode",
-    ],
+    extraFields: ["brand", "model", "imei", "serialNo", "storageGb", "color", "warrantyMonths", "partNo", "supplierPartNo", "compatibleModels", "binLocation", "barcode"],
     reports: ["IMEI/serial register", "Warranty expiring", "Parts by compatible model", "Used-device stock", "Fast/slow movers"],
   },
   {
@@ -97,71 +65,30 @@ export const sectors: SectorTemplate[] = [
     nameEn: "Air Conditioning & HVAC",
     nameSi: "වායු සමනය සහ HVAC",
     description: "AC units, parts, installations, repairs, technicians, warranties and recurring service.",
-    extraFields: [
-      "brand",
-      "btu",
-      "hp",
-      "unitType",
-      "indoorSerial",
-      "outdoorSerial",
-      "compressorWarrantyMonths",
-      "partNo",
-      "supplierPartNo",
-      "compatibleModels",
-      "binLocation",
-      "warrantyMonths",
-      "serialRequired",
-    ],
-    reports: [
-      "Installations pending",
-      "Service due & overdue",
-      "Warranty registrations",
-      "Parts & material usage",
-      "Job profitability",
-    ],
+    extraFields: ["brand", "btu", "hp", "unitType", "indoorSerial", "outdoorSerial", "compressorWarrantyMonths", "partNo", "supplierPartNo", "compatibleModels", "binLocation", "warrantyMonths", "serialRequired"],
+    reports: ["Installations pending", "Service due & overdue", "Warranty registrations", "Parts & material usage", "Job profitability"],
   },
   {
     id: "car_sales",
     nameEn: "Car Sales & Vehicle Dealership",
     nameSi: "මෝටර් රථ වෙළඳාම",
     description: "Per-vehicle inventory, chassis/engine identity, landed/recondition cost, aging and finance sales.",
-    extraFields: [
-      "chassisNo",
-      "engineNo",
-      "regNo",
-      "brand",
-      "model",
-      "year",
-      "mileageKm",
-      "color",
-      "reconditionCost",
-      "financePartner",
-    ],
+    extraFields: ["chassisNo", "engineNo", "regNo", "brand", "model", "year", "mileageKm", "color", "reconditionCost", "financePartner"],
     reports: ["Stock aging 30/60/90 days", "Profit per vehicle", "Cash vs leasing mix", "Sold vs available vehicles"],
   },
 ];
 
 const SECTOR_IDS: SectorId[] = [
-  "grocery",
-  "pharmacy",
-  "electronics",
-  "mobile_shop",
-  "electricals",
-  "spare_parts",
-  "footwear",
-  "ac_hvac",
-  "car_sales",
+  "grocery", "pharmacy", "electronics", "mobile_shop", "electricals", "spare_parts", "footwear", "ac_hvac", "car_sales",
 ];
 
 export function parseSectorId(value: string | null | undefined): SectorId {
-  if (value && SECTOR_IDS.includes(value as SectorId)) {
-    return value as SectorId;
-  }
+  if (value && SECTOR_IDS.includes(value as SectorId)) return value as SectorId;
   return "grocery";
 }
 
 export function sectorById(id: SectorId): SectorTemplate | undefined {
-  return sectors.find((s) => s.id === id);
+  return sectors.find((sector) => sector.id === id);
 }
 
 export function defaultCategoryForSector(sectorId: SectorId): string {
@@ -179,104 +106,30 @@ export function defaultCategoryForSector(sectorId: SectorId): string {
   return map[sectorId];
 }
 
-/** Stock categories scoped to each business template — not a global mix. */
+const LEGACY_CATEGORY_MAP: Partial<Record<SectorId, string[]>> = {
+  electronics: ["Electronics", "Home Appliances", "Computer Accessories", "Cables & Adapters", "Accessories", "Other"],
+  mobile_shop: ["Mobile Phones", "Tablets", "Used Devices", "Chargers & Cables", "Cases & Screen Protectors", "Batteries", "Displays & Touchscreens", "Cameras", "Flex Cables & Connectors", "PCBs & ICs", "Repair Parts", "Accessories", "Other"],
+  electricals: ["Electricals", "Wire & Cable", "Switches & Sockets", "Breakers & Protection", "Lighting", "Fixtures", "Tools", "Other"],
+  spare_parts: ["Spare Parts", "Engine Parts", "Suspension & Steering", "Brake Parts", "Filters", "Electrical & Sensors", "Body Parts", "Lubricants & Fluids", "Accessories", "Other"],
+  footwear: ["Footwear", "Men's Shoes", "Women's Shoes", "Kids' Shoes", "School Shoes", "Slippers & Sandals", "Sports Shoes", "Safety Shoes", "Socks & Accessories", "Other"],
+  ac_hvac: ["Air Conditioning", "Pipe & Accessories", "Consumables", "Service Parts", "Compressors", "Coils (Condenser & Evaporator)", "PCBs & Control Boards", "Capacitors, Relays & Contactors", "Motors & Fans", "Sensors & Thermostats", "Valves & Refrigerant Controls", "Refrigerant & Gas", "Copper Pipe & Fittings", "Insulation & Cladding", "Drain Components", "Filters", "Bearings & Mounts", "Electrical (Terminals, Breakers, Fuses, Cables)", "Brackets & Vibration Pads", "Other"],
+  car_sales: ["Vehicles", "New Vehicles", "Used Vehicles", "Reconditioned Vehicles", "Accessories", "Other"],
+};
+
+/**
+ * Product categories exposed to stock forms. Pharmacy/Grocery now derive their
+ * richer list from the shared Department → Category → Subcategory blueprint,
+ * while retaining the historical default category for backwards compatibility.
+ */
 export function categoriesForSector(sectorId: SectorId): string[] {
-  const map: Record<SectorId, string[]> = {
-    grocery: [
-      "Grocery",
-      "Rice, Flour & Grains",
-      "Beverages",
-      "Dairy & Chilled",
-      "Frozen",
-      "Snacks & Confectionery",
-      "Household",
-      "Personal Care",
-      "Baby Care",
-      "Other",
-    ],
-    pharmacy: [
-      "Medicines",
-      "Prescription Medicines",
-      "OTC Medicines",
-      "Vitamins & Supplements",
-      "Medical Devices",
-      "First Aid",
-      "Personal Care",
-      "Baby Care",
-      "Other",
-    ],
-    electronics: ["Electronics", "Home Appliances", "Computer Accessories", "Cables & Adapters", "Accessories", "Other"],
-    mobile_shop: [
-      "Mobile Phones",
-      "Tablets",
-      "Used Devices",
-      "Chargers & Cables",
-      "Cases & Screen Protectors",
-      "Batteries",
-      "Displays & Touchscreens",
-      "Cameras",
-      "Flex Cables & Connectors",
-      "PCBs & ICs",
-      "Repair Parts",
-      "Accessories",
-      "Other",
-    ],
-    electricals: ["Electricals", "Wire & Cable", "Switches & Sockets", "Breakers & Protection", "Lighting", "Fixtures", "Tools", "Other"],
-    spare_parts: [
-      "Spare Parts",
-      "Engine Parts",
-      "Suspension & Steering",
-      "Brake Parts",
-      "Filters",
-      "Electrical & Sensors",
-      "Body Parts",
-      "Lubricants & Fluids",
-      "Accessories",
-      "Other",
-    ],
-    footwear: [
-      "Footwear",
-      "Men's Shoes",
-      "Women's Shoes",
-      "Kids' Shoes",
-      "School Shoes",
-      "Slippers & Sandals",
-      "Sports Shoes",
-      "Safety Shoes",
-      "Socks & Accessories",
-      "Other",
-    ],
-    ac_hvac: [
-      "Air Conditioning",
-      "Pipe & Accessories",
-      "Consumables",
-      "Service Parts",
-      "Compressors",
-      "Coils (Condenser & Evaporator)",
-      "PCBs & Control Boards",
-      "Capacitors, Relays & Contactors",
-      "Motors & Fans",
-      "Sensors & Thermostats",
-      "Valves & Refrigerant Controls",
-      "Refrigerant & Gas",
-      "Copper Pipe & Fittings",
-      "Insulation & Cladding",
-      "Drain Components",
-      "Filters",
-      "Bearings & Mounts",
-      "Electrical (Terminals, Breakers, Fuses, Cables)",
-      "Brackets & Vibration Pads",
-      "Other",
-    ],
-    car_sales: ["Vehicles", "New Vehicles", "Used Vehicles", "Reconditioned Vehicles", "Accessories", "Other"],
-  };
-  return map[sectorId] ?? [defaultCategoryForSector(sectorId), "Other"];
+  const blueprintCategories = categoryNamesFromBlueprint(sectorId);
+  if (blueprintCategories.length) {
+    return Array.from(new Set([defaultCategoryForSector(sectorId), ...blueprintCategories, "Other"]));
+  }
+  return LEGACY_CATEGORY_MAP[sectorId] ?? [defaultCategoryForSector(sectorId), "Other"];
 }
 
-export function normalizeProductCategory(
-  sectorId: SectorId,
-  category: string,
-): string {
+export function normalizeProductCategory(sectorId: SectorId, category: string): string {
   const trimmed = category.trim();
   const allowed = categoriesForSector(sectorId);
   return allowed.includes(trimmed) ? trimmed : defaultCategoryForSector(sectorId);
