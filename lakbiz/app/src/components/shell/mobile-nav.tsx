@@ -82,43 +82,45 @@ export function MobileNav() {
         </div>
       </header>
 
-      <div className={`fixed inset-0 z-50 overflow-hidden lg:hidden ${open ? "visible" : "invisible"}`} aria-hidden={!open}>
-        <button type="button" aria-label="Close menu" onClick={() => setOpen(false)} className={`absolute inset-0 bg-slate-950/55 backdrop-blur-sm transition-opacity ${open ? "opacity-100" : "opacity-0"}`} />
-        <div className={`absolute inset-y-0 right-0 flex w-[min(100%,21rem)] flex-col bg-white shadow-2xl transition-transform duration-300 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}>
-          <div className="flex h-16 items-center justify-between border-b border-slate-200/80 px-4">
-            <div className="flex items-center gap-2.5"><span className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-600 text-xs font-bold text-white">L</span><span className="font-bold tracking-tight text-slate-950">LakBiz</span></div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close menu" className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-slate-200"><CloseIcon className="h-5 w-5" /></button>
-          </div>
-
-          <nav className="flex-1 overflow-y-auto p-3.5" aria-label="Primary">
-            {sections.map((section, i) => (
-              <div key={section.labelKey ?? "root"} className={i > 0 ? "mt-6" : ""}>
-                {section.labelKey && <p className="mb-2 px-3.5 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{t(section.labelKey)}</p>}
-                <div className="space-y-1">{section.items.map(renderItem)}</div>
-              </div>
-            ))}
-
-            {managementItems.length > 0 && (
-              <div className="mt-6">
-                <p className="mb-2 px-3.5 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{t("nav.section.management")}</p>
-                <div className="space-y-1">{managementItems.map(renderItem)}</div>
-              </div>
-            )}
-
-            {isPlatformAdmin && <Link href="/admin" onClick={() => setOpen(false)} className="mt-6 flex min-h-12 items-center justify-center rounded-xl bg-slate-950 px-3.5 py-3 text-base font-semibold text-teal-200">{t("admin.nav")}</Link>}
-          </nav>
-
-          <div className="border-t border-slate-200/80 bg-slate-50/70 p-3.5">
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-xs font-bold text-teal-800">{initialsFor(org.name, user?.email)}</span>
-              <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-950">{org.name}</p><p className="mt-0.5 truncate text-xs text-slate-500">{user?.email}</p></div>
+      {open && (
+        <div className="fixed inset-0 z-50 overflow-hidden lg:hidden">
+          <button type="button" aria-label="Close menu" onClick={() => setOpen(false)} className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" />
+          <div className="absolute inset-y-0 right-0 flex w-[min(100%,21rem)] flex-col bg-white shadow-2xl">
+            <div className="flex h-16 items-center justify-between border-b border-slate-200/80 px-4">
+              <div className="flex items-center gap-2.5"><span className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-600 text-xs font-bold text-white">L</span><span className="font-bold tracking-tight text-slate-950">LakBiz</span></div>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close menu" className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-slate-200"><CloseIcon className="h-5 w-5" /></button>
             </div>
-            {user && (
-              <button type="button" onClick={() => { setOpen(false); void handleLogout(); }} className="mt-2.5 flex min-h-11 w-full items-center gap-2 rounded-xl px-3.5 py-3 text-sm font-medium text-rose-600 transition hover:bg-rose-50"><SignOutIcon className="h-4.5 w-4.5" />{t("sub.sign_out")}</button>
-            )}
+
+            <nav className="flex-1 overflow-y-auto p-3.5" aria-label="Primary">
+              {sections.map((section, i) => (
+                <div key={section.labelKey ?? "root"} className={i > 0 ? "mt-6" : ""}>
+                  {section.labelKey && <p className="mb-2 px-3.5 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{t(section.labelKey)}</p>}
+                  <div className="space-y-1">{section.items.map(renderItem)}</div>
+                </div>
+              ))}
+
+              {managementItems.length > 0 && (
+                <div className="mt-6">
+                  <p className="mb-2 px-3.5 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{t("nav.section.management")}</p>
+                  <div className="space-y-1">{managementItems.map(renderItem)}</div>
+                </div>
+              )}
+
+              {isPlatformAdmin && <Link href="/admin" onClick={() => setOpen(false)} className="mt-6 flex min-h-12 items-center justify-center rounded-xl bg-slate-950 px-3.5 py-3 text-base font-semibold text-teal-200">{t("admin.nav")}</Link>}
+            </nav>
+
+            <div className="border-t border-slate-200/80 bg-slate-50/70 p-3.5">
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-xs font-bold text-teal-800">{initialsFor(org.name, user?.email)}</span>
+                <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-950">{org.name}</p><p className="mt-0.5 truncate text-xs text-slate-500">{user?.email}</p></div>
+              </div>
+              {user && (
+                <button type="button" onClick={() => { setOpen(false); void handleLogout(); }} className="mt-2.5 flex min-h-11 w-full items-center gap-2 rounded-xl px-3.5 py-3 text-sm font-medium text-rose-600 transition hover:bg-rose-50"><SignOutIcon className="h-4.5 w-4.5" />{t("sub.sign_out")}</button>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </>
   );
 }
