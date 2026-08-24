@@ -129,6 +129,19 @@ async function captureSupplierDrawer(page) {
   await page.screenshot({ path: `${screenshotDir}/suppliers-add-drawer-desktop.png`, fullPage: true });
 }
 
+async function captureWorkforceDrawer(page) {
+  if (!routes.includes("/workforce")) return;
+  await page.goto(`${previewUrl}/workforce`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
+  const addMember = page.getByRole("button", { name: /team member/i }).first();
+  assert(await addMember.isVisible().catch(() => false), "Add team member button is not visible");
+  await addMember.click();
+  await page.waitForTimeout(300);
+  const dialog = page.locator('[role="dialog"]:visible').last();
+  assert(await dialog.isVisible(), "Add team member drawer did not open");
+  await page.screenshot({ path: `${screenshotDir}/workforce-add-member-drawer-desktop.png`, fullPage: true });
+}
+
 await mkdir(screenshotDir, { recursive: true });
 let browser;
 try {
@@ -148,6 +161,7 @@ try {
     await login(page, owner.email);
     for (const route of routes) await capture(page, route, "desktop");
     await captureSupplierDrawer(page);
+    await captureWorkforceDrawer(page);
   } finally {
     await desktop.close();
   }
