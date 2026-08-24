@@ -25,9 +25,8 @@ const admin = createClient(supabaseUrl, serviceRole, {
 const runTag = String(process.env.GITHUB_RUN_ID ?? Date.now()).replace(/[^A-Za-z0-9_-]/g, "");
 const password = `${randomBytes(20).toString("base64url")}A9!`;
 const orgName = `LakBiz Vehicles QA ${runTag}`;
-const vehicleId = `qa-vehicle-${runTag}`;
+const chassisNo = `QA-CHASSIS-${runTag}`;
 let orgId = "";
-let subscriptionId = "";
 let userId = "";
 
 function assert(condition, message) {
@@ -48,49 +47,14 @@ async function createFixture() {
   orgId = org.id;
   assert(org.sector === "car_sales", `Vehicles QA organization sector mismatch: ${org.sector}`);
 
-  const { data: subscription, error: subscriptionError } = await admin
-    .from("subscriptions")
-    .insert({
-      organization_id: orgId,
-      plan_id: "pro",
-      status: "trialing",
-      billing_cycle: "monthly",
-      trial_ends_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    })
-    .select("id")
-    .single();
-  if (subscriptionError || !subscription) {
-    throw new Error(`Vehicles QA subscription creation failed: ${subscriptionError?.message ?? "no row"}`);
-  }
-  subscriptionId = subscription.id;
-
-  const now = new Date().toISOString();
-  const { error: vehicleError } = await admin.from("vehicles").insert({
-    id: vehicleId,
+  const { error: subscriptionError } = await admin.from("subscriptions").insert({
     organization_id: orgId,
-    stock_id: "QA-VEH-001",
-    date_added: now,
-    make: "Toyota",
-    model: "Corolla Cross",
-    year: 2024,
-    chassis_no: `QA-CHASSIS-${runTag}`,
-    engine_no: `QA-ENGINE-${runTag}`,
-    reg_no: "QA-1234",
-    color: "Pearl White",
-    fuel: "hybrid",
-    transmission: "auto",
-    mileage_km: 18500,
-    condition: "Reconditioned",
-    purchase_price: 12500000,
-    recondition_cost: 350000,
-    ask_price: 14250000,
-    min_price: 13800000,
-    status: "for_sale",
-    notes: "Disposable browser-QA vehicle",
-    created_at: now,
-    updated_at: now,
+    plan_id: "pro",
+    status: "trialing",
+    billing_cycle: "monthly",
+    trial_ends_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   });
-  if (vehicleError) throw new Error(`Vehicles QA seed failed: ${vehicleError.message}`);
+  if (subscriptionError) throw new Error(`Vehicles QA subscription creation failed: ${subscriptionError.message}`);
 
   const email = `qa-focused-car-sales-owner-${runTag}@example.invalid`;
   const { data: authData, error: authError } = await admin.auth.admin.createUser({
@@ -118,13 +82,14 @@ async function createFixture() {
 }
 
 async function cleanup() {
-  if (orgId) await admin.from("vehicles").delete().eq("organization_id", orgId);
-  if (orgId && userId) {
-    await admin.from("org_members").delete().eq("organization_id", orgId).eq("user_id", userId);
+  if (orgId) {
+    const { error } = await admin.from("organizations").delete().eq("id", orgId);
+    if (error) console.warn(`Vehicles QA organization cleanup warning: ${error.message}`);
   }
-  if (subscriptionId) await admin.from("subscriptions").delete().eq("id", subscriptionId);
-  if (userId) await admin.auth.admin.deleteUser(userId);
-  if (orgId) await admin.from("organizations").delete().eq("id", orgId);
+  if (userId) {
+    const { error } = await admin.auth.admin.deleteUser(userId);
+    if (error) console.warn(`Vehicles QA user cleanup warning: ${error.message}`);
+  }
 }
 
 async function verifyPreview(page) {
@@ -147,6 +112,55 @@ async function login(page, email) {
   await page.locator('button[type="submit"]').click();
   await page.waitForURL(/\/dashboard(?:\?|$)/, { timeout: 60_000 });
   await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
+}
+
+async function openAddVehicleDrawer(page) {
+  await page.goto(`${previewUrl}/vehicles`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
+  assert(new URL(page.url()).pathname === "/vehicles", `/vehicles redirected to ${page.url()}`);
+
+  const addVehicle = page.getByRole("button").filter({ hasText: /add/i }).first();
+  assert(await addVehicle.isVisible().catch(() => false), "Add Vehicle button is not visible");
+  await addVehicle.click();
+  await page.waitForTimeout(300);
+
+  const dialog = page.locator('[role="dialog"]:visible').last();
+  assert(await dialog.isVisible().catch(() => false), "Add Vehicle drawer did not open");
+  const dialogText = (await dialog.innerText()).toLowerCase();
+  assert(dialogText.includes("chassis"), "Add Vehicle drawer is missing chassis input");
+  assert(dialogText.includes("pricing"), "Add Vehicle drawer is missing pricing section");
+  return dialog;
+}
+
+async function createVehicleThroughApp(page) {
+  const dialog = await openAddVehicleDrawer(page);
+  await page.screenshot({ path: `${screenshotDir}/vehicles-add-drawer-desktop.png`, fullPage: true });
+
+  const inputs = dialog.locator("input");
+  assert((await inputs.count()) >= 12, "Add Vehicle drawer field structure changed unexpectedly");
+  await inputs.nth(0).fill("Corolla Cross");
+  await inputs.nth(1).fill("2024");
+  await inputs.nth(2).fill(chassisNo);
+  await inputs.nth(3).fill(`QA-ENGINE-${runTag}`);
+  await inputs.nth(4).fill("QA-1234");
+  await inputs.nth(5).fill("Pearl White");
+  await inputs.nth(6).fill("Reconditioned");
+  await inputs.nth(7).fill("18500");
+  await inputs.nth(8).fill("12500000");
+  await inputs.nth(9).fill("350000");
+  await inputs.nth(10).fill("13800000");
+  await inputs.nth(11).fill("14250000");
+
+  const primary = dialog.locator("button").last();
+  assert(await primary.isVisible().catch(() => false), "Add Vehicle primary action is not visible");
+  await primary.click();
+  await dialog.waitFor({ state: "hidden", timeout: 30_000 });
+  await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
+  await page.waitForTimeout(700);
+
+  const bodyText = (await page.locator("body").innerText()).toLowerCase();
+  assert(bodyText.includes("corolla cross"), "Vehicle created through the app did not appear in the showroom register");
+  assert(bodyText.includes(chassisNo.toLowerCase()), "Created vehicle chassis is missing from the register");
 }
 
 async function captureVehicles(page, suffix) {
@@ -188,27 +202,12 @@ async function captureVehicles(page, suffix) {
 
   const bodyText = metrics.bodyText.toLowerCase();
   assert(bodyText.includes("lakbiz"), "Vehicles did not render the LakBiz shell");
-  assert(bodyText.includes("qa-veh-001"), "Seeded QA vehicle did not render in the showroom register");
-  assert(bodyText.includes("corolla cross"), "Seeded QA vehicle identity is missing");
+  assert(bodyText.includes("corolla cross"), "QA vehicle did not render in the showroom register");
+  assert(bodyText.includes(chassisNo.toLowerCase()), "QA vehicle chassis is missing");
   assert(bodyText.includes("cost") && bodyText.includes("profit"), "Owner financial vehicle columns/metrics are missing");
 
   const file = `${screenshotDir}/${safeName(`vehicles-${suffix}`)}.png`;
   await page.screenshot({ path: file, fullPage: true });
-}
-
-async function captureAddDrawer(page) {
-  await page.goto(`${previewUrl}/vehicles`, { waitUntil: "domcontentloaded", timeout: 60_000 });
-  await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
-  const addVehicle = page.getByRole("button", { name: /add.*vehicle|vehicle.*add/i }).first();
-  assert(await addVehicle.isVisible().catch(() => false), "Add Vehicle button is not visible");
-  await addVehicle.click();
-  await page.waitForTimeout(300);
-  const dialog = page.locator('[role="dialog"]:visible').last();
-  assert(await dialog.isVisible().catch(() => false), "Add Vehicle drawer did not open");
-  const dialogText = (await dialog.innerText()).toLowerCase();
-  assert(dialogText.includes("chassis"), "Add Vehicle drawer is missing chassis input");
-  assert(dialogText.includes("pricing"), "Add Vehicle drawer is missing pricing section");
-  await page.screenshot({ path: `${screenshotDir}/vehicles-add-drawer-desktop.png`, fullPage: true });
 }
 
 await mkdir(screenshotDir, { recursive: true });
@@ -228,8 +227,8 @@ try {
   try {
     const page = await desktop.newPage();
     await login(page, owner.email);
+    await createVehicleThroughApp(page);
     await captureVehicles(page, "desktop");
-    await captureAddDrawer(page);
   } finally {
     await desktop.close();
   }
