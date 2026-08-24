@@ -279,7 +279,7 @@ export default function VatPageV2() {
           }
         />
 
-        <div className="mb-6">
+        <div className="mb-6 max-w-full overflow-x-auto pb-1">
           <Tabs
             tabs={[
               { value: "vat", label: t("vat.title") },
@@ -356,8 +356,9 @@ export default function VatPageV2() {
                 </div>
               )}
 
-              <section className="mt-6 grid gap-5 xl:grid-cols-2">
+              <section className="mt-6 grid min-w-0 gap-5 xl:grid-cols-2">
                 <Panel
+                  className="min-w-0 overflow-hidden"
                   title={t("vat.sales_list")}
                   action={<StatusBadge tone="warning">{formatLkr(summary.outputVat)}</StatusBadge>}
                 >
@@ -369,12 +370,12 @@ export default function VatPageV2() {
                       icon={<SalesIcon className="h-5 w-5" />}
                     />
                   ) : (
-                    <div className="max-h-[26rem] divide-y divide-slate-100 overflow-y-auto pr-1">
+                    <div className="min-w-0 max-h-[26rem] divide-y divide-slate-100 overflow-y-auto pr-1">
                       {quarterSales.map((sale) => (
                         <Link
                           key={sale.id}
                           href={`/bills/${sale.id}`}
-                          className="flex items-center justify-between gap-4 py-3.5 first:pt-0 last:pb-0 hover:bg-slate-50/70"
+                          className="flex min-w-0 items-center justify-between gap-4 py-3.5 first:pt-0 last:pb-0 hover:bg-slate-50/70"
                         >
                           <div className="min-w-0">
                             <p className="font-mono text-xs font-semibold text-teal-700">
@@ -402,6 +403,7 @@ export default function VatPageV2() {
                 </Panel>
 
                 <Panel
+                  className="min-w-0 overflow-hidden"
                   title={t("vat.purchases_list")}
                   action={<StatusBadge tone="positive">{formatLkr(summary.inputVat)}</StatusBadge>}
                 >
@@ -413,11 +415,11 @@ export default function VatPageV2() {
                       icon={<SuppliersIcon className="h-5 w-5" />}
                     />
                   ) : (
-                    <div className="max-h-[26rem] divide-y divide-slate-100 overflow-y-auto pr-1">
+                    <div className="min-w-0 max-h-[26rem] divide-y divide-slate-100 overflow-y-auto pr-1">
                       {quarterPurchases.map((purchase) => (
                         <div
                           key={purchase.id}
-                          className="flex items-center justify-between gap-4 py-3.5 first:pt-0 last:pb-0"
+                          className="flex min-w-0 items-center justify-between gap-4 py-3.5 first:pt-0 last:pb-0"
                         >
                           <div className="min-w-0">
                             <p className="font-mono text-xs font-semibold text-slate-600">{purchase.grnNo}</p>
