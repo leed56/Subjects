@@ -123,10 +123,6 @@ async function waitForExpectedPreview(page) {
       if (expectedBuildSha) console.log(`Preview build verified: ${last.buildSha}`);
       return;
     }
-    // Vercel's Free tier can reject a build even when a commit changes only
-    // this QA harness. In that narrow case, compare GitHub trees and permit the
-    // previously deployed build only when every intervening path is QA-only.
-    // Any runtime/app/config/migration drift still fails closed.
     if (await isQaOnlyPreviewDrift(last.buildSha, expectedBuildSha)) return;
     if (attempt < 24) {
       console.log(`Preview not on expected commit yet (${last.buildSha || "build identity unavailable"}); retrying.`);
@@ -170,10 +166,6 @@ async function login(page, user) {
 
   try {
     await page.goto(`${previewUrl}/login`, { waitUntil: "domcontentloaded", timeout: 60_000 });
-    // DOMContentLoaded can fire before Next/React has hydrated the server-rendered
-    // form. Clicking during that window performs a native form submit back to
-    // /login instead of running the React onSubmit handler. Wait for page JS and
-    // lazy chunks to settle before interacting with the authentication form.
     await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
     await page.waitForTimeout(500);
 
@@ -252,9 +244,10 @@ async function capture(page, user, route, suffix = "desktop") {
 async function openAddItem(page, user) {
   await page.goto(`${previewUrl}/stock`, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
-  // The app can render in English or Sinhala. Do not make visual QA fail merely
-  // because the localized accessible name changed from the English default.
-  const add = page.getByRole("button", { name: /(?:add item|භාණ්ඩයක්\s+එකතු\s+කරන්න)/i }).first();
+  // The production Sinhala copy currently uses "භාණ්ඩය එකතු කරන්න" while
+  // an older translation used "භාණ්ඩයක් එකතු කරන්න". Accept both accessible
+  // names without weakening the requirement that the Add Item control exists.
+  const add = page.getByRole("button", { name: /(?:add item|භාණ්ඩ(?:ය|යක්)\s+එකතු\s+කරන්න)/i }).first();
   if (!(await add.isVisible().catch(() => false))) {
     await saveDiagnostic(page, user, "stock-add-item-control-missing");
     throw new Error(`${user.sector}: localized Add item button is not visible`);
