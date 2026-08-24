@@ -2,18 +2,25 @@
 
 import { useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
-import {
-  ProBadge,
-  ProCard,
-  ProEmptyState,
-  ProLoadingState,
-  ProMain,
-  ProPageHeader,
-  ProStatCard,
-} from "@/components/ui/pro-shell";
+import { ProLoadingState, ProMain } from "@/components/ui/pro-shell";
 import { Dialog, DrawerFooter } from "@/components/ui/overlay";
-import { Button } from "@/components/ui/primitives";
-import { BankingIcon, BillsIcon, InboxIcon, CostingIcon } from "@/components/ui/icons";
+import {
+  ActionMenu,
+  AlertRow,
+  Button,
+  EmptyState,
+  MetricCard,
+  PageHeader,
+  StatusBadge,
+  Tabs,
+} from "@/components/ui/primitives";
+import { DataTable, type DataTableColumn } from "@/components/ui/table";
+import {
+  BankingIcon,
+  BillsIcon,
+  CostingIcon,
+  InboxIcon,
+} from "@/components/ui/icons";
 import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -33,6 +40,25 @@ const TXN_TYPES: BankTransactionType[] = [
   "interest",
   "adjustment",
 ];
+
+type BankingSection = "accounts" | "transactions" | "cheques" | "transfers";
+
+type TransactionRow = {
+  id: string;
+  date: string;
+  label: string;
+  detail: string;
+  signed: number;
+};
+
+type TransferRow = {
+  id: string;
+  date: string;
+  from: string;
+  to: string;
+  description: string;
+  amount: number;
+};
 
 export default function BankingPage() {
   const {
@@ -63,6 +89,8 @@ export default function BankingPage() {
     interest: t("bank.txn.interest"),
     adjustment: t("bank.txn.adjustment"),
   };
+
+  const [activeSection, setActiveSection] = useState<BankingSection>("accounts");
 
   const [showBankModal, setShowBankModal] = useState(false);
   const [bankName, setBankName] = useState(LK_BANKS[0]);
@@ -117,47 +145,205 @@ export default function BankingPage() {
     );
   }
 
-  const totalBank = data.bankAccounts.reduce((s, a) => s + a.balance, 0);
-  const pending = data.cheques.filter((c) => c.status === "pending");
-  const deposited = data.cheques.filter((c) => c.status === "deposited");
+  const totalBank = data.bankAccounts.reduce((sum, account) => sum + account.balance, 0);
+  const pending = data.cheques.filter((cheque) => cheque.status === "pending");
+  const deposited = data.cheques.filter((cheque) => cheque.status === "deposited");
   const chequeValue = data.cheques
-    .filter((c) => c.status !== "bounced")
-    .reduce((sum, c) => sum + (c.direction === "received" ? c.amount : -c.amount), 0);
-
-  const openStatusModal = (cheque: ChequeRecord) => {
-    setStatusCheque(cheque);
-    setSelectedChequeStatus(cheque.status);
-    setDepositAccountId(data.bankAccounts[0]?.id ?? "");
-  };
+    .filter((cheque) => cheque.status !== "bounced")
+    .reduce(
+      (sum, cheque) => sum + (cheque.direction === "received" ? cheque.amount : -cheque.amount),
+      0,
+    );
 
   const accountLabel = (id: string) => {
-    const a = data.bankAccounts.find((x) => x.id === id);
-    return a ? `${a.bankName} — ${a.accountNumber}` : "—";
+    const account = data.bankAccounts.find((item) => item.id === id);
+    return account ? `${account.bankName} — ${account.accountNumber}` : "—";
   };
 
-  const ledger = [
-    ...data.bankTransactions.map((tx) => ({
-      key: tx.id,
+  const transactionRows: TransactionRow[] = data.bankTransactions
+    .map((tx) => ({
+      id: tx.id,
       date: tx.date,
       label: txnTypeLabels[tx.type],
       detail: `${accountLabel(tx.accountId)}${tx.description ? ` · ${tx.description}` : ""}`,
       signed: tx.type === "withdrawal" || tx.type === "fee" ? -tx.amount : tx.amount,
-      removable: tx.id,
-    })),
-    ...data.bankTransfers.map((tr) => ({
-      key: tr.id,
-      date: tr.date,
-      label: t("bank.transfer"),
-      detail: `${accountLabel(tr.fromAccountId)} → ${accountLabel(tr.toAccountId)}${tr.description ? ` · ${tr.description}` : ""}`,
-      signed: tr.amount,
-      removable: null as string | null,
-    })),
-  ].sort((a, b) => (a.date < b.date ? 1 : -1));
+    }))
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
 
-  // Part 8: when there is truly nothing yet, one compact onboarding block
-  // replaces the 3 full-size empty states (accounts/transactions/cheques)
-  // that used to render stacked on top of each other.
-  const hasAnyBankingData = data.bankAccounts.length > 0 || ledger.length > 0 || data.cheques.length > 0;
+  const transferRows: TransferRow[] = data.bankTransfers
+    .map((transfer) => ({
+      id: transfer.id,
+      date: transfer.date,
+      from: accountLabel(transfer.fromAccountId),
+      to: accountLabel(transfer.toAccountId),
+      description: transfer.description ?? "",
+      amount: transfer.amount,
+    }))
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  const hasAnyBankingData =
+    data.bankAccounts.length > 0 ||
+    transactionRows.length > 0 ||
+    transferRows.length > 0 ||
+    data.cheques.length > 0;
+
+  const transactionColumns: DataTableColumn<TransactionRow>[] = [
+    {
+      key: "date",
+      header: t("common.date"),
+      render: (row) => <span className="text-slate-500">{row.date.slice(0, 10)}</span>,
+    },
+    {
+      key: "type",
+      header: t("bank.type"),
+      render: (row) => <span className="font-medium text-slate-950">{row.label}</span>,
+    },
+    {
+      key: "account",
+      header: t("bank.account"),
+      render: (row) => <span className="text-slate-600">{row.detail}</span>,
+      hideOnMobile: true,
+    },
+    {
+      key: "amount",
+      header: t("bank.amount"),
+      align: "right",
+      render: (row) => (
+        <span
+          className={`font-mono font-semibold tabular-nums ${
+            row.signed < 0 ? "text-rose-600" : "text-emerald-700"
+          }`}
+        >
+          {row.signed < 0 ? "−" : "+"}
+          {formatLkr(Math.abs(row.signed))}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: t("common.actions"),
+      align: "right",
+      render: (row) => (
+        <ActionMenu
+          label={t("common.actions")}
+          items={[
+            {
+              label: deletingTxnId === row.id ? t("common.saving") : t("common.delete"),
+              tone: "danger",
+              disabled: !!deletingTxnId || !canWrite,
+              onSelect: async () => {
+                if (deletingTxnId || !confirm(t("bank.delete_txn"))) return;
+                setDeletingTxnId(row.id);
+                setFormMessage("");
+                const result = await deleteBankTransactionToCloud(row.id);
+                setDeletingTxnId(null);
+                if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
+              },
+            },
+          ]}
+        />
+      ),
+    },
+  ];
+
+  const transferColumns: DataTableColumn<TransferRow>[] = [
+    {
+      key: "date",
+      header: t("common.date"),
+      render: (row) => <span className="text-slate-500">{row.date.slice(0, 10)}</span>,
+    },
+    {
+      key: "from",
+      header: "From",
+      render: (row) => <span className="font-medium text-slate-950">{row.from}</span>,
+    },
+    {
+      key: "to",
+      header: "To",
+      render: (row) => <span className="text-slate-600">{row.to}</span>,
+      hideOnMobile: true,
+    },
+    {
+      key: "description",
+      header: t("bank.description"),
+      render: (row) => <span className="text-slate-500">{row.description || "—"}</span>,
+      hideOnMobile: true,
+    },
+    {
+      key: "amount",
+      header: t("bank.amount"),
+      align: "right",
+      render: (row) => (
+        <span className="font-mono font-semibold tabular-nums text-slate-950">
+          {formatLkr(row.amount)}
+        </span>
+      ),
+    },
+  ];
+
+  const chequeColumns: DataTableColumn<ChequeRecord>[] = [
+    {
+      key: "cheque",
+      header: "#",
+      render: (cheque) => (
+        <div>
+          <p className="font-mono text-xs font-semibold text-slate-950">{cheque.chequeNo}</p>
+          <p className="mt-1 text-xs text-slate-500">{cheque.partyName}</p>
+        </div>
+      ),
+    },
+    {
+      key: "direction",
+      header: t("bank.in_out"),
+      render: (cheque) => (
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-slate-700">
+            {cheque.direction === "received" ? t("bank.in") : t("bank.out")}
+          </span>
+          {cheque.postDated && <StatusBadge tone="warning">PDC</StatusBadge>}
+        </div>
+      ),
+    },
+    {
+      key: "bank",
+      header: t("bank.account"),
+      render: (cheque) => (
+        <div>
+          <p className="text-slate-700">{cheque.bankName}</p>
+          <p className="mt-1 text-xs text-slate-400">{cheque.chequeDate}</p>
+        </div>
+      ),
+      hideOnMobile: true,
+    },
+    {
+      key: "amount",
+      header: t("bank.amount"),
+      align: "right",
+      render: (cheque) => (
+        <span className="font-mono font-semibold tabular-nums text-slate-950">
+          {formatLkr(cheque.amount)}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: t("bank.status_col"),
+      render: (cheque) => (
+        <ChequeStatusBadge status={cheque.status} label={statusLabels[cheque.status]} />
+      ),
+    },
+    {
+      key: "actions",
+      header: t("common.actions"),
+      align: "right",
+      render: (cheque) =>
+        cheque.status !== "cleared" && cheque.status !== "bounced" ? (
+          <Button size="sm" variant="ghost" onClick={() => openStatusModal(cheque)}>
+            {t("common.update")}
+          </Button>
+        ) : null,
+    },
+  ];
 
   const closeAllModals = () => {
     setShowBankModal(false);
@@ -244,276 +430,281 @@ export default function BankingPage() {
     setShowChequeModal(true);
   };
 
+  const openStatusModal = (cheque: ChequeRecord) => {
+    setStatusCheque(cheque);
+    setSelectedChequeStatus(cheque.status);
+    setDepositAccountId(data.bankAccounts[0]?.id ?? "");
+  };
+
   const inputClass =
-    "h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100";
+    "min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-teal-400 focus:ring-4 focus:ring-teal-100/70";
 
   return (
     <AppShell>
       <ProMain>
-        <ProPageHeader
-          eyebrow="Banking control"
+        <PageHeader
           title={t("bank.title")}
-          description={`${t("bank.subtitle")} — ${t("bank.total_balance")} ${formatLkr(totalBank)}`}
+          description={t("bank.subtitle")}
           actions={
             <>
-              <button
-                type="button"
-                onClick={openBankModal}
-                disabled={!canWrite}
-                title={!canWrite ? (disabledHint ?? undefined) : undefined}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-              >
+              <Button variant="secondary" onClick={openBankModal} disabled={!canWrite}>
                 {t("bank.add_account")}
-              </button>
-              <button
-                type="button"
-                onClick={openTxnModal}
-                disabled={!canWrite}
-                title={!canWrite ? (disabledHint ?? undefined) : undefined}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-              >
+              </Button>
+              <Button variant="primary" onClick={openTxnModal} disabled={!canWrite}>
                 {t("bank.record_txn")}
-              </button>
-              <button
-                type="button"
-                onClick={openTransferModal}
-                disabled={!canWrite}
-                title={!canWrite ? (disabledHint ?? undefined) : undefined}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {t("bank.transfer")}
-              </button>
-              <button
-                type="button"
-                onClick={openChequeModal}
-                disabled={!canWrite}
-                title={!canWrite ? (disabledHint ?? undefined) : undefined}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {t("bank.add_cheque")}
-              </button>
+              </Button>
+              <ActionMenu
+                label={t("common.actions")}
+                items={[
+                  {
+                    label: t("bank.transfer"),
+                    onSelect: openTransferModal,
+                    disabled: !canWrite,
+                  },
+                  {
+                    label: t("bank.add_cheque"),
+                    onSelect: openChequeModal,
+                    disabled: !canWrite,
+                  },
+                ]}
+              />
             </>
+          }
+          metrics={
+            hasAnyBankingData ? (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <MetricCard
+                  label={t("bank.total_balance")}
+                  value={formatLkr(totalBank)}
+                  icon={<BankingIcon className="h-4.5 w-4.5" />}
+                />
+                <MetricCard
+                  label={t("bank.pending")}
+                  value={String(pending.length)}
+                  icon={<BillsIcon className="h-4.5 w-4.5" />}
+                  tone={pending.length > 0 ? "warning" : "default"}
+                />
+                <MetricCard
+                  label={t("bank.status.deposited")}
+                  value={String(deposited.length)}
+                  icon={<InboxIcon className="h-4.5 w-4.5" />}
+                />
+                <MetricCard
+                  label="Cheque value"
+                  value={formatLkr(chequeValue)}
+                  icon={<CostingIcon className="h-4.5 w-4.5" />}
+                  tone={chequeValue < 0 ? "danger" : "positive"}
+                />
+              </div>
+            ) : undefined
           }
         />
 
         <WriteDisabledHint className="mb-5" />
 
-        {formMessage && !showBankModal && !showTxnModal && !showTransferModal && !showChequeModal && (
-          <p className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-            {formMessage}
-          </p>
-        )}
+        {formMessage &&
+          !showBankModal &&
+          !showTxnModal &&
+          !showTransferModal &&
+          !showChequeModal && (
+            <div className="mb-5">
+              <AlertRow tone="warning">{formMessage}</AlertRow>
+            </div>
+          )}
 
         {!hasAnyBankingData ? (
-          <ProCard>
-            <ProEmptyState
-              icon={<BankingIcon className="h-5 w-5" />}
-              title={t("bank.onboarding_title")}
-              description={t("bank.onboarding_desc")}
-              action={
-                canWrite ? (
-                  <div className="flex flex-wrap justify-center gap-2">
-                    <Button variant="primary" onClick={openBankModal}>{t("bank.add_account")}</Button>
-                    <Button variant="secondary" onClick={openTxnModal}>{t("bank.record_txn")}</Button>
-                    <Button variant="secondary" onClick={openChequeModal}>{t("bank.add_cheque")}</Button>
-                  </div>
-                ) : undefined
-              }
-            />
-          </ProCard>
+          <EmptyState
+            icon={<BankingIcon className="h-5 w-5" />}
+            title={t("bank.onboarding_title")}
+            description={t("bank.onboarding_desc")}
+            action={
+              canWrite ? (
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button variant="primary" onClick={openBankModal}>
+                    {t("bank.add_account")}
+                  </Button>
+                  <Button variant="secondary" onClick={openChequeModal}>
+                    {t("bank.add_cheque")}
+                  </Button>
+                </div>
+              ) : undefined
+            }
+          />
         ) : (
-        <>
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("bank.total_balance")} value={formatLkr(totalBank)} hint={`${data.bankAccounts.length} accounts`} icon={<BankingIcon className="h-5 w-5" />} tone="teal" />
-          <ProStatCard label={t("bank.pending")} value={String(pending.length)} hint={t("bank.cheque_register")} icon={<BillsIcon className="h-5 w-5" />} tone="amber" />
-          <ProStatCard label={t("bank.status.deposited")} value={String(deposited.length)} hint="Awaiting clearance" icon={<InboxIcon className="h-5 w-5" />} tone="blue" />
-          <ProStatCard label="Cheque value" value={formatLkr(chequeValue)} hint="Received minus paid" icon={<CostingIcon className="h-5 w-5" />} tone="emerald" />
-        </section>
+          <>
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <Tabs
+                value={activeSection}
+                onChange={(value) => setActiveSection(value as BankingSection)}
+                tabs={[
+                  { value: "accounts", label: t("bank.account") },
+                  { value: "transactions", label: t("bank.transactions") },
+                  { value: "cheques", label: t("bank.cheque_register") },
+                  { value: "transfers", label: t("bank.transfer") },
+                ]}
+              />
+              <p className="text-xs font-medium text-slate-400">
+                {activeSection === "accounts" && `${data.bankAccounts.length} ${t("bank.account")}`}
+                {activeSection === "transactions" && `${transactionRows.length} ${t("bank.transactions")}`}
+                {activeSection === "cheques" && `${data.cheques.length} ${t("bank.cheque_register")}`}
+                {activeSection === "transfers" && `${transferRows.length} ${t("bank.transfer")}`}
+              </p>
+            </div>
 
-        <section className="mt-6">
-          <ProCard title={t("bank.total_balance")} eyebrow="Accounts" action={<ProBadge tone="teal">{data.bankAccounts.length} accounts</ProBadge>}>
-            {data.bankAccounts.length === 0 ? (
-              <ProEmptyState
-                size="compact"
-                icon={<BankingIcon className="h-5 w-5" />}
-                title={t("bank.no_accounts")}
-                description="Add a bank account to track deposits, cleared cheques and balances."
-                action={
-                  canWrite ? (
-                    <button type="button" onClick={openBankModal} className="rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-teal-700">
-                      {t("bank.add_account")}
-                    </button>
-                  ) : undefined
+            {activeSection === "accounts" && (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {data.bankAccounts.length === 0 ? (
+                  <div className="md:col-span-2 xl:col-span-3">
+                    <EmptyState
+                      size="compact"
+                      icon={<BankingIcon className="h-5 w-5" />}
+                      title={t("bank.no_accounts")}
+                      description="Add a bank account before recording account transactions or transfers."
+                      action={
+                        canWrite ? (
+                          <Button variant="primary" onClick={openBankModal}>
+                            {t("bank.add_account")}
+                          </Button>
+                        ) : undefined
+                      }
+                    />
+                  </div>
+                ) : (
+                  data.bankAccounts.map((account) => (
+                    <article
+                      key={account.id}
+                      className="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition hover:border-slate-300"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-teal-700 ring-1 ring-inset ring-slate-100">
+                            <BankingIcon className="h-5 w-5" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-950">{account.accountName}</p>
+                            <p className="mt-0.5 truncate text-xs text-slate-500">{account.bankName}</p>
+                          </div>
+                        </div>
+                        <ActionMenu
+                          label={t("common.actions")}
+                          items={[
+                            {
+                              label:
+                                deletingAccountId === account.id
+                                  ? t("common.saving")
+                                  : t("common.delete"),
+                              tone: "danger",
+                              disabled: !!deletingAccountId || !canWrite,
+                              onSelect: async () => {
+                                if (deletingAccountId || !confirm(t("bank.delete_account"))) return;
+                                setDeletingAccountId(account.id);
+                                setFormMessage("");
+                                const result = await deleteBankAccountToCloud(account.id);
+                                setDeletingAccountId(null);
+                                if (!result.ok) {
+                                  setFormMessage(result.error ?? t("common.save_failed"));
+                                }
+                              },
+                            },
+                          ]}
+                        />
+                      </div>
+
+                      <div className="mt-6">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                          {t("bank.total_balance")}
+                        </p>
+                        <p className="mt-1.5 font-mono text-2xl font-bold tracking-tight text-slate-950 tabular-nums">
+                          {formatLkr(account.balance)}
+                        </p>
+                      </div>
+
+                      <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 text-xs">
+                        <div>
+                          <p className="font-medium text-slate-400">{t("bank.account_no")}</p>
+                          <p className="mt-1 truncate font-mono font-medium text-slate-700">{account.accountNumber}</p>
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-400">{t("bank.branch")}</p>
+                          <p className="mt-1 truncate font-medium text-slate-700">{account.branch || "—"}</p>
+                        </div>
+                      </div>
+                    </article>
+                  ))
+                )}
+              </div>
+            )}
+
+            {activeSection === "transactions" && (
+              <DataTable
+                columns={transactionColumns}
+                rows={transactionRows}
+                emptyState={
+                  <EmptyState
+                    size="compact"
+                    title={t("bank.no_transactions")}
+                    description={t("bank.txn_hint")}
+                    action={
+                      canWrite ? (
+                        <Button variant="primary" onClick={openTxnModal}>
+                          {t("bank.record_txn")}
+                        </Button>
+                      ) : undefined
+                    }
+                  />
                 }
               />
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {data.bankAccounts.map((acc) => (
-                  <article key={acc.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4 ring-1 ring-slate-100">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-wide text-teal-700">{acc.bankName}</p>
-                        <h2 className="mt-2 text-base font-bold text-slate-950">{acc.accountName}</h2>
-                        <p className="mt-1 text-xs font-semibold text-slate-500">{acc.branch || "—"} · {acc.accountNumber}</p>
-                      </div>
-                      <ProBadge tone="emerald">Active</ProBadge>
-                    </div>
-                    <p className="mt-5 font-mono text-2xl font-bold text-slate-950">{formatLkr(acc.balance)}</p>
-                    <button
-                      onClick={async () => {
-                        if (deletingAccountId || !confirm(t("bank.delete_account"))) return;
-                        setDeletingAccountId(acc.id);
-                        setFormMessage("");
-                        const result = await deleteBankAccountToCloud(acc.id);
-                        setDeletingAccountId(null);
-                        if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
-                      }}
-                      disabled={!!deletingAccountId}
-                      className="mt-4 rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
-                    >
-                      {deletingAccountId === acc.id ? t("common.saving") : t("common.delete")}
-                    </button>
-                  </article>
-                ))}
-              </div>
             )}
-          </ProCard>
-        </section>
 
-        <section className="mt-6">
-          <ProCard title={t("bank.transactions")} eyebrow="Ledger" action={<ProBadge tone="teal">{ledger.length}</ProBadge>}>
-            {ledger.length === 0 ? (
-              <ProEmptyState title={t("bank.no_transactions")} description={t("bank.txn_hint")} />
-            ) : (
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
-                <table className="w-full text-left text-sm">
-                  <thead className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3">{t("common.date")}</th>
-                      <th className="px-4 py-3">{t("bank.type")}</th>
-                      <th className="px-4 py-3">{t("bank.account")}</th>
-                      <th className="px-4 py-3 text-right">{t("bank.amount")}</th>
-                      <th className="px-4 py-3">{t("common.actions")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ledger.map((row) => (
-                      <tr key={row.key} className="border-b last:border-0">
-                        <td className="px-4 py-3 font-semibold text-slate-600">{row.date.slice(0, 10)}</td>
-                        <td className="px-4 py-3 font-bold text-slate-950">{row.label}</td>
-                        <td className="px-4 py-3 font-semibold text-slate-600">{row.detail}</td>
-                        <td className={`px-4 py-3 text-right font-mono font-bold ${row.signed < 0 ? "text-rose-600" : "text-emerald-600"}`}>
-                          {row.signed < 0 ? "-" : "+"}{formatLkr(Math.abs(row.signed))}
-                        </td>
-                        <td className="px-4 py-3">
-                          {row.removable && (
-                            <button
-                              onClick={async () => {
-                                if (deletingTxnId || !confirm(t("bank.delete_txn"))) return;
-                                setDeletingTxnId(row.removable!);
-                                setFormMessage("");
-                                const result = await deleteBankTransactionToCloud(row.removable!);
-                                setDeletingTxnId(null);
-                                if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
-                              }}
-                              disabled={!!deletingTxnId}
-                              className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
-                            >
-                              {deletingTxnId === row.removable ? t("common.saving") : t("common.delete")}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            {activeSection === "cheques" && (
+              <DataTable
+                columns={chequeColumns}
+                rows={data.cheques}
+                emptyState={
+                  <EmptyState
+                    size="compact"
+                    title={t("bank.cheque_hint")}
+                    description="Track received and paid cheques through pending, deposited, cleared and bounced states."
+                    action={
+                      canWrite ? (
+                        <Button variant="primary" onClick={openChequeModal}>
+                          {t("bank.add_cheque")}
+                        </Button>
+                      ) : undefined
+                    }
+                  />
+                }
+              />
             )}
-          </ProCard>
-        </section>
 
-        <section className="mt-6">
-          <ProCard title={`${t("bank.cheque_register")} (${pending.length} ${t("bank.pending")})`} action={<ProBadge tone="amber">{data.cheques.length} cheques</ProBadge>}>
-            {data.cheques.length === 0 ? (
-              <ProEmptyState title={t("bank.cheque_hint")} description="Add received and paid cheques to track pending, deposited, cleared and bounced status." />
-            ) : (
-              <>
-                <div className="hidden overflow-hidden rounded-2xl border border-slate-200 lg:block">
-                  <table className="w-full text-left text-sm">
-                    <thead className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3">#</th>
-                        <th className="px-4 py-3">{t("bank.party")}</th>
-                        <th className="px-4 py-3">{t("bank.in_out")}</th>
-                        <th className="px-4 py-3">{t("bank.amount")}</th>
-                        <th className="px-4 py-3">{t("common.date")}</th>
-                        <th className="px-4 py-3">{t("bank.status_col")}</th>
-                        <th className="px-4 py-3">{t("common.actions")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.cheques.map((c) => (
-                        <tr key={c.id} className="border-b last:border-0">
-                          <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">{c.chequeNo}</td>
-                          <td className="px-4 py-3 font-bold text-slate-950">{c.partyName}</td>
-                          <td className="px-4 py-3 font-semibold text-slate-600">
-                            {c.direction === "received" ? t("bank.in") : t("bank.out")}
-                            {c.postDated && <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">PDC</span>}
-                          </td>
-                          <td className="px-4 py-3 font-mono font-bold text-slate-950">{formatLkr(c.amount)}</td>
-                          <td className="px-4 py-3 font-semibold text-slate-600">{c.chequeDate}</td>
-                          <td className="px-4 py-3"><ChequeStatusBadge status={c.status} label={statusLabels[c.status]} /></td>
-                          <td className="px-4 py-3">
-                            {c.status !== "cleared" && c.status !== "bounced" && (
-                              <button onClick={() => openStatusModal(c)} className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-700 hover:bg-teal-100">
-                                {t("common.update")}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="grid gap-3 lg:hidden">
-                  {data.cheques.map((c) => (
-                    <article key={c.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-mono text-xs font-bold uppercase tracking-wide text-teal-700">{c.chequeNo}</p>
-                          <h2 className="mt-2 font-bold text-slate-950">{c.partyName}</h2>
-                          <p className="mt-1 text-xs font-semibold text-slate-500">{c.bankName} · {c.chequeDate}</p>
-                        </div>
-                        <ChequeStatusBadge status={c.status} label={statusLabels[c.status]} />
-                      </div>
-                      <div className="mt-4 flex items-end justify-between border-t border-slate-200 pt-3">
-                        <div>
-                          <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{c.direction === "received" ? t("bank.in") : t("bank.out")}</p>
-                          {c.postDated && <p className="mt-1 text-xs font-bold text-amber-700">PDC</p>}
-                        </div>
-                        <p className="font-mono text-lg font-bold text-slate-950">{formatLkr(c.amount)}</p>
-                      </div>
-                      {c.status !== "cleared" && c.status !== "bounced" && (
-                        <button onClick={() => openStatusModal(c)} className="mt-4 w-full rounded-2xl bg-teal-50 px-3 py-3 text-xs font-bold text-teal-700 hover:bg-teal-100">
-                          {t("common.update")}
-                        </button>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              </>
+            {activeSection === "transfers" && (
+              <DataTable
+                columns={transferColumns}
+                rows={transferRows}
+                emptyState={
+                  <EmptyState
+                    size="compact"
+                    title={t("bank.transfer")}
+                    description={t("bank.transfer_need_accounts_desc")}
+                    action={
+                      canWrite ? (
+                        <Button variant="primary" onClick={openTransferModal}>
+                          {t("bank.transfer")}
+                        </Button>
+                      ) : undefined
+                    }
+                  />
+                }
+              />
             )}
-          </ProCard>
-        </section>
-        </>
+          </>
         )}
 
         <Dialog
           open={showBankModal}
           onClose={() => setShowBankModal(false)}
           title={t("bank.add_account_title")}
-          description="Bank account"
+          description={t("bank.account")}
           size="lg"
           footer={
             <DrawerFooter
@@ -528,8 +719,8 @@ export default function BankingPage() {
         >
           <form
             id="bank-account-form"
-            onSubmit={async (e) => {
-              e.preventDefault();
+            onSubmit={async (event) => {
+              event.preventDefault();
               if (savingBank) return;
               setSavingBank(true);
               setFormMessage("");
@@ -547,18 +738,19 @@ export default function BankingPage() {
               }
               setShowBankModal(false);
               resetBankForm();
+              setActiveSection("accounts");
             }}
           >
             <div className="grid gap-3 sm:grid-cols-2">
-              <select value={bankName} onChange={(e) => setBankName(e.target.value)} className={inputClass}>
-                {LK_BANKS.map((b) => <option key={b}>{b}</option>)}
+              <select value={bankName} onChange={(event) => setBankName(event.target.value)} className={inputClass}>
+                {LK_BANKS.map((bank) => <option key={bank}>{bank}</option>)}
               </select>
-              <input placeholder={t("bank.branch")} value={branch} onChange={(e) => setBranch(e.target.value)} className={inputClass} />
-              <input required placeholder={t("bank.account_name")} value={accountName} onChange={(e) => setAccountName(e.target.value)} className={inputClass} />
-              <input required placeholder={t("bank.account_no")} value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className={inputClass} />
-              <input type="number" placeholder={t("bank.opening_balance")} value={balance || ""} onChange={(e) => setBalance(Number(e.target.value))} className={inputClass} />
+              <input placeholder={t("bank.branch")} value={branch} onChange={(event) => setBranch(event.target.value)} className={inputClass} />
+              <input required placeholder={t("bank.account_name")} value={accountName} onChange={(event) => setAccountName(event.target.value)} className={inputClass} />
+              <input required placeholder={t("bank.account_no")} value={accountNumber} onChange={(event) => setAccountNumber(event.target.value)} className={inputClass} />
+              <input type="number" placeholder={t("bank.opening_balance")} value={balance || ""} onChange={(event) => setBalance(Number(event.target.value))} className={inputClass} />
             </div>
-            {formMessage && showBankModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
+            {formMessage && showBankModal && <p className="mt-3 text-sm font-medium text-amber-700">{formMessage}</p>}
           </form>
         </Dialog>
 
@@ -566,7 +758,7 @@ export default function BankingPage() {
           open={showTxnModal}
           onClose={() => setShowTxnModal(false)}
           title={t("bank.txn_title")}
-          description="Ledger"
+          description={t("bank.transactions")}
           size="lg"
           footer={
             data.bankAccounts.length === 0 ? (
@@ -574,7 +766,10 @@ export default function BankingPage() {
                 <DrawerFooter
                   onCancel={() => setShowTxnModal(false)}
                   primaryLabel={t("bank.add_account")}
-                  onPrimary={() => { setShowTxnModal(false); openBankModal(); }}
+                  onPrimary={() => {
+                    setShowTxnModal(false);
+                    openBankModal();
+                  }}
                 />
               ) : undefined
             ) : (
@@ -590,12 +785,12 @@ export default function BankingPage() {
           }
         >
           {data.bankAccounts.length === 0 ? (
-            <ProEmptyState size="compact" title={t("bank.no_accounts")} description={t("bank.txn_need_account")} />
+            <EmptyState size="compact" title={t("bank.no_accounts")} description={t("bank.txn_need_account")} />
           ) : (
             <form
               id="bank-txn-form"
-              onSubmit={async (e) => {
-                e.preventDefault();
+              onSubmit={async (event) => {
+                event.preventDefault();
                 if (savingTxn) return;
                 setSavingTxn(true);
                 setFormMessage("");
@@ -613,21 +808,24 @@ export default function BankingPage() {
                 }
                 setShowTxnModal(false);
                 resetTxnForm();
+                setActiveSection("transactions");
               }}
             >
               <div className="grid gap-3 sm:grid-cols-2">
-                <select value={txnAccountId} onChange={(e) => setTxnAccountId(e.target.value)} className={inputClass}>
-                  {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
+                <select value={txnAccountId} onChange={(event) => setTxnAccountId(event.target.value)} className={inputClass}>
+                  {data.bankAccounts.map((account) => (
+                    <option key={account.id} value={account.id}>{account.bankName} — {account.accountNumber}</option>
+                  ))}
                 </select>
-                <select value={txnType} onChange={(e) => setTxnType(e.target.value as BankTransactionType)} className={inputClass}>
-                  {TXN_TYPES.map((ty) => <option key={ty} value={ty}>{txnTypeLabels[ty]}</option>)}
+                <select value={txnType} onChange={(event) => setTxnType(event.target.value as BankTransactionType)} className={inputClass}>
+                  {TXN_TYPES.map((type) => <option key={type} value={type}>{txnTypeLabels[type]}</option>)}
                 </select>
-                <input type="number" required placeholder={t("bank.amount")} value={txnAmount || ""} onChange={(e) => setTxnAmount(Number(e.target.value))} className={inputClass} />
-                <input type="date" required value={txnDate} onChange={(e) => setTxnDate(e.target.value)} className={inputClass} />
-                <input placeholder={t("bank.description")} value={txnDesc} onChange={(e) => setTxnDesc(e.target.value)} className={`${inputClass} sm:col-span-2`} />
+                <input type="number" required placeholder={t("bank.amount")} value={txnAmount || ""} onChange={(event) => setTxnAmount(Number(event.target.value))} className={inputClass} />
+                <input type="date" required value={txnDate} onChange={(event) => setTxnDate(event.target.value)} className={inputClass} />
+                <input placeholder={t("bank.description")} value={txnDesc} onChange={(event) => setTxnDesc(event.target.value)} className={`${inputClass} sm:col-span-2`} />
               </div>
-              <p className="mt-2 text-xs font-semibold text-slate-500">{t("bank.adjustment_hint")}</p>
-              {formMessage && showTxnModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
+              <p className="mt-2 text-xs font-medium text-slate-500">{t("bank.adjustment_hint")}</p>
+              {formMessage && showTxnModal && <p className="mt-3 text-sm font-medium text-amber-700">{formMessage}</p>}
             </form>
           )}
         </Dialog>
@@ -636,7 +834,7 @@ export default function BankingPage() {
           open={showTransferModal}
           onClose={() => setShowTransferModal(false)}
           title={t("bank.transfer_title")}
-          description="Ledger"
+          description={t("bank.transfer")}
           size="lg"
           footer={
             data.bankAccounts.length < 2 ? (
@@ -644,7 +842,10 @@ export default function BankingPage() {
                 <DrawerFooter
                   onCancel={() => setShowTransferModal(false)}
                   primaryLabel={t("bank.add_account")}
-                  onPrimary={() => { setShowTransferModal(false); openBankModal(); }}
+                  onPrimary={() => {
+                    setShowTransferModal(false);
+                    openBankModal();
+                  }}
                 />
               ) : undefined
             ) : (
@@ -660,12 +861,12 @@ export default function BankingPage() {
           }
         >
           {data.bankAccounts.length < 2 ? (
-            <ProEmptyState size="compact" title={t("bank.transfer_need_accounts")} description={t("bank.transfer_need_accounts_desc")} />
+            <EmptyState size="compact" title={t("bank.transfer_need_accounts")} description={t("bank.transfer_need_accounts_desc")} />
           ) : (
             <form
               id="bank-transfer-form"
-              onSubmit={async (e) => {
-                e.preventDefault();
+              onSubmit={async (event) => {
+                event.preventDefault();
                 if (savingTransfer) return;
                 setSavingTransfer(true);
                 setFormMessage("");
@@ -683,21 +884,22 @@ export default function BankingPage() {
                 }
                 setShowTransferModal(false);
                 resetTransferForm();
+                setActiveSection("transfers");
               }}
             >
               <div className="grid gap-3 sm:grid-cols-2">
-                <select value={trFrom} onChange={(e) => setTrFrom(e.target.value)} className={inputClass}>
-                  {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
+                <select value={trFrom} onChange={(event) => setTrFrom(event.target.value)} className={inputClass}>
+                  {data.bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.bankName} — {account.accountNumber}</option>)}
                 </select>
-                <select value={trTo} onChange={(e) => setTrTo(e.target.value)} className={inputClass}>
-                  {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
+                <select value={trTo} onChange={(event) => setTrTo(event.target.value)} className={inputClass}>
+                  {data.bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.bankName} — {account.accountNumber}</option>)}
                 </select>
-                <input type="number" required placeholder={t("bank.amount")} value={trAmount || ""} onChange={(e) => setTrAmount(Number(e.target.value))} className={inputClass} />
-                <input type="date" required value={trDate} onChange={(e) => setTrDate(e.target.value)} className={inputClass} />
-                <input placeholder={t("bank.description")} value={trDesc} onChange={(e) => setTrDesc(e.target.value)} className={`${inputClass} sm:col-span-2`} />
+                <input type="number" required placeholder={t("bank.amount")} value={trAmount || ""} onChange={(event) => setTrAmount(Number(event.target.value))} className={inputClass} />
+                <input type="date" required value={trDate} onChange={(event) => setTrDate(event.target.value)} className={inputClass} />
+                <input placeholder={t("bank.description")} value={trDesc} onChange={(event) => setTrDesc(event.target.value)} className={`${inputClass} sm:col-span-2`} />
               </div>
-              {trFrom === trTo && <p className="mt-2 text-xs font-bold text-rose-600">{t("bank.transfer_same")}</p>}
-              {formMessage && showTransferModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
+              {trFrom === trTo && <p className="mt-2 text-xs font-semibold text-rose-600">{t("bank.transfer_same")}</p>}
+              {formMessage && showTransferModal && <p className="mt-3 text-sm font-medium text-amber-700">{formMessage}</p>}
             </form>
           )}
         </Dialog>
@@ -706,7 +908,7 @@ export default function BankingPage() {
           open={showChequeModal}
           onClose={() => setShowChequeModal(false)}
           title={t("bank.add_cheque_title")}
-          description="Cheque register"
+          description={t("bank.cheque_register")}
           size="lg"
           footer={
             <DrawerFooter
@@ -721,8 +923,8 @@ export default function BankingPage() {
         >
           <form
             id="bank-cheque-form"
-            onSubmit={async (e) => {
-              e.preventDefault();
+            onSubmit={async (event) => {
+              event.preventDefault();
               if (savingCheque) return;
               setSavingCheque(true);
               setFormMessage("");
@@ -742,26 +944,27 @@ export default function BankingPage() {
               }
               setShowChequeModal(false);
               resetChequeForm();
+              setActiveSection("cheques");
             }}
           >
             <div className="grid gap-3 sm:grid-cols-2">
-              <select value={chDirection} onChange={(e) => setChDirection(e.target.value as "received" | "paid")} className={inputClass}>
+              <select value={chDirection} onChange={(event) => setChDirection(event.target.value as "received" | "paid")} className={inputClass}>
                 <option value="received">{t("bank.received")}</option>
                 <option value="paid">{t("bank.paid")}</option>
               </select>
-              <input required placeholder={t("bank.cheque_no")} value={chNo} onChange={(e) => setChNo(e.target.value)} className={inputClass} />
-              <select value={chBank} onChange={(e) => setChBank(e.target.value)} className={inputClass}>
-                {LK_BANKS.map((b) => <option key={b}>{b}</option>)}
+              <input required placeholder={t("bank.cheque_no")} value={chNo} onChange={(event) => setChNo(event.target.value)} className={inputClass} />
+              <select value={chBank} onChange={(event) => setChBank(event.target.value)} className={inputClass}>
+                {LK_BANKS.map((bank) => <option key={bank}>{bank}</option>)}
               </select>
-              <input required placeholder={t("bank.party_name")} value={chParty} onChange={(e) => setChParty(e.target.value)} className={inputClass} />
-              <input type="number" required placeholder={t("bank.amount")} value={chAmount || ""} onChange={(e) => setChAmount(Number(e.target.value))} className={inputClass} />
-              <input type="date" required value={chDate} onChange={(e) => setChDate(e.target.value)} className={inputClass} />
-              <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 sm:col-span-2">
-                <input type="checkbox" checked={chPostDated} onChange={(e) => setChPostDated(e.target.checked)} />
+              <input required placeholder={t("bank.party_name")} value={chParty} onChange={(event) => setChParty(event.target.value)} className={inputClass} />
+              <input type="number" required placeholder={t("bank.amount")} value={chAmount || ""} onChange={(event) => setChAmount(Number(event.target.value))} className={inputClass} />
+              <input type="date" required value={chDate} onChange={(event) => setChDate(event.target.value)} className={inputClass} />
+              <label className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-700 sm:col-span-2">
+                <input type="checkbox" checked={chPostDated} onChange={(event) => setChPostDated(event.target.checked)} />
                 {t("bank.pdc")}
               </label>
             </div>
-            {formMessage && showChequeModal && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
+            {formMessage && showChequeModal && <p className="mt-3 text-sm font-medium text-amber-700">{formMessage}</p>}
           </form>
         </Dialog>
 
@@ -795,14 +998,13 @@ export default function BankingPage() {
             />
           }
         >
-          <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("bank.update_status")}</p>
-          <label className="block text-sm font-bold text-slate-700">
+          <label className="block text-sm font-medium text-slate-700">
             {t("bank.status_col")}
             <select
-              className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+              className={`${inputClass} mt-2`}
               value={selectedChequeStatus}
-              onChange={(e) => {
-                const status = e.target.value as ChequeStatus;
+              onChange={(event) => {
+                const status = event.target.value as ChequeStatus;
                 if (status === "cleared" && data.bankAccounts.length === 0) {
                   alert(t("bank.need_account"));
                   return;
@@ -817,16 +1019,17 @@ export default function BankingPage() {
               <option value="bounced">{t("bank.status.bounced")}</option>
             </select>
           </label>
-
           {data.bankAccounts.length > 0 && (
-            <label className="mt-4 block text-sm font-bold text-slate-700">
+            <label className="mt-4 block text-sm font-medium text-slate-700">
               {t("bank.total_balance")}
               <select
-                className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                className={`${inputClass} mt-2`}
                 value={depositAccountId || data.bankAccounts[0].id}
-                onChange={(e) => setDepositAccountId(e.target.value)}
+                onChange={(event) => setDepositAccountId(event.target.value)}
               >
-                {data.bankAccounts.map((a) => <option key={a.id} value={a.id}>{a.bankName} — {a.accountNumber}</option>)}
+                {data.bankAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>{account.bankName} — {account.accountNumber}</option>
+                ))}
               </select>
             </label>
           )}
@@ -837,6 +1040,13 @@ export default function BankingPage() {
 }
 
 function ChequeStatusBadge({ status, label }: { status: ChequeStatus; label: string }) {
-  const tone = status === "cleared" ? "emerald" : status === "bounced" ? "rose" : status === "deposited" ? "teal" : "amber";
-  return <ProBadge tone={tone}>{label}</ProBadge>;
+  const tone =
+    status === "cleared"
+      ? "positive"
+      : status === "bounced"
+        ? "danger"
+        : status === "deposited"
+          ? "info"
+          : "warning";
+  return <StatusBadge tone={tone}>{label}</StatusBadge>;
 }
