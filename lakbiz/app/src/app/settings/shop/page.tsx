@@ -141,7 +141,7 @@ function fieldClass() {
 }
 
 function labelClass() {
-  return "block text-sm font-black text-slate-700";
+  return "block text-sm font-bold text-slate-700";
 }
 
 export default function ShopSettingsPage() {
@@ -284,7 +284,7 @@ export default function ShopSettingsPage() {
                 )}
               </div>
               <div>
-                <p className="text-sm font-black text-slate-950">{t("vat.shop_name")}</p>
+                <p className="text-sm font-bold text-slate-950">{t("vat.shop_name")}</p>
                 <p className="mt-1 text-sm font-semibold text-slate-500">{t("shop.invoice_footer_placeholder")}</p>
               </div>
             </div>
@@ -306,10 +306,10 @@ export default function ShopSettingsPage() {
                       if (!file) return;
                       setLogoDataUrl(await fileToLogoDataUrl(file));
                     }}
-                    className="mt-2 block w-full text-xs font-semibold text-slate-500 file:mr-3 file:rounded-xl file:border-0 file:bg-teal-50 file:px-3 file:py-2 file:text-sm file:font-black file:text-teal-700"
+                    className="mt-2 block w-full text-xs font-semibold text-slate-500 file:mr-3 file:rounded-xl file:border-0 file:bg-teal-50 file:px-3 file:py-2 file:text-sm file:font-bold file:text-teal-700"
                   />
                   {logoDataUrl && (
-                    <button type="button" onClick={() => setLogoDataUrl(undefined)} className="mt-2 text-xs font-black text-rose-600 hover:underline">
+                    <button type="button" onClick={() => setLogoDataUrl(undefined)} className="mt-2 text-xs font-bold text-rose-600 hover:underline">
                       {t("shop.remove_logo")}
                     </button>
                   )}
@@ -326,7 +326,7 @@ export default function ShopSettingsPage() {
               </div>
 
               <div className="mt-5 rounded-[1.25rem] border border-teal-100 bg-teal-50/60 p-4">
-                <label className="flex items-center gap-3 text-sm font-black text-slate-700">
+                <label className="flex items-center gap-3 text-sm font-bold text-slate-700">
                   <input name="vatRegistered" type="checkbox" className="h-4 w-4 accent-teal-600" />
                   {t("vat.registered")}
                 </label>
@@ -345,7 +345,7 @@ export default function ShopSettingsPage() {
               </div>
 
               <div className="mt-5 rounded-[1.25rem] border border-indigo-100 bg-indigo-50/60 p-4">
-                <p className="text-sm font-black text-slate-800">{t("tax.rate_setting")}</p>
+                <p className="text-sm font-bold text-slate-800">{t("tax.rate_setting")}</p>
                 <p className="mt-1 text-xs font-semibold leading-5 text-slate-600">{t("tax.rate_setting_hint")}</p>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <label className={labelClass()}>
@@ -380,7 +380,7 @@ export default function ShopSettingsPage() {
               </div>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_1.2fr]">
-                <button type="submit" disabled={btnState === "saving"} className={`rounded-2xl px-5 py-3 text-sm font-black text-white shadow-lg transition ${btnState === "saved" ? "bg-emerald-600 shadow-emerald-700/20" : btnState === "saving" ? "cursor-wait bg-teal-600 shadow-teal-700/20" : "bg-teal-600 shadow-teal-700/20 hover:bg-teal-700"}`}>
+                <button type="submit" disabled={btnState === "saving"} className={`rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-lg transition ${btnState === "saved" ? "bg-emerald-600 shadow-emerald-700/20" : btnState === "saving" ? "cursor-wait bg-teal-600 shadow-teal-700/20" : "bg-teal-600 shadow-teal-700/20 hover:bg-teal-700"}`}>
                   {saveLabel}
                 </button>
                 <div ref={statusRef} role="status" aria-live="polite" className={`rounded-2xl px-4 py-3 text-sm font-bold ${msg ? (msg.ok ? "border border-teal-200 bg-teal-50 text-teal-900" : "border border-amber-200 bg-amber-50 text-amber-900") : "border border-dashed border-slate-200 bg-slate-50 text-slate-400"}`}>

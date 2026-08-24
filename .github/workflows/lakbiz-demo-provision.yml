@@ -1,0 +1,117 @@
+name: LakBiz Demo Business Provision
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type CREATE_LAKBIZ_DEMOS to provision/update the two demo shops"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lakbiz-demo-business-provision
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    name: Provision and verify Sri Lanka demo shops
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: lakbiz/app
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://zestppstpwjxriwcuykc.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      DEMO_PHARMACY_EMAIL: ${{ secrets.DEMO_PHARMACY_EMAIL }}
+      DEMO_PHARMACY_PASSWORD: ${{ secrets.DEMO_PHARMACY_PASSWORD }}
+      DEMO_PHARMACY_CASHIER_EMAIL: ${{ secrets.DEMO_PHARMACY_CASHIER_EMAIL }}
+      DEMO_PHARMACY_CASHIER_PASSWORD: ${{ secrets.DEMO_PHARMACY_CASHIER_PASSWORD }}
+      DEMO_GROCERY_EMAIL: ${{ secrets.DEMO_GROCERY_EMAIL }}
+      DEMO_GROCERY_PASSWORD: ${{ secrets.DEMO_GROCERY_PASSWORD }}
+      DEMO_GROCERY_CASHIER_EMAIL: ${{ secrets.DEMO_GROCERY_CASHIER_EMAIL }}
+      DEMO_GROCERY_CASHIER_PASSWORD: ${{ secrets.DEMO_GROCERY_CASHIER_PASSWORD }}
+
+    steps:
+      - name: Require explicit confirmation and approved ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.confirm }}" != "CREATE_LAKBIZ_DEMOS" ]; then
+            echo "Refusing provisioning: confirmation phrase did not match."
+            exit 1
+          fi
+          case "$GITHUB_REF_NAME" in
+            main|claude/global-premium-ui) ;;
+            *) echo "Refusing provisioning from unapproved ref: $GITHUB_REF_NAME"; exit 1 ;;
+          esac
+
+      - name: Verify required secrets are configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          required=(
+            SUPABASE_SERVICE_ROLE_KEY
+            DEMO_PHARMACY_EMAIL DEMO_PHARMACY_PASSWORD
+            DEMO_PHARMACY_CASHIER_EMAIL DEMO_PHARMACY_CASHIER_PASSWORD
+            DEMO_GROCERY_EMAIL DEMO_GROCERY_PASSWORD
+            DEMO_GROCERY_CASHIER_EMAIL DEMO_GROCERY_CASHIER_PASSWORD
+          )
+          for name in "${required[@]}"; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required secret: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then exit 1; fi
+          echo "All required secret names are configured. Values are not printed."
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Acquire fresh Sri Lanka factual catalog
+        run: |
+          node scripts/fetch-sri-lanka-demo-catalog.mjs \
+            --verify-regulatory \
+            --out=/tmp/lakbiz-sri-lanka-demo-catalog.json \
+            --max-grocery=1600 \
+            --max-pharmacy-retail=900 \
+            --delay-ms=350
+
+      - name: Strict catalog validation
+        run: |
+          node scripts/validate-demo-catalog.mjs \
+            --catalog=/tmp/lakbiz-sri-lanka-demo-catalog.json \
+            --summary-out=/tmp/lakbiz-demo-summary.json
+
+      - name: Importer dry run
+        run: node scripts/import-demo-businesses.mjs --catalog=/tmp/lakbiz-sri-lanka-demo-catalog.json
+
+      - name: Provision Auth users and seed demo businesses
+        run: node scripts/import-demo-businesses.mjs --apply --catalog=/tmp/lakbiz-sri-lanka-demo-catalog.json
+
+      - name: Verify live shops, FEFO fixtures and role isolation
+        run: node scripts/verify-demo-businesses.mjs
+
+      - name: Publish non-secret verification summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/lakbiz-demo-summary.json ]; then
+            echo "## LakBiz Demo Catalog" >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat /tmp/lakbiz-demo-summary.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi

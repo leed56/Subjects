@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ProductForm } from "@/components/product-form";
+import { StockCommandHeader } from "@/components/stock/stock-command-header";
 import { ExportActions } from "@/components/export/export-actions";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
-import { PageHeader, MetricCard, EmptyState, StatusBadge, SearchInput, FilterBar, ActionMenu } from "@/components/ui/primitives";
+import { EmptyState, StatusBadge, SearchInput, FilterBar, ActionMenu } from "@/components/ui/primitives";
 import { Drawer, Dialog, ConfirmDialog } from "@/components/ui/overlay";
 import { FormField, TextInput } from "@/components/ui/form";
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
@@ -26,6 +27,40 @@ import type { Product, ProductCondition } from "@/lib/types";
 
 type ConditionFilter = "all" | ProductCondition;
 
+const STOCK_PAGE_SIZE = 50;
+
+function StockPagination({
+  page,
+  totalPages,
+  start,
+  end,
+  total,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  start: number;
+  end: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-sm text-slate-600 shadow-[0_6px_20px_rgba(15,23,42,0.035)]">
+      <p>
+        <span className="font-semibold text-slate-900">{start}–{end}</span> of {total.toLocaleString()} items
+        <span className="ml-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">· {STOCK_PAGE_SIZE} per page</span>
+      </p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button type="button" disabled={page <= 1} onClick={() => onPageChange(1)} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">First</button>
+        <button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))} className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">←</button>
+        <span className="min-w-[92px] text-center text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Page {page} / {totalPages}</span>
+        <button type="button" aria-label="Next page" disabled={page >= totalPages} onClick={() => onPageChange(Math.min(totalPages, page + 1))} className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">→</button>
+        <button type="button" disabled={page >= totalPages} onClick={() => onPageChange(totalPages)} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">Last</button>
+      </div>
+    </div>
+  );
+}
+
 export default function StockPage() {
   const {
     data,
@@ -41,6 +76,7 @@ export default function StockPage() {
   const { canWrite, disabledHint } = useWriteAccess();
   const { t } = useLocale();
   const { toast } = useToast();
+  const conditionFilterRelevant = org.sector !== "pharmacy" && org.sector !== "grocery";
 
   // Create/edit drawer — form only exists in the DOM while open.
   const [formOpen, setFormOpen] = useState(false);
@@ -82,6 +118,16 @@ export default function StockPage() {
   // HVAC platform Phase 12 — a real filtered view of exactly what needs
   // reordering, not just the metric-card count that existed before.
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, conditionFilter, showInactive, showLowStockOnly, categoryFilter]);
+
+  useEffect(() => {
+    if (!conditionFilterRelevant && conditionFilter !== "all") setConditionFilter("all");
+  }, [conditionFilterRelevant, conditionFilter]);
 
   if (!ready || !data) {
     return (
@@ -102,19 +148,34 @@ export default function StockPage() {
           p.category.toLowerCase().includes(query),
       )
     : data.products;
-  const byCondition = conditionFilter === "all" ? searched : searched.filter((p) => p.condition === conditionFilter);
+  const byCondition = !conditionFilterRelevant || conditionFilter === "all"
+    ? searched
+    : searched.filter((p) => p.condition === conditionFilter);
   const byActive = showInactive ? byCondition : byCondition.filter((p) => p.active);
+  const byCategory = categoryFilter === "all" ? byActive : byActive.filter((p) => p.category === categoryFilter);
   const lowStock = getLowStockProducts(data.products);
   const lowStockIds = new Set(lowStock.map((p) => p.id));
-  const products = showLowStockOnly ? byActive.filter((p) => lowStockIds.has(p.id)) : byActive;
+  const products = showLowStockOnly ? byCategory.filter((p) => lowStockIds.has(p.id)) : byCategory;
+  const totalPages = Math.max(1, Math.ceil(products.length / STOCK_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * STOCK_PAGE_SIZE;
+  const pageProducts = products.slice(pageStart, pageStart + STOCK_PAGE_SIZE);
   const reorderSuggestions = showLowStockOnly ? getReorderSuggestions(data) : [];
   const reorderByProductId = new Map(reorderSuggestions.map((r) => [r.product.id, r] as const));
 
   const newCount = data.products.filter((p) => p.condition === "new").length;
   const usedCount = data.products.filter((p) => p.condition === "used").length;
   const inactiveCount = data.products.filter((p) => !p.active).length;
+  const outOfStockCount = data.products.filter((p) => p.active && p.stockQty <= 0).length;
   const inventoryValue = data.products.reduce((sum, p) => sum + p.stockQty * p.buyPrice, 0);
   const sellValue = data.products.reduce((sum, p) => sum + p.stockQty * p.sellPrice, 0);
+  const categoryCounts = [...new Set(data.products.filter((p) => p.active).map((p) => p.category || "Other"))]
+    .map((name) => ({
+      name,
+      count: data.products.filter((p) => p.active && (p.category || "Other") === name).length,
+    }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, 10);
   const stockInProduct = stockInId ? data.products.find((p) => p.id === stockInId) : null;
   const stockOutProduct = stockOutId ? data.products.find((p) => p.id === stockOutId) : null;
   const stockInQtyNumber = Number(stockInQty) || 0;
@@ -262,7 +323,7 @@ export default function StockPage() {
               <button type="button" onClick={() => openEdit(p)} className={`font-semibold hover:text-teal-700 hover:underline ${p.active ? "text-slate-900" : "text-slate-400"}`}>
                 {p.name}
               </button>
-              <ProductConditionBadge condition={p.condition} />
+              {conditionFilterRelevant && <ProductConditionBadge condition={p.condition} />}
               {!p.active && <StatusBadge tone="neutral">{t("stock.inactive_badge")}</StatusBadge>}
             </div>
             <p className="mt-0.5 text-xs text-slate-500">
@@ -353,9 +414,19 @@ export default function StockPage() {
   return (
     <AppShell>
       <ProMain>
-        <PageHeader
-          title={t("stock.title")}
-          description={`${products.length} ${t("common.items")} · ${t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}`}
+        <StockCommandHeader
+          sector={org.sector}
+          shopName={data.business.name || org.name || "LakBiz"}
+          itemCount={data.products.length}
+          lowStockCount={lowStock.length}
+          outOfStockCount={outOfStockCount}
+          costValue={inventoryValue}
+          sellValue={sellValue}
+          canSeeFinancials={canSeeFinancials}
+          filteredCount={products.length}
+          categories={categoryCounts}
+          selectedCategory={categoryFilter}
+          onCategoryChange={setCategoryFilter}
           actions={
             <>
               {canExport && (
@@ -376,25 +447,12 @@ export default function StockPage() {
                 disabled={!canWrite}
                 title={!canWrite ? disabledHint ?? undefined : undefined}
                 onClick={openCreate}
-                className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-teal-500 px-4 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(20,184,166,0.2)] transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <PlusIcon className="h-4 w-4" />
                 {t("stock.add_item")}
               </button>
             </>
-          }
-          metrics={
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard label={t("common.items")} value={String(data.products.length)} icon={<StockIcon className="h-4 w-4" />} />
-              <MetricCard
-                label={t("dash.low_stock")}
-                value={String(lowStock.length)}
-                hint={lowStock.length > 0 ? t("dash.low_stock_alert") : t("dash.all_good_stock")}
-                tone={lowStock.length > 0 ? "warning" : "default"}
-              />
-              {canSeeFinancials && <MetricCard label={t("stock.cost_value")} value={formatLkr(inventoryValue)} hint={t("stock.buy_price")} />}
-              <MetricCard label={t("stock.sell_value")} value={formatLkr(sellValue)} hint={t("stock.sell_price")} tone="positive" />
-            </div>
           }
         />
 
@@ -402,26 +460,28 @@ export default function StockPage() {
 
         <FilterBar>
           <SearchInput value={search} onChange={setSearch} placeholder={t("stock.search_placeholder")} className="min-w-[220px] flex-1" />
-          <div className="flex gap-1.5">
-            {(
-              [
-                { id: "all" as const, label: t("stock.filter_all"), count: data.products.length },
-                { id: "new" as const, label: t("stock.condition_new"), count: newCount },
-                { id: "used" as const, label: t("stock.condition_used"), count: usedCount },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setConditionFilter(tab.id)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                  conditionFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
-                }`}
-              >
-                {tab.label} <span className="opacity-70">({tab.count})</span>
-              </button>
-            ))}
-          </div>
+          {conditionFilterRelevant && (
+            <div className="flex gap-1.5">
+              {(
+                [
+                  { id: "all" as const, label: t("stock.filter_all"), count: data.products.length },
+                  { id: "new" as const, label: t("stock.condition_new"), count: newCount },
+                  { id: "used" as const, label: t("stock.condition_used"), count: usedCount },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setConditionFilter(tab.id)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                    conditionFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
+                  }`}
+                >
+                  {tab.label} <span className="opacity-70">({tab.count})</span>
+                </button>
+              ))}
+            </div>
+          )}
           {lowStock.length > 0 && (
             <button
               type="button"
@@ -458,17 +518,42 @@ export default function StockPage() {
             }
           />
         ) : (
-          <DataTable columns={columns} rows={products} emptyState={<EmptyState title={t("sales.no_match")} description={t("stock.search_no_match_desc")} />} />
+          <>
+            <div className="mb-3">
+              <StockPagination
+                page={currentPage}
+                totalPages={totalPages}
+                start={pageStart + 1}
+                end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
+                total={products.length}
+                onPageChange={setPage}
+              />
+            </div>
+            <DataTable columns={columns} rows={pageProducts} emptyState={<EmptyState title={t("sales.no_match")} description={t("stock.search_no_match_desc")} />} />
+            {products.length > STOCK_PAGE_SIZE && (
+              <div className="mt-3">
+                <StockPagination
+                  page={currentPage}
+                  totalPages={totalPages}
+                  start={pageStart + 1}
+                  end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
+                  total={products.length}
+                  onPageChange={setPage}
+                />
+              </div>
+            )}
+          </>
         )}
 
         {/* Create / edit drawer — always opens immediately. */}
         <Drawer
           open={formOpen}
           onClose={() => setFormOpen(false)}
+          size="lg"
           title={editing ? editing.name : t("stock.add_item")}
           description={editing ? t("stock.edit_inventory_eyebrow") : t("stock.create_inventory_eyebrow")}
         >
-          {editing ? (
+          {formOpen && (editing ? (
             <ProductForm
               initial={editing}
               lockedSectorId={org.isAuthenticated ? org.sector : undefined}
@@ -511,7 +596,7 @@ export default function StockPage() {
                 toast({ tone: "success", title: t("stock.added"), description: input.name });
               }}
             />
-          )}
+          ))}
         </Drawer>
 
         {/* Stock in */}

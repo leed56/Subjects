@@ -1,8 +1,11 @@
 export type SectorId =
   | "grocery"
+  | "pharmacy"
   | "electronics"
+  | "mobile_shop"
   | "electricals"
   | "spare_parts"
+  | "footwear"
   | "ac_hvac"
   | "car_sales";
 
@@ -13,7 +16,9 @@ export type PaymentMethod =
   | "bank_transfer"
   | "card"
   | "cheque"
-  | "credit";
+  | "credit"
+  /** Display/read value for invoices finalized through the normalized tender ledger. */
+  | "mixed";
 
 /** Inventory lane: new stock vs used/refurbished (Phase A). */
 export type ProductCondition = "new" | "used";
@@ -33,7 +38,6 @@ export interface SectorTemplate {
   nameEn: string;
   nameSi: string;
   description: string;
-  icon: string;
   extraFields: string[];
   reports: string[];
 }

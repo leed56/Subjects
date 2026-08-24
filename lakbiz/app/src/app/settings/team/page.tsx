@@ -149,7 +149,7 @@ export default function TeamSettingsPage() {
           <ProCard title={t("team.create_title")} eyebrow={t("team.create_eyebrow")}>
             <p className="mb-4 text-sm font-semibold text-slate-600">{t("team.create_hint")}</p>
             <form onSubmit={handleCreateUser} className="space-y-3">
-              <label className="block text-sm font-black text-slate-700">
+              <label className="block text-sm font-bold text-slate-700">
                 {t("team.email")}
                 <input
                   type="email"
@@ -159,7 +159,7 @@ export default function TeamSettingsPage() {
                   className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold"
                 />
               </label>
-              <label className="block text-sm font-black text-slate-700">
+              <label className="block text-sm font-bold text-slate-700">
                 {t("team.password")}
                 <input
                   type="password"
@@ -170,7 +170,7 @@ export default function TeamSettingsPage() {
                   className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold"
                 />
               </label>
-              <label className="block text-sm font-black text-slate-700">
+              <label className="block text-sm font-bold text-slate-700">
                 {t("team.role")}
                 <select
                   value={role}
@@ -186,7 +186,7 @@ export default function TeamSettingsPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full rounded-2xl bg-teal-600 py-3 text-sm font-black text-white hover:bg-teal-700 disabled:opacity-50"
+                className="w-full rounded-2xl bg-teal-600 py-3 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-50"
               >
                 {submitting ? t("common.saving") : t("team.create_btn")}
               </button>
@@ -204,7 +204,7 @@ export default function TeamSettingsPage() {
                   return (
                     <li key={m.userId} className="flex items-center justify-between gap-3 py-3 text-sm">
                       <div className="min-w-0">
-                        <p className="truncate font-black text-slate-900">{m.email ?? m.userId.slice(0, 8)}</p>
+                        <p className="truncate font-bold text-slate-900">{m.email ?? m.userId.slice(0, 8)}</p>
                         {(isSelf || isOwner) && (
                           <p className="text-xs font-semibold text-slate-500">{m.role.replace("_", " ")}</p>
                         )}

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { SiteHeader } from "@/components/site-header";
-import { SignedInBanner, SignOutButton } from "@/components/sign-out-button";
+import { SignOutButton } from "@/components/sign-out-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
@@ -35,7 +35,8 @@ export default function LoginPage() {
   const [adminLogin, setAdminLogin] = useState(false);
 
   const configured = isSupabaseConfigured();
-  const adminOnly = process.env.NEXT_PUBLIC_ADMIN_ONLY === "true";
+  // Shop/sector provisioning is exclusively a platform-admin operation.
+  const adminOnly = true;
 
   useEffect(() => {
     const next = new URLSearchParams(window.location.search).get("next");
@@ -53,12 +54,25 @@ export default function LoginPage() {
     });
   }, [adminLogin, configured, authLoading, user]);
 
+  // A normal authenticated shop user should never remain on /login. This is
+  // independent of the submit handler so an auth-state update cannot leave the
+  // stale "already signed in" card visible while another async check settles.
+  useEffect(() => {
+    if (adminLogin || authLoading || !user) return;
+    const next = new URLSearchParams(window.location.search).get("next");
+    const destination = next?.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+    window.location.replace(destination);
+  }, [adminLogin, authLoading, user]);
+
   const safeNextPath = (): string | null => {
     if (typeof window === "undefined") return null;
     const next = new URLSearchParams(window.location.search).get("next");
     if (!next?.startsWith("/") || next.startsWith("//")) return null;
     return next;
   };
+
+  const alreadySignedIn = !!user && !authLoading;
+  const continueDestination = safeNextPath() ?? "/dashboard";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,18 +98,10 @@ export default function LoginPage() {
         router.push("/dashboard");
       } else {
         await signIn(email, password);
-        const supabase = createBrowserClient();
-        const isAdmin =
-          !!supabase && (await isPlatformAdminClient(supabase));
-        const nextPath = safeNextPath();
-
-        if (nextPath === "/admin" && !isAdmin) {
-          setMessage(t("admin.not_platform_admin"));
-          return;
-        }
-
-        const destination = nextPath ?? (isAdmin ? "/admin" : "/dashboard");
-        window.location.assign(destination);
+        // Do not perform another Supabase query between successful auth and
+        // navigation. Shop authorization has already been checked by the auth
+        // action, while /admin has its own protected gate.
+        window.location.assign(safeNextPath() ?? "/dashboard");
         return;
       }
     } catch (err) {
@@ -169,17 +175,42 @@ export default function LoginPage() {
           )}
         </div>
 
-        {adminLogin && user && !authLoading && (
-          <div className="mt-6"><SignedInBanner adminMode redirectAfterSignOut="/login?next=/admin" /></div>
+        {alreadySignedIn && (
+          <div
+            className={`mt-6 rounded-xl border p-6 text-center sm:p-7 ${
+              adminLogin ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
+            }`}
+          >
+            <p className={`text-base font-semibold ${adminLogin ? "text-white" : "text-slate-900"}`}>
+              {t("auth.already_signed_in")}
+            </p>
+            <p className={`mt-1 text-sm ${adminLogin ? "text-slate-400" : "text-slate-500"}`}>
+              {user?.email}
+            </p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
+              <button
+                type="button"
+                onClick={() => window.location.assign(continueDestination)}
+                className={`inline-flex min-h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold text-white ${
+                  adminLogin ? "bg-teal-600 hover:bg-teal-500" : "bg-teal-700 hover:bg-teal-800"
+                }`}
+              >
+                {t("auth.continue_dashboard")}
+              </button>
+              <SignOutButton
+                redirectTo={adminLogin ? "/login?next=/admin" : "/login"}
+                label={t("auth.sign_out_other")}
+                className={`inline-flex min-h-11 items-center justify-center rounded-lg border px-4 text-sm font-semibold ${
+                  adminLogin
+                    ? "border-slate-700 text-slate-300 hover:bg-slate-800"
+                    : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                }`}
+              />
+            </div>
+          </div>
         )}
 
-        {!adminLogin && user && !authLoading && (
-          <div className="mt-6"><SignedInBanner redirectAfterSignOut="/login" /></div>
-        )}
-
-        {/* Centered auth card — the login form no longer floats directly on
-            the page background, matching the rest of the redesigned
-            surfaces (docs/UI_POLISH_AUDIT.md Part 12). */}
+        {!alreadySignedIn && (
         <div
           className={`mt-6 rounded-xl border p-6 shadow-sm sm:p-7 ${
             adminLogin ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
@@ -241,7 +272,7 @@ export default function LoginPage() {
                     required
                     value={shopName}
                     onChange={(e) => setShopName(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5"
                   />
                 </label>
                 <label className="block text-sm">
@@ -251,7 +282,7 @@ export default function LoginPage() {
                     placeholder="07X XXX XXXX"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5"
                   />
                 </label>
               </>
@@ -263,7 +294,7 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className={`mt-1 w-full rounded-lg border px-3 py-2 ${
+                className={`mt-1 w-full rounded-lg border px-3 py-2.5 ${
                   adminLogin
                     ? "border-slate-700 bg-slate-950 text-white placeholder:text-slate-500"
                     : "border-slate-300"
@@ -279,7 +310,7 @@ export default function LoginPage() {
                 minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className={`mt-1 w-full rounded-lg border px-3 py-2 ${
+                className={`mt-1 w-full rounded-lg border px-3 py-2.5 ${
                   adminLogin
                     ? "border-slate-700 bg-slate-950 text-white"
                     : "border-slate-300"
@@ -297,15 +328,16 @@ export default function LoginPage() {
               }`}
             >
               {loading
-                ? "..."
+                ? t("auth.signing_in")
                 : mode === "signup"
                   ? t("sub.create_account")
                   : t("sub.sign_in")}
             </button>
           </form>
         </div>
+        )}
 
-        {!adminLogin && (
+        {!adminLogin && !alreadySignedIn && (
           <p className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm text-slate-600">
             Need access? Contact LakBiz to receive your login details.
           </p>

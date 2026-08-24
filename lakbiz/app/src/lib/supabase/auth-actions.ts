@@ -48,30 +48,23 @@ async function findUserOrgId(
   return rows?.[0]?.organization_id ?? null;
 }
 
-/** Create org + owner membership when the user has none yet. */
+/**
+ * Compatibility helper retained for existing callers. Shop creation is no
+ * longer a client-side operation: platform admin provisioning must create the
+ * organization and membership before a shop user can access LakBiz.
+ */
 export async function ensureUserOrg(
   supabase: NonNullable<ReturnType<typeof createBrowserClient>>,
   userId: string,
-  input: EnsureOrgInput = {},
+  _input: EnsureOrgInput = {},
 ): Promise<string | null> {
   const existingId = await findUserOrgId(supabase, userId);
   if (existingId) return existingId;
 
-  const shopName = input.shopName?.trim() || "My Shop";
-
-  const { data: orgId, error: orgError } = await supabase.rpc(
-    "bootstrap_user_organization",
-    {
-      p_name: shopName,
-      p_phone: input.phone?.trim() || null,
-      p_sector: parseSectorId(input.sector),
-    },
+  throw new AuthFlowError(
+    "No LakBiz workspace is assigned to this login. Contact your LakBiz administrator.",
+    "org",
   );
-
-  if (orgError) throw new AuthFlowError(orgError.message, "org");
-  if (!orgId) throw new AuthFlowError("Could not create shop", "org");
-
-  return orgId as string;
 }
 
 export async function signUpWithShop(input: {
@@ -81,52 +74,11 @@ export async function signUpWithShop(input: {
   phone?: string;
   sector: SectorId;
 }) {
-  if (process.env.NEXT_PUBLIC_ADMIN_ONLY === "true") {
-    throw new AuthFlowError(
-      "Public signup is disabled. Contact your LakBiz administrator.",
-      "auth",
-    );
-  }
-
-  const supabase = createBrowserClient();
-  if (!supabase) throw new Error("Supabase not configured");
-
-  const redirectTo =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/login`
-      : undefined;
-
-  const { data: authData, error: authError } = await supabase.auth.signUp({
-    email: input.email,
-    password: input.password,
-    options: {
-      emailRedirectTo: redirectTo,
-      data: {
-        shop_name: input.shopName,
-        phone: input.phone ?? null,
-        sector: input.sector,
-      },
-    },
-  });
-
-  if (authError) throw new AuthFlowError(authError.message, "auth");
-  if (!authData.user) throw new AuthFlowError("Sign up failed", "auth");
-
-  // No session until email is confirmed (Supabase default)
-  if (!authData.session) {
-    throw new AuthFlowError(
-      "Account created. Check your email (inbox + spam) and click Confirm, then Sign in here.",
-      "email_confirmation",
-    );
-  }
-
-  const orgId = await ensureUserOrg(supabase, authData.user.id, {
-    shopName: input.shopName,
-    phone: input.phone,
-    sector: input.sector,
-  });
-
-  return { user: authData.user, organizationId: orgId };
+  void input;
+  throw new AuthFlowError(
+    "Public shop signup is disabled. LakBiz workspaces and business configuration are created by the platform administrator.",
+    "auth",
+  );
 }
 
 export async function resendConfirmationEmail(email: string) {
@@ -177,31 +129,27 @@ export async function signInWithEmail(email: string, password: string) {
     }
     if (msg.includes("invalid login credentials")) {
       throw new AuthFlowError(
-        "Invalid email or password. Check for extra spaces, use Sign in (not Create account), and ask the owner to reset your password from Settings → Team if needed.",
+        "Invalid email or password. Check for extra spaces and ask the owner to reset your password from Settings → Team if needed.",
         "auth",
       );
     }
     throw new AuthFlowError(error.message, "auth");
   }
 
-  const meta = data.user?.user_metadata as {
-    shop_name?: string;
-    phone?: string;
-    sector?: string;
-  };
-  const isPlatformAdmin = await isPlatformAdminClient(supabase);
-  if (!isPlatformAdmin) {
-    const existingOrgId = await findUserOrgId(supabase, data.user!.id);
-    if (!existingOrgId) {
-      const emailPrefix = email.split("@")[0]?.trim();
-      await ensureUserOrg(supabase, data.user!.id, {
-        shopName: meta?.shop_name ?? emailPrefix,
-        phone: meta?.phone,
-        sector: meta?.sector,
-      });
-    }
+  if (!data.user || !data.session) {
+    throw new AuthFlowError(
+      "Sign-in completed without a usable session. Please try again.",
+      "auth",
+    );
   }
 
+  // Keep the auth critical path limited to establishing the Supabase session.
+  // A successful password exchange must be allowed to return immediately so
+  // the login page can navigate while the browser client still owns the fresh
+  // session. Workspace membership, role and platform-admin authorization are
+  // loaded by SubscriptionProvider and are independently enforced by RLS and
+  // server middleware. Blocking navigation on extra PostgREST queries here
+  // caused intermittent successful-logins to remain stranded on /login.
   return data;
 }
 

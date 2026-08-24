@@ -79,7 +79,7 @@ export default function JobInvoicePage() {
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98]"
+                  className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98]"
                 >
                   {t("common.view_print")}
                 </button>
@@ -89,16 +89,16 @@ export default function JobInvoicePage() {
 
           <section className="mb-6 grid gap-4 sm:grid-cols-3">
             <ProCard>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{t("common.total")}</p>
-              <p className="mt-2 font-mono text-2xl font-black text-slate-950">{formatLkr(invoiceTotal)}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{t("common.total")}</p>
+              <p className="mt-2 font-mono text-2xl font-bold text-slate-950">{formatLkr(invoiceTotal)}</p>
             </ProCard>
             <ProCard>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{t("jobs.deposit_label")}</p>
-              <p className="mt-2 font-mono text-2xl font-black text-slate-950">{formatLkr(job.depositAmount)}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{t("jobs.deposit_label")}</p>
+              <p className="mt-2 font-mono text-2xl font-bold text-slate-950">{formatLkr(job.depositAmount)}</p>
             </ProCard>
             <ProCard>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{t("common.balance")}</p>
-              <p className={`mt-2 font-mono text-2xl font-black ${balance > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{t("common.balance")}</p>
+              <p className={`mt-2 font-mono text-2xl font-bold ${balance > 0 ? "text-amber-700" : "text-emerald-700"}`}>
                 {formatLkr(balance)}
               </p>
             </ProCard>

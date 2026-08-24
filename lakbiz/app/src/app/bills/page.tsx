@@ -15,6 +15,7 @@ import {
   ProPageHeader,
   ProStatCard,
 } from "@/components/ui/pro-shell";
+import { BillsIcon, CostingIcon, ReportsIcon, CustomersIcon } from "@/components/ui/icons";
 import { formatLkr } from "@/lib/format";
 import { buildInvoiceText, buildQuoteText, whatsappShareUrl } from "@/lib/invoice";
 import { exportSalesCsv, printSalesReport } from "@/lib/export";
@@ -35,7 +36,7 @@ function customerPhoneForSale(
 export default function BillsPage() {
   const { data, ready, updateBusinessToCloud } = useAppStore();
   const { t } = useLocale();
-  const { canSeeFinancials, can } = useSubscription();
+  const { canSeeFinancials, can, orgRole } = useSubscription();
   const [editBiz, setEditBiz] = useState(false);
   const [savingBiz, setSavingBiz] = useState(false);
   const [bizMessage, setBizMessage] = useState("");
@@ -123,11 +124,14 @@ export default function BillsPage() {
                   }
                 />
               )}
+              {orgRole === "owner" && (
+                <ProButton href="/returns" variant="secondary">Returns control</ProButton>
+              )}
               <ProButton href="/sales">{t("bills.create_sale")}</ProButton>
               <button
                 type="button"
                 onClick={openBizEdit}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98]"
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98]"
               >
                 {t("bills.shop_details")}
               </button>
@@ -136,13 +140,13 @@ export default function BillsPage() {
         />
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("bills.count")} value={String(data.sales.length)} hint={t("bills.invoices_issued")} icon="🧾" tone="teal" />
-          <ProStatCard label={t("common.total")} value={formatLkr(salesTotal)} hint={t("bills.total_billed")} icon="💸" tone="emerald" />
+          <ProStatCard label={t("bills.count")} value={String(data.sales.length)} hint={t("bills.invoices_issued")} icon={<BillsIcon className="h-5 w-5" />} tone="teal" />
+          <ProStatCard label={t("common.total")} value={formatLkr(salesTotal)} hint={t("bills.total_billed")} icon={<CostingIcon className="h-5 w-5" />} tone="emerald" />
           {canSeeFinancials && (
-            <ProStatCard label={t("common.profit")} value={formatLkr(profitTotal)} hint={t("bills.recorded_profit")} icon="📈" tone="blue" />
+            <ProStatCard label={t("common.profit")} value={formatLkr(profitTotal)} hint={t("bills.recorded_profit")} icon={<ReportsIcon className="h-5 w-5" />} tone="blue" />
           )}
           {canSeeFinancials && (
-            <ProStatCard label={t("bills.credit_bills")} value={formatLkr(creditTotal)} hint={t("bills.credit_sales")} icon="🤝" tone="amber" />
+            <ProStatCard label={t("bills.credit_bills")} value={formatLkr(creditTotal)} hint={t("bills.credit_sales")} icon={<CustomersIcon className="h-5 w-5" />} tone="amber" />
           )}
         </section>
 
@@ -187,7 +191,7 @@ export default function BillsPage() {
                   <button
                     type="submit"
                     disabled={savingBiz}
-                    className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {savingBiz ? t("common.saving") : t("common.save")}
                   </button>
@@ -195,7 +199,7 @@ export default function BillsPage() {
                     type="button"
                     onClick={() => setEditBiz(false)}
                     disabled={savingBiz}
-                    className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {t("common.cancel")}
                   </button>
@@ -249,7 +253,7 @@ export default function BillsPage() {
             <ProCard title={t("bills.invoice_history")} action={<ProBadge tone="teal">{bills.length} {t("bills.invoices_count")}</ProBadge>}>
               <div className="hidden overflow-hidden rounded-2xl border border-slate-200 lg:block">
                 <table className="w-full text-left text-sm">
-                  <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+                  <thead className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
                     <tr>
                       <th className="px-4 py-3">{t("bills.bill_no")}</th>
                       <th className="px-4 py-3">{t("common.date")}</th>
@@ -272,19 +276,19 @@ export default function BillsPage() {
                       );
                       return (
                       <tr key={s.id} className="border-b last:border-0">
-                        <td className="px-4 py-3 font-mono text-xs font-black text-slate-700">{s.billNo ?? s.id.slice(0, 8)}</td>
+                        <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">{s.billNo ?? s.id.slice(0, 8)}</td>
                         <td className="px-4 py-3 font-semibold text-slate-600">{new Date(s.date).toLocaleString("en-LK")}</td>
-                        <td className="px-4 py-3 font-black text-slate-900">{s.customerName || "—"}</td>
-                        <td className="px-4 py-3 font-mono font-black text-slate-950">{formatLkr(s.total)}</td>
+                        <td className="px-4 py-3 font-bold text-slate-900">{s.customerName || "—"}</td>
+                        <td className="px-4 py-3 font-mono font-bold text-slate-950">{formatLkr(s.total)}</td>
                         <td className="px-4 py-3"><ProBadge tone="slate">{paymentLabel(t, s.paymentMethod)}</ProBadge></td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex flex-wrap items-center justify-end gap-2">
-                            <Link href={`/bills/${s.id}`} className="font-black text-teal-700 hover:underline">{t("common.view_print")}</Link>
+                            <Link href={`/bills/${s.id}`} className="font-bold text-teal-700 hover:underline">{t("common.view_print")}</Link>
                             <a
                               href={invoiceWa}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="rounded-lg bg-green-600 px-2 py-1 text-xs font-black text-white hover:bg-green-700"
+                              className="rounded-lg bg-green-600 px-2 py-1 text-xs font-bold text-white hover:bg-green-700"
                             >
                               {t("bills.wa_short")}
                             </a>
@@ -292,7 +296,7 @@ export default function BillsPage() {
                               href={quoteWa}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="rounded-lg border border-green-600 px-2 py-1 text-xs font-black text-green-700 hover:bg-green-50"
+                              className="rounded-lg border border-green-600 px-2 py-1 text-xs font-bold text-green-700 hover:bg-green-50"
                             >
                               {t("bills.quote_whatsapp")}
                             </a>
@@ -318,15 +322,15 @@ export default function BillsPage() {
                   <Link key={s.id} href={`/bills/${s.id}`} className="block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-white">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-mono text-xs font-black uppercase tracking-wide text-teal-700">{s.billNo ?? s.id.slice(0, 8)}</p>
-                        <p className="mt-2 text-base font-black text-slate-950">{s.customerName || t("bills.walk_in_customer")}</p>
+                        <p className="font-mono text-xs font-bold uppercase tracking-wide text-teal-700">{s.billNo ?? s.id.slice(0, 8)}</p>
+                        <p className="mt-2 text-base font-bold text-slate-950">{s.customerName || t("bills.walk_in_customer")}</p>
                         <p className="mt-1 text-xs font-semibold text-slate-500">{new Date(s.date).toLocaleString("en-LK")}</p>
                       </div>
                       <ProBadge tone="slate">{paymentLabel(t, s.paymentMethod)}</ProBadge>
                     </div>
                     <div className="mt-4 flex items-end justify-between border-t border-slate-200 pt-3">
-                      <p className="font-mono text-xl font-black text-slate-950">{formatLkr(s.total)}</p>
-                      <p className="text-xs font-black text-teal-700">{t("common.view_print")} →</p>
+                      <p className="font-mono text-xl font-bold text-slate-950">{formatLkr(s.total)}</p>
+                      <p className="text-xs font-bold text-teal-700">{t("common.view_print")} →</p>
                     </div>
                   </Link>
                 ))}

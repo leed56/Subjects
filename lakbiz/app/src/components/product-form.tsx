@@ -1,18 +1,27 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Product, SectorId } from "@/lib/types";
-import { sectors, defaultCategoryForSector, categoriesForSector, sectorById } from "@/lib/sectors";
+import { sectors, defaultCategoryForSector, categoriesForSector } from "@/lib/sectors";
 import {
   customFieldsFromProduct,
   emptyCustomFieldsForSector,
   sectorFormFields,
 } from "@/lib/sector-fields";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { ProductReferenceCombobox } from "@/components/product-reference-combobox";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { ProductInput } from "@/lib/store/types";
 
-const units = ["pcs", "kg", "m", "box", "unit", "set"];
+function unitsForSector(sectorId: SectorId): string[] {
+  if (sectorId === "pharmacy") {
+    return ["pcs", "tablet", "capsule", "strip", "box", "bottle", "tube", "vial", "ampoule", "pack", "ml"];
+  }
+  if (sectorId === "grocery") {
+    return ["pcs", "g", "kg", "ml", "L", "pack", "bottle", "tin", "bag", "box"];
+  }
+  return ["pcs", "kg", "m", "box", "unit", "set"];
+}
 
 type FormState = ProductInput & {
   sectorCustom: Record<string, string>;
@@ -32,10 +41,7 @@ const emptyForm = (sectorId: SectorId = "grocery"): FormState => ({
   active: true,
   notes: "",
   sectorCustom: Object.fromEntries(
-    Object.entries(emptyCustomFieldsForSector(sectorId)).map(([k, v]) => [
-      k,
-      String(v),
-    ]),
+    Object.entries(emptyCustomFieldsForSector(sectorId)).map(([k, v]) => [k, String(v)]),
   ),
 });
 
@@ -49,6 +55,12 @@ interface ProductFormProps {
   submitLabel?: string;
 }
 
+const fieldLabel = "text-[13px] font-semibold text-slate-600";
+const inputClass =
+  "mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.025)] outline-none transition placeholder:text-slate-400 focus:border-teal-400 focus:ring-4 focus:ring-teal-100/70";
+const sectionClass =
+  "rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_26px_rgba(15,23,42,0.04)]";
+
 export function ProductForm({
   initial,
   defaultSectorId = "grocery",
@@ -59,6 +71,7 @@ export function ProductForm({
 }: ProductFormProps) {
   const { t, locale } = useLocale();
   const { canSeeFinancials } = useSubscription();
+  const isSinhala = locale === "si";
   const shopSectorId = lockedSectorId ?? defaultSectorId;
   const [form, setForm] = useState<FormState>(() => {
     if (initial) {
@@ -78,35 +91,46 @@ export function ProductForm({
         unit: String(initial.customFields.unit ?? "pcs"),
         active: initial.active,
         notes: initial.notes ?? "",
-        sectorCustom: customFieldsFromProduct({
-          ...initial,
-          sectorId,
-        }),
+        sectorCustom: customFieldsFromProduct({ ...initial, sectorId }),
       };
     }
     return emptyForm(shopSectorId);
   });
+  const units = useMemo(
+    () => Array.from(new Set([
+      ...unitsForSector(lockedSectorId ?? form.sectorId),
+      form.unit,
+    ].filter(Boolean))),
+    [lockedSectorId, form.sectorId, form.unit],
+  );
+  const effectiveSectorId = lockedSectorId ?? form.sectorId;
+  const conditionRelevant = effectiveSectorId !== "pharmacy" && effectiveSectorId !== "grocery";
+
+  useEffect(() => {
+    if (initial) return;
+    const sectorId = lockedSectorId ?? defaultSectorId;
+    setForm((current) => {
+      if (
+        current.sectorId === sectorId &&
+        categoriesForSector(sectorId).includes(current.category)
+      ) {
+        return current;
+      }
+      return emptyForm(sectorId);
+    });
+  }, [initial, lockedSectorId, defaultSectorId]);
 
   const categories = useMemo(
     () => categoriesForSector(lockedSectorId ?? form.sectorId),
     [lockedSectorId, form.sectorId],
   );
-
-  const lockedSector = lockedSectorId ? sectorById(lockedSectorId) : undefined;
-
-  const sectorFields = useMemo(
-    () => sectorFormFields(form.sectorId),
-    [form.sectorId],
-  );
+  const sectorFields = useMemo(() => sectorFormFields(form.sectorId), [form.sectorId]);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
   const setSectorField = (key: string, value: string) =>
-    setForm((f) => ({
-      ...f,
-      sectorCustom: { ...f.sectorCustom, [key]: value },
-    }));
+    setForm((f) => ({ ...f, sectorCustom: { ...f.sectorCustom, [key]: value } }));
 
   const handleSectorChange = (sectorId: SectorId) => {
     if (lockedSectorId) return;
@@ -114,11 +138,9 @@ export function ProductForm({
       ...f,
       sectorId,
       category: defaultCategoryForSector(sectorId),
+      condition: "new",
       sectorCustom: Object.fromEntries(
-        Object.entries(emptyCustomFieldsForSector(sectorId)).map(([k, v]) => [
-          k,
-          String(v),
-        ]),
+        Object.entries(emptyCustomFieldsForSector(sectorId)).map(([k, v]) => [k, String(v)]),
       ),
     }));
   };
@@ -134,214 +156,268 @@ export function ProductForm({
       category: categoriesForSector(sectorId).includes(rest.category)
         ? rest.category
         : defaultCategoryForSector(sectorId),
+      // Condition is meaningful for resale/asset sectors, not normal pharmacy
+      // or grocery catalogue items. Keep the persisted invariant as `new`.
+      condition: sectorId === "pharmacy" || sectorId === "grocery" ? "new" : rest.condition,
       customFields: sectorCustom,
     });
     if (!initial) setForm(emptyForm(shopSectorId));
   };
 
   const saveLabel = submitLabel ?? t("stock.save_item");
+  const basicsTitle = isSinhala ? "භාණ්ඩ මූලික තොරතුරු" : "Item details";
+  const basicsHint = isSinhala
+    ? "භාණ්ඩය හඳුනාගැනීමට අවශ්‍ය මූලික තොරතුරු."
+    : "The core information your team uses to find and sell this item.";
+  const inventoryTitle = isSinhala ? "තොග සහ මිල" : "Inventory & pricing";
+  const inventoryHint = isSinhala
+    ? "තොග ප්‍රමාණය, මිල සහ අඩු තොග සීමාව පාලනය කරන්න."
+    : "Control quantity, pricing and the low-stock threshold in one place.";
+  const sectorTitle = isSinhala ? "අමතර භාණ්ඩ තොරතුරු" : "Additional item details";
+  const sectorHint = isSinhala
+    ? "ඔබේ ව්‍යාපාර වර්ගයට පමණක් අදාළ අමතර තොරතුරු."
+    : "Additional identity and handling information used for this item.";
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
-    >
-      <h2 className="mb-4 font-semibold text-slate-900">
-        {initial ? t("stock.edit_item") : t("stock.add_new")}
-      </h2>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block sm:col-span-2">
-          <span className="text-sm text-slate-600">{t("stock.item_name")}</span>
-          <input
-            required
-            value={form.name}
-            onChange={(e) => set("name", e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm text-slate-600">{t("stock.sku")}</span>
-          <input
-            value={form.sku}
-            onChange={(e) => set("sku", e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm text-slate-600">{t("stock.category")}</span>
-          <select
-            value={form.category}
-            onChange={(e) => set("category", e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          >
-            {categories.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-        </label>
-        <label className="block">
-          <span className="text-sm text-slate-600">{t("stock.sector")}</span>
-          {lockedSectorId && lockedSector ? (
-            <div className="mt-1 flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800">
-              <span className="mr-2">{lockedSector.icon}</span>
-              {locale === "si" ? lockedSector.nameSi : lockedSector.nameEn}
-            </div>
-          ) : (
-            <select
-              value={form.sectorId}
-              onChange={(e) => handleSectorChange(e.target.value as SectorId)}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            >
-              {sectors.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.nameSi} / {s.nameEn}
-                </option>
-              ))}
-            </select>
-          )}
-        </label>
-        <label className="block">
-          <span className="text-sm text-slate-600">{t("stock.condition")}</span>
-          <select
-            value={form.condition ?? "new"}
-            onChange={(e) => set("condition", e.target.value as ProductInput["condition"])}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          >
-            <option value="new">{t("stock.condition_new")}</option>
-            <option value="used">{t("stock.condition_used")}</option>
-          </select>
-        </label>
-        <label className="block">
-          <span className="text-sm text-slate-600">{t("stock.unit")}</span>
-          <select
-            value={form.unit}
-            onChange={(e) => set("unit", e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          >
-            {units.map((u) => (
-              <option key={u}>{u}</option>
-            ))}
-          </select>
-        </label>
-        {canSeeFinancials && (
-        <label className="block">
-          <span className="text-sm text-slate-600">{t("stock.buy_price")}</span>
-          <input
-            type="number"
-            min={0}
-            value={form.buyPrice || ""}
-            onChange={(e) => set("buyPrice", Number(e.target.value))}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
-        </label>
-        )}
-        <label className="block">
-          <span className="text-sm text-slate-600">{t("stock.sell_price")}</span>
-          <input
-            type="number"
-            min={0}
-            value={form.sellPrice || ""}
-            onChange={(e) => set("sellPrice", Number(e.target.value))}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm text-slate-600">{t("stock.current_qty")}</span>
-          <input
-            type="number"
-            min={0}
-            value={form.stockQty || ""}
-            onChange={(e) => set("stockQty", Number(e.target.value))}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm text-slate-600">{t("stock.low_alert_at")}</span>
-          <input
-            type="number"
-            min={0}
-            value={form.reorderLevel ?? ""}
-            onChange={(e) => set("reorderLevel", Number(e.target.value))}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
-        </label>
-        {initial && (
-          <label className="flex items-center gap-2 self-end pb-2">
-            <input
-              type="checkbox"
-              checked={form.active ?? true}
-              onChange={(e) => set("active", e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300"
+    <form data-product-form="true" onSubmit={handleSubmit} className="space-y-5 pb-24">
+      <section className={sectionClass}>
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-base font-semibold tracking-[-0.015em] text-slate-950">{basicsTitle}</h3>
+            <p className="mt-1 text-xs leading-5 text-slate-500">{basicsHint}</p>
+          </div>
+          <span className="rounded-full bg-teal-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-700 ring-1 ring-inset ring-teal-100">
+            {initial ? t("common.edit") : t("stock.add_new")}
+          </span>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {!initial && lockedSectorId ? (
+            <ProductReferenceCombobox
+              label={t("stock.item_name")}
+              value={form.name}
+              autoFocus
+              onChange={(value) => set("name", value)}
+              onSelect={(suggestion) => {
+                setForm((current) => ({
+                  ...current,
+                  name: suggestion.name,
+                  sku: suggestion.sku ?? current.sku,
+                  unit: suggestion.unit ?? current.unit,
+                  category: suggestion.category && categoriesForSector(lockedSectorId ?? current.sectorId).includes(suggestion.category)
+                    ? suggestion.category
+                    : current.category,
+                  sectorCustom: {
+                    ...current.sectorCustom,
+                    ...(suggestion.source ? { source: suggestion.source } : {}),
+                    ...(suggestion.sourceUrl ? { sourceUrl: suggestion.sourceUrl } : {}),
+                    ...(suggestion.packSize ? { packSize: suggestion.packSize } : {}),
+                    ...(suggestion.brand ? { brand: suggestion.brand } : {}),
+                    ...(suggestion.genericName ? { genericName: suggestion.genericName } : {}),
+                    ...(suggestion.strength ? { strength: suggestion.strength } : {}),
+                    ...(suggestion.dosageForm ? { dosageForm: suggestion.dosageForm } : {}),
+                    ...(suggestion.manufacturer ? { manufacturer: suggestion.manufacturer } : {}),
+                    ...(suggestion.manufacturingCountry ? { manufacturingCountry: suggestion.manufacturingCountry } : {}),
+                    ...(suggestion.regulatoryRegistrationNumber ? { regulatoryRegistrationNumber: suggestion.regulatoryRegistrationNumber } : {}),
+                    ...(suggestion.regulatorySource ? { regulatorySource: suggestion.regulatorySource } : {}),
+                    ...(suggestion.regulatorySourceUrl ? { regulatorySourceUrl: suggestion.regulatorySourceUrl } : {}),
+                  },
+                }));
+              }}
             />
-            <span className="text-sm text-slate-600">{t("stock.active_item")}</span>
+          ) : (
+            <label className="block sm:col-span-2">
+              <span className={fieldLabel}>{t("stock.item_name")}</span>
+              <input
+                required
+                autoFocus
+                value={form.name}
+                onChange={(e) => set("name", e.target.value)}
+                className={inputClass}
+              />
+            </label>
+          )}
+
+          <label className="block">
+            <span className={fieldLabel}>{t("stock.sku")}</span>
+            <input value={form.sku} onChange={(e) => set("sku", e.target.value)} className={inputClass} />
           </label>
-        )}
-        <label className="block sm:col-span-2">
-          <span className="text-sm text-slate-600">{t("stock.notes")}</span>
-          <textarea
-            value={form.notes ?? ""}
-            onChange={(e) => set("notes", e.target.value)}
-            rows={2}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
-          />
-        </label>
-      </div>
+
+          <label className="block">
+            <span className={fieldLabel}>{t("stock.category")}</span>
+            <select value={form.category} onChange={(e) => set("category", e.target.value)} className={inputClass}>
+              {categories.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </label>
+
+          {!lockedSectorId && (
+            <label className="block">
+              <span className={fieldLabel}>{t("stock.sector")}</span>
+              <select value={form.sectorId} onChange={(e) => handleSectorChange(e.target.value as SectorId)} className={inputClass}>
+                {sectors.map((s) => (
+                  <option key={s.id} value={s.id}>{s.nameSi} / {s.nameEn}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {conditionRelevant && (
+            <label className="block">
+              <span className={fieldLabel}>{t("stock.condition")}</span>
+              <select
+                value={form.condition ?? "new"}
+                onChange={(e) => set("condition", e.target.value as ProductInput["condition"])}
+                className={inputClass}
+              >
+                <option value="new">{t("stock.condition_new")}</option>
+                <option value="used">{t("stock.condition_used")}</option>
+              </select>
+            </label>
+          )}
+        </div>
+      </section>
+
+      <section className={sectionClass}>
+        <div className="mb-5">
+          <h3 className="text-base font-semibold tracking-[-0.015em] text-slate-950">{inventoryTitle}</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-500">{inventoryHint}</p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className={fieldLabel}>{t("stock.unit")}</span>
+            <select value={form.unit} onChange={(e) => set("unit", e.target.value)} className={inputClass}>
+              {units.map((u) => <option key={u}>{u}</option>)}
+            </select>
+          </label>
+
+          {canSeeFinancials && (
+            <label className="block">
+              <span className={fieldLabel}>{t("stock.buy_price")}</span>
+              <input
+                type="number"
+                min={0}
+                value={form.buyPrice || ""}
+                onChange={(e) => set("buyPrice", Number(e.target.value))}
+                className={inputClass}
+              />
+            </label>
+          )}
+
+          <label className="block">
+            <span className={fieldLabel}>{t("stock.sell_price")}</span>
+            <input
+              type="number"
+              min={0}
+              value={form.sellPrice || ""}
+              onChange={(e) => set("sellPrice", Number(e.target.value))}
+              className={inputClass}
+            />
+          </label>
+
+          <label className="block">
+            <span className={fieldLabel}>{t("stock.current_qty")}</span>
+            <input
+              type="number"
+              min={0}
+              value={form.stockQty || ""}
+              onChange={(e) => set("stockQty", Number(e.target.value))}
+              className={inputClass}
+            />
+          </label>
+
+          <label className="block">
+            <span className={fieldLabel}>{t("stock.low_alert_at")}</span>
+            <input
+              type="number"
+              min={0}
+              value={form.reorderLevel ?? ""}
+              onChange={(e) => set("reorderLevel", Number(e.target.value))}
+              className={inputClass}
+            />
+          </label>
+
+          {initial && (
+            <label className="flex min-h-11 items-center gap-3 self-end rounded-xl border border-slate-200 bg-slate-50/80 px-3.5">
+              <input
+                type="checkbox"
+                checked={form.active ?? true}
+                onChange={(e) => set("active", e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 accent-teal-600"
+              />
+              <span className="text-sm font-medium text-slate-700">{t("stock.active_item")}</span>
+            </label>
+          )}
+        </div>
+      </section>
 
       {sectorFields.length > 0 && (
-        <div className="mt-5 border-t border-slate-100 pt-5">
-          <h3 className="mb-3 text-sm font-medium text-slate-700">
-            {t("stock.sector_fields")}
-          </h3>
+        <section className={sectionClass}>
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-base font-semibold tracking-[-0.015em] text-slate-950">{sectorTitle}</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{sectorHint}</p>
+            </div>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             {sectorFields.map((field) =>
               field.type === "boolean" ? (
-                <label key={field.key} className="flex items-center gap-2">
+                <label key={field.key} className="flex min-h-11 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 sm:col-span-2">
                   <input
                     type="checkbox"
                     checked={form.sectorCustom[field.key] === "true"}
                     onChange={(e) => setSectorField(field.key, e.target.checked ? "true" : "false")}
-                    className="h-4 w-4 rounded border-slate-300"
+                    className="h-4 w-4 rounded border-slate-300 accent-teal-600"
                   />
-                  <span className="text-sm text-slate-600">
-                    {locale === "si" ? field.labelSi : field.labelEn}
-                  </span>
+                  <span className="text-sm font-medium text-slate-700">{isSinhala ? field.labelSi : field.labelEn}</span>
                 </label>
               ) : (
                 <label key={field.key} className="block">
-                  <span className="text-sm text-slate-600">
-                    {locale === "si" ? field.labelSi : field.labelEn}
-                  </span>
+                  <span className={fieldLabel}>{isSinhala ? field.labelSi : field.labelEn}</span>
                   <input
                     type={field.type === "number" ? "number" : field.type}
                     min={field.type === "number" ? 0 : undefined}
                     value={form.sectorCustom[field.key] ?? ""}
                     placeholder={field.placeholder}
                     onChange={(e) => setSectorField(field.key, e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    className={inputClass}
                   />
                 </label>
               ),
             )}
           </div>
-        </div>
+        </section>
       )}
 
-      <div className="mt-5 flex gap-3">
-        <button
-          type="submit"
-          className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
-        >
-          {saveLabel}
-        </button>
-        {onCancel && (
+      <section className={sectionClass}>
+        <label className="block">
+          <span className={fieldLabel}>{t("stock.notes")}</span>
+          <textarea
+            value={form.notes ?? ""}
+            onChange={(e) => set("notes", e.target.value)}
+            rows={3}
+            className={`${inputClass} resize-none`}
+          />
+        </label>
+      </section>
+
+      <div className="sticky bottom-[-1.25rem] z-20 -mx-5 -mb-5 flex items-center justify-between gap-3 border-t border-slate-200/80 bg-white/96 px-5 py-4 shadow-[0_-12px_30px_rgba(15,23,42,0.055)] backdrop-blur-xl">
+        {onCancel ? (
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600"
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
           >
             {t("common.cancel")}
           </button>
-        )}
+        ) : <span />}
+        <button
+          type="submit"
+          className="inline-flex min-h-11 items-center justify-center rounded-xl bg-teal-600 px-5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(13,148,136,0.2)] transition hover:bg-teal-700 hover:shadow-[0_10px_24px_rgba(13,148,136,0.24)]"
+        >
+          {saveLabel}
+        </button>
       </div>
     </form>
   );

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { sectors } from "@/lib/sectors";
+import { SectorIcon } from "@/components/sector-icon";
 import type { SectorId } from "@/lib/types";
 
 const fieldLabels: Partial<Record<SectorId, Record<string, string>>> = {
@@ -47,7 +48,9 @@ export default async function SectorDetailPage({
           ← All sectors
         </Link>
         <div className="mt-4 flex items-center gap-3">
-          <span className="text-4xl">{sector.icon}</span>
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
+            <SectorIcon sectorId={sector.id} className="h-6 w-6" />
+          </span>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">
               {sector.nameEn}

@@ -8,6 +8,11 @@ import { AppStoreProvider } from "@/lib/store/app-store-provider";
 import { SubscriptionProvider } from "@/lib/subscription/subscription-provider";
 import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
+import "./premium-ops.css";
+import "./premium-ops-final.css";
+import "./premium-ops-realistic.css";
+import "./premium-job-detail.css";
+import "./atomic-pos-layout.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,6 +45,16 @@ export const metadata: Metadata = {
   },
 };
 
+function publicSupabaseHost(): string {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  if (!url) return "";
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -50,7 +65,11 @@ export default function RootLayout({
       lang="si"
       className={`${geistSans.variable} ${geistMono.variable} ${notoSinhala.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sinhala">
+      <body
+        className="min-h-full flex flex-col font-sinhala"
+        data-lakbiz-build-sha={process.env.VERCEL_GIT_COMMIT_SHA ?? ""}
+        data-lakbiz-supabase-host={publicSupabaseHost()}
+      >
         <LocaleProvider>
           <AuthProvider>
             <SubscriptionProvider>

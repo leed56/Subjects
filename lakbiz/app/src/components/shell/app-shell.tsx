@@ -3,25 +3,20 @@ import { TrialBanner } from "@/components/trial-banner";
 import { CloudSyncBanner } from "@/components/cloud-sync-banner";
 import { OfflineBanner } from "@/components/offline-banner";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
+import { SectorWorkspaceAutoBanner } from "@/components/sector/sector-workspace-auto-banner";
 import { Sidebar } from "@/components/shell/sidebar";
 import { MobileNav } from "@/components/shell/mobile-nav";
 
 /**
- * Application shell for every authenticated shop/settings page — Phase 1.
- *
- * Replaces the old per-page `<SiteHeader />` (a horizontal top nav mounted
- * independently in 16 separate page files) with one shared left sidebar
- * (desktop) + compact top bar/drawer (mobile), matching the target
- * structure in the product spec. Drop-in: swap
- *   <ProPageShell><SiteHeader />{content}</ProPageShell>
- * for
- *   <AppShell>{content}</AppShell>
- * — everything a page previously rendered inside <ProMain> keeps working
- * unchanged; only the chrome around it moved.
+ * Application shell for every authenticated shop/settings page.
+ * The desktop experience uses one persistent navigation rail and a quiet,
+ * layered workspace surface. The canvas is intentionally cool and slightly
+ * dimensional so white operational cards read as surfaces rather than a
+ * continuous white sheet; page-level components still own the hierarchy.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-full bg-slate-50">
+    <div className="flex min-h-full bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.055),transparent_28rem),radial-gradient(circle_at_95%_12%,rgba(56,189,248,0.035),transparent_26rem),linear-gradient(180deg,#f5f8fc_0%,#edf3f8_100%)] text-slate-950">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileNav />
@@ -29,6 +24,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <PwaInstallPrompt />
         <OfflineBanner />
         <CloudSyncBanner />
+        <SectorWorkspaceAutoBanner />
         <div className="flex-1">{children}</div>
       </div>
     </div>

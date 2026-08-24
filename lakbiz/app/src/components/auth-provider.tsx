@@ -58,22 +58,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    refresh();
+    void refresh();
     const supabase = createBrowserClient();
     if (!supabase) return;
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      refresh();
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Do not call another Supabase Auth API from inside this callback.
+      // supabase-js can hold the auth lock while notifying subscribers, so a
+      // re-entrant getUser()/getSession() may deadlock login or token refresh.
+      // The event already carries the session user; RLS remains the authority
+      // for all organization/data authorization after this UI state update.
+      setUser(session?.user ?? null);
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    await signInWithEmail(email, password);
-    await refresh();
+    const data = await signInWithEmail(email, password);
+    setUser(data.user ?? null);
+    setLoading(false);
   };
 
   const signUp = async (input: {

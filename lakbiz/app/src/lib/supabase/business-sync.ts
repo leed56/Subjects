@@ -24,6 +24,7 @@ import type {
 } from "@/lib/store/types";
 import { businessFromOrg, fetchOrgShopSettings } from "./org-settings";
 import { createBrowserClient } from "./client";
+import { fetchAllPages } from "./pagination";
 import {
   hasSyncConflict,
   localHasUnsyncedRecordsFromData,
@@ -117,9 +118,12 @@ function asPurchaseOrderStatus(value: string | null | undefined): PurchaseOrderS
 function asSectorId(value: string | null | undefined): SectorId {
   const allowed: SectorId[] = [
     "grocery",
+    "pharmacy",
     "electronics",
+    "mobile_shop",
     "electricals",
     "spare_parts",
+    "footwear",
     "ac_hvac",
     "car_sales",
   ];
@@ -207,63 +211,30 @@ export async function pullBusinessData(
     vehiclesRes,
     business,
   ] = await Promise.all([
-    supabase.from("products").select("*").eq("organization_id", organizationId),
-    supabase.from("customers").select("*").eq("organization_id", organizationId),
-    supabase.from("suppliers").select("*").eq("organization_id", organizationId),
-    supabase.from("sales").select("*").eq("organization_id", organizationId),
-    supabase.from("sale_lines").select("*").eq("organization_id", organizationId),
-    supabase.from("purchases").select("*").eq("organization_id", organizationId),
-    supabase
-      .from("purchase_lines")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("purchase_orders")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("purchase_order_lines")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("customer_payments")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("customer_product_prices")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("supplier_payments")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase.from("stock_logs").select("*").eq("organization_id", organizationId),
-    supabase
-      .from("bank_accounts")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("bank_transactions")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("bank_transfers")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase.from("cheques").select("*").eq("organization_id", organizationId),
-    supabase.from("ac_jobs").select("*").eq("organization_id", organizationId),
-    supabase.from("job_items").select("*").eq("organization_id", organizationId),
-    supabase
-      .from("job_status_history")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase.from("technicians").select("*").eq("organization_id", organizationId),
-    supabase.from("contractors").select("*").eq("organization_id", organizationId),
-    supabase
-      .from("contractor_payments")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase.from("vehicles").select("*").eq("organization_id", organizationId),
+    fetchAllPages((from, to) => supabase.from("products").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("customers").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("suppliers").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("sales").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("sale_lines").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("purchases").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("purchase_lines").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("purchase_orders").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("purchase_order_lines").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("customer_payments").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("customer_product_prices").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("supplier_payments").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("stock_logs").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("bank_accounts").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("bank_transactions").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("bank_transfers").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("cheques").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("ac_jobs").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("job_items").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("job_status_history").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("technicians").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("contractors").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("contractor_payments").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("vehicles").select("*").eq("organization_id", organizationId).range(from, to)),
     fetchOrgShopSettings(organizationId),
   ]);
 
@@ -707,8 +678,16 @@ async function upsertOrgRows(
   const supabase = createBrowserClient();
   if (!supabase) return "Supabase not configured";
 
-  const { error } = await supabase.from(table).upsert(rows, { onConflict: "id" });
-  return error?.message ?? null;
+  // Large catalogues can contain thousands of rows. Keep every
+  // PostgREST JSON request bounded instead of sending one unbounded body.
+  const batchSize = 200;
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const { error } = await supabase
+      .from(table)
+      .upsert(rows.slice(i, i + batchSize), { onConflict: "id" });
+    if (error) return error.message;
+  }
+  return null;
 }
 
 function customerRowsForOrg(
@@ -773,19 +752,24 @@ async function upsertMaskedViewRows(
   if (!supabase) return "Supabase not configured";
 
   const ids = rows.map((row) => String(row.id));
-  const { data: existing, error: fetchErr } = await supabase
-    .from(table)
-    .select("id")
-    .eq("organization_id", organizationId)
-    .in("id", ids);
-  if (fetchErr) return fetchErr.message;
-
-  const existingIds = new Set((existing ?? []).map((row) => String(row.id)));
+  // `.in()` is encoded in the request URL. A 1,000–1,600 SKU catalogue can
+  // exceed gateway/query-string limits and surface only as HTTP 400 / Bad
+  // Request. Resolve existing ids in bounded URL-sized chunks instead.
+  const existingIds = new Set<string>();
+  for (const idBatch of chunk(ids, 100)) {
+    const { data: existing, error: fetchErr } = await supabase
+      .from(table)
+      .select("id")
+      .eq("organization_id", organizationId)
+      .in("id", idBatch);
+    if (fetchErr) return fetchErr.message;
+    for (const row of existing ?? []) existingIds.add(String(row.id));
+  }
   const toInsert = rows.filter((row) => !existingIds.has(String(row.id)));
   const toUpdate = rows.filter((row) => existingIds.has(String(row.id)));
 
-  if (toInsert.length > 0) {
-    const { error } = await supabase.from(table).insert(toInsert);
+  for (const rowBatch of chunk(toInsert, BULK_UPDATE_BATCH_SIZE)) {
+    const { error } = await supabase.from(table).insert(rowBatch);
     if (error) return error.message;
   }
 
@@ -1071,10 +1055,13 @@ async function productsWithPreservedBuyPrices(
   if (!preserveBuyPrices) return products;
   const supabase = createBrowserClient();
   if (!supabase) return products;
-  const { data: rows } = await supabase
-    .from("products")
-    .select("id, buy_price")
-    .eq("organization_id", organizationId);
+  const { data: rows } = await fetchAllPages((from, to) =>
+    supabase
+      .from("products")
+      .select("id, buy_price")
+      .eq("organization_id", organizationId)
+      .range(from, to),
+  );
   const buyMap = new Map(
     (rows ?? []).map((row) => [row.id as string, num(row.buy_price)]),
   );
@@ -2283,10 +2270,13 @@ export async function pushBusinessData(
   if (options?.preserveBuyPrices) {
     const supabase = createBrowserClient();
     if (supabase) {
-      const { data: rows } = await supabase
-        .from("products")
-        .select("id, buy_price")
-        .eq("organization_id", organizationId);
+      const { data: rows } = await fetchAllPages((from, to) =>
+        supabase
+          .from("products")
+          .select("id, buy_price")
+          .eq("organization_id", organizationId)
+          .range(from, to),
+      );
       const buyMap = new Map(
         (rows ?? []).map((row) => [row.id as string, num(row.buy_price)]),
       );
