@@ -1297,6 +1297,12 @@ export async function syncSaleSnapshot(
   );
   if (linesErr) return linesErr;
 
+  const bankTransaction = data.bankTransactions.find((row) => row.id === saleId);
+  if (bankTransaction) {
+    const bankErr = await syncBankTransactionSnapshot(organizationId, data, saleId);
+    if (bankErr) return bankErr;
+  }
+
   const billTag = sale.id.slice(0, 8);
   const saleLogs = data.stockLogs.filter(
     (log) => log.type === "sale" && log.note?.includes(billTag),
