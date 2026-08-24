@@ -156,6 +156,19 @@ async function captureWorkforceDrawer(page) {
   await page.screenshot({ path: `${screenshotDir}/workforce-add-member-drawer-desktop.png`, fullPage: true });
 }
 
+async function captureBillsDrawer(page) {
+  if (!routes.includes("/bills")) return;
+  await page.goto(`${previewUrl}/bills`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
+  const shopDetails = page.getByRole("button", { name: /shop details/i }).first();
+  assert(await shopDetails.isVisible().catch(() => false), "Shop details button is not visible");
+  await shopDetails.click();
+  await page.waitForTimeout(300);
+  const dialog = page.locator('[role="dialog"]:visible').last();
+  assert(await dialog.isVisible(), "Shop details drawer did not open");
+  await page.screenshot({ path: `${screenshotDir}/bills-shop-details-drawer-desktop.png`, fullPage: true });
+}
+
 await mkdir(screenshotDir, { recursive: true });
 let browser;
 try {
@@ -176,6 +189,7 @@ try {
     for (const route of routes) await capture(page, route, "desktop");
     await captureSupplierDrawer(page);
     await captureWorkforceDrawer(page);
+    await captureBillsDrawer(page);
   } finally {
     await desktop.close();
   }
