@@ -116,6 +116,13 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       { href: "/job-costing", labelKey: "costing.title", feature: "ac_jobs" },
       { href: "/reports", labelKey: "reports.title" },
+      {
+        href: "/textile/trade-control",
+        labelEn: "Textile trade control",
+        labelSi: "රෙදි වෙළඳ පාලනය",
+        sectorOnly: ["textile"],
+        roleOnly: ["owner", "manager"],
+      },
     ],
   },
 ];

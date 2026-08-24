@@ -277,7 +277,7 @@ export async function finalizeTextileSale(
 ): Promise<{ ok: boolean; saleId?: string; billNo?: string; total?: number; paymentMethod?: string; error?: string }> {
   const supabase = createBrowserClient();
   if (!supabase) return { ok: false, error: "Supabase not configured" };
-  const { data, error } = await supabase.rpc("finalize_textile_sale_v3", {
+  const { data, error } = await supabase.rpc("finalize_textile_sale_v4", {
     p_organization_id: organizationId,
     p_sale_id: input.saleId,
     p_customer_id: input.customerId || null,

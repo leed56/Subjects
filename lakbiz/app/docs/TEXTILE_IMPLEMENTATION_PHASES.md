@@ -76,6 +76,8 @@ factory planning and garment work orders are outside the initial scope.
 
 ## Phase 6 — credit, purchasing and imports
 
+**Status: implemented in code; database migration deployment pending.**
+
 - Customer credit limits, payment terms, ageing and collection workflow.
 - Post-dated cheque lifecycle and due/bounce alerts.
 - Supplier price history, purchase planning and replenishment.
