@@ -75,6 +75,8 @@ export default function CustomersPage() {
   const [payCustomerId, setPayCustomerId] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
+  const [payBankAccountId, setPayBankAccountId] = useState("");
+  const [payNote, setPayNote] = useState("");
   const [savingPayment, setSavingPayment] = useState(false);
 
   // Wholesale pricing (company B2B — unchanged from prior implementation)
@@ -85,6 +87,11 @@ export default function CustomersPage() {
   const [typeFilter, setTypeFilter] = useState<ContactFilter>("all");
   const [search, setSearch] = useState("");
   const [bulkWaOpen, setBulkWaOpen] = useState(false);
+
+  useEffect(() => {
+    if (!payCustomerId || payBankAccountId || !data?.bankAccounts[0]) return;
+    setPayBankAccountId(data.bankAccounts[0].id);
+  }, [data?.bankAccounts, payBankAccountId, payCustomerId]);
 
   if (!ready || !data) {
     return (
@@ -502,18 +509,32 @@ export default function CustomersPage() {
               </button>
               <button
                 type="button"
-                disabled={savingPayment || payAmountNumber <= 0}
+                disabled={
+                  savingPayment ||
+                  payAmountNumber <= 0 ||
+                  (payCustomer != null && payAmountNumber > payCustomer.creditBalance) ||
+                  ((payMethod === "bank_transfer" || payMethod === "card") && !payBankAccountId)
+                }
                 onClick={() =>
                   void (async () => {
-                    if (!payCustomerId || savingPayment || payAmountNumber <= 0) return;
+                    if (!payCustomerId || !payCustomer || savingPayment || payAmountNumber <= 0) return;
+                    if (payAmountNumber > payCustomer.creditBalance) {
+                      toast({ tone: "error", title: t("common.save_failed"), description: t("cust.payment_exceeds_balance") });
+                      return;
+                    }
+                    if ((payMethod === "bank_transfer" || payMethod === "card") && !payBankAccountId) {
+                      toast({ tone: "error", title: t("common.save_failed"), description: t("cust.select_bank_account") });
+                      return;
+                    }
                     setSavingPayment(true);
-                    const result = await recordCustomerPaymentToCloud(payCustomerId, payAmountNumber, payMethod);
+                    const result = await recordCustomerPaymentToCloud(payCustomerId, payAmountNumber, payMethod, payNote, payBankAccountId || undefined);
                     setSavingPayment(false);
                     if (!result.ok) {
                       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
                       return;
                     }
                     setPayCustomerId(null);
+                    setPayNote("");
                     toast({ tone: "success", title: t("cust.payment_saved") });
                   })()
                 }
@@ -528,12 +549,36 @@ export default function CustomersPage() {
             <FormField label={t("bills.amount")} required>
               <MoneyInput value={payAmount} onChange={setPayAmount} />
             </FormField>
+            {payCustomer && payAmountNumber > payCustomer.creditBalance && (
+              <p className="-mt-2 text-sm font-medium text-rose-600">{t("cust.payment_exceeds_balance")}</p>
+            )}
             <FormField label={t("common.payment")}>
               <SelectInput
                 value={payMethod}
                 onChange={(v) => setPayMethod(v as PaymentMethod)}
                 options={PAYMENT_OPTIONS.filter((m) => m !== "credit").map((m) => ({ value: m, label: paymentLabel(t, m) }))}
               />
+            </FormField>
+            {(payMethod === "bank_transfer" || payMethod === "card") && (
+              <FormField label={t("cust.receiving_account")} required>
+                {data.bankAccounts.length > 0 ? (
+                  <SelectInput
+                    value={payBankAccountId}
+                    onChange={setPayBankAccountId}
+                    options={[
+                      { value: "", label: t("cust.select_bank_account") },
+                      ...data.bankAccounts.map((account) => ({ value: account.id, label: `${account.bankName} · ${account.accountNumber}` })),
+                    ]}
+                  />
+                ) : (
+                  <Link href="/banking" className="block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 underline">
+                    {t("cust.add_bank_account")}
+                  </Link>
+                )}
+              </FormField>
+            )}
+            <FormField label={t("cust.payment_note")}>
+              <TextInput value={payNote} onChange={(event) => setPayNote(event.target.value)} />
             </FormField>
           </div>
         </Dialog>
