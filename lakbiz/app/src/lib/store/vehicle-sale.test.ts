@@ -71,4 +71,32 @@ describe("sellVehicle", () => {
     expect(twice.customers[0].creditBalance).toBe(7_200_000);
     expect(twice).toBe(once);
   });
+
+  it("posts electronic settlement to the selected bank account once", () => {
+    const account = {
+      id: "33333333-3333-4333-8333-333333333333",
+      bankName: "Commercial Bank",
+      accountName: "LakBiz",
+      accountNumber: "0012345678",
+      balance: 100_000,
+    };
+    const data = { ...emptyAppData(), vehicles: [vehicle], bankAccounts: [account] };
+    const input = {
+      vehicleId: vehicle.id,
+      sellPrice: 7_200_000,
+      paymentMethod: "bank_transfer" as const,
+      bankAccountId: account.id,
+    };
+    const once = sellVehicle(data, input);
+    const twice = sellVehicle(once, input);
+
+    expect(twice.bankAccounts[0].balance).toBe(7_300_000);
+    expect(twice.bankTransactions).toHaveLength(1);
+    expect(twice.bankTransactions[0]).toMatchObject({
+      id: vehicle.id,
+      accountId: account.id,
+      type: "deposit",
+      amount: 7_200_000,
+    });
+  });
 });
