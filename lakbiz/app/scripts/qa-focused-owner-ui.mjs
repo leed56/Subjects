@@ -66,18 +66,6 @@ async function createOwner() {
       vat_number: org.vat_number,
       quarter_start_month: org.quarter_start_month,
     };
-    const { data: vatOrg, error: vatError } = await admin
-      .from("organizations")
-      .update({
-        vat_registered: true,
-        vat_number: "QA-VAT-123456",
-        quarter_start_month: 4,
-      })
-      .eq("id", orgId)
-      .select("vat_registered,vat_number")
-      .single();
-    if (vatError) throw new Error(`Focused VAT fixture setup failed: ${vatError.message}`);
-    assert(vatOrg?.vat_registered === true, "Focused VAT fixture did not enable VAT");
   }
 
   const email = `qa-focused-${targetWorkspace.sector}-owner-${runTag}@example.invalid`;
@@ -141,6 +129,46 @@ async function login(page, email) {
   await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
 }
 
+async function enableVatThroughApp(page) {
+  if (!routes.includes("/vat")) return;
+  await page.goto(`${previewUrl}/settings/shop`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
+
+  const vatCheckbox = page.locator('input[name="vatRegistered"]');
+  const vatNumber = page.locator('input[name="vatNumber"]');
+  const form = page.locator('form:has(input[name="vatRegistered"])');
+  assert(await vatCheckbox.isVisible().catch(() => false), "VAT registered checkbox is not visible in Shop Settings");
+  assert(await vatNumber.isVisible().catch(() => false), "VAT number input is not visible in Shop Settings");
+  assert(await form.isVisible().catch(() => false), "Shop Settings form is not visible");
+
+  if (!(await vatCheckbox.isChecked())) await vatCheckbox.check();
+  await vatNumber.fill("QA-VAT-123456");
+  await form.locator('select[name="quarterStartMonth"]').selectOption("4");
+  await form.locator('button[type="submit"]').click();
+
+  const status = form.getByRole("status");
+  await status.waitFor({ state: "visible", timeout: 15_000 });
+  await page.waitForFunction(
+    () => {
+      const node = document.querySelector('[role="status"]');
+      const text = node?.textContent?.toLowerCase() ?? "";
+      return text.length > 0 && !text.includes("saving");
+    },
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
+
+  const { data: updated, error } = await admin
+    .from("organizations")
+    .select("vat_registered,vat_number,quarter_start_month")
+    .eq("id", orgId)
+    .single();
+  if (error) throw new Error(`Focused VAT cloud verification failed: ${error.message}`);
+  assert(updated?.vat_registered === true, "Shop Settings did not persist VAT registration to Supabase");
+  assert(updated?.vat_number === "QA-VAT-123456", "Shop Settings did not persist the QA VAT number");
+}
+
 async function capture(page, route, suffix) {
   await page.goto(`${previewUrl}${route}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
@@ -154,7 +182,11 @@ async function capture(page, route, suffix) {
   assert(metrics.scrollWidth <= metrics.innerWidth + 2, `${route} has horizontal overflow: ${metrics.scrollWidth}px > ${metrics.innerWidth}px`);
   assert(metrics.bodyText.toLowerCase().includes("lakbiz"), `${route} did not render the LakBiz shell`);
   if (route === "/vat") {
-    assert(metrics.bodyText.toLowerCase().includes("net payable"), "VAT enabled state did not render the net-payable workspace");
+    if (!metrics.bodyText.toLowerCase().includes("net payable")) {
+      await page.screenshot({ path: `${screenshotDir}/vat-enabled-state-missing.png`, fullPage: true });
+      console.error(JSON.stringify({ diagnostic: "vat-enabled-state-missing", bodyText: metrics.bodyText }, null, 2));
+      throw new Error("VAT enabled state did not render the net-payable workspace");
+    }
   }
   const file = `${screenshotDir}/${safeName(`${route}-${suffix}`)}.png`;
   await page.screenshot({ path: file, fullPage: true });
@@ -231,6 +263,7 @@ try {
   try {
     const page = await desktop.newPage();
     await login(page, owner.email);
+    await enableVatThroughApp(page);
     for (const route of routes) await capture(page, route, "desktop");
     await captureSupplierDrawer(page);
     await captureWorkforceDrawer(page);
