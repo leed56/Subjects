@@ -182,10 +182,10 @@ async function capture(page, route, suffix) {
   assert(metrics.scrollWidth <= metrics.innerWidth + 2, `${route} has horizontal overflow: ${metrics.scrollWidth}px > ${metrics.innerWidth}px`);
   assert(metrics.bodyText.toLowerCase().includes("lakbiz"), `${route} did not render the LakBiz shell`);
   if (route === "/vat") {
-    if (!metrics.bodyText.toLowerCase().includes("net payable")) {
+    if (!metrics.bodyText.toLowerCase().includes("net vat payable")) {
       await page.screenshot({ path: `${screenshotDir}/vat-enabled-state-missing.png`, fullPage: true });
       console.error(JSON.stringify({ diagnostic: "vat-enabled-state-missing", bodyText: metrics.bodyText }, null, 2));
-      throw new Error("VAT enabled state did not render the net-payable workspace");
+      throw new Error("VAT enabled state did not render the net-VAT-payable workspace");
     }
   }
   const file = `${screenshotDir}/${safeName(`${route}-${suffix}`)}.png`;
