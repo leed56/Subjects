@@ -29,11 +29,13 @@ import {
   printVatReconciliationReport,
 } from "@/lib/export/vat-returns";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import type { BusinessInfo } from "@/lib/invoice";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { getVatQuarterSummary } from "@/lib/vat";
 import { getIncomeTaxYearSummary } from "@/lib/income-tax";
 import type { JobLinkedExpense } from "@/lib/job-profitability";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
+import { fetchOrgShopSettings } from "@/lib/supabase/org-settings";
 import {
   fetchOrgReturnAccountingAdjustments,
   returnAccountingSchemaUnavailable,
@@ -54,6 +56,29 @@ export default function VatPageV2() {
   const { can, org, canSeeFinancials } = useSubscription();
   const orgId = org.isAuthenticated ? org.id : null;
   const [activeView, setActiveView] = useState<TaxView>("vat");
+  const [authoritativeBusiness, setAuthoritativeBusiness] = useState<
+    BusinessInfo | null | undefined
+  >(undefined);
+
+  // Compliance views must use the organization row as the source of truth for
+  // VAT registration, VAT number, fiscal-quarter start and income-tax rate.
+  // The app store can still be hydrating when an owner saves Shop Settings;
+  // reading the org profile here prevents an older hydration snapshot from
+  // temporarily presenting the opposite tax-registration state.
+  useEffect(() => {
+    if (!orgId) {
+      setAuthoritativeBusiness(null);
+      return;
+    }
+    let cancelled = false;
+    setAuthoritativeBusiness(undefined);
+    void fetchOrgShopSettings(orgId).then((business) => {
+      if (!cancelled) setAuthoritativeBusiness(business);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId]);
 
   // Preserve the existing owner-only cloud fetch used by the income-tax
   // profitability calculation. This is data behavior, not presentation.
@@ -112,7 +137,14 @@ export default function VatPageV2() {
     };
   }, [orgId, canSeeFinancials]);
 
-  if (!ready || !data || !jobLinkedExpenseTotals || returnAdjustments == null) {
+  const authoritativeBusinessReady = !orgId || authoritativeBusiness !== undefined;
+  if (
+    !ready ||
+    !data ||
+    !authoritativeBusinessReady ||
+    !jobLinkedExpenseTotals ||
+    returnAdjustments == null
+  ) {
     return (
       <AppShell>
         <ProMain>
@@ -142,9 +174,12 @@ export default function VatPageV2() {
     );
   }
 
-  const summary = getVatQuarterSummary(data, new Date(), returnAdjustments);
+  const effectiveData = authoritativeBusiness
+    ? { ...data, business: authoritativeBusiness }
+    : data;
+  const summary = getVatQuarterSummary(effectiveData, new Date(), returnAdjustments);
   const incomeTax = getIncomeTaxYearSummary(
-    data,
+    effectiveData,
     new Date(),
     0,
     jobLinkedExpenseTotals,
@@ -152,13 +187,13 @@ export default function VatPageV2() {
   );
 
   const quarterSales = summary.enabled
-    ? data.sales.filter((sale) => {
+    ? effectiveData.sales.filter((sale) => {
         const date = new Date(sale.date).getTime();
         return date >= summary.bounds.start.getTime() && date <= summary.bounds.end.getTime();
       })
     : [];
   const quarterPurchases = summary.enabled
-    ? data.purchases.filter((purchase) => {
+    ? effectiveData.purchases.filter((purchase) => {
         const date = new Date(purchase.date).getTime();
         return date >= summary.bounds.start.getTime() && date <= summary.bounds.end.getTime();
       })
@@ -190,7 +225,7 @@ export default function VatPageV2() {
   };
 
   const vatDescription = summary.enabled
-    ? `${summary.bounds.label}${data.business.vatNumber ? ` · ${t("vat.vat_number")}: ${data.business.vatNumber}` : ""}`
+    ? `${summary.bounds.label}${effectiveData.business.vatNumber ? ` · ${t("vat.vat_number")}: ${effectiveData.business.vatNumber}` : ""}`
     : t("vat.enable_hint");
 
   return (
@@ -206,7 +241,7 @@ export default function VatPageV2() {
                   disabled={quarterSales.length === 0 && quarterPurchases.length === 0 && summary.creditNoteCount === 0}
                   onExportCsv={() =>
                     exportVatReconciliationCsv(
-                      data.business,
+                      effectiveData.business,
                       quarterSales,
                       quarterPurchases,
                       quarterCreditNotes,
@@ -216,7 +251,7 @@ export default function VatPageV2() {
                   }
                   onPrintPdf={() =>
                     printVatReconciliationReport(
-                      data.business,
+                      effectiveData.business,
                       quarterSales,
                       quarterPurchases,
                       quarterCreditNotes,
