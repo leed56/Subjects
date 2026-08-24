@@ -8,11 +8,24 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  buildMigrationNameCounts,
+  migrationAppliedBy,
+} from "./migration-state.mjs";
 
 const PROJECT_REF = "zestppstpwjxriwcuykc";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const envPath = join(__dirname, "..", ".env.local");
 const migrationsDir = join(__dirname, "..", "..", "supabase", "migrations");
+
+const LEGACY_ALIASES = {
+  "20250617000003_ac_service_lifecycle.sql":
+    "20250617000002_ac_service_lifecycle.sql",
+  "20250617000004_repair_org_policies.sql":
+    "20250617000002_repair_and_org_app_data.sql",
+  "20250621000006_remove_payment_provider.sql":
+    "20250621000005_remove_payment_provider.sql",
+};
 
 if (existsSync(envPath)) {
   for (const line of readFileSync(envPath, "utf8").split("\n")) {
@@ -61,6 +74,7 @@ async function runQuery(query) {
 const files = readdirSync(migrationsDir)
   .filter((f) => f.endsWith(".sql"))
   .sort();
+const migrationNameCounts = buildMigrationNameCounts(files);
 
 await runQuery(`
   create table if not exists public.schema_migrations (
@@ -76,10 +90,32 @@ const applied = new Set(
   (Array.isArray(appliedRows) ? appliedRows : []).map((row) => row.filename),
 );
 
+let nativeMigrationNames = new Set();
+try {
+  const nativeRows = await runQuery(
+    "select name from supabase_migrations.schema_migrations where name is not null and name <> '' order by version",
+  );
+  nativeMigrationNames = new Set(
+    (Array.isArray(nativeRows) ? nativeRows : []).map((row) => String(row.name)),
+  );
+} catch (error) {
+  console.warn(
+    "Warning: could not read Supabase native migration history; using the custom filename ledger only.",
+    error instanceof Error ? error.message : error,
+  );
+}
+
 let appliedCount = 0;
 for (const file of files) {
-  if (applied.has(file)) {
-    console.log(`skip ${file}`);
+  const appliedBy = migrationAppliedBy(file, {
+    appliedFilenames: applied,
+    nativeMigrationNames,
+    migrationNameCounts,
+    legacyAliases: LEGACY_ALIASES,
+  });
+  if (appliedBy) {
+    const suffix = appliedBy === "native" ? " (Supabase native history)" : "";
+    console.log(`skip ${file}${suffix}`);
     continue;
   }
 
@@ -89,6 +125,7 @@ for (const file of files) {
   await runQuery(
     `insert into public.schema_migrations (filename) values ('${file.replace(/'/g, "''")}') on conflict do nothing`,
   );
+  applied.add(file);
   appliedCount += 1;
 }
 

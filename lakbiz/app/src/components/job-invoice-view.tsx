@@ -2,32 +2,41 @@
 
 import type { ACJob } from "@/lib/store/types";
 import type { BusinessInfo } from "@/lib/invoice";
-import { jobInvoiceWhatsappUrl, taxInvoiceAmountsForJob } from "@/lib/job-invoice";
+import { invoiceableLinesTotal, jobInvoiceWhatsappUrl, taxInvoiceAmountsForJob, type InvoiceLineItem } from "@/lib/job-invoice";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { amountInWordsLkr, formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { jobTypeLabel } from "@/lib/ac-job-types";
 
-/** Printable/WhatsApp-shareable customer invoice for an AC job (Phase 9).
- * Mirrors InvoiceView's layout deliberately — same visual language as the
- * Sales bill — but built as its own component: InvoiceView's helpers
+/** Printable/WhatsApp-shareable customer invoice for an AC job (Phase 9;
+ * itemized lines added in the job-parts-materials phase). Mirrors
+ * InvoiceView's layout deliberately — same visual language as the Sales
+ * bill — but built as its own component: InvoiceView's helpers
  * (buildInvoiceText, taxInvoiceAmounts) are typed directly against Sale's
- * `lines`/`billNo`/`discount` shape and aren't a clean fit for ACJob. See
- * job-invoice.ts for why this only ever shows one line item, not the
- * Job Sheet's internal cost lines. */
+ * `lines`/`billNo`/`discount` shape and aren't a clean fit for ACJob.
+ *
+ * `items`, when passed, must already be the narrow InvoiceLineItem
+ * projection (see job-invoice.ts) — never a raw JobItem carrying internal
+ * cost. When omitted, or when none of it is an invoiceable line with a
+ * customer price, this renders exactly as it always has: one line (job
+ * type + description) at the flat quotedAmount. */
 interface JobInvoiceViewProps {
   job: ACJob;
   business: BusinessInfo;
   customerAddress?: string;
   showActions?: boolean;
+  items?: InvoiceLineItem[];
 }
 
-export function JobInvoiceView({ job, business, customerAddress, showActions = true }: JobInvoiceViewProps) {
+export function JobInvoiceView({ job, business, customerAddress, showActions = true, items }: JobInvoiceViewProps) {
   const { t, locale } = useLocale();
-  const waUrl = jobInvoiceWhatsappUrl(job, business, locale, t);
-  const amounts = taxInvoiceAmountsForJob(job, business);
+  const invoiceableItems = (items ?? []).filter((i) => i.invoiceable && i.customerPrice != null);
+  const hasItemizedLines = invoiceableItems.length > 0;
+  const invoiceTotal = hasItemizedLines ? invoiceableLinesTotal(invoiceableItems) : job.quotedAmount;
+  const waUrl = jobInvoiceWhatsappUrl(job, business, locale, t, undefined, items);
+  const amounts = taxInvoiceAmountsForJob(job, business, hasItemizedLines ? invoiceTotal : undefined);
   const isTaxInvoice = amounts.isTaxInvoice;
-  const balance = job.quotedAmount - job.depositAmount;
+  const balance = invoiceTotal - job.depositAmount;
   const address = customerAddress ?? job.address;
   const showBuyer = Boolean(job.customerName || address || job.phone);
 
@@ -160,16 +169,29 @@ export function JobInvoiceView({ job, business, customerAddress, showActions = t
           <thead>
             <tr className="border-b border-slate-200 text-left text-slate-500">
               <th className="py-2">{t("bills.item")}</th>
+              {hasItemizedLines && <th className="py-2 text-right">{t("jobs.qty")}</th>}
               <th className="py-2 text-right">{t("bills.amount")}</th>
             </tr>
           </thead>
           <tbody>
-            <tr className="border-b border-slate-100">
-              <td className="py-2 text-slate-800">
-                {jobTypeLabel(job.jobType, locale)} — {job.description}
-              </td>
-              <td className="py-2 text-right tabular-nums">{formatLkr(job.quotedAmount)}</td>
-            </tr>
+            {hasItemizedLines ? (
+              invoiceableItems.map((i) => (
+                <tr key={i.id} className="border-b border-slate-100">
+                  <td className="py-2 text-slate-800">{i.name}</td>
+                  <td className="py-2 text-right tabular-nums">{i.qty}{i.unit ? ` ${i.unit}` : ""}</td>
+                  <td className="py-2 text-right tabular-nums">
+                    {formatLkr(Math.max(0, i.qty * (i.customerPrice ?? 0) - (i.discount ?? 0)))}
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr className="border-b border-slate-100">
+                <td className="py-2 text-slate-800">
+                  {jobTypeLabel(job.jobType, locale)} — {job.description}
+                </td>
+                <td className="py-2 text-right tabular-nums">{formatLkr(job.quotedAmount)}</td>
+              </tr>
+            )}
           </tbody>
         </table>
 
@@ -188,9 +210,9 @@ export function JobInvoiceView({ job, business, customerAddress, showActions = t
           )}
           <div className="flex justify-between text-lg font-bold text-slate-900">
             <span>{t("inv.total")}</span>
-            <span className="tabular-nums">{formatLkr(job.quotedAmount)}</span>
+            <span className="tabular-nums">{formatLkr(invoiceTotal)}</span>
           </div>
-          <p className="pt-1 text-xs italic text-slate-500">{amountInWordsLkr(job.quotedAmount)}</p>
+          <p className="pt-1 text-xs italic text-slate-500">{amountInWordsLkr(invoiceTotal)}</p>
           {job.depositAmount > 0 && (
             <div className="flex justify-between text-slate-600">
               <span>{t("jobs.deposit_label")}</span>

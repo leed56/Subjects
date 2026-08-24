@@ -44,6 +44,7 @@ function makeItem(overrides: Partial<JobItem> = {}): JobItem {
     qty: 1,
     unitPrice: 0,
     lineTotal: 0,
+    invoiceable: true,
     ...overrides,
   };
 }
@@ -157,6 +158,61 @@ describe("computeJobProfitability", () => {
 
       expect(profit.otherCost).toBe(15000);
     });
+  });
+
+  describe("parts_purchase double-count guard (job-parts-materials phase)", () => {
+    it("always excludes a parts_purchase linked expense — it mirrors an already-counted job_items line, never a second cost", () => {
+      const job = makeJob({ quotedAmount: 100000 });
+      const items: JobItem[] = [
+        makeItem({ itemType: "part", source: "purchased", lineTotal: 8000 }), // the real cost, counted once here
+      ];
+      const expenses: JobLinkedExpense[] = [
+        { category: "parts_purchase", amount: 8000 }, // the mirrored Expense record — must not add a second 8000
+        { category: "parking", amount: 500 }, // a genuinely distinct cost, must still count
+      ];
+
+      const profit = computeJobProfitability(job, items, expenses);
+
+      expect(profit.materialCost).toBe(8000);
+      expect(profit.otherCost).toBe(500); // not 8500
+      expect(profit.totalCost).toBe(8500);
+    });
+
+    it("excludes parts_purchase unconditionally, even on a job with no contractor subcontractCost (unlike the outsourced_repair guard, which is conditional)", () => {
+      const job = makeJob({ quotedAmount: 100000, assigneeType: "team" });
+      const expenses: JobLinkedExpense[] = [{ category: "parts_purchase", amount: 5000 }];
+
+      const profit = computeJobProfitability(job, [], expenses);
+
+      expect(profit.otherCost).toBe(0);
+    });
+  });
+
+  it("multiple part lines from different sources (stock, manual, purchased) all sum into materialCost the same way — the bucket is keyed by itemType, not source", () => {
+    const job = makeJob({ quotedAmount: 100000 });
+    const items: JobItem[] = [
+      makeItem({ id: "p1", itemType: "part", source: "stock", lineTotal: 12000 }),
+      makeItem({ id: "p2", itemType: "part", source: "manual", lineTotal: 500 }),
+      makeItem({ id: "p3", itemType: "part", source: "purchased", lineTotal: 8000 }),
+    ];
+
+    const profit = computeJobProfitability(job, items, []);
+
+    expect(profit.materialCost).toBe(20500);
+  });
+
+  it("transport and other item types bucket into otherCost alongside service", () => {
+    const job = makeJob({ quotedAmount: 100000 });
+    const items: JobItem[] = [
+      makeItem({ itemType: "transport", lineTotal: 1500 }),
+      makeItem({ itemType: "other", lineTotal: 750 }),
+    ];
+
+    const profit = computeJobProfitability(job, items, []);
+
+    expect(profit.otherCost).toBe(2250);
+    expect(profit.materialCost).toBe(0);
+    expect(profit.laborCost).toBe(0);
   });
 
   it("produces a negative grossProfit (and negative margin %) when cost exceeds revenue, without clamping to zero", () => {
