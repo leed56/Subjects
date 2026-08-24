@@ -6,6 +6,7 @@ on:
     paths:
       - lakbiz/app/src/**
       - lakbiz/app/scripts/qa-focused-owner-ui.mjs
+      - lakbiz/app/scripts/qa-focused-vehicles-ui.mjs
       - .github/workflows/lakbiz-focused-ui-qa.yml
 
 permissions:
@@ -27,7 +28,7 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: https://zestppstpwjxriwcuykc.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       LAKBIZ_EXPECTED_BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      LAKBIZ_FOCUSED_ROUTES: /vat
+      LAKBIZ_FOCUSED_ROUTES: /vehicles
       LAKBIZ_FOCUSED_UI_QA_DIR: /tmp/lakbiz-focused-ui
 
     steps:
@@ -79,7 +80,7 @@ jobs:
           fi
 
       - name: Run focused owner UI QA
-        run: node scripts/qa-focused-owner-ui.mjs
+        run: node scripts/qa-focused-vehicles-ui.mjs
 
       - name: Upload focused UI screenshots
         if: always()
