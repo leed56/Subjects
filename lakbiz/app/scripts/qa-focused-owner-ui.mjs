@@ -33,6 +33,7 @@ const runTag = String(process.env.GITHUB_RUN_ID ?? Date.now()).replace(/[^A-Za-z
 const password = `${randomBytes(20).toString("base64url")}A9!`;
 let userId = "";
 let orgId = "";
+let originalVatSettings = null;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -45,7 +46,7 @@ function safeName(value) {
 async function createOwner() {
   const { data: organizations, error: orgError } = await admin
     .from("organizations")
-    .select("id,name,sector")
+    .select("id,name,sector,vat_registered,vat_number,quarter_start_month")
     .eq("name", targetWorkspace.name);
   if (orgError || (organizations ?? []).length !== 1) {
     throw new Error(
@@ -58,6 +59,26 @@ async function createOwner() {
     `Focused QA workspace sector mismatch: expected ${targetWorkspace.sector}, found ${org.sector}`,
   );
   orgId = org.id;
+
+  if (routes.includes("/vat")) {
+    originalVatSettings = {
+      vat_registered: org.vat_registered,
+      vat_number: org.vat_number,
+      quarter_start_month: org.quarter_start_month,
+    };
+    const { data: vatOrg, error: vatError } = await admin
+      .from("organizations")
+      .update({
+        vat_registered: true,
+        vat_number: "QA-VAT-123456",
+        quarter_start_month: 4,
+      })
+      .eq("id", orgId)
+      .select("vat_registered,vat_number")
+      .single();
+    if (vatError) throw new Error(`Focused VAT fixture setup failed: ${vatError.message}`);
+    assert(vatOrg?.vat_registered === true, "Focused VAT fixture did not enable VAT");
+  }
 
   const email = `qa-focused-${targetWorkspace.sector}-owner-${runTag}@example.invalid`;
   const { data, error } = await admin.auth.admin.createUser({
@@ -89,6 +110,13 @@ async function cleanup() {
     await admin.from("org_members").delete().eq("organization_id", orgId).eq("user_id", userId);
   }
   if (userId) await admin.auth.admin.deleteUser(userId);
+  if (orgId && originalVatSettings) {
+    const { error } = await admin
+      .from("organizations")
+      .update(originalVatSettings)
+      .eq("id", orgId);
+    if (error) console.warn(`Focused VAT fixture restore warning: ${error.message}`);
+  }
 }
 
 async function verifyPreview(page) {
@@ -121,10 +149,13 @@ async function capture(page, route, suffix) {
   const metrics = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     innerWidth: window.innerWidth,
-    bodyText: document.body.innerText.slice(0, 4000),
+    bodyText: document.body.innerText.slice(0, 5000),
   }));
   assert(metrics.scrollWidth <= metrics.innerWidth + 2, `${route} has horizontal overflow: ${metrics.scrollWidth}px > ${metrics.innerWidth}px`);
   assert(metrics.bodyText.toLowerCase().includes("lakbiz"), `${route} did not render the LakBiz shell`);
+  if (route === "/vat") {
+    assert(metrics.bodyText.toLowerCase().includes("net payable"), "VAT enabled state did not render the net-payable workspace");
+  }
   const file = `${screenshotDir}/${safeName(`${route}-${suffix}`)}.png`;
   await page.screenshot({ path: file, fullPage: true });
   return file;
@@ -169,6 +200,20 @@ async function captureBillsDrawer(page) {
   await page.screenshot({ path: `${screenshotDir}/bills-shop-details-drawer-desktop.png`, fullPage: true });
 }
 
+async function captureVatIncomeTab(page) {
+  if (!routes.includes("/vat")) return;
+  await page.goto(`${previewUrl}/vat`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
+  const incomeTab = page.getByRole("tab", { name: /income tax/i });
+  assert(await incomeTab.isVisible().catch(() => false), "Income Tax tab is not visible");
+  await incomeTab.click();
+  await page.waitForTimeout(300);
+  assert((await incomeTab.getAttribute("aria-selected")) === "true", "Income Tax tab did not become active");
+  const bodyText = (await page.locator("body").innerText()).toLowerCase();
+  assert(bodyText.includes("estimated"), "Income Tax workspace did not render its estimate surface");
+  await page.screenshot({ path: `${screenshotDir}/vat-income-tax-desktop.png`, fullPage: true });
+}
+
 await mkdir(screenshotDir, { recursive: true });
 let browser;
 try {
@@ -190,6 +235,7 @@ try {
     await captureSupplierDrawer(page);
     await captureWorkforceDrawer(page);
     await captureBillsDrawer(page);
+    await captureVatIncomeTab(page);
   } finally {
     await desktop.close();
   }
