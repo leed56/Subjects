@@ -14,6 +14,8 @@ factory planning and garment work orders are outside the initial scope.
 
 ## Phase 1 — sector and roll-safe foundation
 
+**Status: deployed to the LakBiz Supabase project on 2026-08-24.**
+
 ### Deliverables
 
 - Provisionable `textile` business sector with the correct modules and permissions.
@@ -35,7 +37,7 @@ factory planning and garment work orders are outside the initial scope.
 
 ## Phase 2 — physical rolls and receiving
 
-**Status: implemented in code; database migration deployment pending.**
+**Status: deployed to the LakBiz Supabase project on 2026-08-24.**
 
 - Roll receipt against supplier purchase orders and goods receipts.
 - Unique roll number/barcode, supplier lot, dye lot, shade, width, received length,
@@ -46,7 +48,7 @@ factory planning and garment work orders are outside the initial scope.
 
 ## Phase 3 — wholesale and retail selling
 
-**Status: implemented in code; database migration deployment pending.**
+**Status: deployed to the LakBiz Supabase project on 2026-08-24.**
 
 - Sale modes: full roll, wholesale cut, retail cut and fixed piece/bundle.
 - Retail, wholesale, quantity-break and customer-specific price books.
@@ -56,7 +58,7 @@ factory planning and garment work orders are outside the initial scope.
 
 ## Phase 4 — cutting, remnants and reservations
 
-**Status: implemented in code; database migration deployment pending.**
+**Status: deployed to the LakBiz Supabase project on 2026-08-24.**
 
 - Mobile-friendly Cutting Desk with roll scanning.
 - Immutable cut ledger, waste/damage reason and cutter identity.
@@ -66,7 +68,7 @@ factory planning and garment work orders are outside the initial scope.
 
 ## Phase 5 — warehouse and dispatch
 
-**Status: implemented in code; database migration deployment pending.**
+**Status: deployed to the LakBiz Supabase project on 2026-08-24.**
 
 - Pick lists by warehouse, rack, roll and dye lot.
 - Partial fulfilment, packing, dispatch note and delivery status.
@@ -76,7 +78,7 @@ factory planning and garment work orders are outside the initial scope.
 
 ## Phase 6 — credit, purchasing and imports
 
-**Status: implemented in code; database migration deployment pending.**
+**Status: deployed to the LakBiz Supabase project on 2026-08-24.**
 
 - Customer credit limits, payment terms, ageing and collection workflow.
 - Post-dated cheque lifecycle and due/bounce alerts.
@@ -86,7 +88,7 @@ factory planning and garment work orders are outside the initial scope.
 
 ## Phase 7 — owner controls and intelligence
 
-**Status: implemented in code; database migration deployment pending.**
+**Status: deployed to the LakBiz Supabase project on 2026-08-24.**
 
 - Roll, lot, shade, location and remnant stock reports.
 - Sales and margin by metre/yard, roll, fabric family, customer and salesperson.
