@@ -376,13 +376,15 @@ export function recordCustomerPayment(
   amount: number,
   method: PaymentMethod,
   note?: string,
+  bankAccountId?: string,
 ): AppData {
   if (amount <= 0) return data;
   const customer = data.customers.find((c) => c.id === customerId);
-  if (!customer) return data;
+  if (!customer || customer.creditBalance <= 0 || amount > customer.creditBalance) return data;
 
+  const paymentId = newId();
   const payment = {
-    id: newId(),
+    id: paymentId,
     customerId,
     customerName: customer.name,
     amount,
@@ -391,9 +393,29 @@ export function recordCustomerPayment(
     note,
   };
 
+  const account = bankAccountId
+    ? data.bankAccounts.find((row) => row.id === bankAccountId)
+    : undefined;
+  const bankTransaction: BankTransaction | undefined =
+    account && (method === "bank_transfer" || method === "card")
+      ? {
+          id: paymentId,
+          accountId: account.id,
+          type: "deposit",
+          amount,
+          description: `${customer.name} customer payment`,
+          reference: `Customer payment ${paymentId.slice(0, 8)}`,
+          date: payment.date,
+        }
+      : undefined;
+
   return {
     ...data,
     customerPayments: [payment, ...data.customerPayments],
+    bankTransactions: bankTransaction ? [bankTransaction, ...data.bankTransactions] : data.bankTransactions,
+    bankAccounts: bankTransaction
+      ? data.bankAccounts.map((row) => row.id === bankTransaction.accountId ? { ...row, balance: row.balance + amount } : row)
+      : data.bankAccounts,
     customers: data.customers.map((c) =>
       c.id === customerId
         ? { ...c, creditBalance: Math.max(0, c.creditBalance - amount) }
