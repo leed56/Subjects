@@ -316,6 +316,8 @@ export interface VehicleSaleInput {
   customerName?: string;
   paymentMethod: PaymentMethod;
   financePartner?: string;
+  /** Receiving account for electronic/card settlement. */
+  bankAccountId?: string;
 }
 
 export interface SaleLine {
