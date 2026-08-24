@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { AppShell } from "@/components/shell/app-shell";
+import { SettingsNav } from "@/components/settings/settings-nav";
 import {
   ProBadge,
   ProButton,
@@ -46,6 +47,7 @@ export default function PlansPage() {
             </ProButton>
           }
         />
+        <SettingsNav />
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <ProStatCard
