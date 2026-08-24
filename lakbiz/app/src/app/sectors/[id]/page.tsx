@@ -36,6 +36,8 @@ const fieldLabels: Partial<Record<SectorId, Record<string, string>>> = {
     countryOfOrigin: "Country of origin",
     supplierReference: "Supplier reference",
     dyeLot: "Default dye lot",
+    wholesalePrice: "Wholesale price per unit",
+    wholesaleMinQty: "Wholesale minimum quantity",
   },
 };
 

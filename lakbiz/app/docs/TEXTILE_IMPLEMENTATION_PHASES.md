@@ -46,6 +46,8 @@ factory planning and garment work orders are outside the initial scope.
 
 ## Phase 3 — wholesale and retail selling
 
+**Status: implemented in code; database migration deployment pending.**
+
 - Sale modes: full roll, wholesale cut, retail cut and fixed piece/bundle.
 - Retail, wholesale, quantity-break and customer-specific price books.
 - Decimal cut entry with roll selection and real-time remaining length.

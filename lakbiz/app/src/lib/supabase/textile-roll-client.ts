@@ -2,6 +2,7 @@
 
 import { createBrowserClient } from "@/lib/supabase/client";
 import type { TextileLengthUnit, TextileRollStatus } from "@/lib/types";
+import type { SaleTenderDraft } from "@/lib/sale-tender";
 
 export type TextileRollRecord = {
   id: string;
@@ -246,5 +247,59 @@ export async function fetchTextileRollMovements(
       createdAt: String(row.created_at),
     })),
     error: null,
+  };
+}
+
+export type TextileSaleAllocationDraft = {
+  rollId: string;
+  quantity: number;
+  unitPrice: number;
+  saleMode: "retail_cut" | "wholesale_cut" | "full_roll";
+};
+
+export async function finalizeTextileSale(
+  organizationId: string,
+  input: {
+    saleId: string;
+    customerId?: string;
+    customerName?: string;
+    discount?: number;
+    allocations: TextileSaleAllocationDraft[];
+    tenders: SaleTenderDraft[];
+  },
+): Promise<{ ok: boolean; saleId?: string; billNo?: string; total?: number; paymentMethod?: string; error?: string }> {
+  const supabase = createBrowserClient();
+  if (!supabase) return { ok: false, error: "Supabase not configured" };
+  const { data, error } = await supabase.rpc("finalize_textile_sale", {
+    p_organization_id: organizationId,
+    p_sale_id: input.saleId,
+    p_customer_id: input.customerId || null,
+    p_customer_name: input.customerName?.trim() || null,
+    p_discount: Math.max(0, input.discount ?? 0),
+    p_allocations: input.allocations.map((line) => ({
+      roll_id: line.rollId,
+      quantity: line.quantity,
+      unit_price: line.unitPrice,
+      sale_mode: line.saleMode,
+    })),
+    p_tenders: input.tenders.map((tender) => ({
+      id: tender.id,
+      kind: tender.kind,
+      amount: tender.amount,
+      ...(tender.chequeNo?.trim() ? { cheque_no: tender.chequeNo.trim() } : {}),
+      ...(tender.chequeBank?.trim() ? { cheque_bank: tender.chequeBank.trim() } : {}),
+      ...(tender.chequeDate ? { cheque_date: tender.chequeDate } : {}),
+      ...(tender.postDated != null ? { post_dated: tender.postDated } : {}),
+      ...(tender.note?.trim() ? { note: tender.note.trim() } : {}),
+    })),
+  });
+  if (error) return { ok: false, error: error.message };
+  const row = (data ?? {}) as Record<string, unknown>;
+  return {
+    ok: row.ok !== false,
+    saleId: row.sale_id ? String(row.sale_id) : input.saleId,
+    billNo: row.bill_no ? String(row.bill_no) : undefined,
+    total: row.total == null ? undefined : Number(row.total),
+    paymentMethod: row.payment_method ? String(row.payment_method) : undefined,
   };
 }

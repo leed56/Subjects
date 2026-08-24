@@ -65,7 +65,7 @@ export const sectors: SectorTemplate[] = [
     nameEn: "Textile Wholesale & Retail",
     nameSi: "රෙදි තොග සහ සිල්ලර වෙළඳාම",
     description: "Fabric rolls, measured cuts, dye lots, wholesale pricing, customer credit and retail billing.",
-    extraFields: ["fabricFamily", "construction", "composition", "width", "gsm", "color", "shade", "design", "finish", "countryOfOrigin", "supplierReference", "dyeLot", "barcode"],
+    extraFields: ["fabricFamily", "construction", "composition", "width", "gsm", "color", "shade", "design", "finish", "countryOfOrigin", "supplierReference", "dyeLot", "wholesalePrice", "wholesaleMinQty", "barcode"],
     reports: ["Roll balances", "Stock by shade & dye lot", "Wholesale vs retail sales", "Remnant aging", "Customer credit aging"],
   },
   {

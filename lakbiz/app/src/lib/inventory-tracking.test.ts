@@ -41,11 +41,11 @@ describe("sector inventory tracking", () => {
     expect(cars.allowedModes).toEqual(["simple"]);
   });
 
-  it("requires colour, shade and width with lot identity for textile", () => {
+  it("keeps generic allocation off because textile uses the dedicated roll ledger", () => {
     const textile = inventoryTrackingPreset("textile");
-    expect(textile.defaultMode).toBe("variant_lot");
-    expect(textile.allowedModes).toEqual(["variant_lot"]);
-    expect(textile.variantAxes).toEqual(["colour", "shade", "width"]);
+    expect(textile.defaultMode).toBe("simple");
+    expect(textile.allowedModes).toEqual(["simple"]);
+    expect(textile.variantAxes).toEqual([]);
     expect(textile.fefo).toBe(false);
   });
 });

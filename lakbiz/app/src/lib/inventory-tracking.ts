@@ -8,8 +8,8 @@ export type InventoryTrackingMode =
   | "variant_serial"
   | "variant_lot";
 
-// Textile uses variant_lot for catalogue guidance in Phase 1. Physical roll
-// identity is represented by TextileRoll and becomes authoritative in Phase 2.
+// Textile physical identity is owned by the dedicated roll ledger. Generic
+// variant/lot allocation must remain off or it would compete with roll checkout.
 
 export type InventoryTrackingPreset = {
   defaultMode: InventoryTrackingMode;
@@ -84,12 +84,12 @@ const PRESETS: Record<SectorId, InventoryTrackingPreset> = {
     reasonSi: "එක් එක් ප්‍රමාණ/වර්ණ සංයෝජනයට වෙනම තොග ප්‍රමාණයක් සහ අවශ්‍ය නම් barcode/SKU තිබිය යුතුය.",
   },
   textile: {
-    defaultMode: "variant_lot",
-    allowedModes: ["variant_lot"],
-    variantAxes: ["colour", "shade", "width"],
+    defaultMode: "simple",
+    allowedModes: ["simple"],
+    variantAxes: [],
     fefo: false,
-    reasonEn: "Fabric must preserve colour/width variants and dye-lot identity; each physical roll carries its own remaining measured length.",
-    reasonSi: "රෙදි සඳහා වර්ණ/පළල variants සහ dye-lot හඳුනාගැනීම තබා ගනිමින් එක් එක් roll එකේ ඉතිරි මිනුම් දිග වෙනම පාලනය කළ යුතුය.",
+    reasonEn: "Fabric identity, dye lots and measured availability are controlled by the dedicated physical-roll ledger, not generic lot allocation.",
+    reasonSi: "රෙදි identity, dye lot සහ මිනුම් තොගය generic lot allocation මගින් නොව dedicated roll ledger මගින් පාලනය වේ.",
   },
   ac_hvac: {
     defaultMode: "simple",

@@ -132,6 +132,8 @@ const FIELD_DEFS: Record<string, SectorFieldDef> = {
   countryOfOrigin: { key: "countryOfOrigin", type: "text", labelEn: "Country of origin", labelSi: "නිෂ්පාදිත රට" },
   supplierReference: { key: "supplierReference", type: "text", labelEn: "Supplier reference", labelSi: "සැපයුම්කරු යොමුව" },
   dyeLot: { key: "dyeLot", type: "text", labelEn: "Default dye lot", labelSi: "Dye lot අංකය" },
+  wholesalePrice: { key: "wholesalePrice", type: "number", labelEn: "Wholesale price per selling unit (LKR)", labelSi: "අලෙවි ඒකකයක තොග මිල (රු.)" },
+  wholesaleMinQty: { key: "wholesaleMinQty", type: "number", labelEn: "Wholesale minimum quantity", labelSi: "අවම තොග ප්‍රමාණය", placeholder: "10" },
 
   // HVAC
   btu: { key: "btu", type: "number", labelEn: "Capacity (BTU)", labelSi: "ධාරිතාව (BTU)", placeholder: "18000" },

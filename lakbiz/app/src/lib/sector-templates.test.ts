@@ -78,7 +78,7 @@ describe("business sector templates", () => {
     expect(footwear).toEqual(expect.arrayContaining(["styleCode", "size", "color", "material", "gender"]));
 
     const textile = sectorFormFields("textile").map((f) => f.key);
-    expect(textile).toEqual(expect.arrayContaining(["fabricFamily", "composition", "width", "gsm", "shade", "dyeLot"]));
+    expect(textile).toEqual(expect.arrayContaining(["fabricFamily", "composition", "width", "gsm", "shade", "dyeLot", "wholesalePrice", "wholesaleMinQty"]));
   });
 
   it("falls back unknown persisted sector values safely to grocery", () => {
