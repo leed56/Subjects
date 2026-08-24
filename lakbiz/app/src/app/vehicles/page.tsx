@@ -9,9 +9,8 @@ import {
   ProEmptyState,
   ProLoadingState,
   ProMain,
-  ProPageHeader,
-  ProStatCard,
 } from "@/components/ui/pro-shell";
+import { Button, MetricCard, PageHeader, SearchInput, Tabs } from "@/components/ui/primitives";
 import { VehiclesIcon, CostingIcon, ReportsIcon, AlertTriangleIcon } from "@/components/ui/icons";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -21,6 +20,7 @@ import type { VehicleRecord, VehicleStatus } from "@/lib/store/types";
 import type { PaymentMethod } from "@/lib/types";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 import {
   agingLabel,
   CAR_MAKES,
@@ -41,10 +41,12 @@ export default function VehiclesPage() {
   } = useAppStore();
   const { t } = useLocale();
   const { canWrite, disabledHint } = useWriteAccess();
+  const { canSeeFinancials } = useSubscription();
 
-  const [showForm, setShowForm] = useState(true);
+  const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<VehicleRecord | null>(null);
   const [filter, setFilter] = useState<VehicleStatus | "all" | "aging">("all");
+  const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
   const [savingVehicle, setSavingVehicle] = useState(false);
   const [updatingVehicleId, setUpdatingVehicleId] = useState<string | null>(null);
@@ -129,11 +131,29 @@ export default function VehiclesPage() {
     setShowForm(true);
   };
 
-  const vehicles = data.vehicles.filter((v) => {
-    if (filter === "all") return true;
-    if (filter === "aging") return v.status === "for_sale" && daysInStock(v.dateAdded) >= 60;
-    return v.status === filter;
-  });
+  const vehicles = (() => {
+    const query = search.trim().toLowerCase();
+    return data.vehicles.filter((vehicle) => {
+      const matchesStatus =
+        filter === "all"
+          ? true
+          : filter === "aging"
+            ? vehicle.status === "for_sale" && daysInStock(vehicle.dateAdded) >= 60
+            : vehicle.status === filter;
+      if (!matchesStatus) return false;
+      if (!query) return true;
+      return [
+        vehicle.stockId,
+        vehicle.make,
+        vehicle.model,
+        String(vehicle.year),
+        vehicle.chassisNo,
+        vehicle.engineNo,
+        vehicle.regNo,
+        vehicle.color,
+      ].some((value) => (value ?? "").toLowerCase().includes(query));
+    });
+  })();
 
   const forSale = data.vehicles.filter((v) => v.status === "for_sale");
   const sold = data.vehicles.filter((v) => v.status === "sold");
@@ -157,26 +177,42 @@ export default function VehiclesPage() {
   return (
     <AppShell>
       <ProMain>
-        <ProPageHeader
-          eyebrow="Vehicle showroom"
+        <PageHeader
           title={t("veh.title")}
           description={`${forSale.length} ${t("veh.for_sale_count")} · ${t("veh.subtitle")}`}
           actions={
             <>
               <ProButton href="/customers" variant="secondary">{t("nav.customers")}</ProButton>
-              <button
+              {canSeeFinancials && <Button
                 type="button"
                 disabled={!canWrite}
                 title={!canWrite ? (disabledHint ?? undefined) : undefined}
                 onClick={() => {
                   resetForm();
-                  setShowForm((v) => !v);
+                  setShowForm(true);
                 }}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                variant="primary"
               >
-                {showForm ? t("common.hide_form") : t("veh.add")}
-              </button>
+                {t("veh.add")}
+              </Button>}
             </>
+          }
+          metrics={
+            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard label={t("veh.for_sale")} value={String(forSale.length)} hint={t("veh.for_sale_count")} icon={<VehiclesIcon className="h-5 w-5" />} />
+              {canSeeFinancials ? (
+                <>
+                  <MetricCard label={t("common.cost")} value={formatLkr(stockCost)} hint="Current showroom stock" icon={<CostingIcon className="h-5 w-5" />} />
+                  <MetricCard label={t("common.profit")} value={formatLkr(potentialProfit)} hint="Potential on asking price" icon={<ReportsIcon className="h-5 w-5" />} tone="positive" />
+                </>
+              ) : (
+                <>
+                  <MetricCard label={t("veh.incoming")} value={String(data.vehicles.filter((vehicle) => vehicle.status === "incoming").length)} hint="Awaiting yard arrival" icon={<VehiclesIcon className="h-5 w-5" />} />
+                  <MetricCard label={t("veh.sold")} value={String(sold.length)} hint="Completed vehicle sales" icon={<ReportsIcon className="h-5 w-5" />} tone="positive" />
+                </>
+              )}
+              <MetricCard label={t("veh.aging")} value={String(agingCount)} hint="60+ days in yard" icon={<AlertTriangleIcon className="h-5 w-5" />} tone={agingCount ? "warning" : "default"} />
+            </section>
           }
         />
 
@@ -188,14 +224,7 @@ export default function VehiclesPage() {
           </div>
         )}
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("veh.for_sale")} value={String(forSale.length)} hint={t("veh.for_sale_count")} icon={<VehiclesIcon className="h-5 w-5" />} tone="teal" />
-          <ProStatCard label={t("common.cost")} value={formatLkr(stockCost)} hint="Current showroom stock" icon={<CostingIcon className="h-5 w-5" />} tone="blue" />
-          <ProStatCard label={t("common.profit")} value={formatLkr(potentialProfit)} hint="Potential on asking price" icon={<ReportsIcon className="h-5 w-5" />} tone="emerald" />
-          <ProStatCard label={t("veh.aging")} value={String(agingCount)} hint="60+ days in yard" icon={<AlertTriangleIcon className="h-5 w-5" />} tone={agingCount ? "amber" : "slate"} />
-        </section>
-
-        {showForm && (
+        {showForm && canSeeFinancials && (
           <section className="mt-6">
             <ProCard
               eyebrow={editing ? "Edit vehicle" : "Add vehicle"}
@@ -205,7 +234,7 @@ export default function VehiclesPage() {
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
-                  if (!model.trim() || !chassisNo.trim() || savingVehicle) return;
+                  if (savingVehicle) return;
                   if (!model.trim() || !chassisNo.trim()) {
                     setMessage(t("veh.model_required"));
                     return;
@@ -257,7 +286,6 @@ export default function VehiclesPage() {
                   <input required placeholder={t("veh.chassis")} value={chassisNo} onChange={(e) => setChassisNo(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 font-mono text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
                   <input placeholder={t("veh.engine_no")} value={engineNo} onChange={(e) => setEngineNo(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
                   <input placeholder={t("veh.reg_no")} value={regNo} onChange={(e) => setRegNo(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input placeholder={t("veh.color")} value={color} onChange={(e) => setColor(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
                   <select value={fuel} onChange={(e) => setFuel(e.target.value as VehicleRecord["fuel"])} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
                     <option value="petrol">{t("veh.petrol")}</option>
                     <option value="diesel">{t("veh.diesel")}</option>
@@ -297,31 +325,26 @@ export default function VehiclesPage() {
                   <button type="submit" disabled={!canWrite || savingVehicle} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
                     {savingVehicle ? t("common.saving") : editing ? t("common.update") : t("veh.add")}
                   </button>
-                  {editing && (
-                    <button type="button" onClick={resetForm} disabled={savingVehicle} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  <button type="button" onClick={() => { resetForm(); setShowForm(false); }} disabled={savingVehicle} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                       {t("common.cancel")}
-                    </button>
-                  )}
+                  </button>
                 </div>
               </form>
             </ProCard>
           </section>
         )}
 
-        <section className="mt-6">
-          <ProCard title="Showroom filters" eyebrow="Vehicle status" action={<ProBadge tone="teal">{vehicles.length} shown</ProBadge>}>
-            <div className="flex flex-wrap gap-2">
-              {(["all", "for_sale", "reconditioning", "incoming", "sold", "aging"] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`rounded-full px-3 py-2 text-xs font-bold transition ${filter === f ? "bg-teal-600 text-white shadow-lg shadow-teal-700/20" : "border border-slate-200 bg-white text-slate-700 hover:border-teal-200"}`}
-                >
-                  {vehStatusLabel(f)}
-                </button>
-              ))}
-            </div>
-          </ProCard>
+        <section className="mt-6 space-y-4">
+          <Tabs
+            value={filter}
+            onChange={(value) => setFilter(value as VehicleStatus | "all" | "aging")}
+            tabs={(["all", "for_sale", "reconditioning", "incoming", "sold", "aging"] as const).map((value) => ({ value, label: vehStatusLabel(value) }))}
+          />
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Search stock ID, chassis, registration, make, model or year…"
+          />
         </section>
 
         <section className="mt-6">
@@ -331,7 +354,7 @@ export default function VehiclesPage() {
                 title={t("veh.no_vehicles")}
                 description={t("veh.no_vehicles_hint")}
                 action={
-                  data.vehicles.length === 0 && canWrite ? (
+                  data.vehicles.length === 0 && canWrite && canSeeFinancials ? (
                     <button
                       type="button"
                       onClick={() => {
@@ -352,6 +375,8 @@ export default function VehiclesPage() {
                 <VehicleCard
                   key={v.id}
                   vehicle={v}
+                  canSeeFinancials={canSeeFinancials}
+                  canWrite={canWrite}
                   statusLabel={vehStatusLabel(v.status)}
                   onEdit={() => loadVehicle(v)}
                   onListForSale={async () => {
@@ -388,7 +413,7 @@ export default function VehiclesPage() {
           )}
         </section>
 
-        {sold.length > 0 && (
+        {canSeeFinancials && sold.length > 0 && (
           <section className="mt-6">
             <ProCard title={t("veh.sold")} action={<ProBadge tone="emerald">{formatLkr(soldProfit)}</ProBadge>}>
               <p className="text-sm font-semibold text-slate-600">Sold vehicle profit summary is included in the dashboard cards above.</p>
@@ -419,16 +444,18 @@ export default function VehiclesPage() {
                 <select value={sellPayment} onChange={(e) => setSellPayment(e.target.value as PaymentMethod)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
                   {PAYMENT_OPTIONS.map((m) => <option key={m} value={m}>{paymentLabel(t, m)}</option>)}
                 </select>
-                <select value={financePartner} onChange={(e) => setFinancePartner(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                  {FINANCE_PARTNERS.map((f) => <option key={f}>{f}</option>)}
-                </select>
+                {sellPayment === "credit" && (
+                  <select value={financePartner} onChange={(e) => setFinancePartner(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                    {FINANCE_PARTNERS.map((f) => <option key={f}>{f}</option>)}
+                  </select>
+                )}
               </div>
-              <div className="mt-5 rounded-2xl bg-slate-950 p-4 text-white">
+              {canSeeFinancials && <div className="mt-5 rounded-2xl bg-slate-950 p-4 text-white">
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("common.profit")}</p>
                 <p className="mt-1 font-mono text-2xl font-bold text-teal-300">
                   {formatLkr(sellPrice - vehicleTotalCost(sellVehicleRecord.purchasePrice, sellVehicleRecord.reconditionCost))}
                 </p>
-              </div>
+              </div>}
               <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                 <button
                   onClick={async () => {
@@ -446,7 +473,7 @@ export default function VehiclesPage() {
                       customerId: sellCustomerId || undefined,
                       customerName: sellCustomerName || undefined,
                       paymentMethod: sellPayment,
-                      financePartner: financePartner === "Cash only" ? undefined : financePartner,
+                      financePartner: sellPayment === "credit" && financePartner !== "Cash only" ? financePartner : undefined,
                     });
                     setSavingSale(false);
                     if (!result.ok) {
@@ -477,6 +504,8 @@ export default function VehiclesPage() {
 
 function VehicleCard({
   vehicle,
+  canSeeFinancials,
+  canWrite,
   statusLabel,
   onEdit,
   onListForSale,
@@ -486,6 +515,8 @@ function VehicleCard({
   deleting,
 }: {
   vehicle: VehicleRecord;
+  canSeeFinancials: boolean;
+  canWrite: boolean;
   statusLabel: string;
   onEdit: () => void;
   onListForSale: () => void | Promise<void>;
@@ -519,18 +550,18 @@ function VehicleCard({
 
       <div className="p-5">
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-2xl bg-slate-50 p-3">
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("common.cost")}</p>
-            <p className="mt-1 font-mono text-sm font-bold text-slate-950">{formatLkr(cost)}</p>
-          </div>
+          {canSeeFinancials && <div className="rounded-2xl bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("common.cost")}</p>
+              <p className="mt-1 font-mono text-sm font-bold text-slate-950">{formatLkr(cost)}</p>
+          </div>}
           <div className="rounded-2xl bg-slate-50 p-3">
             <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{vehicle.status === "sold" ? t("veh.sold_price") : t("veh.ask")}</p>
             <p className="mt-1 font-mono text-sm font-bold text-teal-700">{formatLkr(vehicle.status === "sold" ? vehicle.soldPrice ?? 0 : vehicle.askPrice)}</p>
           </div>
-          <div className="rounded-2xl bg-slate-50 p-3">
+          {canSeeFinancials && <div className="rounded-2xl bg-slate-50 p-3">
             <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("common.profit")}</p>
             <p className="mt-1 font-mono text-sm font-bold text-emerald-700">{formatLkr(profit)}</p>
-          </div>
+          </div>}
           <div className="rounded-2xl bg-slate-50 p-3">
             <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("veh.days_stock")}</p>
             <p className="mt-1 font-mono text-sm font-bold text-slate-950">{vehicle.status === "sold" ? "—" : days}</p>
@@ -550,10 +581,10 @@ function VehicleCard({
           </div>
         )}
 
-        {vehicle.status !== "sold" && (
+        {vehicle.status !== "sold" && canWrite && (
           <div className="mt-4 flex flex-wrap gap-2">
-            <button onClick={onEdit} className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-700 hover:bg-teal-100">{t("common.edit")}</button>
-            {vehicle.status !== "for_sale" && (
+            {canSeeFinancials && <button onClick={onEdit} className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-700 hover:bg-teal-100">{t("common.edit")}</button>}
+            {canSeeFinancials && vehicle.status !== "for_sale" && (
               <button
                 onClick={() => void onListForSale()}
                 disabled={updating}
@@ -563,13 +594,13 @@ function VehicleCard({
               </button>
             )}
             {vehicle.status === "for_sale" && <button onClick={onSell} className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100">{t("veh.sell")}</button>}
-            <button
+            {canSeeFinancials && <button
               onClick={() => void onDelete()}
               disabled={deleting}
               className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
             >
               {deleting ? t("common.saving") : t("common.delete")}
-            </button>
+            </button>}
           </div>
         )}
       </div>
