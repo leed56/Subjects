@@ -10,9 +10,14 @@ import {
   ProEmptyState,
   ProLoadingState,
   ProMain,
-  ProPageHeader,
-  ProStatCard,
 } from "@/components/ui/pro-shell";
+import {
+  Button,
+  MetricCard,
+  PageHeader,
+  SearchInput,
+  Tabs,
+} from "@/components/ui/primitives";
 import { SuppliersIcon, InboxIcon, BillsIcon, VatIcon } from "@/components/ui/icons";
 import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
@@ -25,6 +30,8 @@ import type { PaymentMethod } from "@/lib/types";
 import { calcInputVat } from "@/lib/vat";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
+
+type SupplierSection = "directory" | "orders" | "receipts";
 
 export default function SuppliersPage() {
   const {
@@ -50,6 +57,7 @@ export default function SuppliersPage() {
   const [ledgerSupplier, setLedgerSupplier] = useState<Supplier | null>(null);
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
+  const [activeSection, setActiveSection] = useState<SupplierSection>("directory");
   const [savingSupplier, setSavingSupplier] = useState(false);
   const [savingPurchase, setSavingPurchase] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
@@ -333,7 +341,9 @@ export default function SuppliersPage() {
   };
 
   const openPurchase = () => {
-    setShowPurchase((v) => !v);
+    setShowPurchase(true);
+    setShowPo(false);
+    setActiveSection("receipts");
     if (!purchaseSupplierId && data.suppliers[0]) setPurchaseSupplierId(data.suppliers[0].id);
   };
 
@@ -342,7 +352,9 @@ export default function SuppliersPage() {
   };
 
   const openPo = () => {
-    setShowPo((v) => !v);
+    setShowPo(true);
+    setShowPurchase(false);
+    setActiveSection("orders");
     if (!poSupplierId && data.suppliers[0]) setPoSupplierId(data.suppliers[0].id);
   };
 
@@ -360,28 +372,35 @@ export default function SuppliersPage() {
   return (
     <AppShell>
       <ProMain>
-        <ProPageHeader
-          eyebrow="Supplier operations"
+        <PageHeader
           title={t("sup.title")}
-          description={`${t("sup.you_owe")} ${formatLkr(totalPayable)}`}
+          description="Manage supplier relationships, purchase orders, goods receipts and payables from one operational workspace."
           actions={
             <>
               <ProButton href="/stock" variant="secondary">{t("nav.stock")}</ProButton>
-              <button
+              <Button
                 onClick={openPo}
                 disabled={data.suppliers.length === 0 || data.products.length === 0}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-teal-200 bg-white px-4 py-2.5 text-sm font-bold text-teal-700 shadow-sm transition hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-40"
+                variant="secondary"
               >
                 {t("sup.new_po")}
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={openPurchase}
                 disabled={data.suppliers.length === 0 || data.products.length === 0}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
+                variant="primary"
               >
                 {t("sup.record_purchase")}
-              </button>
+              </Button>
             </>
+          }
+          metrics={
+            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard label={t("nav.suppliers")} value={String(data.suppliers.length)} hint="Active supplier profiles" icon={<SuppliersIcon className="h-5 w-5" />} />
+              <MetricCard label={t("sup.you_owe_col")} value={formatLkr(totalPayable)} hint={`${payableSuppliers} suppliers payable`} icon={<InboxIcon className="h-5 w-5" />} tone={totalPayable > 0 ? "warning" : "positive"} />
+              <MetricCard label={t("sup.vat_number")} value={String(vatSuppliers)} hint="VAT-ready records" icon={<VatIcon className="h-5 w-5" />} />
+              <MetricCard label={t("sup.recent_grn")} value={formatLkr(recentPurchaseValue)} hint="Latest 10 receipts" icon={<BillsIcon className="h-5 w-5" />} tone="positive" />
+            </section>
           }
         />
 
@@ -393,14 +412,19 @@ export default function SuppliersPage() {
           </div>
         )}
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("nav.suppliers")} value={String(data.suppliers.length)} hint="Saved supplier profiles" icon={<SuppliersIcon className="h-5 w-5" />} tone="teal" />
-          <ProStatCard label={t("sup.you_owe_col")} value={formatLkr(totalPayable)} hint={`${payableSuppliers} suppliers payable`} icon={<InboxIcon className="h-5 w-5" />} tone="amber" />
-          <ProStatCard label={t("sup.vat_number")} value={String(vatSuppliers)} hint="VAT-ready supplier records" icon={<VatIcon className="h-5 w-5" />} tone="blue" />
-          <ProStatCard label={t("sup.recent_grn")} value={formatLkr(recentPurchaseValue)} hint="Latest 10 purchases" icon={<BillsIcon className="h-5 w-5" />} tone="emerald" />
-        </section>
+        <div className="mb-6">
+          <Tabs
+            value={activeSection}
+            onChange={(value) => setActiveSection(value as SupplierSection)}
+            tabs={[
+              { value: "directory", label: `${t("nav.suppliers")} (${data.suppliers.length})` },
+              { value: "orders", label: `${t("sup.po_title")} (${data.purchaseOrders.length})` },
+              { value: "receipts", label: `${t("sup.recent_grn")} (${data.purchases.length})` },
+            ]}
+          />
+        </div>
 
-        <section className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+        {activeSection === "directory" && <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <ProCard eyebrow={editing ? "Edit supplier" : "Create supplier"} title={editing ? t("sup.edit") : t("sup.add")}>
             <form onSubmit={saveSupplier}>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -424,15 +448,12 @@ export default function SuppliersPage() {
           </ProCard>
 
           <ProCard title="Find suppliers" eyebrow="Search payables" action={<ProBadge tone={suppliers.length === data.suppliers.length ? "slate" : "teal"}>{suppliers.length} shown</ProBadge>}>
-            <div className="relative">
-              <input
-                type="search"
+            <div>
+              <SearchInput
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={setSearch}
                 placeholder="Search by supplier, phone, contact person or VAT number..."
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pl-11 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
               />
-              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
             </div>
             <div className="mt-4 rounded-2xl border border-teal-100 bg-teal-50/70 p-4 text-sm font-semibold text-teal-900">
               {data.suppliers.length === 0 || data.products.length === 0
@@ -440,7 +461,7 @@ export default function SuppliersPage() {
                 : t("sup.grn_hint")}
             </div>
           </ProCard>
-        </section>
+        </section>}
 
         {showPurchase && (
           <section className="mt-6">
@@ -579,7 +600,7 @@ export default function SuppliersPage() {
           </section>
         )}
 
-        <section className="mt-6">
+        {activeSection === "directory" && <section className="mt-6">
           {data.suppliers.length === 0 ? (
             <ProCard>
               <ProEmptyState title={t("sup.no_suppliers")} description="Add suppliers to track GRNs, payables and payment history." />
@@ -635,9 +656,9 @@ export default function SuppliersPage() {
               </div>
             </ProCard>
           )}
-        </section>
+        </section>}
 
-        {data.purchases.length > 0 && (
+        {activeSection === "receipts" && data.purchases.length > 0 && (
           <section className="mt-6">
             <ProCard title={t("sup.recent_grn")} action={<ProBadge tone="slate">Latest 10</ProBadge>}>
               <div className="hidden overflow-hidden rounded-2xl border border-slate-200 lg:block">
@@ -683,7 +704,7 @@ export default function SuppliersPage() {
           </section>
         )}
 
-        {data.purchaseOrders.length > 0 && (
+        {activeSection === "orders" && data.purchaseOrders.length > 0 && (
           <section className="mt-6">
             <ProCard title={t("sup.po_title")} action={<ProBadge tone="teal">{data.purchaseOrders.length}</ProBadge>}>
               <div className="hidden overflow-hidden rounded-2xl border border-slate-200 lg:block">
