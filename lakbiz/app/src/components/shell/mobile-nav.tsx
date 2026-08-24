@@ -82,7 +82,7 @@ export function MobileNav() {
         </div>
       </header>
 
-      <div className={`fixed inset-0 z-50 lg:hidden ${open ? "visible" : "invisible"}`} aria-hidden={!open}>
+      <div className={`fixed inset-0 z-50 overflow-hidden lg:hidden ${open ? "visible" : "invisible"}`} aria-hidden={!open}>
         <button type="button" aria-label="Close menu" onClick={() => setOpen(false)} className={`absolute inset-0 bg-slate-950/55 backdrop-blur-sm transition-opacity ${open ? "opacity-100" : "opacity-0"}`} />
         <div className={`absolute inset-y-0 right-0 flex w-[min(100%,21rem)] flex-col bg-white shadow-2xl transition-transform duration-300 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}>
           <div className="flex h-16 items-center justify-between border-b border-slate-200/80 px-4">
