@@ -2057,7 +2057,7 @@ export async function deleteVehicleFromCloud(
   return error?.message ?? null;
 }
 
-/** Upsert a sold vehicle and any customer credit balance change to Supabase. */
+/** Upsert a sold vehicle, its invoice sale and any customer balance change. */
 export async function syncVehicleSaleSnapshot(
   organizationId: string,
   data: AppData,
@@ -2065,6 +2065,14 @@ export async function syncVehicleSaleSnapshot(
 ): Promise<string | null> {
   const vehicle = data.vehicles.find((row) => row.id === vehicleId);
   if (!vehicle) return "Vehicle not found locally";
+
+  const sale = data.sales.find((row) => row.id === vehicleId);
+  if (!sale) return "Vehicle invoice not found locally";
+
+  // syncSaleSnapshot is safe to retry because both the sale and vehicle use a
+  // stable id and sale lines are replaced rather than appended.
+  const saleErr = await syncSaleSnapshot(organizationId, data, sale.id);
+  if (saleErr) return saleErr;
 
   if (vehicle.paymentMethod === "credit" && vehicle.customerId) {
     const custErr = await syncCustomersSnapshot(organizationId, data.customers);
