@@ -174,12 +174,55 @@ async function capture(page, route, suffix) {
   await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
   await page.waitForTimeout(500);
   assert(new URL(page.url()).pathname === route, `${route} redirected to ${page.url()}`);
-  const metrics = await page.evaluate(() => ({
-    scrollWidth: document.documentElement.scrollWidth,
-    innerWidth: window.innerWidth,
-    bodyText: document.body.innerText.slice(0, 5000),
-  }));
-  assert(metrics.scrollWidth <= metrics.innerWidth + 2, `${route} has horizontal overflow: ${metrics.scrollWidth}px > ${metrics.innerWidth}px`);
+  const metrics = await page.evaluate(() => {
+    const innerWidth = window.innerWidth;
+    const overflowElements = [...document.querySelectorAll("body *")]
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          tag: element.tagName.toLowerCase(),
+          role: element.getAttribute("role"),
+          text: (element.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 140),
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          width: Math.round(rect.width),
+          className:
+            typeof element.className === "string"
+              ? element.className.slice(0, 220)
+              : "",
+        };
+      })
+      .filter((element) => element.right > innerWidth + 2 || element.left < -2)
+      .sort((a, b) => Math.max(b.right - innerWidth, -b.left) - Math.max(a.right - innerWidth, -a.left))
+      .slice(0, 15);
+
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth,
+      bodyText: document.body.innerText.slice(0, 5000),
+      overflowElements,
+    };
+  });
+  if (metrics.scrollWidth > metrics.innerWidth + 2) {
+    const overflowFile = `${screenshotDir}/${safeName(`${route}-${suffix}-overflow`)}.png`;
+    await page.screenshot({ path: overflowFile, fullPage: true });
+    console.error(
+      JSON.stringify(
+        {
+          diagnostic: "horizontal-overflow",
+          route,
+          suffix,
+          scrollWidth: metrics.scrollWidth,
+          innerWidth: metrics.innerWidth,
+          overflowElements: metrics.overflowElements,
+          screenshot: overflowFile,
+        },
+        null,
+        2,
+      ),
+    );
+    throw new Error(`${route} has horizontal overflow: ${metrics.scrollWidth}px > ${metrics.innerWidth}px`);
+  }
   assert(metrics.bodyText.toLowerCase().includes("lakbiz"), `${route} did not render the LakBiz shell`);
   if (route === "/vat") {
     if (!metrics.bodyText.toLowerCase().includes("net vat payable")) {
