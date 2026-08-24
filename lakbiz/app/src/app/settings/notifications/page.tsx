@@ -1,8 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
+import { SettingsNav } from "@/components/settings/settings-nav";
+import { PageHeader } from "@/components/ui/primitives";
+import { ProMain } from "@/components/ui/pro-shell";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import {
   defaultNotificationSettings,
@@ -149,19 +151,11 @@ export default function NotificationsSettingsPage() {
 
   return (
     <AppShell>
-      <main className="mx-auto max-w-3xl px-4 py-10">
-        <div className="mb-6">
-          <Link
-            href="/settings/plans"
-            className="text-sm text-teal-700 hover:underline"
-          >
-            ← {t("nav.plans")}
-          </Link>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">
-            {t("msg.settings_title")}
-          </h1>
-          <p className="text-slate-600">{t("msg.settings_subtitle")}</p>
-        </div>
+      <ProMain>
+        <PageHeader title={t("msg.settings_title")} description={t("msg.settings_subtitle")} />
+        <SettingsNav />
+
+        <div className="mx-auto max-w-4xl">
 
         {saving && (
           <div className="mb-4 rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">
@@ -179,7 +173,7 @@ export default function NotificationsSettingsPage() {
           </div>
         )}
 
-        <section className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="mb-6 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
           <h2 className="font-semibold text-slate-900">{t("msg.prefs_title")}</h2>
           <div className="mt-4 space-y-4">
             <label className="block text-sm">
@@ -236,7 +230,7 @@ export default function NotificationsSettingsPage() {
           </div>
         </section>
 
-        <section className="mb-8 rounded-2xl border border-cyan-200 bg-gradient-to-br from-cyan-50/80 to-white p-6 shadow-sm">
+        <section className="mb-6 rounded-2xl border border-teal-200/80 bg-gradient-to-br from-teal-50/70 via-white to-white p-6 shadow-[0_8px_30px_rgba(15,118,110,0.07)]">
           <h2 className="font-semibold text-slate-900">
             {t("msg.auto_service_due_title")}
           </h2>
@@ -483,7 +477,7 @@ export default function NotificationsSettingsPage() {
           </div>
         </section>
 
-        <section className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="mb-6 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
           <h2 className="font-semibold text-slate-900">{t("msg.api_title")}</h2>
           <p className="mt-2 text-sm text-slate-600">{t("msg.api_desc")}</p>
           <p
@@ -513,7 +507,7 @@ export default function NotificationsSettingsPage() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
           <h2 className="font-semibold text-slate-900">{t("msg.log_title")}</h2>
           {log.length === 0 ? (
             <p className="mt-3 text-sm text-slate-500">{t("msg.log_empty")}</p>
@@ -544,7 +538,8 @@ export default function NotificationsSettingsPage() {
             </ul>
           )}
         </section>
-      </main>
+        </div>
+      </ProMain>
     </AppShell>
   );
 }

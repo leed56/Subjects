@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
+import { SettingsNav } from "@/components/settings/settings-nav";
 import {
   ProButton,
   ProCard,
@@ -138,6 +139,7 @@ export default function TeamSettingsPage() {
             </ProButton>
           }
         />
+        <SettingsNav />
 
         {message && (
           <div className="mb-5 rounded-2xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900">
