@@ -79,7 +79,7 @@ export function TextileSalesPage() {
   }, [org.id]);
 
   const products = useMemo(() => (data?.products ?? []).filter((p) => p.active && p.sectorId === "textile"), [data?.products]);
-  const sellableRolls = rolls.filter((r) => !["quarantined", "returned", "exhausted"].includes(r.status) && r.remainingLength - r.reservedLength > 0 && (!productId || r.productId === productId));
+  const sellableRolls = rolls.filter((r) => r.custodyStatus === "available" && !["quarantined", "returned", "exhausted"].includes(r.status) && r.remainingLength - r.reservedLength > 0 && (!productId || r.productId === productId));
   const selectedReservation = reservations.find((row) => row.id === reservationId);
   const selectedRoll = rolls.find((r) => r.id === rollId && (selectedReservation ? r.id === selectedReservation.rollId : sellableRolls.some((sellable) => sellable.id === r.id)));
   const selectedProduct = products.find((p) => p.id === (productId || selectedRoll?.productId));

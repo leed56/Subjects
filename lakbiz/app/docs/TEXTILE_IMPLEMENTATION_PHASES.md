@@ -66,6 +66,8 @@ factory planning and garment work orders are outside the initial scope.
 
 ## Phase 5 — warehouse and dispatch
 
+**Status: implemented in code; database migration deployment pending.**
+
 - Pick lists by warehouse, rack, roll and dye lot.
 - Partial fulfilment, packing, dispatch note and delivery status.
 - Branch/warehouse transfers with scan-based custody.

@@ -28,6 +28,7 @@ export type TextileRollRecord = {
   status: TextileRollStatus;
   isRemnant: boolean;
   remnantSince: string | null;
+  custodyStatus: "available" | "in_transit";
   receivedAt: string;
   notes: string | null;
   createdAt: string;
@@ -98,6 +99,7 @@ function rollFromRow(
     status: String(row.status) as TextileRollStatus,
     isRemnant: Boolean(row.is_remnant),
     remnantSince: row.remnant_since ? String(row.remnant_since) : null,
+    custodyStatus: String(row.custody_status ?? "available") as TextileRollRecord["custodyStatus"],
     receivedAt: String(row.received_at),
     notes: row.notes ? String(row.notes) : null,
     createdAt: String(row.created_at),
@@ -275,7 +277,7 @@ export async function finalizeTextileSale(
 ): Promise<{ ok: boolean; saleId?: string; billNo?: string; total?: number; paymentMethod?: string; error?: string }> {
   const supabase = createBrowserClient();
   if (!supabase) return { ok: false, error: "Supabase not configured" };
-  const { data, error } = await supabase.rpc("finalize_textile_sale_v2", {
+  const { data, error } = await supabase.rpc("finalize_textile_sale_v3", {
     p_organization_id: organizationId,
     p_sale_id: input.saleId,
     p_customer_id: input.customerId || null,
