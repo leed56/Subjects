@@ -120,6 +120,21 @@ const FIELD_DEFS: Record<string, SectorFieldDef> = {
   material: { key: "material", type: "text", labelEn: "Material", labelSi: "ද්‍රව්‍යය", placeholder: "Leather, rubber, EVA…" },
   gender: { key: "gender", type: "text", labelEn: "Gender / range", labelSi: "වර්ගය", placeholder: "Men, Women, Kids, Unisex…" },
 
+  // Textile wholesale and measured retail
+  fabricFamily: { key: "fabricFamily", type: "text", labelEn: "Fabric family", labelSi: "රෙදි වර්ගය", placeholder: "Cotton, linen, denim, jersey…" },
+  construction: { key: "construction", type: "text", labelEn: "Construction", labelSi: "නිර්මාණ ආකාරය", placeholder: "Woven, knitted, non-woven…" },
+  composition: { key: "composition", type: "text", labelEn: "Composition", labelSi: "අමුද්‍රව්‍ය සංයුතිය", placeholder: "100% cotton / 95% viscose, 5% elastane…" },
+  width: { key: "width", type: "number", labelEn: "Width (inches)", labelSi: "පළල (අඟල්)", placeholder: "60" },
+  gsm: { key: "gsm", type: "number", labelEn: "Weight (GSM)", labelSi: "බර (GSM)", placeholder: "180" },
+  shade: { key: "shade", type: "text", labelEn: "Shade", labelSi: "වර්ණ සෙවන" },
+  design: { key: "design", type: "text", labelEn: "Design / pattern", labelSi: "මෝස්තරය", placeholder: "Plain, stripe, floral…" },
+  finish: { key: "finish", type: "text", labelEn: "Finish", labelSi: "නිමාව", placeholder: "Brushed, mercerised, coated…" },
+  countryOfOrigin: { key: "countryOfOrigin", type: "text", labelEn: "Country of origin", labelSi: "නිෂ්පාදිත රට" },
+  supplierReference: { key: "supplierReference", type: "text", labelEn: "Supplier reference", labelSi: "සැපයුම්කරු යොමුව" },
+  dyeLot: { key: "dyeLot", type: "text", labelEn: "Default dye lot", labelSi: "Dye lot අංකය" },
+  wholesalePrice: { key: "wholesalePrice", type: "number", labelEn: "Wholesale price per selling unit (LKR)", labelSi: "අලෙවි ඒකකයක තොග මිල (රු.)" },
+  wholesaleMinQty: { key: "wholesaleMinQty", type: "number", labelEn: "Wholesale minimum quantity", labelSi: "අවම තොග ප්‍රමාණය", placeholder: "10" },
+
   // HVAC
   btu: { key: "btu", type: "number", labelEn: "Capacity (BTU)", labelSi: "ධාරිතාව (BTU)", placeholder: "18000" },
   hp: { key: "hp", type: "number", labelEn: "Horsepower (HP)", labelSi: "අශ්වබල (HP)" },
@@ -220,6 +235,8 @@ export function formatProductFieldBadge(
   if (sectorId === "electronics" && customFields.brand) return String(customFields.brand);
   if (sectorId === "spare_parts" && customFields.partNo) return String(customFields.partNo);
   if (sectorId === "footwear" && customFields.size) return `Size ${customFields.size}`;
+  if (sectorId === "textile" && customFields.color && customFields.width) return `${customFields.color} · ${customFields.width}\"`;
+  if (sectorId === "textile" && customFields.fabricFamily) return String(customFields.fabricFamily);
   if (sectorId === "grocery" && customFields.barcode) return String(customFields.barcode);
   if (sectorId === "car_sales" && customFields.chassisNo) return String(customFields.chassisNo);
   return null;

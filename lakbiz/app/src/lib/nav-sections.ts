@@ -45,6 +45,24 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/stock", labelKey: "nav.stock" },
       {
+        href: "/stock/rolls",
+        labelEn: "Fabric rolls",
+        labelSi: "රෙදි roll තොගය",
+        sectorOnly: ["textile"],
+      },
+      {
+        href: "/stock/cutting",
+        labelEn: "Cutting & reservations",
+        labelSi: "කැපීම් සහ වෙන්කිරීම්",
+        sectorOnly: ["textile"],
+      },
+      {
+        href: "/stock/dispatch",
+        labelEn: "Warehouse & dispatch",
+        labelSi: "ගබඩා සහ බෙදාහැරීම්",
+        sectorOnly: ["textile"],
+      },
+      {
         href: "/stock/advanced",
         labelEn: "Inventory control",
         labelSi: "උසස් තොග පාලනය",
@@ -98,6 +116,20 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       { href: "/job-costing", labelKey: "costing.title", feature: "ac_jobs" },
       { href: "/reports", labelKey: "reports.title" },
+      {
+        href: "/textile/trade-control",
+        labelEn: "Textile trade control",
+        labelSi: "රෙදි වෙළඳ පාලනය",
+        sectorOnly: ["textile"],
+        roleOnly: ["owner", "manager"],
+      },
+      {
+        href: "/textile/owner-intelligence",
+        labelEn: "Textile owner intelligence",
+        labelSi: "රෙදි හිමිකරු විශ්ලේෂණ",
+        sectorOnly: ["textile"],
+        roleOnly: ["owner"],
+      },
     ],
   },
 ];

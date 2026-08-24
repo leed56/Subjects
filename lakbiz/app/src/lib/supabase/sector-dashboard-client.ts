@@ -28,10 +28,19 @@ export type SectorVariantSnapshot = {
   attributes: Record<string, string | number | boolean>;
 };
 
+export type SectorTextileRollSnapshot = {
+  productId: string;
+  lengthUnit: "metre" | "yard";
+  remainingLength: number;
+  reservedLength: number;
+  status: "unopened" | "opened" | "reserved" | "exhausted" | "quarantined" | "returned";
+};
+
 export type SectorOperationalSnapshot = {
   lots: SectorLotSnapshot[];
   units: SectorUnitSnapshot[];
   variants: SectorVariantSnapshot[];
+  textileRolls: SectorTextileRollSnapshot[];
   schemaReady: boolean;
   error: string | null;
 };
@@ -56,6 +65,7 @@ export async function fetchSectorOperationalSnapshot(
     lots: [],
     units: [],
     variants: [],
+    textileRolls: [],
     schemaReady: true,
     error: null,
   };
@@ -131,6 +141,28 @@ export async function fetchSectorOperationalSnapshot(
           row.attributes && typeof row.attributes === "object"
             ? (row.attributes as Record<string, string | number | boolean>)
             : {},
+      })),
+    };
+  }
+
+  if (sector === "textile") {
+    const result = await supabase
+      .from("textile_rolls")
+      .select("product_id, length_unit, remaining_length, reserved_length, status")
+      .eq("organization_id", organizationId);
+    if (result.error) {
+      return schemaUnavailable(result.error.message) || result.error.message.toLowerCase().includes("textile_rolls")
+        ? { ...empty, schemaReady: false }
+        : { ...empty, error: result.error.message };
+    }
+    return {
+      ...empty,
+      textileRolls: (result.data ?? []).map((row) => ({
+        productId: String(row.product_id),
+        lengthUnit: String(row.length_unit) as SectorTextileRollSnapshot["lengthUnit"],
+        remainingLength: Number(row.remaining_length ?? 0),
+        reservedLength: Number(row.reserved_length ?? 0),
+        status: String(row.status) as SectorTextileRollSnapshot["status"],
       })),
     };
   }

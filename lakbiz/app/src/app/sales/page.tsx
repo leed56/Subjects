@@ -4,6 +4,7 @@ import { AtomicRetailSalesPageV2 } from "@/components/sales/atomic-retail-sales-
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { isAtomicRetailSector } from "@/lib/atomic-retail-pos";
 import LegacySalesPage from "./legacy-sales-page";
+import { TextileSalesPage } from "@/components/sales/textile-sales-page";
 
 /**
  * Controlled POS cutover boundary.
@@ -16,5 +17,6 @@ import LegacySalesPage from "./legacy-sales-page";
  */
 export default function SalesPage() {
   const { org } = useSubscription();
+  if (org.sector === "textile") return <TextileSalesPage />;
   return isAtomicRetailSector(org.sector) ? <AtomicRetailSalesPageV2 /> : <LegacySalesPage />;
 }
