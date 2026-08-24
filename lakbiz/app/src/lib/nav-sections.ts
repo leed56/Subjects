@@ -123,6 +123,13 @@ export const NAV_SECTIONS: NavSection[] = [
         sectorOnly: ["textile"],
         roleOnly: ["owner", "manager"],
       },
+      {
+        href: "/textile/owner-intelligence",
+        labelEn: "Textile owner intelligence",
+        labelSi: "රෙදි හිමිකරු විශ්ලේෂණ",
+        sectorOnly: ["textile"],
+        roleOnly: ["owner"],
+      },
     ],
   },
 ];

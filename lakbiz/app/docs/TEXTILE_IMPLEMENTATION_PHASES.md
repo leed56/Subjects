@@ -86,12 +86,15 @@ factory planning and garment work orders are outside the initial scope.
 
 ## Phase 7 — owner controls and intelligence
 
+**Status: implemented in code; database migration deployment pending.**
+
 - Roll, lot, shade, location and remnant stock reports.
 - Sales and margin by metre/yard, roll, fabric family, customer and salesperson.
 - Measurement variance, cutting waste, shrinkage and adjustment audit.
 - Slow-moving stock, ageing, reorder and dead-stock recommendations.
 - Wholesale/retail channel performance, receivables exposure and cash forecasting.
-- Multi-branch owner dashboard and exportable audit packs.
+- Multi-location owner dashboard and exportable audit packs within one organization.
+- Cross-organization branch consolidation remains deferred until LakBiz has an explicit parent-group tenancy model.
 
 ## Non-negotiable controls
 
