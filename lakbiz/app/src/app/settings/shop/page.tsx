@@ -5,6 +5,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useAuth } from "@/components/auth-provider";
 import { AppShell } from "@/components/shell/app-shell";
+import { SettingsNav } from "@/components/settings/settings-nav";
 import {
   ProBadge,
   ProButton,
@@ -271,6 +272,7 @@ export default function ShopSettingsPage() {
             </>
           }
         />
+        <SettingsNav />
 
         <section className="grid gap-6 lg:grid-cols-[0.75fr_1.25fr]">
           <ProCard title="Invoice profile" eyebrow="Preview" action={<ProBadge tone={cloudReady ? "emerald" : "amber"}>{cloudReady ? "Cloud sync" : "Browser"}</ProBadge>}>
