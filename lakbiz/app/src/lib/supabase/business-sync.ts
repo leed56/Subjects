@@ -1632,6 +1632,12 @@ export async function syncCustomerPaymentSnapshot(
   const custErr = await syncCustomersSnapshot(organizationId, data.customers);
   if (custErr) return custErr;
 
+  const bankTransaction = data.bankTransactions.find((row) => row.id === paymentId);
+  if (bankTransaction) {
+    const bankErr = await syncBankTransactionSnapshot(organizationId, data, paymentId);
+    if (bankErr) return bankErr;
+  }
+
   return upsertOrgRows("customer_payments", [
     customerPaymentRow(organizationId, payment),
   ]);
