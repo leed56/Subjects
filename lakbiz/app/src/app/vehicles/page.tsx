@@ -76,6 +76,7 @@ export default function VehiclesPage() {
   const [sellCustomerId, setSellCustomerId] = useState("");
   const [sellCustomerName, setSellCustomerName] = useState("");
   const [sellPayment, setSellPayment] = useState<PaymentMethod>("cash");
+  const [sellBankAccountId, setSellBankAccountId] = useState("");
   const [financePartner, setFinancePartner] = useState(FINANCE_PARTNERS[0]);
 
   if (!ready || !data) {
@@ -393,6 +394,7 @@ export default function VehiclesPage() {
                   onSell={() => {
                     setSellId(v.id);
                     setSellPrice(v.askPrice);
+                    setSellBankAccountId(data.bankAccounts[0]?.id ?? "");
                   }}
                   onDelete={async () => {
                     if (deletingVehicleId || !confirm(`${t("common.confirm_delete")} ${v.stockId}?`)) return;
@@ -444,6 +446,22 @@ export default function VehiclesPage() {
                 <select value={sellPayment} onChange={(e) => setSellPayment(e.target.value as PaymentMethod)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
                   {PAYMENT_OPTIONS.map((m) => <option key={m} value={m}>{paymentLabel(t, m)}</option>)}
                 </select>
+                {(sellPayment === "bank_transfer" || sellPayment === "card") && (
+                  data.bankAccounts.length > 0 ? (
+                    <select value={sellBankAccountId} onChange={(e) => setSellBankAccountId(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                      {data.bankAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.bankName} · {account.accountNumber}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+                      Add a receiving account in Banking before recording this payment method.
+                      <a href="/banking" className="ml-2 font-bold underline">Open Banking</a>
+                    </div>
+                  )
+                )}
                 {sellPayment === "credit" && (
                   <select value={financePartner} onChange={(e) => setFinancePartner(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
                     {FINANCE_PARTNERS.map((f) => <option key={f}>{f}</option>)}
@@ -465,6 +483,10 @@ export default function VehiclesPage() {
                       setSellId(null);
                       return;
                     }
+                    if ((sellPayment === "bank_transfer" || sellPayment === "card") && !sellBankAccountId) {
+                      setMessage("Select a receiving bank account before confirming the sale.");
+                      return;
+                    }
                     setSavingSale(true);
                     setMessage("");
                     const result = await sellVehicleToCloud({
@@ -473,6 +495,7 @@ export default function VehiclesPage() {
                       customerId: sellCustomerId || undefined,
                       customerName: sellCustomerName || undefined,
                       paymentMethod: sellPayment,
+                      bankAccountId: sellBankAccountId || undefined,
                       financePartner: sellPayment === "credit" && financePartner !== "Cash only" ? financePartner : undefined,
                     });
                     setSavingSale(false);
