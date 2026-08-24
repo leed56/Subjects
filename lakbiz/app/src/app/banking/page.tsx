@@ -15,12 +15,7 @@ import {
   Tabs,
 } from "@/components/ui/primitives";
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
-import {
-  BankingIcon,
-  BillsIcon,
-  CostingIcon,
-  InboxIcon,
-} from "@/components/ui/icons";
+import { BankingIcon, BillsIcon, InboxIcon } from "@/components/ui/icons";
 import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -73,7 +68,7 @@ export default function BankingPage() {
     updateChequeStatusToCloud,
   } = useAppStore();
   const { t } = useLocale();
-  const { canWrite, disabledHint } = useWriteAccess();
+  const { canWrite } = useWriteAccess();
 
   const statusLabels: Record<ChequeStatus, string> = {
     pending: t("bank.status.pending"),
@@ -148,12 +143,6 @@ export default function BankingPage() {
   const totalBank = data.bankAccounts.reduce((sum, account) => sum + account.balance, 0);
   const pending = data.cheques.filter((cheque) => cheque.status === "pending");
   const deposited = data.cheques.filter((cheque) => cheque.status === "deposited");
-  const chequeValue = data.cheques
-    .filter((cheque) => cheque.status !== "bounced")
-    .reduce(
-      (sum, cheque) => sum + (cheque.direction === "received" ? cheque.amount : -cheque.amount),
-      0,
-    );
 
   const accountLabel = (id: string) => {
     const account = data.bankAccounts.find((item) => item.id === id);
@@ -189,14 +178,20 @@ export default function BankingPage() {
 
   const transactionColumns: DataTableColumn<TransactionRow>[] = [
     {
+      key: "type",
+      header: t("bank.type"),
+      render: (row) => (
+        <div>
+          <span className="font-medium text-slate-950">{row.label}</span>
+          <p className="mt-1 text-xs text-slate-500 sm:hidden">{row.date.slice(0, 10)}</p>
+        </div>
+      ),
+    },
+    {
       key: "date",
       header: t("common.date"),
       render: (row) => <span className="text-slate-500">{row.date.slice(0, 10)}</span>,
-    },
-    {
-      key: "type",
-      header: t("bank.type"),
-      render: (row) => <span className="font-medium text-slate-950">{row.label}</span>,
+      hideOnMobile: true,
     },
     {
       key: "account",
@@ -248,20 +243,19 @@ export default function BankingPage() {
 
   const transferColumns: DataTableColumn<TransferRow>[] = [
     {
+      key: "route",
+      header: t("bank.transfer"),
+      render: (row) => (
+        <div>
+          <p className="font-medium text-slate-950">{row.from}</p>
+          <p className="mt-1 text-xs text-slate-500">→ {row.to}</p>
+        </div>
+      ),
+    },
+    {
       key: "date",
       header: t("common.date"),
       render: (row) => <span className="text-slate-500">{row.date.slice(0, 10)}</span>,
-    },
-    {
-      key: "from",
-      header: "From",
-      render: (row) => <span className="font-medium text-slate-950">{row.from}</span>,
-    },
-    {
-      key: "to",
-      header: "To",
-      render: (row) => <span className="text-slate-600">{row.to}</span>,
-      hideOnMobile: true,
     },
     {
       key: "description",
@@ -472,7 +466,7 @@ export default function BankingPage() {
           }
           metrics={
             hasAnyBankingData ? (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <MetricCard
                   label={t("bank.total_balance")}
                   value={formatLkr(totalBank)}
@@ -488,12 +482,6 @@ export default function BankingPage() {
                   label={t("bank.status.deposited")}
                   value={String(deposited.length)}
                   icon={<InboxIcon className="h-4.5 w-4.5" />}
-                />
-                <MetricCard
-                  label="Cheque value"
-                  value={formatLkr(chequeValue)}
-                  icon={<CostingIcon className="h-4.5 w-4.5" />}
-                  tone={chequeValue < 0 ? "danger" : "positive"}
                 />
               </div>
             ) : undefined
@@ -552,14 +540,14 @@ export default function BankingPage() {
             </div>
 
             {activeSection === "accounts" && (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-2">
                 {data.bankAccounts.length === 0 ? (
-                  <div className="md:col-span-2 xl:col-span-3">
+                  <div className="lg:col-span-2">
                     <EmptyState
                       size="compact"
                       icon={<BankingIcon className="h-5 w-5" />}
                       title={t("bank.no_accounts")}
-                      description="Add a bank account before recording account transactions or transfers."
+                      description={t("bank.onboarding_desc")}
                       action={
                         canWrite ? (
                           <Button variant="primary" onClick={openBankModal}>
@@ -576,13 +564,13 @@ export default function BankingPage() {
                       className="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition hover:border-slate-300"
                     >
                       <div className="flex items-start justify-between gap-4">
-                        <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex min-w-0 items-start gap-3">
                           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-teal-700 ring-1 ring-inset ring-slate-100">
                             <BankingIcon className="h-5 w-5" />
                           </span>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-slate-950">{account.accountName}</p>
-                            <p className="mt-0.5 truncate text-xs text-slate-500">{account.bankName}</p>
+                            <p className="text-sm font-semibold text-slate-950">{account.accountName}</p>
+                            <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{account.bankName}</p>
                           </div>
                         </div>
                         <ActionMenu
@@ -619,14 +607,14 @@ export default function BankingPage() {
                         </p>
                       </div>
 
-                      <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 text-xs">
-                        <div>
+                      <div className="mt-5 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4 text-xs">
+                        <div className="min-w-0">
                           <p className="font-medium text-slate-400">{t("bank.account_no")}</p>
-                          <p className="mt-1 truncate font-mono font-medium text-slate-700">{account.accountNumber}</p>
+                          <p className="mt-1 break-all font-mono font-medium text-slate-700">{account.accountNumber}</p>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <p className="font-medium text-slate-400">{t("bank.branch")}</p>
-                          <p className="mt-1 truncate font-medium text-slate-700">{account.branch || "—"}</p>
+                          <p className="mt-1 break-words font-medium leading-relaxed text-slate-700">{account.branch || "—"}</p>
                         </div>
                       </div>
                     </article>
@@ -663,8 +651,8 @@ export default function BankingPage() {
                 emptyState={
                   <EmptyState
                     size="compact"
-                    title={t("bank.cheque_hint")}
-                    description="Track received and paid cheques through pending, deposited, cleared and bounced states."
+                    title={t("bank.cheque_register")}
+                    description={t("bank.cheque_hint")}
                     action={
                       canWrite ? (
                         <Button variant="primary" onClick={openChequeModal}>
@@ -685,7 +673,11 @@ export default function BankingPage() {
                   <EmptyState
                     size="compact"
                     title={t("bank.transfer")}
-                    description={t("bank.transfer_need_accounts_desc")}
+                    description={
+                      data.bankAccounts.length < 2
+                        ? t("bank.transfer_need_accounts_desc")
+                        : undefined
+                    }
                     action={
                       canWrite ? (
                         <Button variant="primary" onClick={openTransferModal}>
