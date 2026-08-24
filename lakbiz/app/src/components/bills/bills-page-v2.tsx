@@ -38,6 +38,7 @@ function customerPhoneForSale(
 
 const linkButtonBase =
   "inline-flex min-h-11 items-center justify-center rounded-xl px-4.5 py-2.5 text-sm font-semibold transition duration-200 active:scale-[0.98]";
+const PAGE_SIZE = 25;
 
 export default function BillsPageV2() {
   const { data, ready, updateBusinessToCloud } = useAppStore();
@@ -53,6 +54,7 @@ export default function BillsPageV2() {
   const [bizAddress, setBizAddress] = useState("");
   const [bizTin, setBizTin] = useState("");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   if (!ready || !data) {
     return (
@@ -89,6 +91,13 @@ export default function BillsPageV2() {
           paymentLabel(t, sale.paymentMethod).toLowerCase().includes(query),
       )
     : data.sales;
+
+  const pageCount = Math.max(1, Math.ceil(bills.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pagedBills = bills.slice(pageStart, pageStart + PAGE_SIZE);
+  const rangeStart = bills.length === 0 ? 0 : pageStart + 1;
+  const rangeEnd = Math.min(pageStart + PAGE_SIZE, bills.length);
 
   const canExport = can("export");
   const invoiceIdentityIncomplete =
@@ -315,18 +324,21 @@ export default function BillsPageV2() {
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <SearchInput
             value={search}
-            onChange={setSearch}
+            onChange={(value) => {
+              setSearch(value);
+              setPage(1);
+            }}
             placeholder={t("bills.search_placeholder")}
             className="w-full sm:max-w-xl"
           />
           <p className="shrink-0 text-xs font-medium text-slate-400">
-            {bills.length} {t("bills.shown")}
+            {rangeStart}-{rangeEnd} / {bills.length}
           </p>
         </div>
 
         <DataTable
           columns={billColumns}
-          rows={bills}
+          rows={pagedBills}
           emptyState={
             <EmptyState
               icon={<BillsIcon className="h-5 w-5" />}
@@ -349,6 +361,34 @@ export default function BillsPageV2() {
             />
           }
         />
+
+        {bills.length > PAGE_SIZE && (
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-3 py-2.5 shadow-sm">
+            <p className="text-xs font-medium tabular-nums text-slate-500">
+              {currentPage} / {pageCount}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                aria-label="Previous page"
+                disabled={currentPage <= 1}
+                onClick={() => setPage(Math.max(1, currentPage - 1))}
+              >
+                ←
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                aria-label="Next page"
+                disabled={currentPage >= pageCount}
+                onClick={() => setPage(Math.min(pageCount, currentPage + 1))}
+              >
+                →
+              </Button>
+            </div>
+          </div>
+        )}
       </ProMain>
 
       <Drawer
