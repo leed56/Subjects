@@ -33,6 +33,7 @@ const runTag = String(process.env.GITHUB_RUN_ID ?? Date.now()).replace(/[^A-Za-z
 const password = `${randomBytes(20).toString("base64url")}A9!`;
 let userId = "";
 let orgId = "";
+let originalVatSettings = null;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -45,7 +46,7 @@ function safeName(value) {
 async function createOwner() {
   const { data: organizations, error: orgError } = await admin
     .from("organizations")
-    .select("id,name,sector")
+    .select("id,name,sector,vat_registered,vat_number,quarter_start_month")
     .eq("name", targetWorkspace.name);
   if (orgError || (organizations ?? []).length !== 1) {
     throw new Error(
@@ -58,6 +59,14 @@ async function createOwner() {
     `Focused QA workspace sector mismatch: expected ${targetWorkspace.sector}, found ${org.sector}`,
   );
   orgId = org.id;
+
+  if (routes.includes("/vat")) {
+    originalVatSettings = {
+      vat_registered: org.vat_registered,
+      vat_number: org.vat_number,
+      quarter_start_month: org.quarter_start_month,
+    };
+  }
 
   const email = `qa-focused-${targetWorkspace.sector}-owner-${runTag}@example.invalid`;
   const { data, error } = await admin.auth.admin.createUser({
@@ -89,6 +98,13 @@ async function cleanup() {
     await admin.from("org_members").delete().eq("organization_id", orgId).eq("user_id", userId);
   }
   if (userId) await admin.auth.admin.deleteUser(userId);
+  if (orgId && originalVatSettings) {
+    const { error } = await admin
+      .from("organizations")
+      .update(originalVatSettings)
+      .eq("id", orgId);
+    if (error) console.warn(`Focused VAT fixture restore warning: ${error.message}`);
+  }
 }
 
 async function verifyPreview(page) {
@@ -113,18 +129,108 @@ async function login(page, email) {
   await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
 }
 
+async function enableVatThroughApp(page) {
+  if (!routes.includes("/vat")) return;
+  await page.goto(`${previewUrl}/settings/shop`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
+
+  const vatCheckbox = page.locator('input[name="vatRegistered"]');
+  const vatNumber = page.locator('input[name="vatNumber"]');
+  const form = page.locator('form:has(input[name="vatRegistered"])');
+  assert(await vatCheckbox.isVisible().catch(() => false), "VAT registered checkbox is not visible in Shop Settings");
+  assert(await vatNumber.isVisible().catch(() => false), "VAT number input is not visible in Shop Settings");
+  assert(await form.isVisible().catch(() => false), "Shop Settings form is not visible");
+
+  if (!(await vatCheckbox.isChecked())) await vatCheckbox.check();
+  await vatNumber.fill("QA-VAT-123456");
+  await form.locator('select[name="quarterStartMonth"]').selectOption("4");
+  await form.locator('button[type="submit"]').click();
+
+  const status = form.getByRole("status");
+  await status.waitFor({ state: "visible", timeout: 15_000 });
+  await page.waitForFunction(
+    () => {
+      const node = document.querySelector('[role="status"]');
+      const text = node?.textContent?.toLowerCase() ?? "";
+      return text.length > 0 && !text.includes("saving");
+    },
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
+
+  const { data: updated, error } = await admin
+    .from("organizations")
+    .select("vat_registered,vat_number,quarter_start_month")
+    .eq("id", orgId)
+    .single();
+  if (error) throw new Error(`Focused VAT cloud verification failed: ${error.message}`);
+  assert(updated?.vat_registered === true, "Shop Settings did not persist VAT registration to Supabase");
+  assert(updated?.vat_number === "QA-VAT-123456", "Shop Settings did not persist the QA VAT number");
+}
+
 async function capture(page, route, suffix) {
   await page.goto(`${previewUrl}${route}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
   await page.waitForTimeout(500);
   assert(new URL(page.url()).pathname === route, `${route} redirected to ${page.url()}`);
-  const metrics = await page.evaluate(() => ({
-    scrollWidth: document.documentElement.scrollWidth,
-    innerWidth: window.innerWidth,
-    bodyText: document.body.innerText.slice(0, 4000),
-  }));
-  assert(metrics.scrollWidth <= metrics.innerWidth + 2, `${route} has horizontal overflow: ${metrics.scrollWidth}px > ${metrics.innerWidth}px`);
+  const metrics = await page.evaluate(() => {
+    const innerWidth = window.innerWidth;
+    const overflowElements = [...document.querySelectorAll("body *")]
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          tag: element.tagName.toLowerCase(),
+          role: element.getAttribute("role"),
+          text: (element.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 140),
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          width: Math.round(rect.width),
+          className:
+            typeof element.className === "string"
+              ? element.className.slice(0, 220)
+              : "",
+        };
+      })
+      .filter((element) => element.right > innerWidth + 2 || element.left < -2)
+      .sort((a, b) => Math.max(b.right - innerWidth, -b.left) - Math.max(a.right - innerWidth, -a.left))
+      .slice(0, 15);
+
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth,
+      bodyText: document.body.innerText.slice(0, 5000),
+      overflowElements,
+    };
+  });
+  if (metrics.scrollWidth > metrics.innerWidth + 2) {
+    const overflowFile = `${screenshotDir}/${safeName(`${route}-${suffix}-overflow`)}.png`;
+    await page.screenshot({ path: overflowFile, fullPage: true });
+    console.error(
+      JSON.stringify(
+        {
+          diagnostic: "horizontal-overflow",
+          route,
+          suffix,
+          scrollWidth: metrics.scrollWidth,
+          innerWidth: metrics.innerWidth,
+          overflowElements: metrics.overflowElements,
+          screenshot: overflowFile,
+        },
+        null,
+        2,
+      ),
+    );
+    throw new Error(`${route} has horizontal overflow: ${metrics.scrollWidth}px > ${metrics.innerWidth}px`);
+  }
   assert(metrics.bodyText.toLowerCase().includes("lakbiz"), `${route} did not render the LakBiz shell`);
+  if (route === "/vat") {
+    if (!metrics.bodyText.toLowerCase().includes("net vat payable")) {
+      await page.screenshot({ path: `${screenshotDir}/vat-enabled-state-missing.png`, fullPage: true });
+      console.error(JSON.stringify({ diagnostic: "vat-enabled-state-missing", bodyText: metrics.bodyText }, null, 2));
+      throw new Error("VAT enabled state did not render the net-VAT-payable workspace");
+    }
+  }
   const file = `${screenshotDir}/${safeName(`${route}-${suffix}`)}.png`;
   await page.screenshot({ path: file, fullPage: true });
   return file;
@@ -156,6 +262,33 @@ async function captureWorkforceDrawer(page) {
   await page.screenshot({ path: `${screenshotDir}/workforce-add-member-drawer-desktop.png`, fullPage: true });
 }
 
+async function captureBillsDrawer(page) {
+  if (!routes.includes("/bills")) return;
+  await page.goto(`${previewUrl}/bills`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
+  const shopDetails = page.getByRole("button", { name: /shop details/i }).first();
+  assert(await shopDetails.isVisible().catch(() => false), "Shop details button is not visible");
+  await shopDetails.click();
+  await page.waitForTimeout(300);
+  const dialog = page.locator('[role="dialog"]:visible').last();
+  assert(await dialog.isVisible(), "Shop details drawer did not open");
+  await page.screenshot({ path: `${screenshotDir}/bills-shop-details-drawer-desktop.png`, fullPage: true });
+}
+
+async function captureVatIncomeTab(page) {
+  if (!routes.includes("/vat")) return;
+  await page.goto(`${previewUrl}/vat`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
+  const incomeTab = page.getByRole("tab", { name: /income tax/i });
+  assert(await incomeTab.isVisible().catch(() => false), "Income Tax tab is not visible");
+  await incomeTab.click();
+  await page.waitForTimeout(300);
+  assert((await incomeTab.getAttribute("aria-selected")) === "true", "Income Tax tab did not become active");
+  const bodyText = (await page.locator("body").innerText()).toLowerCase();
+  assert(bodyText.includes("estimated"), "Income Tax workspace did not render its estimate surface");
+  await page.screenshot({ path: `${screenshotDir}/vat-income-tax-desktop.png`, fullPage: true });
+}
+
 await mkdir(screenshotDir, { recursive: true });
 let browser;
 try {
@@ -173,9 +306,12 @@ try {
   try {
     const page = await desktop.newPage();
     await login(page, owner.email);
+    await enableVatThroughApp(page);
     for (const route of routes) await capture(page, route, "desktop");
     await captureSupplierDrawer(page);
     await captureWorkforceDrawer(page);
+    await captureBillsDrawer(page);
+    await captureVatIncomeTab(page);
   } finally {
     await desktop.close();
   }
@@ -184,6 +320,7 @@ try {
   try {
     const page = await mobile.newPage();
     await login(page, owner.email);
+    await enableVatThroughApp(page);
     for (const route of routes) await capture(page, route, "mobile");
   } finally {
     await mobile.close();

@@ -27,7 +27,7 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: https://zestppstpwjxriwcuykc.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       LAKBIZ_EXPECTED_BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      LAKBIZ_FOCUSED_ROUTES: /workforce
+      LAKBIZ_FOCUSED_ROUTES: /vat
       LAKBIZ_FOCUSED_UI_QA_DIR: /tmp/lakbiz-focused-ui
 
     steps:
