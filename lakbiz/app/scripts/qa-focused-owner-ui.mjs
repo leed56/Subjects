@@ -14,6 +14,9 @@ const routes = (process.env.LAKBIZ_FOCUSED_ROUTES ?? "/suppliers")
   .map((route) => route.trim())
   .filter(Boolean);
 const expectedHost = "zestppstpwjxriwcuykc.supabase.co";
+const targetWorkspace = routes.includes("/workforce")
+  ? { name: "IMT Test 2", sector: "ac_hvac" }
+  : { name: "LakBiz Pharmacy Demo", sector: "pharmacy" };
 
 if (!supabaseUrl || !serviceRole || !previewUrl) {
   throw new Error("Supabase credentials and LAKBIZ_PREVIEW_URL are required");
@@ -43,19 +46,30 @@ async function createOwner() {
   const { data: organizations, error: orgError } = await admin
     .from("organizations")
     .select("id,name,sector")
-    .eq("name", "LakBiz Pharmacy Demo");
+    .eq("name", targetWorkspace.name);
   if (orgError || (organizations ?? []).length !== 1) {
-    throw new Error(`Focused QA organization lookup failed: ${orgError?.message ?? "not unique"}`);
+    throw new Error(
+      `Focused QA organization lookup failed for ${targetWorkspace.name}: ${orgError?.message ?? "not unique"}`,
+    );
   }
   const org = organizations[0];
+  assert(
+    org.sector === targetWorkspace.sector,
+    `Focused QA workspace sector mismatch: expected ${targetWorkspace.sector}, found ${org.sector}`,
+  );
   orgId = org.id;
 
-  const email = `qa-focused-pharmacy-owner-${runTag}@example.invalid`;
+  const email = `qa-focused-${targetWorkspace.sector}-owner-${runTag}@example.invalid`;
   const { data, error } = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
-    user_metadata: { lakbiz_qa: true, qa_type: "focused_ui", qa_role: "owner" },
+    user_metadata: {
+      lakbiz_qa: true,
+      qa_type: "focused_ui",
+      qa_role: "owner",
+      qa_sector: targetWorkspace.sector,
+    },
   });
   if (error || !data.user) throw new Error(`Focused QA user creation failed: ${error?.message ?? "no user"}`);
   userId = data.user.id;
@@ -176,7 +190,13 @@ try {
   }
 
   console.log("FOCUSED_OWNER_UI_QA_PASSED");
-  console.log(JSON.stringify({ previewUrl, expectedBuildSha, routes, screenshotDir }, null, 2));
+  console.log(
+    JSON.stringify(
+      { previewUrl, expectedBuildSha, routes, targetWorkspace, screenshotDir },
+      null,
+      2,
+    ),
+  );
 } finally {
   if (browser) await browser.close();
   await cleanup();
