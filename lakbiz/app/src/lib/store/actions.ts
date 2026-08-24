@@ -1460,6 +1460,11 @@ export function sellVehicle(
     return data;
   }
 
+  // A vehicle and its sale intentionally share an id. They live in separate
+  // tables, and the stable link makes retries idempotent without requiring a
+  // schema migration or relying on a mutable bill number.
+  if (data.sales.some((sale) => sale.id === vehicle.id)) return data;
+
   const customer = input.customerId
     ? data.customers.find((c) => c.id === input.customerId)
     : undefined;
@@ -1468,6 +1473,36 @@ export function sellVehicle(
     customer?.name ?? (input.customerName?.trim() || undefined);
 
   const soldDate = new Date().toISOString();
+
+  const vatSplit = isVatEnabled(data.business)
+    ? splitInclusiveTotal(input.sellPrice)
+    : { subtotal: input.sellPrice, vat: 0, total: input.sellPrice };
+  const cost = vehicleTotalCost(vehicle.purchasePrice, vehicle.reconditionCost);
+  const sale: Sale = {
+    id: vehicle.id,
+    billNo: generateBillNo(data.sales.length),
+    date: soldDate,
+    lines: [
+      {
+        // Vehicle inventory is stored separately from retail products. A null
+        // product reference keeps the invoice line valid in Supabase while the
+        // shared sale id provides the durable vehicle link.
+        productId: "",
+        productName: `${vehicle.stockId} · ${vehicle.make} ${vehicle.model} ${vehicle.year}`,
+        qty: 1,
+        unitPrice: input.sellPrice,
+        buyPrice: cost,
+      },
+    ],
+    subtotal: vatSplit.subtotal,
+    outputVat: vatSplit.vat,
+    total: vatSplit.total,
+    profit: input.sellPrice - cost,
+    paymentMethod: input.paymentMethod,
+    customerId: input.customerId,
+    customerName,
+    creditAmount: input.paymentMethod === "credit" ? input.sellPrice : 0,
+  };
 
   let customers = data.customers;
   if (input.paymentMethod === "credit" && input.customerId) {
@@ -1480,6 +1515,7 @@ export function sellVehicle(
 
   return {
     ...data,
+    sales: [sale, ...data.sales],
     customers,
     vehicles: data.vehicles.map((v) =>
       v.id === input.vehicleId
