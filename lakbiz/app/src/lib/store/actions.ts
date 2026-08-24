@@ -1915,6 +1915,22 @@ export function createSale(
     chequeId,
   };
 
+  const bankAccount = options.bankAccountId
+    ? working.bankAccounts.find((account) => account.id === options.bankAccountId)
+    : undefined;
+  const bankTransaction: BankTransaction | undefined =
+    bankAccount && (paymentMethod === "bank_transfer" || paymentMethod === "card")
+      ? {
+          id: saleId,
+          accountId: bankAccount.id,
+          type: "deposit",
+          amount: total,
+          description: `${sale.billNo ?? saleId.slice(0, 8)} sale receipt`,
+          reference: sale.billNo,
+          date: sale.date,
+        }
+      : undefined;
+
   const qtyByProduct = new Map(
     saleLines.map((l) => [l.productId, l.qty] as const),
   );
@@ -1943,6 +1959,16 @@ export function createSale(
     sales: [sale, ...working.sales],
     customers,
     cheques,
+    bankTransactions: bankTransaction
+      ? [bankTransaction, ...working.bankTransactions]
+      : working.bankTransactions,
+    bankAccounts: bankTransaction
+      ? working.bankAccounts.map((account) =>
+          account.id === bankTransaction.accountId
+            ? { ...account, balance: account.balance + bankTransaction.amount }
+            : account,
+        )
+      : working.bankAccounts,
     products: working.products.map((p) => {
       const sold = qtyByProduct.get(p.id);
       if (!sold) return p;

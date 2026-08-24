@@ -758,4 +758,6 @@ export type SaleOptions = {
   chequeBank?: string;
   chequeDate?: string;
   postDated?: boolean;
+  /** Receiving account for card or bank-transfer settlement. */
+  bankAccountId?: string;
 };
