@@ -1513,10 +1513,38 @@ export function sellVehicle(
     );
   }
 
+  const bankAccount = input.bankAccountId
+    ? data.bankAccounts.find((account) => account.id === input.bankAccountId)
+    : undefined;
+  const recordsBankDeposit =
+    (input.paymentMethod === "bank_transfer" || input.paymentMethod === "card") &&
+    bankAccount;
+  const bankTransaction: BankTransaction | undefined = recordsBankDeposit
+    ? {
+        id: vehicle.id,
+        accountId: bankAccount.id,
+        type: "deposit",
+        amount: input.sellPrice,
+        description: `${vehicle.stockId} vehicle sale`,
+        reference: sale.billNo,
+        date: soldDate,
+      }
+    : undefined;
+
   return {
     ...data,
     sales: [sale, ...data.sales],
     customers,
+    bankTransactions: bankTransaction
+      ? [bankTransaction, ...data.bankTransactions]
+      : data.bankTransactions,
+    bankAccounts: bankTransaction
+      ? data.bankAccounts.map((account) =>
+          account.id === bankTransaction.accountId
+            ? { ...account, balance: account.balance + bankTransaction.amount }
+            : account,
+        )
+      : data.bankAccounts,
     vehicles: data.vehicles.map((v) =>
       v.id === input.vehicleId
         ? {
