@@ -26,7 +26,6 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://zestppstpwjxriwcuykc.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      LAKBIZ_PREVIEW_URL: https://subjects-git-claude-global-premium-ui-nexuserp.vercel.app
       LAKBIZ_EXPECTED_BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       LAKBIZ_UI_QA_DIR: /tmp/lakbiz-ui-qa
 
@@ -38,6 +37,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+
+      - name: Resolve Vercel branch preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          safe_branch="$(printf '%s' "$branch" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
+          if [ -z "$safe_branch" ]; then
+            echo "Unable to resolve Vercel preview branch alias."
+            exit 1
+          fi
+          echo "LAKBIZ_PREVIEW_URL=https://subjects-git-${safe_branch}-nexuserp.vercel.app" >> "$GITHUB_ENV"
 
       - name: Install locked dependencies
         run: npm ci
@@ -59,6 +70,10 @@ jobs:
           fi
           if [ -z "${LAKBIZ_EXPECTED_BUILD_SHA:-}" ]; then
             echo "LAKBIZ_EXPECTED_BUILD_SHA is required to prevent stale-preview QA."
+            exit 1
+          fi
+          if [ -z "${LAKBIZ_PREVIEW_URL:-}" ]; then
+            echo "LAKBIZ_PREVIEW_URL is required for deployed browser QA."
             exit 1
           fi
 
