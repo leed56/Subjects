@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { ProLoadingState, ProMain } from "@/components/ui/pro-shell";
@@ -27,7 +27,6 @@ import type { PaymentMethod } from "@/lib/types";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import {
-  agingLabel,
   CAR_MAKES,
   daysInStock,
   FINANCE_PARTNERS,
@@ -187,33 +186,31 @@ export default function VehiclesPageV2() {
     0,
   );
 
-  const filteredVehicles = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return data.vehicles.filter((vehicle) => {
-      const matchesFilter =
-        filter === "all"
-          ? true
-          : filter === "aging"
-            ? vehicle.status === "for_sale" && daysInStock(vehicle.dateAdded) >= 60
-            : vehicle.status === filter;
-      if (!matchesFilter) return false;
-      if (!needle) return true;
-      return [
-        vehicle.stockId,
-        vehicle.make,
-        vehicle.model,
-        String(vehicle.year),
-        vehicle.chassisNo,
-        vehicle.engineNo ?? "",
-        vehicle.regNo ?? "",
-        vehicle.color ?? "",
-        vehicle.customerName ?? "",
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(needle);
-    });
-  }, [data.vehicles, filter, query]);
+  const needle = query.trim().toLowerCase();
+  const filteredVehicles = data.vehicles.filter((vehicle) => {
+    const matchesFilter =
+      filter === "all"
+        ? true
+        : filter === "aging"
+          ? vehicle.status === "for_sale" && daysInStock(vehicle.dateAdded) >= 60
+          : vehicle.status === filter;
+    if (!matchesFilter) return false;
+    if (!needle) return true;
+    return [
+      vehicle.stockId,
+      vehicle.make,
+      vehicle.model,
+      String(vehicle.year),
+      vehicle.chassisNo,
+      vehicle.engineNo ?? "",
+      vehicle.regNo ?? "",
+      vehicle.color ?? "",
+      vehicle.customerName ?? "",
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(needle);
+  });
 
   const saveVehicle = async () => {
     if (!model.trim() || !chassisNo.trim() || savingVehicle || !canWrite) {
@@ -489,62 +486,19 @@ export default function VehiclesPageV2() {
 
         <section className="mt-6">
           <FilterBar>
-            <SearchInput
-              value={query}
-              onChange={setQuery}
-              placeholder={`${t("nav.vehicles")}…`}
-              className="min-w-[15rem] flex-1"
-            />
-            <select
-              value={filter}
-              onChange={(event) => setFilter(event.target.value as VehicleFilter)}
-              className={`${fieldClass} w-auto min-w-[10rem]`}
-              aria-label="Vehicle status"
-            >
-              {(["all", "for_sale", "reconditioning", "incoming", "sold", "aging"] as const).map((value) => (
-                <option key={value} value={value}>{statusLabel(value)}</option>
-              ))}
+            <SearchInput value={query} onChange={setQuery} placeholder={`${t("nav.vehicles")}…`} className="min-w-[15rem] flex-1" />
+            <select value={filter} onChange={(event) => setFilter(event.target.value as VehicleFilter)} className={`${fieldClass} w-auto min-w-[10rem]`} aria-label="Vehicle status">
+              {(["all", "for_sale", "reconditioning", "incoming", "sold", "aging"] as const).map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}
             </select>
             <span className="px-1 text-xs font-medium text-slate-500">{filteredVehicles.length} shown</span>
           </FilterBar>
 
-          <DataTable
-            rows={filteredVehicles}
-            columns={columns}
-            emptyState={
-              <EmptyState
-                title={t("veh.no_vehicles")}
-                description={t("veh.no_vehicles_hint")}
-                icon={<VehiclesIcon className="h-5 w-5" />}
-                action={canWrite && data.vehicles.length === 0 ? <Button variant="primary" onClick={openCreate}>{t("veh.add")}</Button> : undefined}
-              />
-            }
-          />
+          <DataTable rows={filteredVehicles} columns={columns} emptyState={<EmptyState title={t("veh.no_vehicles")} description={t("veh.no_vehicles_hint")} icon={<VehiclesIcon className="h-5 w-5" />} action={canWrite && data.vehicles.length === 0 ? <Button variant="primary" onClick={openCreate}>{t("veh.add")}</Button> : undefined} />} />
         </section>
 
-        {sold.length > 0 && canSeeFinancials && (
-          <p className="mt-4 text-right text-xs font-medium text-slate-500">
-            {t("veh.sold")}: {sold.length}
-          </p>
-        )}
+        {sold.length > 0 && canSeeFinancials && <p className="mt-4 text-right text-xs font-medium text-slate-500">{t("veh.sold")}: {sold.length}</p>}
 
-        <Drawer
-          open={vehicleDrawerOpen}
-          onClose={closeVehicleDrawer}
-          title={editing ? `${t("common.edit")} ${editing.stockId}` : t("veh.add_yard")}
-          description={editing ? `${editing.make} ${editing.model} · ${editing.chassisNo}` : t("veh.subtitle")}
-          size="lg"
-          footer={
-            <DrawerFooter
-              onCancel={closeVehicleDrawer}
-              cancelLabel={t("common.cancel")}
-              primaryLabel={editing ? t("common.update") : t("veh.add")}
-              onPrimary={() => void saveVehicle()}
-              primaryDisabled={!canWrite || savingVehicle}
-              primaryLoading={savingVehicle}
-            />
-          }
-        >
+        <Drawer open={vehicleDrawerOpen} onClose={closeVehicleDrawer} title={editing ? `${t("common.edit")} ${editing.stockId}` : t("veh.add_yard")} description={editing ? `${editing.make} ${editing.model} · ${editing.chassisNo}` : t("veh.subtitle")} size="lg" footer={<DrawerFooter onCancel={closeVehicleDrawer} cancelLabel={t("common.cancel")} primaryLabel={editing ? t("common.update") : t("veh.add")} onPrimary={() => void saveVehicle()} primaryDisabled={!canWrite || savingVehicle} primaryLoading={savingVehicle} />}>
           <div className="space-y-6">
             <section>
               <h3 className="text-sm font-semibold text-slate-950">Vehicle identity</h3>
@@ -574,66 +528,19 @@ export default function VehiclesPageV2() {
             <section className="border-t border-slate-100 pt-5">
               <h3 className="text-sm font-semibold text-slate-950">Pricing</h3>
               <div className={`mt-3 grid gap-4 ${canSeeFinancials ? "sm:grid-cols-2" : ""}`}>
-                {canSeeFinancials && (
-                  <>
-                    <label><span className={labelClass}>{t("veh.purchase")}</span><input type="number" value={purchasePrice || ""} onChange={(e) => setPurchasePrice(Number(e.target.value))} className={fieldClass} /></label>
-                    <label><span className={labelClass}>{t("veh.recondition")}</span><input type="number" value={reconditionCost || ""} onChange={(e) => setReconditionCost(Number(e.target.value))} className={fieldClass} /></label>
-                    <label><span className={labelClass}>{t("veh.min_price")}</span><input type="number" value={minPrice || ""} onChange={(e) => setMinPrice(Number(e.target.value))} className={fieldClass} /></label>
-                  </>
-                )}
+                {canSeeFinancials && <><label><span className={labelClass}>{t("veh.purchase")}</span><input type="number" value={purchasePrice || ""} onChange={(e) => setPurchasePrice(Number(e.target.value))} className={fieldClass} /></label><label><span className={labelClass}>{t("veh.recondition")}</span><input type="number" value={reconditionCost || ""} onChange={(e) => setReconditionCost(Number(e.target.value))} className={fieldClass} /></label><label><span className={labelClass}>{t("veh.min_price")}</span><input type="number" value={minPrice || ""} onChange={(e) => setMinPrice(Number(e.target.value))} className={fieldClass} /></label></>}
                 <label><span className={labelClass}>{t("veh.ask_price")}</span><input type="number" value={askPrice || ""} onChange={(e) => setAskPrice(Number(e.target.value))} className={fieldClass} /></label>
               </div>
-              {canSeeFinancials && (
-                <div className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
-                  <div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("veh.total_cost")}</p><p className="mt-1 font-mono text-lg font-semibold text-slate-950">{formatLkr(currentCost)}</p></div>
-                  <div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("veh.est_profit")}</p><p className={`mt-1 font-mono text-lg font-semibold ${currentProfit < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatLkr(currentProfit)}</p></div>
-                </div>
-              )}
+              {canSeeFinancials && <div className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2"><div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("veh.total_cost")}</p><p className="mt-1 font-mono text-lg font-semibold text-slate-950">{formatLkr(currentCost)}</p></div><div><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("veh.est_profit")}</p><p className={`mt-1 font-mono text-lg font-semibold ${currentProfit < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatLkr(currentProfit)}</p></div></div>}
             </section>
           </div>
         </Drawer>
 
-        <Dialog
-          open={Boolean(sellTarget)}
-          onClose={() => !savingSale && setSellTarget(null)}
-          title={sellTarget ? `${t("veh.sell")} · ${sellTarget.make} ${sellTarget.model}` : t("veh.sell")}
-          description={sellTarget ? `${sellTarget.stockId} · ${sellTarget.chassisNo}` : undefined}
-          size="md"
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setSellTarget(null)} disabled={savingSale}>{t("common.cancel")}</Button>
-              <Button variant="primary" onClick={() => void confirmSale()} disabled={!canWrite || savingSale}>{savingSale ? t("common.saving") : t("veh.confirm_sale")}</Button>
-            </>
-          }
-        >
-          {sellTarget && (
-            <div className="space-y-4">
-              <label><span className={labelClass}>{t("veh.sell_price")}</span><input type="number" value={sellPrice || ""} onChange={(e) => setSellPrice(Number(e.target.value))} className={fieldClass} /></label>
-              <label><span className={labelClass}>{t("common.customer")}</span><select value={sellCustomerId} onChange={(e) => setSellCustomerId(e.target.value)} className={fieldClass}><option value="">{t("jobs.customer_opt")}</option>{data.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>
-              {!sellCustomerId && <label><span className={labelClass}>{t("veh.buyer_name")}</span><input value={sellCustomerName} onChange={(e) => setSellCustomerName(e.target.value)} className={fieldClass} /></label>}
-              <label><span className={labelClass}>Payment</span><select value={sellPayment} onChange={(e) => setSellPayment(e.target.value as PaymentMethod)} className={fieldClass}>{PAYMENT_OPTIONS.map((method) => <option key={method} value={method}>{paymentLabel(t, method)}</option>)}</select></label>
-              <label><span className={labelClass}>{t("veh.finance")}</span><select value={financePartner} onChange={(e) => setFinancePartner(e.target.value)} className={fieldClass}>{FINANCE_PARTNERS.map((partner) => <option key={partner}>{partner}</option>)}</select></label>
-              {canSeeFinancials && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("common.profit")}</p>
-                  <p className="mt-1 font-mono text-xl font-semibold text-emerald-700">{formatLkr(sellPrice - vehicleTotalCost(sellTarget.purchasePrice, sellTarget.reconditionCost))}</p>
-                </div>
-              )}
-            </div>
-          )}
+        <Dialog open={Boolean(sellTarget)} onClose={() => !savingSale && setSellTarget(null)} title={sellTarget ? `${t("veh.sell")} · ${sellTarget.make} ${sellTarget.model}` : t("veh.sell")} description={sellTarget ? `${sellTarget.stockId} · ${sellTarget.chassisNo}` : undefined} size="md" footer={<><Button variant="secondary" onClick={() => setSellTarget(null)} disabled={savingSale}>{t("common.cancel")}</Button><Button variant="primary" onClick={() => void confirmSale()} disabled={!canWrite || savingSale}>{savingSale ? t("common.saving") : t("veh.confirm_sale")}</Button></>}>
+          {sellTarget && <div className="space-y-4"><label><span className={labelClass}>{t("veh.sell_price")}</span><input type="number" value={sellPrice || ""} onChange={(e) => setSellPrice(Number(e.target.value))} className={fieldClass} /></label><label><span className={labelClass}>{t("common.customer")}</span><select value={sellCustomerId} onChange={(e) => setSellCustomerId(e.target.value)} className={fieldClass}><option value="">{t("jobs.customer_opt")}</option>{data.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}</select></label>{!sellCustomerId && <label><span className={labelClass}>{t("veh.buyer_name")}</span><input value={sellCustomerName} onChange={(e) => setSellCustomerName(e.target.value)} className={fieldClass} /></label>}<label><span className={labelClass}>Payment</span><select value={sellPayment} onChange={(e) => setSellPayment(e.target.value as PaymentMethod)} className={fieldClass}>{PAYMENT_OPTIONS.map((method) => <option key={method} value={method}>{paymentLabel(t, method)}</option>)}</select></label><label><span className={labelClass}>{t("veh.finance")}</span><select value={financePartner} onChange={(e) => setFinancePartner(e.target.value)} className={fieldClass}>{FINANCE_PARTNERS.map((partner) => <option key={partner}>{partner}</option>)}</select></label>{canSeeFinancials && <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("common.profit")}</p><p className="mt-1 font-mono text-xl font-semibold text-emerald-700">{formatLkr(sellPrice - vehicleTotalCost(sellTarget.purchasePrice, sellTarget.reconditionCost))}</p></div>}</div>}
         </Dialog>
 
-        <ConfirmDialog
-          open={Boolean(deleteTarget)}
-          onClose={() => !deletingVehicle && setDeleteTarget(null)}
-          title={t("common.confirm_delete")}
-          description={deleteTarget ? `${deleteTarget.stockId} · ${deleteTarget.make} ${deleteTarget.model}` : undefined}
-          confirmLabel={t("common.delete")}
-          cancelLabel={t("common.cancel")}
-          tone="danger"
-          loading={deletingVehicle}
-          onConfirm={() => void confirmDelete()}
-        />
+        <ConfirmDialog open={Boolean(deleteTarget)} onClose={() => !deletingVehicle && setDeleteTarget(null)} title={t("common.confirm_delete")} description={deleteTarget ? `${deleteTarget.stockId} · ${deleteTarget.make} ${deleteTarget.model}` : undefined} confirmLabel={t("common.delete")} cancelLabel={t("common.cancel")} tone="danger" loading={deletingVehicle} onConfirm={() => void confirmDelete()} />
       </ProMain>
     </AppShell>
   );
