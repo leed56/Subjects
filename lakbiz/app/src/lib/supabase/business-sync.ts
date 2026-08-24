@@ -2074,6 +2074,18 @@ export async function syncVehicleSaleSnapshot(
   const saleErr = await syncSaleSnapshot(organizationId, data, sale.id);
   if (saleErr) return saleErr;
 
+  const bankTransaction = data.bankTransactions.find(
+    (row) => row.id === vehicleId,
+  );
+  if (bankTransaction) {
+    const bankErr = await syncBankTransactionSnapshot(
+      organizationId,
+      data,
+      bankTransaction.id,
+    );
+    if (bankErr) return bankErr;
+  }
+
   if (vehicle.paymentMethod === "credit" && vehicle.customerId) {
     const custErr = await syncCustomersSnapshot(organizationId, data.customers);
     if (custErr) return custErr;
