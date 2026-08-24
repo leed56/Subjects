@@ -115,6 +115,9 @@ export interface TextileRoll {
   remainingLength: number;
   reservedLength: number;
   damagedLength: number;
+  weightKg?: number;
+  grade?: string;
+  sourceReference?: string;
   unitCost?: number;
   rackLocation?: string;
   status: TextileRollStatus;

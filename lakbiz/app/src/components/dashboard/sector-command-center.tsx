@@ -29,6 +29,7 @@ const EMPTY_SNAPSHOT: SectorOperationalSnapshot = {
   lots: [],
   units: [],
   variants: [],
+  textileRolls: [],
   schemaReady: true,
   error: null,
 };
@@ -141,8 +142,32 @@ function buildSectorModel(
   snapshot: SectorOperationalSnapshot,
   now: Date,
 ): SectorModel {
-  if (sector === "grocery" || sector === "electricals" || sector === "spare_parts" || sector === "textile") {
+  if (sector === "grocery" || sector === "electricals" || sector === "spare_parts") {
     return retailVelocityModel(data, sector, now);
+  }
+
+  if (sector === "textile") {
+    const live = snapshot.textileRolls.filter((roll) => !["exhausted", "returned"].includes(roll.status));
+    const metres = live.filter((roll) => roll.lengthUnit === "metre").reduce((sum, roll) => sum + roll.remainingLength, 0);
+    const yards = live.filter((roll) => roll.lengthUnit === "yard").reduce((sum, roll) => sum + roll.remainingLength, 0);
+    const held = snapshot.textileRolls.filter((roll) => roll.status === "quarantined").length;
+    const reserved = live.reduce((sum, roll) => sum + roll.reservedLength, 0);
+    const actions: Action[] = [];
+    if (held) actions.push({ key: "roll-holds", title: `${held} roll${held === 1 ? "" : "s"} quarantined`, detail: "Resolve quality or receiving issues before these rolls return to sellable stock.", href: "/stock/rolls", tone: "danger" });
+    return {
+      eyebrow: "Textile roll intelligence",
+      title: "Physical rolls & measured balance",
+      description: "Roll-level visibility by original unit. Metres and yards remain separate so the dashboard never mixes unlike quantities.",
+      metrics: [
+        { label: "Active rolls", value: snapshot.schemaReady ? String(live.length) : "—", hint: "Physical identities", tone: "default" },
+        { label: "Metre balance", value: snapshot.schemaReady ? metres.toFixed(3) : "—", hint: "Remaining metres", tone: "default" },
+        { label: "Yard balance", value: snapshot.schemaReady ? yards.toFixed(3) : "—", hint: "Remaining yards", tone: "default" },
+        { label: "Reserved measure", value: snapshot.schemaReady ? reserved.toFixed(3) : "—", hint: "Original roll units", tone: reserved ? "warning" : "positive" },
+      ],
+      actions,
+      primaryHref: "/stock/rolls",
+      primaryLabel: "Fabric Rolls",
+    };
   }
 
   if (sector === "pharmacy") {
@@ -347,7 +372,7 @@ export function SectorCommandCenter() {
       setSnapshot(EMPTY_SNAPSHOT);
       return;
     }
-    if (!(["pharmacy", "mobile_shop", "electronics", "footwear"] as SectorId[]).includes(org.sector)) {
+    if (!(["pharmacy", "mobile_shop", "electronics", "footwear", "textile"] as SectorId[]).includes(org.sector)) {
       setSnapshot(EMPTY_SNAPSHOT);
       return;
     }

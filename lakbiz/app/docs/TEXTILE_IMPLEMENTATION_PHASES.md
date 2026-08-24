@@ -35,6 +35,8 @@ factory planning and garment work orders are outside the initial scope.
 
 ## Phase 2 — physical rolls and receiving
 
+**Status: implemented in code; database migration deployment pending.**
+
 - Roll receipt against supplier purchase orders and goods receipts.
 - Unique roll number/barcode, supplier lot, dye lot, shade, width, received length,
   usable length, defects, landed unit cost and rack/bin location.
@@ -91,4 +93,3 @@ factory planning and garment work orders are outside the initial scope.
 - Reserved quantity is not shown as freely available stock.
 - Different dye lots cannot be silently combined for one matched order.
 - Price, cost, credit and stock adjustments follow role-based approval rules.
-

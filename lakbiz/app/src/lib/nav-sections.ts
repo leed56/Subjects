@@ -45,6 +45,12 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/stock", labelKey: "nav.stock" },
       {
+        href: "/stock/rolls",
+        labelEn: "Fabric rolls",
+        labelSi: "රෙදි roll තොගය",
+        sectorOnly: ["textile"],
+      },
+      {
         href: "/stock/advanced",
         labelEn: "Inventory control",
         labelSi: "උසස් තොග පාලනය",
