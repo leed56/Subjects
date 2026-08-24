@@ -277,6 +277,7 @@ try {
   try {
     const page = await mobile.newPage();
     await login(page, owner.email);
+    await enableVatThroughApp(page);
     for (const route of routes) await capture(page, route, "mobile");
   } finally {
     await mobile.close();
