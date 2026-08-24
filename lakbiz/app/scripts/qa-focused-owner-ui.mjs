@@ -120,11 +120,11 @@ async function captureSupplierDrawer(page) {
   if (!routes.includes("/suppliers")) return;
   await page.goto(`${previewUrl}/suppliers`, { waitUntil: "domcontentloaded", timeout: 60_000 });
   await page.waitForLoadState("networkidle", { timeout: 25_000 }).catch(() => {});
-  const addSupplier = page.getByRole("button", { name: /supplier/i }).first();
-  if (!(await addSupplier.isVisible().catch(() => false))) return;
+  const addSupplier = page.getByRole("button", { name: /^add supplier$/i });
+  assert(await addSupplier.isVisible().catch(() => false), "Add Supplier button is not visible");
   await addSupplier.click();
   await page.waitForTimeout(300);
-  const dialog = page.locator('[role="dialog"]').last();
+  const dialog = page.locator('[role="dialog"]:visible').last();
   assert(await dialog.isVisible(), "Add Supplier drawer did not open");
   await page.screenshot({ path: `${screenshotDir}/suppliers-add-drawer-desktop.png`, fullPage: true });
 }
