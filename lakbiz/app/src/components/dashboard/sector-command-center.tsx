@@ -84,6 +84,11 @@ function retailVelocityModel(data: AppData, sector: SectorId, now: Date): Sector
       title: "Movement & dormant-stock control",
       description: "Surfaces reorder pressure and parts that are occupying shelf space without recent movement.",
     },
+    textile: {
+      eyebrow: "Textile trading intelligence",
+      title: "Fabric movement & replenishment",
+      description: "Tracks catalogue movement now; roll balances, dye lots, reservations and remnants activate with the physical-roll phases.",
+    },
   };
   const copy = labels[sector] ?? labels.grocery!;
   const movement = productMovementMap(data);
@@ -136,7 +141,7 @@ function buildSectorModel(
   snapshot: SectorOperationalSnapshot,
   now: Date,
 ): SectorModel {
-  if (sector === "grocery" || sector === "electricals" || sector === "spare_parts") {
+  if (sector === "grocery" || sector === "electricals" || sector === "spare_parts" || sector === "textile") {
     return retailVelocityModel(data, sector, now);
   }
 

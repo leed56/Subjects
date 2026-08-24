@@ -40,4 +40,12 @@ describe("sector inventory tracking", () => {
     expect(cars.defaultMode).toBe("simple");
     expect(cars.allowedModes).toEqual(["simple"]);
   });
+
+  it("requires colour, shade and width with lot identity for textile", () => {
+    const textile = inventoryTrackingPreset("textile");
+    expect(textile.defaultMode).toBe("variant_lot");
+    expect(textile.allowedModes).toEqual(["variant_lot"]);
+    expect(textile.variantAxes).toEqual(["colour", "shade", "width"]);
+    expect(textile.fefo).toBe(false);
+  });
 });

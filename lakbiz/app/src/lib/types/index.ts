@@ -6,6 +6,7 @@ export type SectorId =
   | "electricals"
   | "spare_parts"
   | "footwear"
+  | "textile"
   | "ac_hvac"
   | "car_sales";
 
@@ -82,6 +83,43 @@ export interface Product {
   /** Free-text notes (storage/handling caveats, discontinued reason, etc.) — generic across every sector, not sector-specific like customFields. */
   notes?: string;
   customFields: Record<string, string | number | boolean>;
+}
+
+export type TextileLengthUnit = "metre" | "yard";
+
+export type TextileRollStatus =
+  | "unopened"
+  | "opened"
+  | "reserved"
+  | "exhausted"
+  | "quarantined"
+  | "returned";
+
+/** Physical fabric identity. Aggregate Product.stockQty remains available for
+ * legacy catalogue views; roll-ledger availability becomes authoritative when
+ * Textile roll tracking is enabled. */
+export interface TextileRoll {
+  id: string;
+  organizationId: string;
+  productId: string;
+  rollNo: string;
+  barcode?: string;
+  supplierId?: string;
+  supplierLot?: string;
+  dyeLot?: string;
+  shade?: string;
+  width?: number;
+  widthUnit?: "inch" | "centimetre";
+  lengthUnit: TextileLengthUnit;
+  receivedLength: number;
+  remainingLength: number;
+  reservedLength: number;
+  damagedLength: number;
+  unitCost?: number;
+  rackLocation?: string;
+  status: TextileRollStatus;
+  receivedAt: string;
+  notes?: string;
 }
 
 export interface VehicleUnit {

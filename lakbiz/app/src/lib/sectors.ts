@@ -61,6 +61,14 @@ export const sectors: SectorTemplate[] = [
     reports: ["Sales by size", "Sales by style", "Size gaps", "Fast/slow movers", "Low stock & reorder"],
   },
   {
+    id: "textile",
+    nameEn: "Textile Wholesale & Retail",
+    nameSi: "රෙදි තොග සහ සිල්ලර වෙළඳාම",
+    description: "Fabric rolls, measured cuts, dye lots, wholesale pricing, customer credit and retail billing.",
+    extraFields: ["fabricFamily", "construction", "composition", "width", "gsm", "color", "shade", "design", "finish", "countryOfOrigin", "supplierReference", "dyeLot", "barcode"],
+    reports: ["Roll balances", "Stock by shade & dye lot", "Wholesale vs retail sales", "Remnant aging", "Customer credit aging"],
+  },
+  {
     id: "ac_hvac",
     nameEn: "Air Conditioning & HVAC",
     nameSi: "වායු සමනය සහ HVAC",
@@ -79,7 +87,7 @@ export const sectors: SectorTemplate[] = [
 ];
 
 const SECTOR_IDS: SectorId[] = [
-  "grocery", "pharmacy", "electronics", "mobile_shop", "electricals", "spare_parts", "footwear", "ac_hvac", "car_sales",
+  "grocery", "pharmacy", "electronics", "mobile_shop", "electricals", "spare_parts", "footwear", "textile", "ac_hvac", "car_sales",
 ];
 
 export function parseSectorId(value: string | null | undefined): SectorId {
@@ -100,6 +108,7 @@ export function defaultCategoryForSector(sectorId: SectorId): string {
     electricals: "Electricals",
     spare_parts: "Spare Parts",
     footwear: "Footwear",
+    textile: "Fabrics",
     ac_hvac: "Air Conditioning",
     car_sales: "Vehicles",
   };
@@ -112,6 +121,7 @@ const LEGACY_CATEGORY_MAP: Partial<Record<SectorId, string[]>> = {
   electricals: ["Electricals", "Wire & Cable", "Switches & Sockets", "Breakers & Protection", "Lighting", "Fixtures", "Tools", "Other"],
   spare_parts: ["Spare Parts", "Engine Parts", "Suspension & Steering", "Brake Parts", "Filters", "Electrical & Sensors", "Body Parts", "Lubricants & Fluids", "Accessories", "Other"],
   footwear: ["Footwear", "Men's Shoes", "Women's Shoes", "Kids' Shoes", "School Shoes", "Slippers & Sandals", "Sports Shoes", "Safety Shoes", "Socks & Accessories", "Other"],
+  textile: ["Fabrics", "Cotton", "Linen", "Denim", "Rayon & Viscose", "Jersey & Knits", "Lycra & Stretch", "Chiffon & Georgette", "Suiting", "Shirting", "Uniform Fabric", "Lining", "Curtain & Upholstery", "Lace & Embroidery", "Fixed Cuts & Bundles", "Trims & Accessories", "Other"],
   ac_hvac: ["Air Conditioning", "Pipe & Accessories", "Consumables", "Service Parts", "Compressors", "Coils (Condenser & Evaporator)", "PCBs & Control Boards", "Capacitors, Relays & Contactors", "Motors & Fans", "Sensors & Thermostats", "Valves & Refrigerant Controls", "Refrigerant & Gas", "Copper Pipe & Fittings", "Insulation & Cladding", "Drain Components", "Filters", "Bearings & Mounts", "Electrical (Terminals, Breakers, Fuses, Cables)", "Brackets & Vibration Pads", "Other"],
   car_sales: ["Vehicles", "New Vehicles", "Used Vehicles", "Reconditioned Vehicles", "Accessories", "Other"],
 };

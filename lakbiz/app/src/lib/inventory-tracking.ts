@@ -8,6 +8,9 @@ export type InventoryTrackingMode =
   | "variant_serial"
   | "variant_lot";
 
+// Textile uses variant_lot for catalogue guidance in Phase 1. Physical roll
+// identity is represented by TextileRoll and becomes authoritative in Phase 2.
+
 export type InventoryTrackingPreset = {
   defaultMode: InventoryTrackingMode;
   allowedModes: InventoryTrackingMode[];
@@ -79,6 +82,14 @@ const PRESETS: Record<SectorId, InventoryTrackingPreset> = {
     fefo: false,
     reasonEn: "Each size/colour combination must have its own stock quantity and barcode/SKU where used.",
     reasonSi: "එක් එක් ප්‍රමාණ/වර්ණ සංයෝජනයට වෙනම තොග ප්‍රමාණයක් සහ අවශ්‍ය නම් barcode/SKU තිබිය යුතුය.",
+  },
+  textile: {
+    defaultMode: "variant_lot",
+    allowedModes: ["variant_lot"],
+    variantAxes: ["colour", "shade", "width"],
+    fefo: false,
+    reasonEn: "Fabric must preserve colour/width variants and dye-lot identity; each physical roll carries its own remaining measured length.",
+    reasonSi: "රෙදි සඳහා වර්ණ/පළල variants සහ dye-lot හඳුනාගැනීම තබා ගනිමින් එක් එක් roll එකේ ඉතිරි මිනුම් දිග වෙනම පාලනය කළ යුතුය.",
   },
   ac_hvac: {
     defaultMode: "simple",

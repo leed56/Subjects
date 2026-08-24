@@ -19,6 +19,7 @@ const EXPECTED_SECTORS: SectorId[] = [
   "electricals",
   "spare_parts",
   "footwear",
+  "textile",
   "ac_hvac",
   "car_sales",
 ];
@@ -58,7 +59,7 @@ describe("business sector templates", () => {
     expect(sectorFeatures("car_sales").vehicles).toBe(true);
     expect(sectorFeatures("car_sales").ac_jobs).toBe(false);
 
-    for (const sectorId of ["grocery", "pharmacy", "electronics", "mobile_shop", "electricals", "spare_parts", "footwear"] as SectorId[]) {
+    for (const sectorId of ["grocery", "pharmacy", "electronics", "mobile_shop", "electricals", "spare_parts", "footwear", "textile"] as SectorId[]) {
       expect(sectorFeatures(sectorId).ac_jobs).toBe(false);
       expect(sectorFeatures(sectorId).vehicles).toBe(false);
       expect(sectorFeatures(sectorId).sales).toBe(true);
@@ -75,6 +76,9 @@ describe("business sector templates", () => {
 
     const footwear = sectorFormFields("footwear").map((f) => f.key);
     expect(footwear).toEqual(expect.arrayContaining(["styleCode", "size", "color", "material", "gender"]));
+
+    const textile = sectorFormFields("textile").map((f) => f.key);
+    expect(textile).toEqual(expect.arrayContaining(["fabricFamily", "composition", "width", "gsm", "shade", "dyeLot"]));
   });
 
   it("falls back unknown persisted sector values safely to grocery", () => {

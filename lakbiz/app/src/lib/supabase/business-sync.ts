@@ -124,6 +124,7 @@ function asSectorId(value: string | null | undefined): SectorId {
     "electricals",
     "spare_parts",
     "footwear",
+    "textile",
     "ac_hvac",
     "car_sales",
   ];

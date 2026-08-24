@@ -23,6 +23,20 @@ const fieldLabels: Partial<Record<SectorId, Record<string, string>>> = {
     reconditionCost: "Recondition cost (LKR)",
     financePartner: "Leasing bank (Sampath, LOLC…)",
   },
+  textile: {
+    fabricFamily: "Fabric family",
+    construction: "Woven / knitted / non-woven",
+    composition: "Fibre composition",
+    width: "Width (inches)",
+    gsm: "Weight (GSM)",
+    color: "Colour",
+    shade: "Shade",
+    design: "Design / pattern",
+    finish: "Finish",
+    countryOfOrigin: "Country of origin",
+    supplierReference: "Supplier reference",
+    dyeLot: "Default dye lot",
+  },
 };
 
 export function generateStaticParams() {
