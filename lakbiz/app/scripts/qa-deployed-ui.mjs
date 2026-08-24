@@ -153,17 +153,60 @@ async function saveDiagnostic(page, user, label) {
 }
 
 async function login(page, user) {
-  await page.goto(`${previewUrl}/login`, { waitUntil: "domcontentloaded", timeout: 60_000 });
-  await page.locator('input[type="email"]').fill(user.email);
-  await page.locator('input[type="password"]').fill(password);
-  await page.locator('button[type="submit"]').click();
+  const consoleErrors = [];
+  const pageErrors = [];
+  const authResponses = [];
+  const onConsole = (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text().slice(0, 500));
+  };
+  const onPageError = (error) => pageErrors.push(String(error?.message ?? error).slice(0, 500));
+  const onResponse = (response) => {
+    if (!response.url().includes("/auth/v1/token")) return;
+    authResponses.push({ url: response.url(), status: response.status() });
+  };
+  page.on("console", onConsole);
+  page.on("pageerror", onPageError);
+  page.on("response", onResponse);
+
   try {
-    await page.waitForURL(/\/dashboard(?:\?|$)/, { timeout: 60_000 });
-  } catch (error) {
-    await saveDiagnostic(page, user, "login-failure");
-    throw new Error(`${user.sector}/${user.role}: login did not reach /dashboard. ${error instanceof Error ? error.message : "Unknown login failure"}`);
+    await page.goto(`${previewUrl}/login`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    // DOMContentLoaded can fire before Next/React has hydrated the server-rendered
+    // form. Clicking during that window performs a native form submit back to
+    // /login instead of running the React onSubmit handler. Wait for page JS and
+    // lazy chunks to settle before interacting with the authentication form.
+    await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
+    await page.waitForTimeout(500);
+
+    const emailInput = page.locator('input[type="email"]');
+    const passwordInput = page.locator('input[type="password"]');
+    const submitButton = page.locator('button[type="submit"]');
+    await emailInput.waitFor({ state: "visible", timeout: 15_000 });
+    await passwordInput.waitFor({ state: "visible", timeout: 15_000 });
+    await submitButton.waitFor({ state: "visible", timeout: 15_000 });
+    await emailInput.fill(user.email);
+    await passwordInput.fill(password);
+    await submitButton.click();
+
+    try {
+      await page.waitForURL(/\/dashboard(?:\?|$)/, { timeout: 60_000 });
+    } catch (error) {
+      console.error(JSON.stringify({
+        diagnostic: "login-runtime",
+        sector: user.sector,
+        role: user.role,
+        consoleErrors,
+        pageErrors,
+        authResponses,
+      }, null, 2));
+      await saveDiagnostic(page, user, "login-failure");
+      throw new Error(`${user.sector}/${user.role}: login did not reach /dashboard. ${error instanceof Error ? error.message : "Unknown login failure"}`);
+    }
+    await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
+  } finally {
+    page.off("console", onConsole);
+    page.off("pageerror", onPageError);
+    page.off("response", onResponse);
   }
-  await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
 }
 
 async function assertClientSurface(page, { role }) {
