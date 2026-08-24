@@ -51,6 +51,12 @@ export const NAV_SECTIONS: NavSection[] = [
         sectorOnly: ["textile"],
       },
       {
+        href: "/stock/cutting",
+        labelEn: "Cutting & reservations",
+        labelSi: "කැපීම් සහ වෙන්කිරීම්",
+        sectorOnly: ["textile"],
+      },
+      {
         href: "/stock/advanced",
         labelEn: "Inventory control",
         labelSi: "උසස් තොග පාලනය",

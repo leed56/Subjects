@@ -15,6 +15,7 @@ import { useAppStore } from "@/lib/store/use-app-store";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { pullBusinessData } from "@/lib/supabase/business-sync";
+import { fetchTextileReservations, type TextileReservation } from "@/lib/supabase/textile-cutting-client";
 import { fetchTextileRolls, finalizeTextileSale, type TextileRollRecord, type TextileSaleAllocationDraft } from "@/lib/supabase/textile-roll-client";
 import { textileUnitPrice, type TextileSaleChannel } from "@/lib/textile-pricing";
 
@@ -29,11 +30,16 @@ function clientId(prefix: string): string {
     : `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function productByIdSafe(products: Array<{ id: string; name: string }>, productId: string): string {
+  return products.find((product) => product.id === productId)?.name ?? "Fabric";
+}
+
 export function TextileSalesPage() {
   const { data, ready } = useAppStore();
   const { org } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
   const [rolls, setRolls] = useState<TextileRollRecord[]>([]);
+  const [reservations, setReservations] = useState<TextileReservation[]>([]);
   const [loadingRolls, setLoadingRolls] = useState(true);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -42,6 +48,7 @@ export function TextileSalesPage() {
   const [channel, setChannel] = useState<TextileSaleChannel>("retail");
   const [productId, setProductId] = useState("");
   const [rollId, setRollId] = useState("");
+  const [reservationId, setReservationId] = useState("");
   const [quantity, setQuantity] = useState("");
   const [fullRoll, setFullRoll] = useState(false);
   const [manualPrice, setManualPrice] = useState("");
@@ -61,20 +68,22 @@ export function TextileSalesPage() {
     if (!org.id) return;
     let cancelled = false;
     setLoadingRolls(true);
-    void fetchTextileRolls(org.id, false).then((result) => {
+    void Promise.all([fetchTextileRolls(org.id, false), fetchTextileReservations(org.id, true)]).then(([result, reservationResult]) => {
       if (cancelled) return;
       setLoadingRolls(false);
       if (result.error) setMessage(result.error);
-      else setRolls(result.data);
+      else if (reservationResult.error) setMessage(reservationResult.error);
+      else { setRolls(result.data); setReservations(reservationResult.data); }
     });
     return () => { cancelled = true; };
   }, [org.id]);
 
   const products = useMemo(() => (data?.products ?? []).filter((p) => p.active && p.sectorId === "textile"), [data?.products]);
   const sellableRolls = rolls.filter((r) => !["quarantined", "returned", "exhausted"].includes(r.status) && r.remainingLength - r.reservedLength > 0 && (!productId || r.productId === productId));
-  const selectedRoll = sellableRolls.find((r) => r.id === rollId);
+  const selectedReservation = reservations.find((row) => row.id === reservationId);
+  const selectedRoll = rolls.find((r) => r.id === rollId && (selectedReservation ? r.id === selectedReservation.rollId : sellableRolls.some((sellable) => sellable.id === r.id)));
   const selectedProduct = products.find((p) => p.id === (productId || selectedRoll?.productId));
-  const available = selectedRoll ? selectedRoll.remainingLength - selectedRoll.reservedLength : 0;
+  const available = selectedReservation?.quantity ?? (selectedRoll ? selectedRoll.remainingLength - selectedRoll.reservedLength : 0);
   const saleQty = fullRoll ? available : Number(quantity || 0);
   const priceResolution = selectedProduct && data ? textileUnitPrice({
     product: selectedProduct,
@@ -87,8 +96,8 @@ export function TextileSalesPage() {
   }) : null;
 
   useEffect(() => {
-    if (productId && !sellableRolls.some((r) => r.id === rollId)) setRollId("");
-  }, [productId, rollId, sellableRolls]);
+    if (!reservationId && productId && !sellableRolls.some((r) => r.id === rollId)) setRollId("");
+  }, [productId, rollId, sellableRolls, reservationId]);
 
   const gross = cart.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
   const discountValue = Math.min(Math.max(0, Number(discount) || 0), gross);
@@ -103,9 +112,9 @@ export function TextileSalesPage() {
       productName: selectedProduct.name, rollNo: selectedRoll.rollNo,
       quantity: saleQty, unitPrice: priceResolution.price,
       saleMode: fullRoll ? "full_roll" : channel === "wholesale" ? "wholesale_cut" : "retail_cut",
-      unit: selectedRoll.lengthUnit, priceSource: priceResolution.source,
+      unit: selectedRoll.lengthUnit, priceSource: priceResolution.source, reservationId: selectedReservation?.id,
     }]);
-    setQuantity(""); setManualPrice(""); setFullRoll(false); setMessage("");
+    setQuantity(""); setManualPrice(""); setFullRoll(false); setReservationId(""); setMessage("");
   }
 
   async function checkout() {
@@ -127,7 +136,7 @@ export function TextileSalesPage() {
     const result = await finalizeTextileSale(org.id, {
       saleId, customerId: customerId || undefined, customerName: customer?.name ?? walkInName,
       discount: discountValue,
-      allocations: cart.map(({ rollId: id, quantity: qty, unitPrice, saleMode }) => ({ rollId: id, quantity: qty, unitPrice, saleMode })),
+      allocations: cart.map(({ rollId: id, quantity: qty, unitPrice, saleMode, reservationId: reserved }) => ({ rollId: id, quantity: qty, unitPrice, saleMode, reservationId: reserved })),
       tenders: plan.tenders,
     });
     if (!result.ok || !result.saleId) { setSaving(false); return setMessage(result.error ?? "Textile checkout failed."); }
@@ -160,10 +169,11 @@ export function TextileSalesPage() {
         <ProCard title="Build sale line" eyebrow="Roll selection">
           <div className="mb-4 flex gap-2"><button type="button" className={`rounded-xl px-4 py-2 text-sm font-semibold ${channel === "retail" ? "bg-teal-600 text-white" : "bg-slate-100 text-slate-700"}`} onClick={() => setChannel("retail")}>Retail cut</button><button type="button" className={`rounded-xl px-4 py-2 text-sm font-semibold ${channel === "wholesale" ? "bg-teal-600 text-white" : "bg-slate-100 text-slate-700"}`} onClick={() => setChannel("wholesale")}>Wholesale</button></div>
           <div className="grid gap-4 md:grid-cols-2">
+            <label className={`${field} md:col-span-2`}>Reserved order (optional)<select className={input} value={reservationId} onChange={(e) => { const id=e.target.value; setReservationId(id); const reserved=reservations.find((r)=>r.id===id); if (reserved) { setRollId(reserved.rollId); setProductId(reserved.productId); setQuantity(String(reserved.quantity)); if (reserved.customerId) setCustomerId(reserved.customerId); else if (reserved.customerName) setWalkInName(reserved.customerName); } }}><option value="">New walk-in / unreserved sale</option>{reservations.map((r)=><option key={r.id} value={r.id}>{r.orderReference} · {productByIdSafe(products, r.productId)} · {r.quantity.toFixed(3)} {r.lengthUnit} · Dye {r.dyeLot || "unrecorded"}</option>)}</select></label>
             <label className={field}>Customer<select className={input} value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">Walk-in customer</option>{data.customers.map((c) => <option key={c.id} value={c.id}>{c.name}{c.contactType === "company" ? " · Company" : ""}</option>)}</select></label>
             {!customerId && <label className={field}>Walk-in name<input className={input} value={walkInName} onChange={(e) => setWalkInName(e.target.value)} /></label>}
             <label className={field}>Fabric<select className={input} value={productId} onChange={(e) => { setProductId(e.target.value); setRollId(""); }}><option value="">All fabrics</option>{products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-            <label className={field}>Physical roll *<select className={input} value={rollId} onChange={(e) => { const id = e.target.value; setRollId(id); const roll = rolls.find((r) => r.id === id); if (roll) setProductId(roll.productId); }}><option value="">Select roll</option>{sellableRolls.map((r) => <option key={r.id} value={r.id}>{r.rollNo} · {(r.remainingLength-r.reservedLength).toFixed(3)} {r.lengthUnit === "metre" ? "m" : "yd"}{r.dyeLot ? ` · Dye ${r.dyeLot}` : ""}</option>)}</select></label>
+            <label className={field}>Physical roll *<select disabled={Boolean(selectedReservation)} className={input} value={rollId} onChange={(e) => { const id = e.target.value; setRollId(id); const roll = rolls.find((r) => r.id === id); if (roll) setProductId(roll.productId); }}><option value="">Select roll</option>{(selectedReservation ? rolls.filter((r)=>r.id===selectedReservation.rollId) : sellableRolls).map((r) => <option key={r.id} value={r.id}>{r.rollNo} · {(selectedReservation ? selectedReservation.quantity : r.remainingLength-r.reservedLength).toFixed(3)} {r.lengthUnit === "metre" ? "m" : "yd"}{r.dyeLot ? ` · Dye ${r.dyeLot}` : ""}</option>)}</select></label>
             <label className={field}>Measured quantity<input disabled={fullRoll} type="number" min="0.001" max={available || undefined} step="0.001" className={input} value={fullRoll ? available.toFixed(3) : quantity} onChange={(e) => setQuantity(e.target.value)} /></label>
             <label className={`${field} flex items-center gap-3 self-end rounded-xl border border-slate-200 p-3.5`}><input type="checkbox" disabled={Boolean(selectedRoll?.reservedLength)} checked={fullRoll} onChange={(e) => setFullRoll(e.target.checked)} /><span>{selectedRoll?.reservedLength ? "Reserved material prevents full-roll sale" : "Sell entire physical roll"}</span></label>
             {canOverride && <label className={field}>Manager price override<input type="number" min="0" step="0.01" className={input} value={manualPrice} onChange={(e) => setManualPrice(e.target.value)} placeholder={priceResolution ? String(priceResolution.price) : ""} /></label>}

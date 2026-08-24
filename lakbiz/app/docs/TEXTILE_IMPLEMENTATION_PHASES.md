@@ -56,6 +56,8 @@ factory planning and garment work orders are outside the initial scope.
 
 ## Phase 4 — cutting, remnants and reservations
 
+**Status: implemented in code; database migration deployment pending.**
+
 - Mobile-friendly Cutting Desk with roll scanning.
 - Immutable cut ledger, waste/damage reason and cutter identity.
 - Automatic remnant creation and remnant ageing.

@@ -26,6 +26,8 @@ export type TextileRollRecord = {
   rackLocation: string | null;
   sourceReference: string | null;
   status: TextileRollStatus;
+  isRemnant: boolean;
+  remnantSince: string | null;
   receivedAt: string;
   notes: string | null;
   createdAt: string;
@@ -94,6 +96,8 @@ function rollFromRow(
     rackLocation: row.rack_location ? String(row.rack_location) : null,
     sourceReference: row.source_reference ? String(row.source_reference) : null,
     status: String(row.status) as TextileRollStatus,
+    isRemnant: Boolean(row.is_remnant),
+    remnantSince: row.remnant_since ? String(row.remnant_since) : null,
     receivedAt: String(row.received_at),
     notes: row.notes ? String(row.notes) : null,
     createdAt: String(row.created_at),
@@ -255,6 +259,7 @@ export type TextileSaleAllocationDraft = {
   quantity: number;
   unitPrice: number;
   saleMode: "retail_cut" | "wholesale_cut" | "full_roll";
+  reservationId?: string;
 };
 
 export async function finalizeTextileSale(
@@ -270,7 +275,7 @@ export async function finalizeTextileSale(
 ): Promise<{ ok: boolean; saleId?: string; billNo?: string; total?: number; paymentMethod?: string; error?: string }> {
   const supabase = createBrowserClient();
   if (!supabase) return { ok: false, error: "Supabase not configured" };
-  const { data, error } = await supabase.rpc("finalize_textile_sale", {
+  const { data, error } = await supabase.rpc("finalize_textile_sale_v2", {
     p_organization_id: organizationId,
     p_sale_id: input.saleId,
     p_customer_id: input.customerId || null,
@@ -281,6 +286,7 @@ export async function finalizeTextileSale(
       quantity: line.quantity,
       unit_price: line.unitPrice,
       sale_mode: line.saleMode,
+      ...(line.reservationId ? { reservation_id: line.reservationId } : {}),
     })),
     p_tenders: input.tenders.map((tender) => ({
       id: tender.id,
