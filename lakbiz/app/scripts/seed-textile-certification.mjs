@@ -18,7 +18,10 @@ const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const FIXTURE_VERSION = "lakbiz-textile-certification-v1";
 
 function deterministicUuid(key) {
-  const hex = createHash("sha256").update(`${FIXTURE_VERSION}:${key}`).digest("hex").slice(0, 32);
+  // Matches the UUIDs used by the connected Supabase fixture application so
+  // a later service-role rerun updates the same rolls instead of colliding on
+  // the organization + roll-number uniqueness guard.
+  const hex = createHash("md5").update(`${FIXTURE_VERSION}:${key}`).digest("hex");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20)}`;
 }
 
@@ -209,7 +212,7 @@ async function main() {
     hold_reason: null,
     collection_owner: ownerId,
     updated_by: ownerId,
-  })), "organization_id,customer_id");
+  })), "customer_id");
   await upsert(admin, "textile_rolls", rolls.map((row) => ({
     ...row,
     organization_id: organization.id,
