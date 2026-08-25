@@ -389,6 +389,26 @@ export default function DashboardPage() {
     );
   }
 
+  // Textile starts with a focused setup workspace instead of repeating
+  // zero-value sales, finance, trend and attention panels. The live sector
+  // command centre inside OfflineSyncNotice owns these first-run steps and
+  // switches itself to operational roll intelligence as data arrives.
+  if (!hasAnyData && org.sector === "textile") {
+    return (
+      <AppShell>
+        <ProMain>
+          <PageHeader
+            title={`${dashboardPreset.title} · ${shopName}`}
+            description={`${dashboardPreset.subtitle} · ${org.isAuthenticated ? t("dash.cloud_synced") : t("common.saved_browser")}`}
+          />
+          <OfflineSyncNotice />
+          {resetFooter}
+          {resetDialog}
+        </ProMain>
+      </AppShell>
+    );
+  }
+
   // ---------------------------------------------------------------------
   // Full owner/manager/data_entry/cashier dashboard.
   // ---------------------------------------------------------------------

@@ -176,7 +176,7 @@ function buildSectorModel(
       title: "Physical rolls & measured balance",
       description: "Roll-level visibility by original unit. Metres and yards remain separate so the dashboard never mixes unlike quantities.",
       metrics: [
-        { label: "Active rolls", value: snapshot.schemaReady ? String(live.length) : "—", hint: "Physical identities", tone: "default" },
+        { label: "Active rolls", value: snapshot.schemaReady ? String(live.length) : "—", hint: "Available rolls", tone: "default" },
         { label: "Metre balance", value: snapshot.schemaReady ? metres.toFixed(3) : "—", hint: "Remaining metres", tone: "default" },
         { label: "Yard balance", value: snapshot.schemaReady ? yards.toFixed(3) : "—", hint: "Remaining yards", tone: "default" },
         { label: "Remnants", value: snapshot.schemaReady ? String(workflow.remnants) : "—", hint: `${workflow.activeReservations} active reservations`, tone: workflow.remnants || reserved ? "warning" : "positive" },
@@ -451,10 +451,83 @@ export function SectorCommandCenter() {
       ]
     : [];
   const incompleteMilestones = textileMilestones.filter((item) => !item.done);
+  const completedMilestones = textileMilestones.length - incompleteMilestones.length;
+  const isTextileSetup = Boolean(
+    textile &&
+      !loading &&
+      snapshot.schemaReady &&
+      data.products.every((product) => product.sectorId !== "textile") &&
+      snapshot.textileRolls.length === 0 &&
+      data.sales.length === 0,
+  );
   const todayKey = new Date().toISOString().slice(0, 10);
   const todaySales = org.sector === "textile" ? data.sales.filter((sale) => sale.date.startsWith(todayKey)) : [];
   const todayTotal = todaySales.reduce((sum, sale) => sum + sale.total, 0);
   const todayCredit = todaySales.reduce((sum, sale) => sum + sale.creditAmount, 0);
+
+  if (isTextileSetup) {
+    const nextMilestone = incompleteMilestones[0];
+    const progress = textileMilestones.length > 0 ? (completedMilestones / textileMilestones.length) * 100 : 0;
+
+    return (
+      <section className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
+        <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[0.8fr_1.2fr] lg:p-8">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-teal-700">
+              {locale === "si" ? "රෙදි ව්‍යාපාර සැකසුම" : "Textile workspace setup"}
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+              {locale === "si" ? "ඔබේ පළමු රෙදි අලෙවියට සූදානම් වන්න" : "Get ready for your first fabric sale"}
+            </h2>
+            <p className="mt-2 max-w-lg text-sm leading-6 text-slate-600">
+              {locale === "si"
+                ? "රෙදි වර්ග, Roll ශේෂ සහ පාරිභෝගික කොන්දේසි එක් වරක් සකසන්න. සැබෑ දත්ත ලැබුණු විට දෛනික ප්‍රමිතික ස්වයංක්‍රීයව පෙන්වයි."
+                : "Set up fabric styles, roll balances and customer terms once. Daily operating metrics appear automatically when real activity begins."}
+            </p>
+            {nextMilestone ? (
+              <Link
+                href={nextMilestone.href}
+                className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-teal-600 px-4 text-sm font-semibold text-white transition hover:bg-teal-700"
+              >
+                {nextMilestone.label}
+                <span className="ml-2" aria-hidden="true">→</span>
+              </Link>
+            ) : null}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-slate-900">
+                {locale === "si" ? "සැකසුම් ප්‍රගතිය" : "Setup progress"}
+              </p>
+              <p className="text-xs font-semibold text-slate-500">
+                {completedMilestones} / {textileMilestones.length}
+              </p>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
+              <div className="h-full rounded-full bg-teal-500 transition-[width]" style={{ width: `${progress}%` }} />
+            </div>
+            <ol className="mt-4 space-y-2">
+              {textileMilestones.map((item, index) => (
+                <li key={item.href + item.label}>
+                  <Link
+                    href={item.href}
+                    className="group flex min-h-11 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 transition hover:border-teal-300 hover:bg-teal-50/40"
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700">
+                      {index + 1}
+                    </span>
+                    <span className="flex-1 text-sm font-medium text-slate-700 group-hover:text-slate-950">{item.label}</span>
+                    <span className="text-sm font-bold text-teal-700" aria-hidden="true">→</span>
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-[0_14px_35px_rgba(15,23,42,0.08)]">
