@@ -9,87 +9,42 @@
  *
  * v1 scope: textile sector, owner role only (see nav-sections.ts). Every
  * number here is read from the same sources /dashboard already uses —
- * getDashboardStats(), fetchSectorOperationalSnapshot(), getRevenueTrend()
- * and buildTextileAttentionActions() — no new queries, no separate
- * "simplified" formula that could quietly drift from the real numbers.
+ * getDashboardStats(), fetchSectorOperationalSnapshot(),
+ * buildTextileAttentionActions(), getRevenueTrend() — plus two small,
+ * honestly-derived local figures (see monthCashCollected below) built from
+ * the exact same formula the dashboard already uses for "today", just
+ * re-scoped to a month. No fabricated numbers, no fake trend lines: a
+ * stat card only gets a sparkline where a real time series backs it.
  */
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ProLoadingState } from "@/components/ui/pro-shell";
-import { PageHeader, SectionHeader, EmptyState, StatusBadge } from "@/components/ui/primitives";
-import { SignOutIcon } from "@/components/ui/icons";
-import { formatLkr, initialsFor } from "@/lib/format";
+import { EmptyState } from "@/components/ui/primitives";
+import {
+  BellIcon,
+  ChevronDownIcon,
+  DashboardIcon,
+  SalesIcon,
+  StockIcon,
+  MoreIcon,
+  ShieldIcon,
+  AlertTriangleIcon,
+  CostingIcon,
+  SuppliersIcon,
+  SyncIcon,
+  SignOutIcon,
+} from "@/components/ui/icons";
+import { initialsFor } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { LOCALE_NAMES, nextLocale } from "@/lib/i18n/translations";
 import { getDashboardStats } from "@/lib/store/actions";
 import { useAppStore } from "@/lib/store/use-app-store";
+import type { Sale, CustomerPayment } from "@/lib/store/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { fetchSectorOperationalSnapshot, summarizeTextileRolls, type SectorOperationalSnapshot } from "@/lib/supabase/sector-dashboard-client";
 import { buildTextileAttentionActions } from "@/components/dashboard/sector-command-center";
-import { getRevenueTrend, type Locale, type TrendPeriod } from "@/lib/revenue-trend";
-
-/**
- * Business Pulse's own chrome — deliberately not <AppShell>. AppShell's
- * Sidebar carries the full 20+-item operational nav (Sales, Stock, Jobs,
- * Banking, VAT, Settings, ...), which is exactly the clutter this page
- * exists to get away from. An owner opening Business Pulse should see the
- * brand, which shop they're in, a language switch, sign-out, and nothing
- * else competing for attention — a genuinely separate, minimal "owner app"
- * feel rather than one more item bolted onto the operational shell. The
- * one deliberate door back into the full app is the "Full dashboard" link
- * already in the page header/footer below, not a nav rail.
- */
-function PulseShell({ children }: { children: ReactNode }) {
-  const { locale, setLocale } = useLocale();
-  const { user, logout } = useAuth();
-  const { org } = useSubscription();
-
-  const handleLogout = async () => {
-    await logout();
-    window.location.href = "/login";
-  };
-
-  return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.055),transparent_28rem),radial-gradient(circle_at_95%_12%,rgba(56,189,248,0.035),transparent_26rem),linear-gradient(180deg,#f5f8fc_0%,#edf3f8_100%)] text-slate-950">
-      <header className="border-b border-slate-200/70 bg-white/75 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-3 px-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-400 to-teal-600 text-xs font-bold text-white shadow-sm shadow-teal-900/20">L</span>
-            <span className="shrink-0 text-sm font-bold tracking-tight text-slate-950">LakBiz</span>
-            <span className="hidden shrink-0 text-slate-300 sm:inline" aria-hidden="true">·</span>
-            <span className="hidden min-w-0 truncate text-sm font-medium text-slate-500 sm:inline">{org.name}</span>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setLocale(nextLocale(locale))}
-              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-            >
-              {LOCALE_NAMES[locale]}
-            </button>
-            {user && (
-              <span className="hidden h-8 w-8 items-center justify-center rounded-lg bg-teal-50 text-[10px] font-bold text-teal-700 ring-1 ring-inset ring-teal-100 sm:flex">
-                {initialsFor(org.name, user.email)}
-              </span>
-            )}
-            {user && (
-              <button
-                type="button"
-                onClick={() => void handleLogout()}
-                aria-label="Sign out"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-              >
-                <SignOutIcon className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-10">{children}</main>
-    </div>
-  );
-}
+import { getRevenueTrend, type Locale } from "@/lib/revenue-trend";
 
 /** Local 3-way locale pick — same convention as dashboard/page.tsx and
  * sector-command-center.tsx; kept duplicated per file rather than shared
@@ -100,36 +55,208 @@ function tt(locale: Locale, si: string, en: string, ta: string): string {
   return en;
 }
 
-type Tone = "positive" | "warning" | "danger" | "default";
+/** Compact currency for the big glanceable figures ("Rs. 4.82M") — the
+ * hero/stat-card numbers this page is built around read faster abbreviated.
+ * Itemized amounts (Needs Attention rows) stay on formatLkr's full form,
+ * matching how buildTextileAttentionActions already formats them. */
+function formatCompactLkr(amount: number): string {
+  const compact = new Intl.NumberFormat("en-LK", { notation: "compact", maximumFractionDigits: 2 }).format(amount);
+  return `Rs. ${compact}`;
+}
 
-const TONE_DOT: Record<Tone, string> = {
-  positive: "bg-emerald-500",
-  warning: "bg-amber-500",
-  danger: "bg-rose-500",
-  default: "bg-slate-300",
-};
+/** Same collection formula getDashboardStats() uses for "payments received
+ * today" (see actions.ts) — creditAmount is binary in this data model, so
+ * total - creditAmount is exactly what was actually collected — just
+ * re-scoped from "today" to an arbitrary month key so the hero's period
+ * switch (this month / last month) has a real, not fabricated, number for
+ * "Cash collected". `monthKey` must be in the same "YYYY-MM" shape
+ * getRevenueTrend() already buckets by, so this stays consistent with the
+ * sparkline built from the same trend array. */
+function monthCashCollected(sales: Sale[], payments: CustomerPayment[], monthKey: string): number {
+  const monthSales = sales.filter((s) => s.date.startsWith(monthKey));
+  const monthPayments = payments.filter((p) => p.date.startsWith(monthKey));
+  return (
+    monthSales.reduce((s, x) => s + (x.total - x.creditAmount), 0) +
+    monthPayments.reduce((s, p) => s + p.amount, 0)
+  );
+}
 
-const TONE_TEXT: Record<Tone, string> = {
+/** Small inline sparkline — only ever fed a real series (see hero below).
+ * No axes, no labels: it exists purely to show shape/direction at a glance. */
+function Sparkline({ values, stroke }: { values: number[]; stroke: string }) {
+  if (values.length < 2) return null;
+  const w = 96;
+  const h = 32;
+  const max = Math.max(...values, 1);
+  const min = Math.min(...values, 0);
+  const range = Math.max(1, max - min);
+  const points = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * w;
+    const y = h - ((v - min) / range) * h;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const last = points[points.length - 1].split(",");
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="h-8 w-24 shrink-0" aria-hidden="true">
+      <polyline points={points.join(" ")} fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={last[0]} cy={last[1]} r="2.5" fill={stroke} />
+    </svg>
+  );
+}
+
+type StatTone = "default" | "positive" | "warning" | "danger";
+const STAT_VALUE_TONE: Record<StatTone, string> = {
+  default: "text-slate-950",
   positive: "text-emerald-700",
   warning: "text-amber-700",
   danger: "text-rose-700",
-  default: "text-slate-900",
 };
 
-/** One quiet, plain-language row of the health strip — deliberately not a
- * card grid. An owner should be able to read all four in one vertical
- * glance without any of them competing for attention. */
-function HealthRow({ label, value, hint, tone = "default" }: { label: string; value: string; hint: string; tone?: Tone }) {
+/** One card in the horizontally-scrolling stat row. Deliberately no
+ * sparkline here — unlike the hero, none of these (receivables balance,
+ * active reservations, quality holds) have a real historical series
+ * cheaply available, and a fabricated trend line would misrepresent one
+ * that doesn't exist. */
+function StatCard({ label, value, hint, tone = "default" }: { label: string; value: string; hint: string; tone?: StatTone }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-slate-100 py-3.5 last:border-0">
-      <div className="flex min-w-0 items-center gap-3">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${TONE_DOT[tone]}`} aria-hidden="true" />
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-900">{label}</p>
-          <p className="truncate text-xs text-slate-500">{hint}</p>
-        </div>
+    <div className="w-[13.5rem] shrink-0 snap-start rounded-2xl border border-slate-200 bg-white p-4">
+      <p className="text-xs font-semibold text-slate-500">{label}</p>
+      <p className={`mt-1.5 text-2xl font-bold tracking-[-0.02em] ${STAT_VALUE_TONE[tone]}`}>{value}</p>
+      <p className={`mt-1 text-xs font-medium ${tone === "danger" ? "text-rose-600" : "text-slate-400"}`}>{hint}</p>
+    </div>
+  );
+}
+
+type AttentionActionKey = "roll-holds" | "overdue-credit" | "pending-cuts" | "pending-dispatches";
+
+function attentionIcon(key: string) {
+  if (key === "roll-holds") return ShieldIcon;
+  if (key === "overdue-credit") return AlertTriangleIcon;
+  if (key === "pending-cuts") return CostingIcon;
+  return SuppliersIcon;
+}
+
+function attentionActionLabel(key: string, locale: Locale): string {
+  if (key === "roll-holds") return tt(locale, "සමාලෝචනය", "Review", "மறுஆய்வு");
+  if (key === "overdue-credit") return tt(locale, "එකතු කරන්න", "Collect", "வசூலி");
+  if (key === "pending-cuts") return tt(locale, "කපන්න", "Cut", "வெட்டு");
+  return tt(locale, "යවන්න", "Dispatch", "அனுப்பு");
+}
+
+/**
+ * Business Pulse's own chrome — deliberately not <AppShell>. AppShell's
+ * Sidebar carries the full 20+-item operational nav (Sales, Stock, Jobs,
+ * Banking, VAT, Settings, ...), which is exactly the clutter this page
+ * exists to get away from. An owner opening Business Pulse should see the
+ * brand, which shop they're in, a way to check what needs attention, and
+ * nothing else competing for it — a genuinely separate, minimal "owner
+ * app" feel. Language switch, sign-out and the door back to the full
+ * operational app live in one account panel instead of a nav rail.
+ */
+function PulseShell({
+  children,
+  attentionCount,
+  onBellClick,
+}: {
+  children: ReactNode;
+  attentionCount: number;
+  onBellClick: () => void;
+}) {
+  const { locale, setLocale } = useLocale();
+  const { user, logout } = useAuth();
+  const { org } = useSubscription();
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    const onPointer = (event: MouseEvent) => {
+      if (!accountRef.current?.contains(event.target as Node)) setAccountOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    return () => document.removeEventListener("mousedown", onPointer);
+  }, [accountOpen]);
+
+  const handleLogout = async () => {
+    await logout();
+    window.location.href = "/login";
+  };
+
+  const accountPanel = accountOpen && (
+    <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+      <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+        <p className="truncate text-sm font-semibold text-slate-950">{org.name}</p>
+        <p className="truncate text-xs text-slate-500">{user?.email}</p>
       </div>
-      <p className={`shrink-0 font-mono text-base font-bold tabular-nums ${TONE_TEXT[tone]}`}>{value}</p>
+      <button
+        type="button"
+        onClick={() => setLocale(nextLocale(locale))}
+        className="mt-1.5 flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+      >
+        <span>{LOCALE_NAMES[locale]}</span>
+        <span className="text-xs font-semibold text-teal-700">{LOCALE_NAMES[nextLocale(locale)]} →</span>
+      </button>
+      <Link href="/dashboard" className="flex min-h-10 w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
+        {tt(locale, "සම්පූර්ණ dashboard", "Full dashboard", "முழு dashboard")} →
+      </Link>
+      {user && (
+        <button
+          type="button"
+          onClick={() => void handleLogout()}
+          className="mt-1 flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50"
+        >
+          <SignOutIcon className="h-4 w-4" />
+          {tt(locale, "පිටවන්න", "Sign out", "வெளியேறு")}
+        </button>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.055),transparent_28rem),radial-gradient(circle_at_95%_12%,rgba(56,189,248,0.035),transparent_26rem),linear-gradient(180deg,#f5f8fc_0%,#edf3f8_100%)] pb-24 text-slate-950 lg:pb-6">
+      <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-3 px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-400 to-teal-600 text-xs font-bold text-white shadow-sm shadow-teal-900/20">L</span>
+            <div className="min-w-0 leading-tight">
+              <p className="truncate text-sm font-bold tracking-tight text-slate-950">LakBiz</p>
+              <button
+                type="button"
+                onClick={() => setAccountOpen((v) => !v)}
+                className="flex items-center gap-0.5 truncate text-xs font-medium text-slate-500 hover:text-slate-700"
+              >
+                <span className="truncate">{org.name}</span>
+                <ChevronDownIcon className="h-3.5 w-3.5 shrink-0" />
+              </button>
+            </div>
+          </div>
+          <div className="relative flex shrink-0 items-center gap-2" ref={accountRef}>
+            <button
+              type="button"
+              onClick={onBellClick}
+              aria-label={tt(locale, "දැනුම්දීම්", "Notifications", "அறிவிப்புகள்")}
+              className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:border-teal-200 hover:bg-teal-50"
+            >
+              <BellIcon className="h-4.5 w-4.5" />
+              {attentionCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-black text-white">
+                  {attentionCount > 9 ? "9+" : attentionCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAccountOpen((v) => !v)}
+              aria-label={tt(locale, "ගිණුම", "Account", "கணக்கு")}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600 text-xs font-bold text-white"
+            >
+              {initialsFor(org.name, user?.email)}
+            </button>
+            {accountPanel}
+          </div>
+        </div>
+      </header>
+      <main className="mx-auto max-w-4xl space-y-4 px-4 py-5 sm:px-6 sm:py-8">{children}</main>
     </div>
   );
 }
@@ -138,7 +265,19 @@ export default function BusinessPulsePage() {
   const { data, ready } = useAppStore();
   const { locale, t } = useLocale();
   const { org, orgRole, canSeeFinancials } = useSubscription();
-  const [trendPeriod, setTrendPeriod] = useState<TrendPeriod>("6m");
+  const [period, setPeriod] = useState<"this_month" | "last_month">("this_month");
+  const [periodOpen, setPeriodOpen] = useState(false);
+  const periodRef = useRef<HTMLDivElement>(null);
+  const attentionSectionRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!periodOpen) return;
+    const onPointer = (event: MouseEvent) => {
+      if (!periodRef.current?.contains(event.target as Node)) setPeriodOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    return () => document.removeEventListener("mousedown", onPointer);
+  }, [periodOpen]);
 
   // Same fetch, same gating, as the dashboard and command centre — one
   // snapshot shape, never a second independently-derived textile view.
@@ -157,9 +296,13 @@ export default function BusinessPulsePage() {
     };
   }, [canSeeFinancials, org.id, org.isAuthenticated, org.sector]);
 
+  const scrollToAttention = () => {
+    attentionSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   if (!ready || !data) {
     return (
-      <PulseShell>
+      <PulseShell attentionCount={0} onBellClick={() => {}}>
         <ProLoadingState label={t("common.loading")} />
       </PulseShell>
     );
@@ -171,7 +314,7 @@ export default function BusinessPulsePage() {
   // returns true unconditionally for "owner" regardless of href.
   if (org.sector !== "textile" || orgRole !== "owner") {
     return (
-      <PulseShell>
+      <PulseShell attentionCount={0} onBellClick={() => {}}>
         <EmptyState
           title={tt(locale, "හිමිකරු පමණි", "Owner access only", "உரிமையாளர் அணுகல் மட்டும்")}
           description={tt(
@@ -191,195 +334,298 @@ export default function BusinessPulsePage() {
   }
 
   const stats = getDashboardStats(data);
-  const shopName = data.business.name || org.name || "LakBiz";
   const rollSummary = textileSnapshot ? summarizeTextileRolls(textileSnapshot) : null;
   const attentionActions = textileSnapshot ? buildTextileAttentionActions(textileSnapshot, locale) : [];
+  const qualityHolds = textileSnapshot ? textileSnapshot.textileRolls.filter((roll) => roll.status === "quarantined").length : 0;
 
-  const trend = getRevenueTrend(data.sales, trendPeriod, locale, new Date());
-  const trendMax = Math.max(1, ...trend.map((p) => Math.max(p.revenue, p.profit)));
-  // Current-month profit is read off the trend's own last bucket rather
-  // than re-deriving a second "this month" filter — one calculation, one
-  // definition of "this month", shared with the chart directly below it.
-  const thisMonthProfit = trend.length > 0 ? trend[trend.length - 1].profit : 0;
+  // One 12-month trend backs the hero, its sparkline and both period
+  // options ("this month" / "last month") — a single bucket definition
+  // (see getRevenueTrend's month-key convention) instead of mixing it with
+  // getDashboardStats()'s separately-bucketed monthSales, so the hero
+  // number and the sparkline it sits next to can never quietly disagree.
+  const trend = getRevenueTrend(data.sales, "12m", locale, new Date());
+  const selectedIdx = period === "this_month" ? trend.length - 1 : trend.length - 2;
+  const priorIdx = selectedIdx - 1;
+  const selected = trend[selectedIdx];
+  const prior = priorIdx >= 0 ? trend[priorIdx] : null;
+  const salesChangePct = prior && prior.revenue > 0 ? Math.round(((selected.revenue - prior.revenue) / prior.revenue) * 100) : null;
+  const marginPct = selected.revenue > 0 ? Math.round((selected.profit / selected.revenue) * 100) : 0;
+  const cashCollected = monthCashCollected(data.sales, data.customerPayments, selected.key);
+  const priorCashCollected = prior ? monthCashCollected(data.sales, data.customerPayments, prior.key) : null;
+  const cashChangePct = priorCashCollected && priorCashCollected > 0 ? Math.round(((cashCollected - priorCashCollected) / priorCashCollected) * 100) : null;
+  const sparklineValues = trend.slice(-8).map((p) => p.revenue);
 
-  const salesUp = (stats.monthSalesChangePct ?? 0) >= 0;
-  const heroTone: Tone = stats.monthSalesChangePct == null ? "default" : salesUp ? "positive" : "danger";
-
-  // One plain-language sentence combining the two things an owner actually
-  // wants to know at a glance: is revenue moving, and is anything waiting
-  // on a decision. Never fabricated — built entirely from stats.monthSalesChangePct
-  // and attentionActions.length, both already computed above.
-  const summarySentence =
-    stats.monthSalesChangePct == null
-      ? tt(
-          locale,
-          "මෙම මාසයේ අලෙවි ප්‍රවණතාවක් සංසන්දනය කිරීමට පසුගිය මාසයේ දත්ත ප්‍රමාණවත් නැත.",
-          "Not enough sales history yet to compare this month's trend.",
-          "இந்த மாத போக்கை ஒப்பிட கடந்த மாத தரவு போதுமானதாக இல்லை.",
-        )
-      : tt(
-          locale,
-          `අලෙවි පසුගිය මාසයට වඩා ${salesUp ? "වැඩි" : "අඩු"} ${Math.abs(stats.monthSalesChangePct)}%${attentionActions.length > 0 ? tt(locale, ` — කරුණාකර සලකා බලන කරුණු ${attentionActions.length}ක් ඇත.` , "", "") : " — මෙහෙයුම් පැහැදිලිය."}`,
-          `Sales are ${salesUp ? "up" : "down"} ${Math.abs(stats.monthSalesChangePct)}% versus last month${attentionActions.length > 0 ? ` — ${attentionActions.length} item${attentionActions.length > 1 ? "s" : ""} waiting on your decision.` : ", and operations are clear."}`,
-          `விற்பனை கடந்த மாதத்தை விட ${salesUp ? "அதிகரித்துள்ளது" : "குறைந்துள்ளது"} ${Math.abs(stats.monthSalesChangePct)}%${attentionActions.length > 0 ? ` — உங்கள் முடிவுக்காக ${attentionActions.length} விஷயங்கள் காத்திருக்கின்றன.` : " — செயல்பாடுகள் தெளிவாக உள்ளன."}`,
-        );
-
-  const decisionItems = attentionActions.slice(0, 2);
+  const salesUp = (salesChangePct ?? 0) >= 0;
 
   return (
-    <PulseShell>
-      <PageHeader
-        title={tt(locale, "ව්‍යාපාර ස්පන්දනය", "Business Pulse", "வணிக துடிப்பு")}
-        description={`${shopName} · ${tt(locale, "ඔබේ ව්‍යාපාරයට එක් පැහැදිලි දැක්මක්", "One clear view of your business", "உங்கள் வணிகத்தின் ஒரு தெளிவான பார்வை")}`}
-        actions={
-          <Link
-            href="/dashboard"
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+    <PulseShell attentionCount={attentionActions.length} onBellClick={scrollToAttention}>
+      {/* Title row + period switch. */}
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold tracking-[-0.02em] text-slate-950">{tt(locale, "හිමිකරු දළ විශ්ලේෂණය", "Owner overview", "உரிமையாளர் கண்ணோட்டம்")}</h1>
+        <div className="relative shrink-0" ref={periodRef}>
+          <button
+            type="button"
+            onClick={() => setPeriodOpen((v) => !v)}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
           >
-            {tt(locale, "සම්පූර්ණ dashboard", "Full dashboard", "முழு dashboard")} →
-          </Link>
-        }
-      />
-
-      {/* Hero — the one number an owner opens this page to see. */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-8">
-        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
-          {tt(locale, "මෙම මාසයේ අලෙවිය", "This month's sales", "இந்த மாத விற்பனை")}
-        </p>
-        <div className="mt-2 flex flex-wrap items-baseline gap-3">
-          <p className="text-4xl font-bold tracking-[-0.03em] text-slate-950 sm:text-5xl">{formatLkr(stats.monthSales)}</p>
-          {stats.monthSalesChangePct != null && (
-            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-bold ${salesUp ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
-              {salesUp ? "▲" : "▼"} {Math.abs(stats.monthSalesChangePct)}%
-            </span>
+            {period === "this_month" ? tt(locale, "මෙම මාසය", "This month", "இந்த மாதம்") : tt(locale, "පසුගිය මාසය", "Last month", "கடந்த மாதம்")}
+            <ChevronDownIcon className="h-4 w-4 text-slate-400" />
+          </button>
+          {periodOpen && (
+            <div className="absolute right-0 top-full z-20 mt-1.5 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+              {(["this_month", "last_month"] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => {
+                    setPeriod(p);
+                    setPeriodOpen(false);
+                  }}
+                  className={`flex w-full items-center px-3 py-2 text-left text-sm font-medium ${period === p ? "bg-teal-50 text-teal-800" : "text-slate-600 hover:bg-slate-50"}`}
+                >
+                  {p === "this_month" ? tt(locale, "මෙම මාසය", "This month", "இந்த மாதம்") : tt(locale, "පසුගිය මාසය", "Last month", "கடந்த மாதம்")}
+                </button>
+              ))}
+            </div>
           )}
         </div>
-        <p className={`mt-3 max-w-2xl text-sm leading-6 ${TONE_TEXT[heroTone]}`}>{summarySentence}</p>
+      </div>
+      {org.isAuthenticated && (
+        <p className="-mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+          <SyncIcon className="h-3.5 w-3.5" />
+          {t("dash.cloud_synced")}
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+        </p>
+      )}
+
+      {/* Hero — Business pulse. */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-slate-500">{tt(locale, "ව්‍යාපාර ස්පන්දනය", "Business pulse", "வணிக துடிப்பு")}</p>
+            <p className="mt-1.5 text-[2.1rem] font-bold leading-none tracking-[-0.03em] text-slate-950 sm:text-4xl">{formatCompactLkr(selected.revenue)}</p>
+            <p className="mt-1.5 text-xs font-medium text-slate-500">{tt(locale, "නිකුත් අලෙවිය", "Net sales", "நிகர விற்பனை")}</p>
+            {salesChangePct != null && (
+              <p className={`mt-2 flex items-center gap-1 text-sm font-bold ${salesUp ? "text-emerald-700" : "text-rose-700"}`}>
+                {salesUp ? "↑" : "↓"} {Math.abs(salesChangePct)}%
+                <span className="font-medium text-slate-400">{tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}</span>
+              </p>
+            )}
+          </div>
+          <Sparkline values={sparklineValues} stroke="#0d9488" />
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
+          <div>
+            <p className="text-xs font-semibold text-slate-500">{tt(locale, "දළ ලාභය", "Gross profit", "மொத்த லாபம்")}</p>
+            <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-950">{formatCompactLkr(selected.profit)}</p>
+            <p className="mt-0.5 text-xs font-medium text-emerald-700">{marginPct}% {tt(locale, "ආන්තිකය", "margin", "விளிம்பு")}</p>
+          </div>
+          <div className="border-l border-slate-100 pl-4">
+            <p className="text-xs font-semibold text-slate-500">{tt(locale, "එකතු කළ මුදල්", "Cash collected", "வசூலிக்கப்பட்ட பணம்")}</p>
+            <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-950">{formatCompactLkr(cashCollected)}</p>
+            {cashChangePct != null && (
+              <p className={`mt-0.5 text-xs font-medium ${cashChangePct >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                {cashChangePct >= 0 ? "↑" : "↓"} {Math.abs(cashChangePct)}% {tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Health strip — four plain-language rows, read top to bottom. */}
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-5 py-1 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:px-6">
-        <HealthRow
-          label={tt(locale, "ලාභය", "Profit", "லாபம்")}
-          value={formatLkr(thisMonthProfit)}
-          hint={tt(locale, "මෙම මාසයේ දළ ලාභය", "This month's gross profit", "இந்த மாத மொத்த லாபம்")}
-          tone={thisMonthProfit > 0 ? "positive" : "default"}
-        />
-        <HealthRow
-          label={tt(locale, "මුදල් තත්ත්වය", "Cash position", "பண நிலை")}
-          value={formatLkr(stats.bankBalance - stats.payableOutstanding)}
-          hint={tt(locale, "බැංකු ශේෂය අඩු සැපයුම්කරු ගෙවීම්", "Bank balance minus supplier payables", "வங்கி இருப்பு கழித்தல் சப்ளையர் பணம்")}
-          tone={stats.bankBalance - stats.payableOutstanding >= 0 ? "positive" : "danger"}
-        />
-        <HealthRow
-          label={tt(locale, "තොග තත්ත්වය", "Inventory health", "சரக்கு நிலை")}
-          value={rollSummary ? `${rollSummary.activeRolls} ${tt(locale, "Rolls", "rolls", "Rolls")}` : "—"}
+      {/* Stat carousel — real, unit-safe figures only (see StatCard docstring). */}
+      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+        <StatCard
+          label={tt(locale, "ලැබිය යුතු මුදල්", "Receivables", "பெறத்தக்கவை")}
+          value={formatCompactLkr(stats.creditOutstanding)}
           hint={
-            rollSummary
-              ? tt(
-                  locale,
-                  `මීටර් ${rollSummary.metres.toFixed(0)} · යාර්ඩ් ${rollSummary.yards.toFixed(0)} · ඉතිරි ${rollSummary.remnants}`,
-                  `${rollSummary.metres.toFixed(0)}m · ${rollSummary.yards.toFixed(0)}yd · ${rollSummary.remnants} remnants`,
-                  `மீட்டர் ${rollSummary.metres.toFixed(0)} · யார்டு ${rollSummary.yards.toFixed(0)} · மீதி ${rollSummary.remnants}`,
-                )
-              : tt(locale, "දත්ත නොමැත", "No roll data yet", "Roll தரவு இல்லை")
+            textileSnapshot && textileSnapshot.textileWorkflow.overdueAmount > 0
+              ? tt(locale, `${formatCompactLkr(textileSnapshot.textileWorkflow.overdueAmount)} පැහැර හැරී ඇත`, `${formatCompactLkr(textileSnapshot.textileWorkflow.overdueAmount)} overdue`, `${formatCompactLkr(textileSnapshot.textileWorkflow.overdueAmount)} தாமதமானது`)
+              : tt(locale, "පැහැර හැරීම් නැත", "None overdue", "தாமதம் இல்லை")
           }
-          tone={rollSummary && rollSummary.remnants > 0 ? "warning" : rollSummary ? "positive" : "default"}
+          tone={textileSnapshot && textileSnapshot.textileWorkflow.overdueAmount > 0 ? "danger" : "default"}
         />
-        <HealthRow
-          label={tt(locale, "අවදානම", "Risk", "இடர்")}
-          value={String(attentionActions.length)}
-          hint={
-            attentionActions.length > 0
-              ? tt(locale, "ඔබේ තීරණය අවශ්‍යයි", "Waiting on your decision", "உங்கள் முடிவுக்காக காத்திருக்கிறது")
-              : tt(locale, "සියල්ල පැහැදිලිය", "All clear", "அனைத்தும் தெளிவாக உள்ளது")
-          }
-          tone={attentionActions.length > 0 ? "danger" : "positive"}
+        <StatCard
+          label={tt(locale, "සක්‍රීය වෙන්කිරීම්", "Reservations", "முன்பதிவுகள்")}
+          value={textileSnapshot ? String(textileSnapshot.textileWorkflow.activeReservations) : "—"}
+          hint={tt(locale, "සක්‍රීය පාරිභෝගික වෙන්කිරීම්", "Active customer reservations", "செயலில் உள்ள வாடிக்கையாளர் முன்பதிவுகள்")}
+        />
+        <StatCard
+          label={tt(locale, "තත්ත්ව රඳවා ගැනීම්", "Quality holds", "தர நிறுத்தங்கள்")}
+          value={String(qualityHolds)}
+          hint={qualityHolds > 0 ? tt(locale, "සමාලෝචනය අවශ්‍යයි", "Needs review", "மறுஆய்வு தேவை") : tt(locale, "සියල්ල පැහැදිලිය", "All clear", "அனைத்தும் தெளிவு")}
+          tone={qualityHolds > 0 ? "warning" : "positive"}
         />
       </div>
 
-      {/* Needs your decision — top 2 real exceptions, same single source
-          of truth as the dashboard's Needs Attention card and the sector
-          command centre (buildTextileAttentionActions). Never a separate,
-          potentially-contradictory list. */}
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
-        <SectionHeader title={tt(locale, "ඔබේ තීරණය අවශ්‍යයි", "Needs your decision", "உங்கள் முடிவு தேவை")} />
-        {decisionItems.length === 0 ? (
+      {/* Needs attention — same single source of truth as the dashboard's
+          Needs Attention card and the sector command centre
+          (buildTextileAttentionActions). Never a separate, potentially
+          contradictory list. */}
+      <div ref={attentionSectionRef} className="scroll-mt-20 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
+        <div className="mb-3 flex items-center gap-2">
+          <h2 className="text-base font-bold tracking-tight text-slate-900">{tt(locale, "අවධානය අවශ්‍යයි", "Needs attention", "கவனம் தேவை")}</h2>
+          {attentionActions.length > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[11px] font-bold text-white">{attentionActions.length}</span>
+          )}
+        </div>
+        {attentionActions.length === 0 ? (
           <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-sm text-slate-500">
             {tt(locale, "සියල්ල පැහැදිලිය — කිසිවක් ඔබේ තීරණය අවශ්‍ය නොවේ.", "Everything is clear — nothing needs your decision right now.", "அனைத்தும் தெளிவாக உள்ளது — தற்போது எதுவும் உங்கள் முடிவுக்குத் தேவையில்லை.")}
           </p>
         ) : (
-          <div className="space-y-2">
-            {decisionItems.map((action) => (
-              <div key={action.key} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3.5 py-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-900">{action.title}</p>
-                  <p className="truncate text-xs text-slate-500">{action.detail}</p>
-                </div>
-                <Link href={action.href} className="shrink-0 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                  {t("dash.view")}
-                </Link>
-              </div>
-            ))}
-            {attentionActions.length > decisionItems.length && (
-              <Link href="/dashboard" className="block pt-1 text-xs font-semibold text-teal-700 hover:underline">
-                {tt(
-                  locale,
-                  `තව ${attentionActions.length - decisionItems.length}ක් dashboard හි බලන්න →`,
-                  `${attentionActions.length - decisionItems.length} more on the full dashboard →`,
-                  `மேலும் ${attentionActions.length - decisionItems.length} முழு dashboard-இல் →`,
-                )}
-              </Link>
-            )}
-          </div>
+          <AttentionList actions={attentionActions} locale={locale} />
         )}
       </div>
 
-      {/* Quiet trend — same getRevenueTrend() as the dashboard, but
-          deliberately smaller and muted: this page answers "how are we
-          doing", not "show me every number". */}
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
-        <SectionHeader
-          title={tt(locale, "ප්‍රවණතාව", "Trend", "போக்கு")}
-          action={
-            <div className="flex gap-1 rounded-lg border border-slate-200 p-0.5">
-              {(["3m", "6m", "12m"] as TrendPeriod[]).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setTrendPeriod(p)}
-                  className={`rounded-md px-2 py-1 text-xs font-semibold ${trendPeriod === p ? "bg-teal-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}
-                >
-                  {t(`dash.period_${p}`)}
-                </button>
-              ))}
-            </div>
-          }
-        />
-        {trend.every((p) => p.revenue === 0) ? (
-          <EmptyState size="compact" title={t("dash.performance_empty")} />
-        ) : (
-          <div className="flex h-24 items-end gap-1.5">
-            {trend.map((p) => (
-              <div key={p.key} className="flex flex-1 flex-col items-center justify-end gap-1">
-                <div
-                  title={`${p.label}: ${formatLkr(p.revenue)}`}
-                  className="w-full rounded-t bg-teal-400/70"
-                  style={{ height: `${Math.max(2, (p.revenue / trendMax) * 100)}%` }}
-                />
-                <span className="text-[10px] text-slate-400">{p.label}</span>
-              </div>
-            ))}
+      {/* Roll inventory. */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-base font-bold tracking-tight text-slate-900">{tt(locale, "රෙදි Roll තොගය", "Roll inventory", "துணி Roll சரக்கு")}</h2>
+          <Link href="/stock/rolls" className="text-xs font-semibold text-teal-700 hover:underline">
+            {tt(locale, "සියලු Rolls බලන්න →", "View all rolls →", "அனைத்து Rolls பார்க்க →")}
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-100">
+          <div className="p-3.5">
+            <p className="text-xl font-bold text-slate-950">{rollSummary ? rollSummary.activeRolls : "—"}</p>
+            <p className="text-xs text-slate-500">{tt(locale, "විකිණිය හැකි Rolls", "Sellable rolls", "விற்கக்கூடிய Rolls")}</p>
           </div>
-        )}
+          <div className="p-3.5">
+            <p className="text-xl font-bold text-slate-950">
+              {rollSummary ? rollSummary.metres.toLocaleString("en-LK", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : "—"}
+              <span className="ml-1 text-xs font-medium text-slate-400">m</span>
+            </p>
+            <p className="text-xs text-slate-500">{tt(locale, "මුළු මීටර්", "Total metres", "மொத்த மீட்டர்கள்")}</p>
+          </div>
+          <div className="p-3.5">
+            <p className="text-xl font-bold text-slate-950">
+              {rollSummary ? rollSummary.yards.toLocaleString("en-LK", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : "—"}
+              <span className="ml-1 text-xs font-medium text-slate-400">yd</span>
+            </p>
+            <p className="text-xs text-slate-500">{tt(locale, "මුළු යාර්ඩ්", "Total yards", "மொத்த யார்டுகள்")}</p>
+          </div>
+          <div className="p-3.5">
+            <p className="text-xl font-bold text-slate-950">{rollSummary ? rollSummary.remnants : "—"}</p>
+            <p className="text-xs text-slate-500">{tt(locale, "ඉතිරි කැබලි", "Remnants", "மீதிகள்")}</p>
+          </div>
+        </div>
       </div>
 
-      <p className="mt-6 text-center text-xs text-slate-400">
-        <StatusBadge tone="neutral">{tt(locale, "රෙදි · හිමිකරු දැක්ම", "Textile · Owner view", "துணி · உரிமையாளர் பார்வை")}</StatusBadge>{" "}
-        <Link href="/dashboard" className="ml-2 font-semibold text-teal-700 hover:underline">
-          {tt(locale, "සම්පූර්ණ මෙහෙයුම් dashboard බලන්න →", "View the full operational dashboard →", "முழு செயல்பாட்டு dashboard-ஐப் பார்க்கவும் →")}
+      {/* Today at a glance — three real "today" figures already computed
+          by getDashboardStats() for the operational dashboard. The
+          reference mockup's third tile was a same-day cut count; no
+          reliably real, date-scoped "cuts today" figure exists yet (the
+          workflow snapshot only tracks currently-pending cuts, not a
+          completed-today count), so this uses payments collected today
+          instead — real, not a placeholder. */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
+        <h2 className="mb-3 text-base font-bold tracking-tight text-slate-900">{tt(locale, "අද දිනය", "Today at a glance", "இன்று ஒரு பார்வையில்")}</h2>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <p className="text-lg font-bold text-slate-950">{stats.saleCount}</p>
+            <p className="text-xs text-slate-500">{tt(locale, "අද අලෙවි", "Sales today", "இன்று விற்பனை")}</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-slate-950">{formatCompactLkr(stats.todaySales)}</p>
+            <p className="text-xs text-slate-500">{tt(locale, "අද අලෙවි අගය", "Sales value", "விற்பனை மதிப்பு")}</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-slate-950">{formatCompactLkr(stats.paymentsReceivedToday)}</p>
+            <p className="text-xs text-slate-500">{tt(locale, "අද එකතු කළ", "Collected today", "இன்று வசூலிக்கப்பட்டது")}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Primary actions. */}
+      <div className="space-y-2 pb-2">
+        <Link
+          href="/sales"
+          className="flex min-h-12 w-full items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-teal-700"
+        >
+          + {tt(locale, "නව රෙදි අලෙවියක්", "New fabric sale", "புதிய துணி விற்பனை")}
         </Link>
-      </p>
+        <Link
+          href="/stock/rolls?receive=1"
+          className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          {tt(locale, "Roll ලබාගන්න", "Receive roll", "Roll பெறவும்")}
+        </Link>
+      </div>
+
+      {/* Mobile-only quick nav — mirrors the header's account panel and
+          the needs-attention anchor rather than duplicating the full
+          operational sidebar (see PulseShell's docstring). */}
+      <nav
+        aria-label={tt(locale, "ඉක්මන් සංචලනය", "Quick navigation", "விரைவு வழிசெலுத்தல்")}
+        className="fixed inset-x-0 bottom-0 z-30 grid h-[4.25rem] grid-cols-5 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden"
+      >
+        <span className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-teal-700" aria-current="page">
+          <DashboardIcon className="h-5 w-5" />
+          {tt(locale, "මුල් පිටුව", "Home", "முகப்பு")}
+        </span>
+        <Link href="/sales" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-500">
+          <SalesIcon className="h-5 w-5" />
+          {tt(locale, "අලෙවි", "Sales", "விற்பனை")}
+        </Link>
+        <Link href="/stock/rolls" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-500">
+          <StockIcon className="h-5 w-5" />
+          {tt(locale, "Rolls", "Rolls", "Rolls")}
+        </Link>
+        <button type="button" onClick={scrollToAttention} className="relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-500">
+          <BellIcon className="h-5 w-5" />
+          {tt(locale, "ඇඟවීම්", "Alerts", "விழிப்பூட்டல்")}
+          {attentionActions.length > 0 && (
+            <span className="absolute right-[calc(50%-1.35rem)] top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-black text-white">
+              {attentionActions.length > 9 ? "9+" : attentionActions.length}
+            </span>
+          )}
+        </button>
+        <Link href="/dashboard" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-500">
+          <MoreIcon className="h-5 w-5" />
+          {tt(locale, "තව", "More", "மேலும்")}
+        </Link>
+      </nav>
     </PulseShell>
+  );
+}
+
+/** Attention list body — split out so the "View N more" expand/collapse
+ * has its own small piece of state without cluttering the page component. */
+function AttentionList({ actions, locale }: { actions: ReturnType<typeof buildTextileAttentionActions>; locale: Locale }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? actions : actions.slice(0, 2);
+  return (
+    <div className="space-y-2">
+      {visible.map((action) => {
+        const Icon = attentionIcon(action.key);
+        const tone = action.tone === "danger" ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600";
+        return (
+          <div key={action.key} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3.5 py-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}>
+                <Icon className="h-4.5 w-4.5" />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-900">{action.title}</p>
+                <p className="truncate text-xs text-slate-500">{action.detail}</p>
+              </div>
+            </div>
+            <Link
+              href={action.href}
+              className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-bold ${action.tone === "danger" ? "border-rose-200 text-rose-700 hover:bg-rose-50" : "border-amber-200 text-amber-700 hover:bg-amber-50"}`}
+            >
+              {attentionActionLabel(action.key as AttentionActionKey, locale)}
+            </Link>
+          </div>
+        );
+      })}
+      {actions.length > 2 && (
+        <button type="button" onClick={() => setExpanded((v) => !v)} className="flex w-full items-center justify-center gap-1 pt-1 text-xs font-semibold text-teal-700 hover:underline">
+          {expanded ? tt(locale, "අඩුවෙන් පෙන්වන්න", "Show less", "குறைவாகக் காட்டு") : tt(locale, `තව ${actions.length - 2}ක් බලන්න`, `View ${actions.length - 2} more`, `மேலும் ${actions.length - 2} பார்க்க`)}
+          <ChevronDownIcon className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
+        </button>
+      )}
+    </div>
   );
 }

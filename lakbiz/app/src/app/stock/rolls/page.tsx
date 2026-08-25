@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/shell/app-shell";
 import { EmptyState, MetricCard, PageHeader, Panel, StatusBadge } from "@/components/ui/primitives";
 import { ProLoadingState, ProMain } from "@/components/ui/pro-shell";
@@ -95,7 +96,10 @@ export default function TextileRollsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [showReceive, setShowReceive] = useState(false);
+  // "Receive roll" from Business Pulse links here with ?receive=1 so that
+  // CTA actually opens the form instead of just landing on the list.
+  const searchParams = useSearchParams();
+  const [showReceive, setShowReceive] = useState(() => searchParams.get("receive") === "1");
   const [form, setForm] = useState<ReceiveForm>(() => emptyReceiveForm());
   const [adjustingId, setAdjustingId] = useState<string | null>(null);
   const [adjustLength, setAdjustLength] = useState("");
