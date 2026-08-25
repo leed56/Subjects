@@ -337,6 +337,12 @@ export default function BusinessPulsePage() {
   const rollSummary = textileSnapshot ? summarizeTextileRolls(textileSnapshot) : null;
   const attentionActions = textileSnapshot ? buildTextileAttentionActions(textileSnapshot, locale) : [];
   const qualityHolds = textileSnapshot ? textileSnapshot.textileRolls.filter((roll) => roll.status === "quarantined").length : 0;
+  // Same "inventory ready, nothing sold yet" state the dashboard's Phase 1
+  // fix already handles (see dashboard/page.tsx's textileNoTransactions) —
+  // a hero showing "Rs. 0" everywhere reads as a broken app, not a premium
+  // one, for a shop that just finished onboarding. Real rolls exist, real
+  // sales don't yet: show that honestly instead of a wall of zeros.
+  const noTransactionsYet = (rollSummary?.activeRolls ?? 0) > 0 && data.sales.length === 0;
 
   // One 12-month trend backs the hero, its sparkline and both period
   // options ("this month" / "last month") — a single bucket definition
@@ -399,39 +405,62 @@ export default function BusinessPulsePage() {
       )}
 
       {/* Hero — Business pulse. */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-slate-500">{tt(locale, "ව්‍යාපාර ස්පන්දනය", "Business pulse", "வணிக துடிப்பு")}</p>
-            <p className="mt-1.5 text-[2.1rem] font-bold leading-none tracking-[-0.03em] text-slate-950 sm:text-4xl">{formatCompactLkr(selected.revenue)}</p>
-            <p className="mt-1.5 text-xs font-medium text-slate-500">{tt(locale, "නිකුත් අලෙවිය", "Net sales", "நிகர விற்பனை")}</p>
-            {salesChangePct != null && (
-              <p className={`mt-2 flex items-center gap-1 text-sm font-bold ${salesUp ? "text-emerald-700" : "text-rose-700"}`}>
-                {salesUp ? "↑" : "↓"} {Math.abs(salesChangePct)}%
-                <span className="font-medium text-slate-400">{tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}</span>
-              </p>
+      {noTransactionsYet ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-8">
+          <p className="text-xs font-semibold text-slate-500">{tt(locale, "ව්‍යාපාර ස්පන්දනය", "Business pulse", "வணிக துடிப்பு")}</p>
+          <p className="mt-2 text-xl font-bold tracking-[-0.02em] text-slate-950">
+            {tt(locale, "ඔබේ තොගය සූදානම්", "Your inventory is ready", "உங்கள் சரக்கு தயார்")}
+          </p>
+          <p className="mt-1.5 max-w-md text-sm leading-6 text-slate-500">
+            {tt(
+              locale,
+              `Rolls ${rollSummary?.activeRolls ?? 0}ක් තොගයේ ඇත. පළමු අලෙවියෙන් පසු ලාභය, එකතු කළ මුදල් සහ ප්‍රවණතාව මෙහි දිස්වේ.`,
+              `${rollSummary?.activeRolls ?? 0} rolls are stocked and ready to sell. Profit, cash collected and the trend line show up here the moment your first sale is recorded.`,
+              `${rollSummary?.activeRolls ?? 0} Rolls சரக்கில் தயாராக உள்ளன. முதல் விற்பனை பதிவான உடனேயே லாபம், வசூலிக்கப்பட்ட பணம் மற்றும் போக்கு இங்கே தோன்றும்.`,
             )}
-          </div>
-          <Sparkline values={sparklineValues} stroke="#0d9488" />
+          </p>
+          <Link
+            href="/sales"
+            className="mt-4 inline-flex h-10 items-center gap-1.5 rounded-xl bg-teal-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-teal-700"
+          >
+            + {tt(locale, "නව රෙදි අලෙවියක්", "New fabric sale", "புதிய துணி விற்பனை")}
+          </Link>
         </div>
+      ) : (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-slate-500">{tt(locale, "ව්‍යාපාර ස්පන්දනය", "Business pulse", "வணிக துடிப்பு")}</p>
+              <p className="mt-1.5 text-[2.1rem] font-bold leading-none tracking-[-0.03em] text-slate-950 sm:text-4xl">{formatCompactLkr(selected.revenue)}</p>
+              <p className="mt-1.5 text-xs font-medium text-slate-500">{tt(locale, "නිකුත් අලෙවිය", "Net sales", "நிகர விற்பனை")}</p>
+              {salesChangePct != null && (
+                <p className={`mt-2 flex items-center gap-1 text-sm font-bold ${salesUp ? "text-emerald-700" : "text-rose-700"}`}>
+                  {salesUp ? "↑" : "↓"} {Math.abs(salesChangePct)}%
+                  <span className="font-medium text-slate-400">{tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}</span>
+                </p>
+              )}
+            </div>
+            <Sparkline values={sparklineValues} stroke="#0d9488" />
+          </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
-          <div>
-            <p className="text-xs font-semibold text-slate-500">{tt(locale, "දළ ලාභය", "Gross profit", "மொத்த லாபம்")}</p>
-            <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-950">{formatCompactLkr(selected.profit)}</p>
-            <p className="mt-0.5 text-xs font-medium text-emerald-700">{marginPct}% {tt(locale, "ආන්තිකය", "margin", "விளிம்பு")}</p>
-          </div>
-          <div className="border-l border-slate-100 pl-4">
-            <p className="text-xs font-semibold text-slate-500">{tt(locale, "එකතු කළ මුදල්", "Cash collected", "வசூலிக்கப்பட்ட பணம்")}</p>
-            <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-950">{formatCompactLkr(cashCollected)}</p>
-            {cashChangePct != null && (
-              <p className={`mt-0.5 text-xs font-medium ${cashChangePct >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                {cashChangePct >= 0 ? "↑" : "↓"} {Math.abs(cashChangePct)}% {tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}
-              </p>
-            )}
+          <div className="mt-4 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
+            <div>
+              <p className="text-xs font-semibold text-slate-500">{tt(locale, "දළ ලාභය", "Gross profit", "மொத்த லாபம்")}</p>
+              <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-950">{formatCompactLkr(selected.profit)}</p>
+              <p className="mt-0.5 text-xs font-medium text-emerald-700">{marginPct}% {tt(locale, "ආන්තිකය", "margin", "விளிம்பு")}</p>
+            </div>
+            <div className="border-l border-slate-100 pl-4">
+              <p className="text-xs font-semibold text-slate-500">{tt(locale, "එකතු කළ මුදල්", "Cash collected", "வசூலிக்கப்பட்ட பணம்")}</p>
+              <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-950">{formatCompactLkr(cashCollected)}</p>
+              {cashChangePct != null && (
+                <p className={`mt-0.5 text-xs font-medium ${cashChangePct >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                  {cashChangePct >= 0 ? "↑" : "↓"} {Math.abs(cashChangePct)}% {tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}
+                </p>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Stat carousel — real, unit-safe figures only (see StatCard docstring). */}
       <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
