@@ -48,6 +48,41 @@ Credentials must come from environment variables or a secrets manager and must n
 8. Return a cut, inspect it, preserve original-roll evidence and issue the correct financial result.
 9. Collect customer credit and verify owner reports.
 
+## Textile certification fixture
+
+The repository includes a deterministic fixture for the existing Textile QA organization. It is
+dry-run by default and does not create staff identities or claim workflow certification.
+
+```bash
+npm run qa:textile:seed
+```
+
+Applying the fixture is deliberately gated by the exact live organization ID and server-side
+credentials. Do not run this against a customer organization. The fixture marks every master row
+with a `qa-textile-*` identifier or `lakbiz-textile-certification-v1` source marker.
+
+```bash
+SUPABASE_URL=https://zestppstpwjxriwcuykc.supabase.co \
+SUPABASE_SERVICE_ROLE_KEY=... \
+npm run qa:textile:seed -- \
+  --apply \
+  --organization="True Textile" \
+  --confirm-organization-id=<verified-uuid>
+```
+
+After application:
+
+```bash
+SUPABASE_URL=https://zestppstpwjxriwcuykc.supabase.co \
+SUPABASE_SERVICE_ROLE_KEY=... \
+npm run qa:textile:verify -- --organization="True Textile"
+```
+
+This creates 20 fabric styles, 40 physical rolls split between metres and yards, three dye lots,
+two remnant fixtures, one quarantined roll, six customers, five credit-term records and three
+suppliers. Sales, reservations, cuts, dispatches, collections and returns must still be created
+through the production UI/RPC workflows so their audit evidence is genuine.
+
 ## Vehicle journey
 
 1. Acquire a vehicle with chassis identity, landed cost and preparation cost.
