@@ -36,11 +36,32 @@ export type SectorTextileRollSnapshot = {
   status: "unopened" | "opened" | "reserved" | "exhausted" | "quarantined" | "returned";
 };
 
+export type SectorTextileActivitySnapshot = {
+  id: string;
+  movementType: string;
+  quantityDelta: number;
+  balanceAfter: number;
+  reason: string | null;
+  createdAt: string;
+};
+
+export type SectorTextileWorkflowSnapshot = {
+  pendingCuts: number;
+  pendingDispatches: number;
+  activeReservations: number;
+  remnants: number;
+  customerTerms: number;
+  overdueReceivables: number;
+  overdueAmount: number;
+  recentActivity: SectorTextileActivitySnapshot[];
+};
+
 export type SectorOperationalSnapshot = {
   lots: SectorLotSnapshot[];
   units: SectorUnitSnapshot[];
   variants: SectorVariantSnapshot[];
   textileRolls: SectorTextileRollSnapshot[];
+  textileWorkflow: SectorTextileWorkflowSnapshot;
   schemaReady: boolean;
   error: string | null;
 };
@@ -60,12 +81,23 @@ function schemaUnavailable(message: string | null | undefined): boolean {
 export async function fetchSectorOperationalSnapshot(
   organizationId: string,
   sector: SectorId,
+  includeFinancials = false,
 ): Promise<SectorOperationalSnapshot> {
   const empty: SectorOperationalSnapshot = {
     lots: [],
     units: [],
     variants: [],
     textileRolls: [],
+    textileWorkflow: {
+      pendingCuts: 0,
+      pendingDispatches: 0,
+      activeReservations: 0,
+      remnants: 0,
+      customerTerms: 0,
+      overdueReceivables: 0,
+      overdueAmount: 0,
+      recentActivity: [],
+    },
     schemaReady: true,
     error: null,
   };
@@ -146,24 +178,52 @@ export async function fetchSectorOperationalSnapshot(
   }
 
   if (sector === "textile") {
-    const result = await supabase
-      .from("textile_rolls")
-      .select("product_id, length_unit, remaining_length, reserved_length, status")
-      .eq("organization_id", organizationId);
-    if (result.error) {
-      return schemaUnavailable(result.error.message) || result.error.message.toLowerCase().includes("textile_rolls")
+    const today = new Date().toISOString().slice(0, 10);
+    const [rolls, cuts, dispatches, reservations, remnants, terms, activity, receivables] = await Promise.all([
+      supabase.from("textile_rolls").select("product_id, length_unit, remaining_length, reserved_length, status").eq("organization_id", organizationId),
+      supabase.from("textile_cut_tasks").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("status", "pending"),
+      supabase.from("textile_dispatches").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).in("status", ["draft", "picking", "packed", "dispatched"]),
+      supabase.from("textile_reservations").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("status", "active"),
+      supabase.from("textile_rolls").select("id", { count: "exact", head: true }).eq("organization_id", organizationId).eq("is_remnant", true).not("status", "in", "(exhausted,returned)"),
+      supabase.from("textile_customer_terms").select("customer_id", { count: "exact", head: true }).eq("organization_id", organizationId),
+      supabase.from("textile_roll_movements").select("id, movement_type, quantity_delta, balance_after, reason, created_at").eq("organization_id", organizationId).order("created_at", { ascending: false }).limit(5),
+      includeFinancials
+        ? supabase.from("textile_receivables").select("outstanding_amount").eq("organization_id", organizationId).in("status", ["open", "part_paid"]).lt("due_date", today)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    const firstError = [rolls, cuts, dispatches, reservations, remnants, terms, activity, receivables].find((item) => item.error)?.error;
+    if (firstError) {
+      return schemaUnavailable(firstError.message) || firstError.message.toLowerCase().includes("textile_")
         ? { ...empty, schemaReady: false }
-        : { ...empty, error: result.error.message };
+        : { ...empty, error: firstError.message };
     }
+    const overdueRows = receivables.data ?? [];
     return {
       ...empty,
-      textileRolls: (result.data ?? []).map((row) => ({
+      textileRolls: (rolls.data ?? []).map((row) => ({
         productId: String(row.product_id),
         lengthUnit: String(row.length_unit) as SectorTextileRollSnapshot["lengthUnit"],
         remainingLength: Number(row.remaining_length ?? 0),
         reservedLength: Number(row.reserved_length ?? 0),
         status: String(row.status) as SectorTextileRollSnapshot["status"],
       })),
+      textileWorkflow: {
+        pendingCuts: cuts.count ?? 0,
+        pendingDispatches: dispatches.count ?? 0,
+        activeReservations: reservations.count ?? 0,
+        remnants: remnants.count ?? 0,
+        customerTerms: terms.count ?? 0,
+        overdueReceivables: overdueRows.length,
+        overdueAmount: overdueRows.reduce((sum, row) => sum + Number(row.outstanding_amount ?? 0), 0),
+        recentActivity: (activity.data ?? []).map((row) => ({
+          id: String(row.id),
+          movementType: String(row.movement_type),
+          quantityDelta: Number(row.quantity_delta ?? 0),
+          balanceAfter: Number(row.balance_after ?? 0),
+          reason: row.reason ? String(row.reason) : null,
+          createdAt: String(row.created_at),
+        })),
+      },
     };
   }
 

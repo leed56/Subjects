@@ -434,7 +434,7 @@ export default function VehiclesPage() {
                   </h3>
                   <p className="mt-1 text-sm font-semibold text-slate-500">{sellVehicleRecord.stockId} · {sellVehicleRecord.chassisNo}</p>
                 </div>
-                <button onClick={() => setSellId(null)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+                <button type="button" aria-label={t("common.close")} onClick={() => setSellId(null)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-lg text-slate-600 hover:bg-slate-200">×</button>
               </div>
               <div className="mt-5 space-y-3">
                 <input type="number" placeholder={t("veh.sell_price")} value={sellPrice || ""} onChange={(e) => setSellPrice(Number(e.target.value))} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
@@ -606,21 +606,23 @@ function VehicleCard({
 
         {vehicle.status !== "sold" && canWrite && (
           <div className="mt-4 flex flex-wrap gap-2">
-            {canSeeFinancials && <button onClick={onEdit} className="rounded-full bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-700 hover:bg-teal-100">{t("common.edit")}</button>}
+            {canSeeFinancials && <button type="button" onClick={onEdit} className="min-h-11 rounded-xl bg-teal-50 px-3 text-xs font-bold text-teal-700 hover:bg-teal-100">{t("common.edit")}</button>}
             {canSeeFinancials && vehicle.status !== "for_sale" && (
               <button
+                type="button"
                 onClick={() => void onListForSale()}
                 disabled={updating}
-                className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                className="min-h-11 rounded-xl bg-slate-100 px-3 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
               >
                 {updating ? t("common.saving") : t("veh.list_sale")}
               </button>
             )}
-            {vehicle.status === "for_sale" && <button onClick={onSell} className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100">{t("veh.sell")}</button>}
+            {vehicle.status === "for_sale" && <button type="button" onClick={onSell} className="min-h-11 rounded-xl bg-emerald-50 px-3 text-xs font-bold text-emerald-700 hover:bg-emerald-100">{t("veh.sell")}</button>}
             {canSeeFinancials && <button
+              type="button"
               onClick={() => void onDelete()}
               disabled={deleting}
-              className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+              className="min-h-11 rounded-xl bg-rose-50 px-3 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
             >
               {deleting ? t("common.saving") : t("common.delete")}
             </button>}

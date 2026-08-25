@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { formatLkr } from "@/lib/format";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { AppData } from "@/lib/store/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
@@ -30,6 +32,16 @@ const EMPTY_SNAPSHOT: SectorOperationalSnapshot = {
   units: [],
   variants: [],
   textileRolls: [],
+  textileWorkflow: {
+    pendingCuts: 0,
+    pendingDispatches: 0,
+    activeReservations: 0,
+    remnants: 0,
+    customerTerms: 0,
+    overdueReceivables: 0,
+    overdueAmount: 0,
+    recentActivity: [],
+  },
   schemaReady: true,
   error: null,
 };
@@ -141,6 +153,7 @@ function buildSectorModel(
   sector: SectorId,
   snapshot: SectorOperationalSnapshot,
   now: Date,
+  canSeeFinancials: boolean,
 ): SectorModel {
   if (sector === "grocery" || sector === "electricals" || sector === "spare_parts") {
     return retailVelocityModel(data, sector, now);
@@ -152,8 +165,12 @@ function buildSectorModel(
     const yards = live.filter((roll) => roll.lengthUnit === "yard").reduce((sum, roll) => sum + roll.remainingLength, 0);
     const held = snapshot.textileRolls.filter((roll) => roll.status === "quarantined").length;
     const reserved = live.reduce((sum, roll) => sum + roll.reservedLength, 0);
+    const workflow = snapshot.textileWorkflow;
     const actions: Action[] = [];
     if (held) actions.push({ key: "roll-holds", title: `${held} roll${held === 1 ? "" : "s"} quarantined`, detail: "Resolve quality or receiving issues before these rolls return to sellable stock.", href: "/stock/rolls", tone: "danger" });
+    if (workflow.overdueReceivables) actions.push({ key: "overdue-credit", title: `${workflow.overdueReceivables} overdue receivable${workflow.overdueReceivables === 1 ? "" : "s"}`, detail: `${formatLkr(workflow.overdueAmount)} needs collection follow-up.`, href: "/textile/trade-control", tone: "danger" });
+    if (workflow.pendingCuts) actions.push({ key: "pending-cuts", title: `${workflow.pendingCuts} cut${workflow.pendingCuts === 1 ? "" : "s"} waiting`, detail: "Complete measured cuts before warehouse dispatch.", href: "/stock/cutting", tone: "warning" });
+    if (workflow.pendingDispatches) actions.push({ key: "pending-dispatches", title: `${workflow.pendingDispatches} dispatch${workflow.pendingDispatches === 1 ? "" : "es"} in progress`, detail: "Continue pick, pack or delivery confirmation.", href: "/stock/dispatch", tone: "warning" });
     return {
       eyebrow: "Textile roll intelligence",
       title: "Physical rolls & measured balance",
@@ -162,7 +179,7 @@ function buildSectorModel(
         { label: "Active rolls", value: snapshot.schemaReady ? String(live.length) : "—", hint: "Physical identities", tone: "default" },
         { label: "Metre balance", value: snapshot.schemaReady ? metres.toFixed(3) : "—", hint: "Remaining metres", tone: "default" },
         { label: "Yard balance", value: snapshot.schemaReady ? yards.toFixed(3) : "—", hint: "Remaining yards", tone: "default" },
-        { label: "Reserved measure", value: snapshot.schemaReady ? reserved.toFixed(3) : "—", hint: "Original roll units", tone: reserved ? "warning" : "positive" },
+        { label: "Remnants", value: snapshot.schemaReady ? String(workflow.remnants) : "—", hint: `${workflow.activeReservations} active reservations`, tone: workflow.remnants || reserved ? "warning" : "positive" },
       ],
       actions,
       primaryHref: "/stock/rolls",
@@ -329,7 +346,16 @@ function buildSectorModel(
   if (sector === "car_sales") {
     const vehicles = data.vehicles;
     const forSale = vehicles.filter((v) => v.status === "for_sale");
+    const incoming = vehicles.filter((v) => v.status === "incoming");
     const reconditioning = vehicles.filter((v) => v.status === "reconditioning");
+    const unsold = vehicles.filter((v) => v.status !== "sold");
+    const soldThisMonth = vehicles.filter((v) => v.status === "sold" && v.soldDate?.startsWith(now.toISOString().slice(0, 7)));
+    const capitalTiedUp = unsold.reduce((sum, vehicle) => sum + vehicle.purchasePrice + vehicle.reconditionCost, 0);
+    const preparationCost = unsold.reduce((sum, vehicle) => sum + vehicle.reconditionCost, 0);
+    const realizedMargin = soldThisMonth.reduce(
+      (sum, vehicle) => sum + (vehicle.soldPrice ?? 0) - vehicle.purchasePrice - vehicle.reconditionCost,
+      0,
+    );
     const aged60 = forSale.filter((v) => now.getTime() - new Date(v.dateAdded).getTime() >= 60 * 86_400_000);
     const aged90 = forSale.filter((v) => now.getTime() - new Date(v.dateAdded).getTime() >= 90 * 86_400_000);
     const actions: Action[] = [];
@@ -339,12 +365,19 @@ function buildSectorModel(
       eyebrow: "Vehicle retail intelligence",
       title: "Stock age & reconditioning",
       description: "Operational vehicle aging without exposing purchase cost, minimum price or internal margin to non-owner roles.",
-      metrics: [
-        { label: "For sale", value: String(forSale.length), hint: "Current vehicle stock", tone: "default" },
-        { label: "Reconditioning", value: String(reconditioning.length), hint: "Not ready for sale", tone: reconditioning.length ? "warning" : "positive" },
-        { label: "Aged 60+d", value: String(aged60.length), hint: "Listing age", tone: aged60.length ? "warning" : "positive" },
-        { label: "Aged 90+d", value: String(aged90.length), hint: "Priority aging", tone: aged90.length ? "danger" : "positive" },
-      ],
+      metrics: canSeeFinancials
+        ? [
+            { label: "For sale", value: String(forSale.length), hint: `${incoming.length} incoming · ${reconditioning.length} preparing`, tone: "default" },
+            { label: "Capital tied up", value: formatLkr(capitalTiedUp), hint: "Unsold purchase + preparation", tone: "default" },
+            { label: "Preparation cost", value: formatLkr(preparationCost), hint: "Unsold vehicles", tone: preparationCost ? "warning" : "positive" },
+            { label: "Margin this month", value: formatLkr(realizedMargin), hint: `${soldThisMonth.length} vehicle${soldThisMonth.length === 1 ? "" : "s"} sold`, tone: realizedMargin > 0 ? "positive" : realizedMargin < 0 ? "danger" : "default" },
+          ]
+        : [
+            { label: "For sale", value: String(forSale.length), hint: "Current vehicle stock", tone: "default" },
+            { label: "Incoming", value: String(incoming.length), hint: "Expected stock", tone: incoming.length ? "default" : "positive" },
+            { label: "Reconditioning", value: String(reconditioning.length), hint: "Not ready for sale", tone: reconditioning.length ? "warning" : "positive" },
+            { label: "Aged 60+d", value: String(aged60.length), hint: aged90.length ? `${aged90.length} at 90+ days` : "Listing age", tone: aged90.length ? "danger" : aged60.length ? "warning" : "positive" },
+          ],
       actions,
       primaryHref: "/vehicles",
       primaryLabel: "Vehicle Stock",
@@ -363,7 +396,8 @@ function toneClasses(tone: Tone): string {
 
 export function SectorCommandCenter() {
   const { data, ready } = useAppStore();
-  const { org, orgRole } = useSubscription();
+  const { org, orgRole, canSeeFinancials } = useSubscription();
+  const { locale } = useLocale();
   const [snapshot, setSnapshot] = useState<SectorOperationalSnapshot>(EMPTY_SNAPSHOT);
   const [loading, setLoading] = useState(false);
 
@@ -378,7 +412,7 @@ export function SectorCommandCenter() {
     }
     let cancelled = false;
     setLoading(true);
-    void fetchSectorOperationalSnapshot(org.id, org.sector).then((result) => {
+    void fetchSectorOperationalSnapshot(org.id, org.sector, canSeeFinancials).then((result) => {
       if (cancelled) return;
       setSnapshot(result);
       setLoading(false);
@@ -386,19 +420,59 @@ export function SectorCommandCenter() {
     return () => {
       cancelled = true;
     };
-  }, [org.id, org.isAuthenticated, org.sector]);
+  }, [canSeeFinancials, org.id, org.isAuthenticated, org.sector]);
 
   const model = useMemo(() => {
     if (!data) return null;
-    return buildSectorModel(data, org.sector, snapshot, new Date());
-  }, [data, org.sector, snapshot]);
+    return buildSectorModel(data, org.sector, snapshot, new Date(), canSeeFinancials);
+  }, [canSeeFinancials, data, org.sector, snapshot]);
 
   if (!ready || !data || !model) return null;
   if (org.sector === "ac_hvac" && !canAccessShopRoute(orgRole, "/jobs")) return null;
   if (org.sector === "car_sales" && !canAccessShopRoute(orgRole, "/vehicles")) return null;
 
+  const textile = org.sector === "textile" ? snapshot.textileWorkflow : null;
+  const textileQuickActions = orgRole === "cashier"
+    ? [{ href: "/sales", label: locale === "si" ? "නව අලෙවිය" : "New sale" }, { href: "/customers", label: locale === "si" ? "පාරිභෝගිකයා එක් කරන්න" : "Add customer" }]
+    : orgRole === "data_entry"
+      ? [{ href: "/stock/rolls", label: locale === "si" ? "Roll ලබාගන්න" : "Receive roll" }, { href: "/stock/cutting", label: locale === "si" ? "කැපීම් බලන්න" : "Open cutting desk" }, { href: "/stock/dispatch", label: locale === "si" ? "යැවීම් බලන්න" : "Open dispatches" }]
+      : [
+          { href: "/stock/rolls", label: locale === "si" ? "Roll ලබාගන්න" : "Receive roll" },
+          { href: "/sales", label: locale === "si" ? "නව අලෙවිය" : "New sale" },
+          { href: "/customers", label: locale === "si" ? "පාරිභෝගිකයා එක් කරන්න" : "Add customer" },
+          ...(canSeeFinancials ? [{ href: "/textile/trade-control", label: locale === "si" ? "මුදල් එකතු කිරීම" : "Record collection" }] : []),
+        ];
+  const textileMilestones = textile
+    ? [
+        { done: data.products.some((product) => product.active && product.sectorId === "textile"), label: locale === "si" ? "රෙදි වර්ග එක් කරන්න" : "Add fabric styles", href: "/stock" },
+        { done: snapshot.textileRolls.length > 0, label: locale === "si" ? "පළමු Roll එක ලබාගන්න" : "Receive the first roll", href: "/stock/rolls" },
+        ...(canSeeFinancials ? [{ done: textile.customerTerms > 0, label: locale === "si" ? "පාරිභෝගික ණය කොන්දේසි සකසන්න" : "Set customer credit terms", href: "/textile/trade-control" }] : []),
+        { done: data.sales.length > 0, label: locale === "si" ? "පළමු රෙදි අලෙවිය සාදන්න" : "Complete the first fabric sale", href: "/sales" },
+      ]
+    : [];
+  const incompleteMilestones = textileMilestones.filter((item) => !item.done);
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todaySales = org.sector === "textile" ? data.sales.filter((sale) => sale.date.startsWith(todayKey)) : [];
+  const todayTotal = todaySales.reduce((sum, sale) => sum + sale.total, 0);
+  const todayCredit = todaySales.reduce((sum, sale) => sum + sale.creditAmount, 0);
+
   return (
     <section className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-[0_14px_35px_rgba(15,23,42,0.08)]">
+      {textile && (
+        <div className="border-b border-slate-800 px-4 py-3 sm:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-white">{org.name || "LakBiz"}</p>
+              <p className="text-xs text-slate-400">{loading ? (locale === "si" ? "දත්ත යාවත්කාලීන වෙමින්…" : "Refreshing live data…") : snapshot.error ? (locale === "si" ? "සජීවී දත්ත ලබාගත නොහැක" : "Live data unavailable") : (locale === "si" ? "සජීවී දත්ත යාවත්කාලීනයි" : "Live data up to date")}</p>
+            </div>
+            <div className="flex flex-wrap gap-2" aria-label={locale === "si" ? "ඉක්මන් ක්‍රියා" : "Quick actions"}>
+              {textileQuickActions.map((action, index) => (
+                <Link key={action.href} href={action.href} className={index === 0 ? "inline-flex min-h-10 items-center rounded-xl bg-teal-500 px-3 text-sm font-semibold text-slate-950 hover:bg-teal-400" : "inline-flex min-h-10 items-center rounded-xl border border-slate-700 px-3 text-sm font-semibold text-slate-200 hover:border-slate-500 hover:bg-slate-900"}>{action.label}</Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="grid lg:grid-cols-[0.72fr_1.28fr]">
         <div className="p-5 text-white sm:p-6">
           <div className="flex flex-wrap items-center gap-2">
@@ -454,6 +528,27 @@ export function SectorCommandCenter() {
           </div>
         </div>
       </div>
+      {textile && (
+        <div className="grid gap-px bg-slate-200 lg:grid-cols-3">
+          <div className="bg-white p-4 sm:p-5">
+            <p className="text-xs font-semibold text-slate-500">{locale === "si" ? "අද" : "Today"}</p>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div><p className="text-xs text-slate-500">{locale === "si" ? "අලෙවි" : "Sales"}</p><p className="mt-1 font-mono text-lg font-semibold text-slate-950">{formatLkr(todayTotal)}</p></div>
+              <div><p className="text-xs text-slate-500">{locale === "si" ? "බිල්" : "Invoices"}</p><p className="mt-1 font-mono text-lg font-semibold text-slate-950">{todaySales.length}</p></div>
+              <div><p className="text-xs text-slate-500">{locale === "si" ? "ණයට" : "On credit"}</p><p className="mt-1 font-mono text-lg font-semibold text-amber-700">{formatLkr(todayCredit)}</p></div>
+              <div><p className="text-xs text-slate-500">{locale === "si" ? "ලැබුණු මුදල" : "Collected now"}</p><p className="mt-1 font-mono text-lg font-semibold text-emerald-700">{formatLkr(Math.max(0, todayTotal - todayCredit))}</p></div>
+            </div>
+          </div>
+          <div className="bg-white p-4 sm:p-5">
+            <p className="text-xs font-semibold text-slate-500">{locale === "si" ? "මෑත Roll ක්‍රියාකාරකම්" : "Recent roll activity"}</p>
+            {textile.recentActivity.length ? <ul className="mt-2 divide-y divide-slate-100">{textile.recentActivity.slice(0, 4).map((item) => <li key={item.id} className="py-2"><p className="text-sm font-medium capitalize text-slate-800">{item.movementType.replaceAll("_", " ")}</p><p className="truncate text-xs text-slate-500">{item.reason || `${item.balanceAfter.toFixed(3)} remaining`}</p></li>)}</ul> : <p className="mt-3 text-sm text-slate-500">{locale === "si" ? "Roll ක්‍රියාකාරකම් තවම නැත." : "No roll activity yet."}</p>}
+          </div>
+          <div className="bg-white p-4 sm:p-5">
+            <p className="text-xs font-semibold text-slate-500">{incompleteMilestones.length ? (locale === "si" ? "ඊළඟ සැකසුම්" : "Next setup steps") : (locale === "si" ? "සැකසුම සම්පූර්ණයි" : "Setup complete")}</p>
+            {incompleteMilestones.length ? <ul className="mt-2 space-y-2">{incompleteMilestones.map((item) => <li key={item.href + item.label}><Link href={item.href} className="flex min-h-10 items-center justify-between rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:border-teal-300 hover:bg-teal-50/40"><span>{item.label}</span><span aria-hidden="true">→</span></Link></li>)}</ul> : <p className="mt-3 text-sm text-emerald-700">{locale === "si" ? "ප්‍රධාන සැකසුම් පියවර හතරම සම්පූර්ණයි." : "All four operational setup milestones are complete."}</p>}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -210,7 +210,7 @@ export function Drawer({
             type="button"
             onClick={guardedClose}
             aria-label="Close"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
           >
             <CloseIcon className="h-5 w-5" />
           </button>
@@ -257,7 +257,7 @@ export function DrawerFooter({
       <button
         type="button"
         onClick={onCancel}
-        className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        className="min-h-11 rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
       >
         {cancelLabel}
       </button>
@@ -266,7 +266,7 @@ export function DrawerFooter({
           <button
             type="button"
             onClick={onSaveDraft}
-            className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="min-h-11 rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             {saveDraftLabel}
           </button>
@@ -276,7 +276,7 @@ export function DrawerFooter({
           form={primaryForm}
           onClick={onPrimary}
           disabled={primaryDisabled}
-          className={`rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 ${
+          className={`min-h-11 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 ${
             primaryTone === "danger" ? "bg-rose-600 hover:bg-rose-700" : "bg-teal-600 hover:bg-teal-700"
           }`}
         >
@@ -363,7 +363,7 @@ export function Dialog({
             type="button"
             onClick={guardedClose}
             aria-label="Close"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900"
           >
             <CloseIcon className="h-5 w-5" />
           </button>
@@ -413,7 +413,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="min-h-11 rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             {cancelLabel}
           </button>
@@ -421,7 +421,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className={`rounded-lg px-3.5 py-2 text-sm font-semibold text-white disabled:opacity-50 ${
+            className={`min-h-11 rounded-lg px-3.5 py-2 text-sm font-semibold text-white disabled:opacity-50 ${
               tone === "danger" ? "bg-rose-600 hover:bg-rose-700" : "bg-teal-600 hover:bg-teal-700"
             }`}
           >

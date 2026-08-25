@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ExportActions } from "@/components/export/export-actions";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { AppShell } from "@/components/shell/app-shell";
 import {
@@ -15,7 +15,8 @@ import {
   ProPageHeader,
   ProStatCard,
 } from "@/components/ui/pro-shell";
-import { BillsIcon, CostingIcon, ReportsIcon, CustomersIcon } from "@/components/ui/icons";
+import { BillsIcon, CostingIcon, ReportsIcon, CustomersIcon, FilterIcon, SearchIcon } from "@/components/ui/icons";
+import { ActionMenu } from "@/components/ui/primitives";
 import { formatLkr } from "@/lib/format";
 import { buildInvoiceText, buildQuoteText, whatsappShareUrl } from "@/lib/invoice";
 import { exportSalesCsv, printSalesReport } from "@/lib/export";
@@ -35,12 +36,14 @@ function customerPhoneForSale(
 }
 
 export default function BillsPage() {
+  const router = useRouter();
   const { data, ready } = useAppStore();
   const { t } = useLocale();
   const { canSeeFinancials, can, orgRole } = useSubscription();
   const [search, setSearch] = useState("");
   const [paymentFilter, setPaymentFilter] = useState<PaymentMethod | "all">("all");
   const [invoiceType, setInvoiceType] = useState<"all" | "vehicle" | "retail">("all");
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   if (!ready || !data) {
     return (
@@ -74,6 +77,7 @@ export default function BillsPage() {
   });
 
   const canExport = can("export");
+  const activeFilterCount = Number(paymentFilter !== "all") + Number(invoiceType !== "all");
   const salesExportLabels = {
     billNo: t("bills.bill_no"),
     date: t("common.date"),
@@ -86,6 +90,24 @@ export default function BillsPage() {
     total: t("common.total"),
     profit: t("common.profit"),
   };
+  const clearFilters = () => {
+    setSearch("");
+    setPaymentFilter("all");
+    setInvoiceType("all");
+  };
+  const exportVisibleCsv = () =>
+    exportSalesCsv(data.business, bills, {
+      includeProfit: canSeeFinancials,
+      labels: salesExportLabels,
+      paymentLabel: (method) => paymentLabel(t, method),
+    });
+  const printVisibleReport = () =>
+    printSalesReport(data.business, bills, {
+      includeProfit: canSeeFinancials,
+      labels: salesExportLabels,
+      reportTitle: t("export.sales_report"),
+      paymentLabel: (method) => paymentLabel(t, method),
+    });
 
   return (
     <AppShell>
@@ -96,75 +118,64 @@ export default function BillsPage() {
           description={`${t("bills.subtitle")} · ${data.sales.length} ${t("bills.count")}`}
           actions={
             <>
-              {canExport && (
-                <ExportActions
-                  disabled={bills.length === 0}
-                  onExportCsv={() =>
-                    exportSalesCsv(data.business, bills, {
-                      includeProfit: canSeeFinancials,
-                      labels: salesExportLabels,
-                      paymentLabel: (m) => paymentLabel(t, m),
-                    })
-                  }
-                  onPrintPdf={() =>
-                    printSalesReport(data.business, bills, {
-                      includeProfit: canSeeFinancials,
-                      labels: salesExportLabels,
-                      reportTitle: t("export.sales_report"),
-                      paymentLabel: (m) => paymentLabel(t, m),
-                    })
-                  }
-                />
-              )}
+              <ProButton href="/sales">{t("bills.create_sale")}</ProButton>
               {orgRole === "owner" && (
                 <ProButton href="/returns" variant="secondary">Returns control</ProButton>
               )}
-              <ProButton href="/sales">{t("bills.create_sale")}</ProButton>
-              <ProButton href="/settings/shop" variant="secondary">
-                {t("bills.shop_details")}
-              </ProButton>
+              <ActionMenu
+                label={t("common.actions")}
+                items={[
+                  ...(canExport
+                    ? [
+                        { label: bills.length === 0 ? `${t("export.csv")} · ${t("sales.no_match")}` : t("export.csv"), onSelect: exportVisibleCsv, disabled: bills.length === 0 },
+                        { label: bills.length === 0 ? `${t("export.pdf")} · ${t("sales.no_match")}` : t("export.pdf"), onSelect: printVisibleReport, disabled: bills.length === 0 },
+                      ]
+                    : []),
+                  { label: t("bills.shop_details"), onSelect: () => router.push("/settings/shop") },
+                ]}
+              />
             </>
           }
         />
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("bills.count")} value={String(data.sales.length)} hint={t("bills.invoices_issued")} icon={<BillsIcon className="h-5 w-5" />} tone="teal" />
-          <ProStatCard label={t("common.total")} value={formatLkr(salesTotal)} hint={t("bills.total_billed")} icon={<CostingIcon className="h-5 w-5" />} tone="emerald" />
-          {canSeeFinancials && (
-            <ProStatCard label={t("common.profit")} value={formatLkr(profitTotal)} hint={t("bills.recorded_profit")} icon={<ReportsIcon className="h-5 w-5" />} tone="blue" />
-          )}
-          {canSeeFinancials && (
-            <ProStatCard label={t("bills.credit_bills")} value={formatLkr(creditTotal)} hint={t("bills.credit_sales")} icon={<CustomersIcon className="h-5 w-5" />} tone="amber" />
-          )}
-        </section>
-
-        <section className="mt-6">
-          <ProCard title={t("bills.find_invoices")} eyebrow={t("bills.search_archive_eyebrow")} action={<ProBadge tone={bills.length === data.sales.length ? "slate" : "teal"}>{bills.length} {t("bills.shown")}</ProBadge>}>
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_12rem]">
+        {data.sales.length > 0 && (
+          <section>
+            <ProCard title={t("bills.find_invoices")} eyebrow={t("bills.search_archive_eyebrow")} action={<ProBadge tone={bills.length === data.sales.length ? "slate" : "teal"}>{bills.length} {t("bills.shown")}</ProBadge>}>
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_12rem]">
               <div className="relative">
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t("bills.search_placeholder")}
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pl-11 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
-              />
-              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t("bills.search_placeholder")}
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pl-11 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                />
+                <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               </div>
-              <select value={invoiceType} onChange={(event) => setInvoiceType(event.target.value as typeof invoiceType)} className="h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-800 outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100">
+              <button
+                type="button"
+                onClick={() => setShowMobileFilters((value) => !value)}
+                aria-expanded={showMobileFilters}
+                className="flex h-12 items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-800 lg:hidden"
+              >
+                <span className="flex items-center gap-2"><FilterIcon className="h-4 w-4" />{t("jobs.filters")}</span>
+                <span>{activeFilterCount > 0 ? activeFilterCount : "+"}</span>
+              </button>
+              <select value={invoiceType} onChange={(event) => setInvoiceType(event.target.value as typeof invoiceType)} className={`${showMobileFilters ? "block" : "hidden"} h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-800 outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100 lg:block`}>
                 <option value="all">{t("bills.all_invoice_types")}</option>
                 <option value="vehicle">{t("bills.vehicle_invoices")}</option>
                 <option value="retail">{t("bills.retail_service")}</option>
               </select>
-              <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value as PaymentMethod | "all")} className="h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-800 outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100">
+              <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value as PaymentMethod | "all")} className={`${showMobileFilters ? "block" : "hidden"} h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-800 outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100 lg:block`}>
                 <option value="all">{t("bills.all_payment_methods")}</option>
                 {PAYMENT_OPTIONS.map((method) => <option key={method} value={method}>{paymentLabel(t, method)}</option>)}
               </select>
             </div>
-          </ProCard>
-        </section>
+            </ProCard>
+          </section>
+        )}
 
-        <section className="mt-6">
+        <section className={data.sales.length > 0 ? "mt-5" : ""}>
           {data.sales.length === 0 ? (
             <ProCard>
               <ProEmptyState
@@ -175,7 +186,11 @@ export default function BillsPage() {
             </ProCard>
           ) : bills.length === 0 ? (
             <ProCard>
-              <ProEmptyState title={t("sales.no_match")} description={t("bills.search_no_match_desc")} />
+              <ProEmptyState
+                title={t("sales.no_match")}
+                description={t("bills.search_no_match_desc")}
+                action={<button type="button" onClick={clearFilters} className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">{t("common.clear")}</button>}
+              />
             </ProCard>
           ) : (
             <ProCard title={t("bills.invoice_history")} action={<ProBadge tone="teal">{bills.length} {t("bills.invoices_count")}</ProBadge>}>
@@ -273,6 +288,19 @@ export default function BillsPage() {
             </ProCard>
           )}
         </section>
+
+        {data.sales.length > 0 && (
+          <section className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4" aria-label={t("bills.archive_eyebrow")}>
+            <ProStatCard label={t("bills.count")} value={String(data.sales.length)} hint={t("bills.invoices_issued")} icon={<BillsIcon className="h-5 w-5" />} tone="teal" />
+            <ProStatCard label={t("common.total")} value={formatLkr(salesTotal)} hint={t("bills.total_billed")} icon={<CostingIcon className="h-5 w-5" />} tone="emerald" />
+            {canSeeFinancials && (
+              <ProStatCard label={t("common.profit")} value={formatLkr(profitTotal)} hint={t("bills.recorded_profit")} icon={<ReportsIcon className="h-5 w-5" />} tone="blue" />
+            )}
+            {canSeeFinancials && (
+              <ProStatCard label={t("bills.credit_bills")} value={formatLkr(creditTotal)} hint={t("bills.credit_sales")} icon={<CustomersIcon className="h-5 w-5" />} tone="amber" />
+            )}
+          </section>
+        )}
       </ProMain>
     </AppShell>
   );

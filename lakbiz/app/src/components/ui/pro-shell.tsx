@@ -8,7 +8,7 @@ export function ProPageShell({ children }: { children: ReactNode }) {
 
 export function ProMain({ children }: { children: ReactNode }) {
   return (
-    <main className="mx-auto w-full max-w-[1440px] px-4 py-7 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
+    <main className="mx-auto w-full max-w-[1440px] px-4 py-5 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
       {children}
     </main>
   );
@@ -23,8 +23,8 @@ type ProPageHeaderProps = {
 
 export function ProPageHeader({ eyebrow, title, description, actions }: ProPageHeaderProps) {
   return (
-    <div className="mb-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div className="mb-6 sm:mb-8">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0">
           {eyebrow && (
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700">
@@ -83,9 +83,10 @@ type ProStatCardProps = {
   hint?: string;
   icon?: ReactNode;
   tone?: "teal" | "amber" | "blue" | "emerald" | "slate" | "rose";
+  className?: string;
 };
 
-export function ProStatCard({ label, value, hint, icon, tone = "teal" }: ProStatCardProps) {
+export function ProStatCard({ label, value, hint, icon, tone = "teal", className = "" }: ProStatCardProps) {
   const tones = {
     teal: {
       icon: "bg-teal-50 text-teal-700 ring-teal-100",
@@ -116,16 +117,16 @@ export function ProStatCard({ label, value, hint, icon, tone = "teal" }: ProStat
   return (
     <article
       data-ui="pro-stat-card"
-      className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-[radial-gradient(circle_at_100%_0%,rgba(20,184,166,0.055),transparent_42%),linear-gradient(180deg,#ffffff_0%,#fbfdff_100%)] p-5 shadow-[0_10px_34px_rgba(15,23,42,0.055)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_16px_42px_rgba(15,23,42,0.075)]"
+      className={`group relative min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-[radial-gradient(circle_at_100%_0%,rgba(20,184,166,0.045),transparent_42%),linear-gradient(180deg,#ffffff_0%,#fbfdff_100%)] p-4 shadow-[0_8px_26px_rgba(15,23,42,0.05)] transition duration-200 hover:border-slate-300 sm:p-5 sm:hover:-translate-y-0.5 sm:hover:shadow-[0_16px_42px_rgba(15,23,42,0.075)] ${className}`}
     >
       <div className={`absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r ${tones.accent} opacity-85`} />
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-2.5 sm:gap-4">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{label}</p>
-          <p className="mt-3 truncate text-[1.7rem] font-bold tracking-[-0.035em] text-slate-950">{value}</p>
-          {hint && <p className="mt-1.5 text-xs font-medium leading-5 text-slate-500">{hint}</p>}
+          <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400 sm:text-[10px] sm:tracking-[0.14em]">{label}</p>
+          <p className="mt-2 break-words text-[1.35rem] font-bold leading-tight tracking-[-0.035em] text-slate-950 sm:mt-3 sm:text-[1.7rem]">{value}</p>
+          {hint && <p className="mt-1 text-[11px] font-medium leading-4 text-slate-500 sm:mt-1.5 sm:text-xs sm:leading-5">{hint}</p>}
         </div>
-        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-base ring-1 ring-inset ${tones.icon}`}>
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm ring-1 ring-inset sm:h-11 sm:w-11 sm:rounded-xl sm:text-base ${tones.icon}`}>
           {icon ?? "•"}
         </div>
       </div>
@@ -194,9 +195,9 @@ export function ProEmptyState({
 
 export function ProLoadingState({ label = "Loading your workspace..." }: { label?: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.035)]">
+    <div role="status" aria-live="polite" aria-busy="true" className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.035)]">
       <div className="flex items-center gap-3 text-sm font-medium text-slate-500">
-        <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-teal-500" />
+        <span aria-hidden="true" className="h-2.5 w-2.5 animate-pulse rounded-full bg-teal-500" />
         {label}
       </div>
     </div>

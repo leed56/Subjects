@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { AcAlertsBell } from "@/components/ac-alerts-bell";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -28,6 +28,8 @@ export function MobileNav() {
   const { isPlatformAdmin, org } = useSubscription();
   const { sections, managementItems } = useShopNav();
   const [open, setOpen] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const allItems = [...sections.flatMap((section) => section.items), ...managementItems];
   const activeHref = allItems
     .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
@@ -44,6 +46,42 @@ export function MobileNav() {
     setOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    if (!open || !drawerRef.current) return;
+    const drawer = drawerRef.current;
+    const focusable = Array.from(drawer.querySelectorAll<HTMLElement>('a[href], button:not([disabled])'));
+    focusable[0]?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        return;
+      }
+      if (event.key !== "Tab" || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (open || !previousFocusRef.current) return;
+    previousFocusRef.current.focus();
+    previousFocusRef.current = null;
+  }, [open]);
+
+  const openDrawer = () => {
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setOpen(true);
+  };
+
   const handleLogout = async () => {
     await logout();
     window.location.href = "/login";
@@ -58,7 +96,7 @@ export function MobileNav() {
         href={item.href}
         onClick={() => setOpen(false)}
         aria-current={active ? "page" : undefined}
-        className={`flex min-h-12 items-center gap-3 rounded-xl px-3.5 py-3 text-base font-medium transition ${active ? "bg-teal-50 text-teal-900 ring-1 ring-inset ring-teal-100" : "text-slate-700 hover:bg-slate-50 hover:text-slate-950"}`}
+        className={`flex min-h-12 items-center gap-3 rounded-xl border-l-4 px-3 py-3 text-base font-medium transition ${active ? "border-teal-500 bg-teal-50 text-teal-950 ring-1 ring-inset ring-teal-100" : "border-transparent text-slate-700 hover:bg-slate-50 hover:text-slate-950"}`}
       >
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-teal-100 text-teal-700" : "bg-slate-50 text-slate-400"}`}>
           <Icon className="h-5 w-5" />
@@ -68,26 +106,32 @@ export function MobileNav() {
     );
   };
 
+  const bottomItems = ["/dashboard", "/sales", "/stock", "/jobs", "/schedule", "/vehicles"]
+    .map((href) => allItems.find((item) => item.href === href))
+    .filter((item): item is NavItem => Boolean(item))
+    .slice(0, 3);
+  const showBottomNav = !isPlatformAdmin && !pathname.startsWith("/sales");
+
   return (
     <>
-      <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-2 border-b border-slate-200/80 bg-white/95 px-4 shadow-[0_1px_0_rgba(15,23,42,0.02)] backdrop-blur-xl lg:hidden">
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-2 border-b border-slate-200/80 bg-white/95 px-3.5 shadow-[0_1px_0_rgba(15,23,42,0.02)] backdrop-blur-xl lg:hidden">
         <Link href={isPlatformAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500 to-teal-700 text-xs font-bold text-white shadow-sm shadow-teal-900/20">L</span>
-          <span className="text-lg font-bold tracking-tight text-slate-950">LakBiz</span>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-600 text-xs font-bold text-white shadow-sm shadow-teal-900/20">L</span>
+          <span className="text-base font-bold tracking-tight text-slate-950">LakBiz</span>
         </Link>
         <div className="flex items-center gap-2">
           <AcAlertsBell />
-          <button type="button" onClick={() => setLocale(locale === "si" ? "en" : "si")} className="min-h-9 rounded-full border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 shadow-sm">{t("nav.lang")}</button>
-          <button type="button" aria-label="Open menu" onClick={() => setOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-white shadow-sm"><MenuIcon className="h-5 w-5" /></button>
+          <button type="button" onClick={() => setLocale(locale === "si" ? "en" : "si")} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 shadow-sm">{t("nav.lang")}</button>
+          <button type="button" aria-label="Open menu" onClick={openDrawer} className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-950 text-white shadow-sm"><MenuIcon className="h-5 w-5" /></button>
         </div>
       </header>
 
       <div className={`fixed inset-0 z-50 lg:hidden ${open ? "visible" : "invisible"}`} aria-hidden={!open}>
         <button type="button" aria-label="Close menu" onClick={() => setOpen(false)} className={`absolute inset-0 bg-slate-950/55 backdrop-blur-sm transition-opacity ${open ? "opacity-100" : "opacity-0"}`} />
-        <div className={`absolute inset-y-0 right-0 flex w-[min(100%,21rem)] flex-col bg-white shadow-2xl transition-transform duration-300 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}>
-          <div className="flex h-16 items-center justify-between border-b border-slate-200/80 px-4">
+        <div ref={drawerRef} role="dialog" aria-modal="true" aria-label="Navigation menu" className={`absolute inset-y-0 right-0 flex w-[min(100%,21rem)] flex-col bg-white shadow-2xl transition-transform duration-300 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}>
+          <div className="flex h-14 items-center justify-between border-b border-slate-200/80 px-4">
             <div className="flex items-center gap-2.5"><span className="flex h-8 w-8 items-center justify-center rounded-xl bg-teal-600 text-xs font-bold text-white">L</span><span className="font-bold tracking-tight text-slate-950">LakBiz</span></div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Close menu" className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-slate-200"><CloseIcon className="h-5 w-5" /></button>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close menu" className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-slate-200"><CloseIcon className="h-5 w-5" /></button>
           </div>
 
           <nav className="flex-1 overflow-y-auto p-3.5" aria-label="Primary">
@@ -98,17 +142,11 @@ export function MobileNav() {
               </div>
             ))}
 
-            {managementItems.length > 0 && (
-              <div className="mt-6">
-                <p className="mb-2 px-3.5 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{t("nav.section.management")}</p>
-                <div className="space-y-1">{managementItems.map(renderItem)}</div>
-              </div>
-            )}
-
             {isPlatformAdmin && <Link href="/admin" onClick={() => setOpen(false)} className="mt-6 flex min-h-12 items-center justify-center rounded-xl bg-slate-950 px-3.5 py-3 text-base font-semibold text-teal-200">{t("admin.nav")}</Link>}
           </nav>
 
           <div className="border-t border-slate-200/80 bg-slate-50/70 p-3.5">
+            {managementItems.length > 0 && <div className="mb-3 grid grid-cols-2 gap-1.5">{managementItems.map((item) => { const Icon=NAV_ICON_BY_HREF[item.href]??SettingsIcon; return <Link key={item.href} href={item.href} onClick={()=>setOpen(false)} className="flex min-h-11 items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-semibold text-slate-600 hover:bg-white hover:text-slate-950"><Icon className="h-4 w-4 shrink-0 text-slate-400"/><span className="truncate">{navLabel(item,locale,t)}</span></Link>; })}</div>}
             <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-xs font-bold text-teal-800">{initialsFor(org.name, user?.email)}</span>
               <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-950">{org.name}</p><p className="mt-0.5 truncate text-xs text-slate-500">{user?.email}</p></div>
@@ -119,6 +157,8 @@ export function MobileNav() {
           </div>
         </div>
       </div>
+
+      {showBottomNav && <nav aria-label="Mobile quick navigation" className="fixed inset-x-0 bottom-0 z-40 grid h-[4.25rem] grid-cols-4 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden">{bottomItems.map((item)=>{const Icon=NAV_ICON_BY_HREF[item.href]??SettingsIcon;const active=pathname===item.href||pathname.startsWith(`${item.href}/`);return <Link key={item.href} href={item.href} aria-current={active?"page":undefined} className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-semibold ${active?"text-teal-700":"text-slate-500"}`}><Icon className="h-5 w-5"/><span className="max-w-full truncate">{navLabel(item,locale,t)}</span></Link>;})}<button type="button" onClick={openDrawer} className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-semibold ${bottomItems.some((item)=>pathname===item.href||pathname.startsWith(`${item.href}/`))?"text-slate-500":"text-teal-700"}`}><MenuIcon className="h-5 w-5"/><span className="max-w-full truncate">{t("dash.more")}</span></button></nav>}
     </>
   );
 }

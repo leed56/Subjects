@@ -44,6 +44,7 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { canAccessShopRoute } from "@/lib/org-role/permissions";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
 import { computeJobProfitability, isLowMarginJob, type JobLinkedExpense } from "@/lib/job-profitability";
+import { localizedDashboardPreset } from "@/lib/sector-dashboard";
 
 type Locale = "si" | "en";
 type TrendPeriod = "30d" | "3m" | "6m" | "12m";
@@ -112,8 +113,6 @@ function dateHeading(locale: Locale): string {
 
 const primaryButton =
   "inline-flex h-9 items-center gap-1.5 rounded-lg bg-teal-600 px-3.5 text-sm font-semibold text-white hover:bg-teal-700";
-const secondaryButton =
-  "inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3.5 text-sm font-medium text-slate-700 hover:bg-slate-50";
 const ghostLink = "text-xs font-semibold text-teal-700 hover:underline";
 
 /** Card shell used throughout — one consistent 10-14px-radius, subtle-border
@@ -336,36 +335,52 @@ export default function DashboardPage() {
   // all. Switches to the real dashboard automatically the moment any of
   // that exists; nothing to dismiss.
   // ---------------------------------------------------------------------
+  const dashboardPreset = localizedDashboardPreset(org.sector, locale);
+  const dashboardPrimary = canAccessShopRoute(orgRole, dashboardPreset.primaryAction.href)
+    ? dashboardPreset.primaryAction
+    : { href: "/sales", label: t("dash.new_sale") };
   const hasAnyData =
-    data.customers.length > 0 || data.products.length > 0 || data.sales.length > 0 || data.acJobs.length > 0;
+    data.customers.length > 0 ||
+    data.products.length > 0 ||
+    data.sales.length > 0 ||
+    data.acJobs.length > 0 ||
+    data.vehicles.length > 0;
 
-  if (!hasAnyData) {
+  const onboardingLinks =
+    org.sector === "textile"
+      ? ["/stock", "/stock/rolls", "/textile/trade-control", "/sales"]
+      : org.sector === "car_sales"
+        ? ["/vehicles", "/customers", "/vehicles"]
+        : ["/stock", "/customers", dashboardPrimary.href];
+
+  // Textile keeps its compact command centre visible from day one because
+  // physical rolls, cuts and dispatches live in RLS-protected sector tables
+  // rather than the local-first store used by this generic empty check. Its
+  // command centre progressively removes completed setup milestones.
+  if (!hasAnyData && org.sector !== "textile") {
     return (
       <AppShell>
         <ProMain>
-          <PageHeader title={`${t("dash.title")} · ${shopName}`} />
+          <PageHeader title={`${dashboardPreset.title} · ${shopName}`} description={dashboardPreset.subtitle} />
+          <OfflineSyncNotice />
           <EmptyState
-            title={t("dash.onboarding_title")}
-            description={t("dash.onboarding_desc")}
+            title={dashboardPreset.onboardingTitle}
+            description={dashboardPreset.onboardingDescription}
             action={
-              <div className="mx-auto max-w-sm space-y-3 text-left">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700">1</span>
-                  <p className="text-sm text-slate-700">{t("dash.onboarding_step1")}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700">2</span>
-                  <p className="text-sm text-slate-700">{t("dash.onboarding_step2")}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700">3</span>
-                  <p className="text-sm text-slate-700">{t("dash.onboarding_step3")}</p>
-                </div>
-                <div className="flex flex-wrap justify-center gap-2 pt-2">
-                  <Link href="/customers" className={secondaryButton}>{t("cust.add")}</Link>
-                  <Link href="/stock" className={secondaryButton}>{t("dash.add_stock")}</Link>
-                  <Link href="/sales" className={primaryButton}>{t("dash.new_sale")}</Link>
-                </div>
+              <div className="mx-auto max-w-md space-y-2 text-left">
+                {dashboardPreset.onboardingSteps.map((step, index) => (
+                  <Link
+                    key={step}
+                    href={onboardingLinks[index] ?? dashboardPrimary.href}
+                    className="group flex min-h-11 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 transition hover:border-teal-300 hover:bg-teal-50/40"
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700">
+                      {index + 1}
+                    </span>
+                    <span className="flex-1 text-sm font-medium text-slate-700 group-hover:text-slate-950">{step}</span>
+                    <span className="text-sm font-bold text-teal-700" aria-hidden="true">→</span>
+                  </Link>
+                ))}
               </div>
             }
           />
@@ -551,11 +566,11 @@ export default function DashboardPage() {
     <AppShell>
       <ProMain>
         <PageHeader
-          title={`${t("dash.title")} · ${shopName}`}
-          description={`${dateHeading(locale)} · ${t("dash.live_overview")}${org.isAuthenticated ? ` · ${t("dash.cloud_synced")}` : ` · ${t("common.saved_browser")}`}${isReadOnly ? ` · ${t("sub.read_only")}` : ""}`}
+          title={`${dashboardPreset.title} · ${shopName}`}
+          description={`${dashboardPreset.subtitle} · ${dateHeading(locale)}${org.isAuthenticated ? ` · ${t("dash.cloud_synced")}` : ` · ${t("common.saved_browser")}`}${isReadOnly ? ` · ${t("sub.read_only")}` : ""}`}
           actions={
             <>
-              <Link href="/sales" className={primaryButton}>+ {t("dash.new_sale")}</Link>
+              <Link href={dashboardPrimary.href} className={primaryButton}>+ {dashboardPrimary.label}</Link>
               {canSeeJobs && <Link href="/jobs" className={primaryButton}>{t("jobs.new")}</Link>}
               <ActionMenu
                 label={t("dash.more")}

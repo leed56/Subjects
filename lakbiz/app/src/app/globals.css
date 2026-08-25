@@ -19,6 +19,10 @@
 
 html {
   background: var(--background);
+  scroll-padding-top: 5rem;
+  scroll-padding-bottom: 5rem;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -27,6 +31,38 @@ body {
   font-family: var(--font-sinhala), var(--font-geist-sans), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  line-height: 1.5;
+}
+
+main,
+section,
+article,
+nav,
+header,
+footer,
+aside {
+  min-width: 0;
+}
+
+:where(h1, h2, h3, h4, p, label, button, a, td, th) {
+  overflow-wrap: anywhere;
+}
+
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 3px solid rgba(13, 148, 136, 0.72);
+  outline-offset: 2px;
+}
+
+[id] {
+  scroll-margin-top: 5rem;
+}
+
+html[lang="si"] body {
+  line-height: 1.65;
+}
+
+html[lang="si"] :where(h1, h2, h3, h4, p, a, button, label, th, [role="tab"]) {
+  letter-spacing: normal !important;
 }
 
 ::selection {
@@ -92,6 +128,21 @@ body {
 
 .lak-float {
   animation: lak-float 5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .safe-area-pb {
