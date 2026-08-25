@@ -58,6 +58,23 @@ const TEXTILE_POS_COPY = {
     completed: "විකුණුම සම්පූර්ණයි", completedHint: "ඉන්වොයිසිය, ගෙවීම සහ භෞතික රෝල් එකවර සුරැකිණි.", removeLabel: "{fabric}, රෝල {roll} ඉවත් කරන්න", cash: "මුදල්", card: "කාඩ්", bankTransfer: "බැංකු මාරුව", cheque: "චෙක්", credit: "ණය", manual: "කළමනාකරුගේ මිල", customerPrice: "ගනුදෙනුකරුගේ මිල", wholesalePrice: "තොග මිල", retailPrice: "සිල්ලර මිල",
     metre: "මීටර්", yard: "යාර", retailCut: "සිල්ලර කැපුම", wholesaleCut: "තොග කැපුම", fullRollMode: "සම්පූර්ණ රෝල",
   },
+  ta: {
+    loading: "துணி POS ஏற்றப்படுகிறது…", eyebrow: "துணி POS", title: "மொத்த & சில்லறை துணி விற்பனை",
+    description: "முழு Roll ஒன்றை அல்லது துல்லியமாக அளவிடப்பட்ட வெட்டை விற்கவும். இன்வாய்ஸ், கட்டணம் மற்றும் Roll இருப்பு ஒரே பரிவர்த்தனையில் உறுதிப்படுத்தப்படும்.", atomic: "பாதுகாப்பான Roll checkout", rolls: "துணி Rolls",
+    noRolls: "விற்பனைக்கு துணி Rolls இல்லை", noRollsHint: "அளவிடப்பட்ட துணி விற்பனையை உருவாக்குவதற்கு முன் துணி Rolls-ஐப் பெறவும்.", receive: "முதல் Roll-ஐப் பெறவும்",
+    build: "விற்பனை வரியை உருவாக்கு", selection: "Roll தேர்வு", mode: "துணி விற்பனை முறை", retail: "சில்லறை வெட்டு", wholesale: "மொத்த வெட்டு", full: "முழு Roll", fullBlocked: "ஒதுக்கப்பட்ட பொருள் முழு-Roll விற்பனையைத் தடுக்கிறது",
+    reservedOrder: "ஒதுக்கப்பட்ட ஆர்டர் (விருப்பத்தேர்வு)", walkInSale: "புதிய நேரடி / ஒதுக்கப்படாத விற்பனை", unrecorded: "பதிவு செய்யப்படவில்லை", scan: "Roll-ஐ ஸ்கேன் செய் அல்லது தேடு", scanHint: "Roll எண், பார்கோடு அல்லது dye lot",
+    fabric: "துணி", allFabrics: "அனைத்து துணிகளும்", physicalRoll: "பருநிலை Roll *", selectRoll: "Roll-ஐத் தேர்ந்தெடுக்கவும்", noMatch: "பொருந்தும் விற்கக்கூடிய Rolls இல்லை", dye: "Dye lot", shade: "நிறச்சாயல்", available: "கிடைக்கிறது",
+    customer: "வாடிக்கையாளர்", walkInCustomer: "நேரடி வாடிக்கையாளர்", company: "நிறுவனம்", walkInName: "வாடிக்கையாளர் பெயர்", fullQty: "முழு-Roll அளவு", measuredQty: "அளவிடப்பட்ட அளவு", managerPrice: "மேலாளர் விலை மாற்றம்",
+    appliedPrice: "பயன்படுத்தப்பட்ட அலகு விலை", addAllocation: "Roll ஒதுக்கீட்டைச் சேர்", allocated: "ஒதுக்கப்பட்ட Rolls", cart: "விற்பனை கூடை", line: "வரி", lines: "வரிகள்", noCuts: "Roll வெட்டுகள் எதுவும் சேர்க்கப்படவில்லை.", remove: "அகற்று",
+    paymentCheckout: "கட்டணம் & checkout", settlement: "தீர்வு", discount: "இன்வாய்ஸ் தள்ளுபடி", primaryPayment: "முதன்மை கட்டணம்", split: "பிரிக்கப்பட்ட கட்டணம்", secondPayment: "இரண்டாவது கட்டணம்", secondAmount: "இரண்டாவது தொகை",
+    chequeNo: "காசோலை எண்", bank: "வங்கி", chequeDate: "காசோலை தேதி", postDated: "பிந்தைய தேதி காசோலை", amountDue: "செலுத்த வேண்டிய தொகை", finalizing: "இறுதி செய்கிறது…", finalize: "துணி விற்பனையை முடிக்கவும்",
+    atomicHint: "தேர்ந்தெடுக்கப்பட்ட ஒவ்வொரு Roll-ஐயும் checkout நேரத்தில் கழிக்க முடிந்தால் மட்டுமே இன்வாய்ஸ் உருவாக்கப்படும்.", allocations: "Roll ஒதுக்கீடுகள்", reviewPayment: "கட்டணத்தை மறுபரிசீலனை செய்", reviewSales: "முடிந்த விற்பனைகளை மறுபரிசீலனை செய்ய வேண்டுமா?", openBills: "பில்களைத் திற",
+    invalidQty: "ஒரு Roll-ஐத் தேர்ந்தெடுத்து சரியான அளவிடப்பட்ட அளவை உள்ளிடவும்.", onlyAvailable: "இந்த Roll-இல் {quantity} {unit} மட்டுமே உள்ளது.", creditLimit: "வாடிக்கையாளர் கடன் வரம்பு மீறப்படும்.", checkoutFailed: "துணி checkout தோல்வியடைந்தது.",
+    completed: "விற்பனை முடிந்தது", completedHint: "இன்வாய்ஸ், கட்டணம் மற்றும் பருநிலை Rolls ஒன்றாக உறுதிப்படுத்தப்பட்டன.", removeLabel: "{fabric}, roll {roll} ஐ அகற்று",
+    cash: "பணம்", card: "அட்டை", bankTransfer: "வங்கி பரிமாற்றம்", cheque: "காசோலை", credit: "கடன்", manual: "மேலாளர் விலை", customerPrice: "வாடிக்கையாளர் விலை", wholesalePrice: "மொத்த விலை", retailPrice: "சில்லறை விலை",
+    metre: "மீட்டர்", yard: "யார்டு", retailCut: "சில்லறை வெட்டு", wholesaleCut: "மொத்த வெட்டு", fullRollMode: "முழு Roll",
+  },
 } as const;
 
 function clientId(prefix: string): string {
@@ -83,15 +100,25 @@ const SINHALA_TENDER_ERRORS: Record<string, string> = {
   "Payment allocation exceeds the sale total.": "ගෙවීම් එකතුව විකුණුම් මුදල ඉක්මවයි.",
 };
 
+const TAMIL_TENDER_ERRORS: Record<string, string> = {
+  "Sale total must be greater than zero.": "விற்பனை மொத்தம் பூஜ்ஜியத்தை விட அதிகமாக இருக்க வேண்டும்.",
+  "Choose two different payment methods for a split payment.": "பிரிக்கப்பட்ட கட்டணத்திற்கு இரண்டு வெவ்வேறு கட்டண முறைகளைத் தேர்ந்தெடுக்கவும்.",
+  "Split payment amount must be greater than zero and below the invoice total.": "இரண்டாவது கட்டணத் தொகை பூஜ்ஜியத்தை விட அதிகமாகவும் இன்வாய்ஸ் மொத்தத்தை விடக் குறைவாகவும் இருக்க வேண்டும்.",
+  "Add at least one payment tender.": "குறைந்தது ஒரு கட்டணத்தையாவது சேர்க்கவும்.",
+  "Each payment tender must have a unique id.": "ஒவ்வொரு கட்டணத்திற்கும் தனித்துவமான ஐடி இருக்க வேண்டும்.",
+  "Every payment tender must have a positive amount.": "ஒவ்வொரு கட்டணத் தொகையும் பூஜ்ஜியத்தை விட அதிகமாக இருக்க வேண்டும்.",
+  "Credit payment requires a customer account.": "கடன் கட்டணத்திற்கு பதிவுசெய்யப்பட்ட வாடிக்கையாளர் கணக்கு தேவை.",
+  "Cheque payment requires cheque number, bank and date.": "காசோலை கட்டணத்திற்கு காசோலை எண், வங்கி மற்றும் தேதி தேவை.",
+  "Payment allocation does not cover the full sale total.": "கட்டண ஒதுக்கீடு முழு விற்பனைத் தொகையையும் ஈடுசெய்யவில்லை.",
+  "Payment allocation exceeds the sale total.": "கட்டண ஒதுக்கீடு விற்பனைத் தொகையை மீறுகிறது.",
+};
+
 export function TextileSalesPage() {
   const { locale } = useLocale();
-  // TEXTILE_POS_COPY has no `ta` entry yet — the textile sales counter is
-  // the single highest-priority screen still owed real Tamil copy (see the
-  // Tamil-language follow-up note in the dashboard Phase 1 report); falls
-  // back to English rather than indexing a missing key or guessing.
-  const copy = TEXTILE_POS_COPY[locale === "ta" ? "en" : locale];
+  const copy = TEXTILE_POS_COPY[locale];
   const tenderLabel = (kind: string) => ({ cash: copy.cash, card: copy.card, bank_transfer: copy.bankTransfer, cheque: copy.cheque, credit: copy.credit }[kind] ?? kind);
-  const tenderError = (error: string) => locale === "si" ? SINHALA_TENDER_ERRORS[error] ?? error : error;
+  const tenderError = (error: string) =>
+    locale === "si" ? SINHALA_TENDER_ERRORS[error] ?? error : locale === "ta" ? TAMIL_TENDER_ERRORS[error] ?? error : error;
   const priceSourceLabel = (source?: string) => ({ manual: copy.manual, customer: copy.customerPrice, wholesale: copy.wholesalePrice, retail: copy.retailPrice }[source ?? ""] ?? copy.selectRoll);
   const saleModeLabel = (mode: string) => ({ retail_cut: copy.retailCut, wholesale_cut: copy.wholesaleCut, full_roll: copy.fullRollMode }[mode] ?? mode.replaceAll("_", " "));
   const unitLabel = (unit: "metre" | "yard") => unit === "metre" ? copy.metre : copy.yard;
