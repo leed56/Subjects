@@ -1,6 +1,6 @@
 import type { SectorId } from "@/lib/types";
 
-export type DashboardLocale = "en" | "si";
+export type DashboardLocale = "en" | "si" | "ta";
 
 export type SectorDashboardPreset = {
   titleEn: string;

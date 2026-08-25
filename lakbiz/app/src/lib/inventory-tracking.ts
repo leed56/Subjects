@@ -117,7 +117,7 @@ export function defaultInventoryTrackingMode(sectorId: SectorId): InventoryTrack
   return inventoryTrackingPreset(sectorId).defaultMode;
 }
 
-export function inventoryModeLabel(mode: InventoryTrackingMode, locale: "en" | "si" = "en"): string {
+export function inventoryModeLabel(mode: InventoryTrackingMode, locale: "en" | "si" | "ta" = "en"): string {
   const labels: Record<InventoryTrackingMode, [string, string]> = {
     simple: ["Simple quantity", "සරල තොග ප්‍රමාණය"],
     lot: ["Batch / expiry lots", "බැච් / කල් ඉකුත් තොග"],

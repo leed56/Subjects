@@ -21,7 +21,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           sits on top of the sidebar's brand mark once focused — the sidebar
           spans x:0..16rem on desktop, which a left-anchored skip link would
           overlap. */}
-      <a href="#main-content" className="fixed left-1/2 top-3 z-[120] -translate-x-1/2 -translate-y-20 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white shadow-xl transition focus:translate-y-0">Skip to content / අන්තර්ගතයට යන්න</a>
+      <a href="#main-content" className="fixed left-1/2 top-3 z-[120] -translate-x-1/2 -translate-y-20 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white shadow-xl transition focus:translate-y-0">Skip to content / අන්තර්ගතයට යන්න / உள்ளடக்கத்திற்குச் செல்ல</a>
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileNav />

@@ -85,7 +85,11 @@ const SINHALA_TENDER_ERRORS: Record<string, string> = {
 
 export function TextileSalesPage() {
   const { locale } = useLocale();
-  const copy = TEXTILE_POS_COPY[locale];
+  // TEXTILE_POS_COPY has no `ta` entry yet — the textile sales counter is
+  // the single highest-priority screen still owed real Tamil copy (see the
+  // Tamil-language follow-up note in the dashboard Phase 1 report); falls
+  // back to English rather than indexing a missing key or guessing.
+  const copy = TEXTILE_POS_COPY[locale === "ta" ? "en" : locale];
   const tenderLabel = (kind: string) => ({ cash: copy.cash, card: copy.card, bank_transfer: copy.bankTransfer, cheque: copy.cheque, credit: copy.credit }[kind] ?? kind);
   const tenderError = (error: string) => locale === "si" ? SINHALA_TENDER_ERRORS[error] ?? error : error;
   const priceSourceLabel = (source?: string) => ({ manual: copy.manual, customer: copy.customerPrice, wholesale: copy.wholesalePrice, retail: copy.retailPrice }[source ?? ""] ?? copy.selectRoll);

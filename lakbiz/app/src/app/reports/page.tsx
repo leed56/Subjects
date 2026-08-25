@@ -33,7 +33,7 @@ function periodStartIso(period: Period, now: Date): string | null {
   return start.toISOString().slice(0, 10);
 }
 
-function dayLabel(iso: string, locale: "si" | "en"): string {
+function dayLabel(iso: string, locale: "si" | "en" | "ta"): string {
   return new Date(iso).toLocaleDateString(locale === "si" ? "si-LK" : "en-LK", { day: "numeric", month: "short" });
 }
 

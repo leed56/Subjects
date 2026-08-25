@@ -48,7 +48,7 @@ import { localizedDashboardPreset } from "@/lib/sector-dashboard";
 import { fetchSectorOperationalSnapshot, type SectorOperationalSnapshot } from "@/lib/supabase/sector-dashboard-client";
 import { buildTextileAttentionActions } from "@/components/dashboard/sector-command-center";
 
-type Locale = "si" | "en";
+type Locale = "si" | "en" | "ta";
 type TrendPeriod = "30d" | "3m" | "6m" | "12m";
 type TrendPoint = { key: string; label: string; revenue: number; profit: number };
 
@@ -76,7 +76,7 @@ function getRevenueTrend(sales: Sale[], period: TrendPeriod, locale: Locale): Tr
       const daySales = sales.filter((s) => s.date.startsWith(iso));
       return {
         key: iso,
-        label: d.toLocaleDateString(locale === "si" ? "si-LK" : "en-LK", { day: "numeric", month: "short" }),
+        label: d.toLocaleDateString(localeTag(locale), { day: "numeric", month: "short" }),
         revenue: daySales.reduce((s, x) => s + x.total, 0),
         profit: daySales.reduce((s, x) => s + x.profit, 0),
       };
@@ -89,7 +89,7 @@ function getRevenueTrend(sales: Sale[], period: TrendPeriod, locale: Locale): Tr
     const monthSales = sales.filter((s) => s.date.startsWith(key));
     return {
       key,
-      label: d.toLocaleDateString(locale === "si" ? "si-LK" : "en-LK", { month: "short", year: "2-digit" }),
+      label: d.toLocaleDateString(localeTag(locale), { month: "short", year: "2-digit" }),
       revenue: monthSales.reduce((s, x) => s + x.total, 0),
       profit: monthSales.reduce((s, x) => s + x.profit, 0),
     };
@@ -105,8 +105,26 @@ function assigneeName(job: ACJob, technicians: Technician[], contractors: Contra
   return undefined;
 }
 
+/** Intl locale tag for the active UI locale. "ta-LK" is valid BCP 47 even
+ * where a browser/Node's ICU data lacks Sri-Lanka-specific Tamil overrides —
+ * it falls back to generic "ta" formatting rather than throwing. */
+function localeTag(locale: Locale): string {
+  if (locale === "si") return "si-LK";
+  if (locale === "ta") return "ta-LK";
+  return "en-LK";
+}
+
+/** Small 3-way locale pick for the handful of textile Phase-1 strings below
+ * that aren't (yet) migrated into translations.ts's keyed dictionaries —
+ * shorter than repeating nested ternaries at each call site. */
+function tt(locale: Locale, si: string, en: string, ta: string): string {
+  if (locale === "si") return si;
+  if (locale === "ta") return ta;
+  return en;
+}
+
 function dateHeading(locale: Locale): string {
-  return new Date().toLocaleDateString(locale === "si" ? "si-LK" : "en-LK", {
+  return new Date().toLocaleDateString(localeTag(locale), {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -654,7 +672,13 @@ export default function DashboardPage() {
           actions={
             <>
               <Link href={dashboardPrimary.href} className={primaryButton}>
-                + {textileNoTransactions ? (locale === "si" ? "පළමු රෙදි අලෙවිය සම්පූර්ණ කරන්න" : "Complete first fabric sale") : dashboardPrimary.label}
+                + {textileNoTransactions
+                  ? locale === "si"
+                    ? "පළමු රෙදි අලෙවිය සම්පූර්ණ කරන්න"
+                    : locale === "ta"
+                      ? "முதல் துணி விற்பனையை முடிக்கவும்"
+                      : "Complete first fabric sale"
+                  : dashboardPrimary.label}
               </Link>
               {canSeeJobs && <Link href="/jobs" className={primaryButton}>{t("jobs.new")}</Link>}
               <ActionMenu
@@ -727,13 +751,13 @@ export default function DashboardPage() {
               // dashboard that just finished setup. Show what's actually
               // true instead: operational roll inventory.
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <MetricCard label={locale === "si" ? "සක්‍රීය Rolls" : "Active rolls"} value={textileRollSummary ? String(textileRollSummary.activeRolls) : "—"} hint={locale === "si" ? "විකිණීමට ඇති Rolls" : "Available rolls"} />
-                <MetricCard label={locale === "si" ? "මීටර් ශේෂය" : "Metre balance"} value={textileRollSummary ? textileRollSummary.metres.toFixed(3) : "—"} hint={locale === "si" ? "ඉතිරි මීටර්" : "Remaining metres"} />
-                <MetricCard label={locale === "si" ? "යාර්ඩ් ශේෂය" : "Yard balance"} value={textileRollSummary ? textileRollSummary.yards.toFixed(3) : "—"} hint={locale === "si" ? "ඉතිරි යාර්ඩ්" : "Remaining yards"} />
+                <MetricCard label={tt(locale, "සක්‍රීය Rolls", "Active rolls", "செயலில் உள்ள Rolls")} value={textileRollSummary ? String(textileRollSummary.activeRolls) : "—"} hint={tt(locale, "විකිණීමට ඇති Rolls", "Available rolls", "கிடைக்கும் Rolls")} />
+                <MetricCard label={tt(locale, "මීටර් ශේෂය", "Metre balance", "மீட்டர் இருப்பு")} value={textileRollSummary ? textileRollSummary.metres.toFixed(3) : "—"} hint={tt(locale, "ඉතිරි මීටර්", "Remaining metres", "மீதமுள்ள மீட்டர்கள்")} />
+                <MetricCard label={tt(locale, "යාර්ඩ් ශේෂය", "Yard balance", "யார்டு இருப்பு")} value={textileRollSummary ? textileRollSummary.yards.toFixed(3) : "—"} hint={tt(locale, "ඉතිරි යාර්ඩ්", "Remaining yards", "மீதமுள்ள யார்டுகள்")} />
                 <MetricCard
-                  label={locale === "si" ? "ඉතිරි කැබලි" : "Remnants"}
+                  label={tt(locale, "ඉතිරි කැබලි", "Remnants", "மீதிகள்")}
                   value={textileRollSummary ? String(textileRollSummary.remnants) : "—"}
-                  hint={locale === "si" ? "සමාලෝචනය කරන්න" : "Worth reviewing"}
+                  hint={tt(locale, "සමාලෝචනය කරන්න", "Worth reviewing", "மறுபரிசீலனை செய்யத் தகுந்தது")}
                   tone={textileRollSummary && textileRollSummary.remnants > 0 ? "warning" : "default"}
                 />
               </div>
@@ -827,13 +851,16 @@ export default function DashboardPage() {
                 href="/settings/team"
                 className="flex min-h-11 items-center justify-between rounded-lg border border-dashed border-slate-300 px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:border-teal-300 hover:bg-teal-50/40 hover:text-slate-900"
               >
-                <span>{locale === "si" ? "බැංකු සහ බදු තොරතුරු සකසන්න" : "Set up banking and tax"}</span>
+                <span>{tt(locale, "බැංකු සහ බදු තොරතුරු සකසන්න", "Set up banking and tax", "வங்கி மற்றும் வரி தகவலை அமைக்கவும்")}</span>
                 <span aria-hidden="true">→</span>
               </Link>
               <p className="text-xs text-slate-400">
-                {locale === "si"
-                  ? "පළමු අලෙවියෙන් සහ එකතු කිරීමෙන් පසු මෙම කොටස ස්වයංක්‍රීයව සක්‍රීය වේ."
-                  : "This section activates automatically once the first sale and collection exist."}
+                {tt(
+                  locale,
+                  "පළමු අලෙවියෙන් සහ එකතු කිරීමෙන් පසු මෙම කොටස ස්වයංක්‍රීයව සක්‍රීය වේ.",
+                  "This section activates automatically once the first sale and collection exist.",
+                  "முதல் விற்பனை மற்றும் வசூலிப்பு நடந்தவுடன் இந்தப் பகுதி தானாகவே செயல்படும்.",
+                )}
               </p>
             </Card>
           ) : null}

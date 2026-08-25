@@ -24,7 +24,7 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const saved = localStorage.getItem(LOCALE_KEY) as Locale | null;
-    if (saved === "si" || saved === "en") {
+    if (saved === "si" || saved === "en" || saved === "ta") {
       setLocaleState(saved);
     }
     setReady(true);
@@ -32,7 +32,7 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!ready) return;
-    document.documentElement.lang = locale === "si" ? "si" : "en";
+    document.documentElement.lang = locale;
     localStorage.setItem(LOCALE_KEY, locale);
   }, [locale, ready]);
 

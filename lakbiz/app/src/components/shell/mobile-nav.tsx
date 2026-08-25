@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { AcAlertsBell } from "@/components/ac-alerts-bell";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { LOCALE_NAMES, nextLocale } from "@/lib/i18n/translations";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useShopNav } from "@/components/shell/use-shop-nav";
 import { NAV_ICON_BY_HREF } from "@/components/shell/nav-icons";
@@ -13,7 +14,7 @@ import { MenuIcon, CloseIcon, SettingsIcon, SignOutIcon } from "@/components/ui/
 import { initialsFor } from "@/lib/format";
 import type { NavItem } from "@/lib/nav-sections";
 
-function navLabel(item: NavItem, locale: "si" | "en", t: (key: string) => string): string {
+function navLabel(item: NavItem, locale: "si" | "en" | "ta", t: (key: string) => string): string {
   if (locale === "si" && item.labelSi) return item.labelSi;
   if (locale === "en" && item.labelEn) return item.labelEn;
   return item.labelKey ? t(item.labelKey) : item.labelEn ?? item.labelSi ?? item.href;
@@ -121,7 +122,7 @@ export function MobileNav() {
         </Link>
         <div className="flex items-center gap-2">
           <AcAlertsBell />
-          <button type="button" onClick={() => setLocale(locale === "si" ? "en" : "si")} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 shadow-sm">{t("nav.lang")}</button>
+          <button type="button" onClick={() => setLocale(nextLocale(locale))} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 shadow-sm">{LOCALE_NAMES[nextLocale(locale)]}</button>
           <button type="button" aria-label="Open menu" onClick={openDrawer} className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-950 text-white shadow-sm"><MenuIcon className="h-5 w-5" /></button>
         </div>
       </header>

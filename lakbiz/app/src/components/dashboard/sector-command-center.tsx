@@ -34,9 +34,18 @@ type SectorModel = {
  * any other textile exception) can never be reported by one surface while
  * the other claims operations are clear — see docs, dashboard Phase 1 fix.
  */
+/** Local 3-way locale pick — see the identical helper's docstring in
+ * dashboard/page.tsx; kept duplicated rather than shared to avoid a new
+ * cross-file import for a two-line function. */
+function tt(locale: "si" | "en" | "ta", si: string, en: string, ta: string): string {
+  if (locale === "si") return si;
+  if (locale === "ta") return ta;
+  return en;
+}
+
 export function buildTextileAttentionActions(
   snapshot: SectorOperationalSnapshot,
-  locale: "si" | "en",
+  locale: "si" | "en" | "ta",
 ): Action[] {
   const held = snapshot.textileRolls.filter((roll) => roll.status === "quarantined").length;
   const workflow = snapshot.textileWorkflow;
@@ -44,11 +53,13 @@ export function buildTextileAttentionActions(
   if (held) {
     actions.push({
       key: "roll-holds",
-      title: locale === "si" ? `Roll ${held}ක් රඳවා ඇත` : `${held} roll${held === 1 ? "" : "s"} quarantined`,
-      detail:
-        locale === "si"
-          ? "විකිණීමට පෙර තත්ත්ව හෝ ලැබීමේ ගැටලු විසඳන්න."
-          : "Resolve quality or receiving issues before these rolls return to sellable stock.",
+      title: tt(locale, `Roll ${held}ක් රඳවා ඇත`, `${held} roll${held === 1 ? "" : "s"} quarantined`, `${held} Rolls தனிமைப்படுத்தப்பட்டுள்ளன`),
+      detail: tt(
+        locale,
+        "විකිණීමට පෙර තත්ත්ව හෝ ලැබීමේ ගැටලු විසඳන්න.",
+        "Resolve quality or receiving issues before these rolls return to sellable stock.",
+        "இந்த Rolls விற்பனைக்குத் திரும்புவதற்கு முன் தரம் அல்லது பெறுதல் சிக்கல்களைத் தீர்க்கவும்.",
+      ),
       href: "/stock/rolls",
       tone: "danger",
     });
@@ -56,14 +67,18 @@ export function buildTextileAttentionActions(
   if (workflow.overdueReceivables) {
     actions.push({
       key: "overdue-credit",
-      title:
-        locale === "si"
-          ? `පැහැර හැරුණු ලැබිය යුතු ${workflow.overdueReceivables}ක්`
-          : `${workflow.overdueReceivables} overdue receivable${workflow.overdueReceivables === 1 ? "" : "s"}`,
-      detail:
-        locale === "si"
-          ? `${formatLkr(workflow.overdueAmount)} එකතු කිරීම අවශ්‍යයි.`
-          : `${formatLkr(workflow.overdueAmount)} needs collection follow-up.`,
+      title: tt(
+        locale,
+        `පැහැර හැරුණු ලැබිය යුතු ${workflow.overdueReceivables}ක්`,
+        `${workflow.overdueReceivables} overdue receivable${workflow.overdueReceivables === 1 ? "" : "s"}`,
+        `${workflow.overdueReceivables} தாமதமான பெறத்தக்கவை`,
+      ),
+      detail: tt(
+        locale,
+        `${formatLkr(workflow.overdueAmount)} එකතු කිරීම අවශ්‍යයි.`,
+        `${formatLkr(workflow.overdueAmount)} needs collection follow-up.`,
+        `${formatLkr(workflow.overdueAmount)} வசூலிப்பு பின்தொடர்தல் தேவை.`,
+      ),
       href: "/textile/trade-control",
       tone: "danger",
     });
@@ -71,8 +86,18 @@ export function buildTextileAttentionActions(
   if (workflow.pendingCuts) {
     actions.push({
       key: "pending-cuts",
-      title: locale === "si" ? `කැපීම් ${workflow.pendingCuts}ක් රැඳී ඇත` : `${workflow.pendingCuts} cut${workflow.pendingCuts === 1 ? "" : "s"} waiting`,
-      detail: locale === "si" ? "යැවීමට පෙර මිනුම් කැපීම් සම්පූර්ණ කරන්න." : "Complete measured cuts before warehouse dispatch.",
+      title: tt(
+        locale,
+        `කැපීම් ${workflow.pendingCuts}ක් රැඳී ඇත`,
+        `${workflow.pendingCuts} cut${workflow.pendingCuts === 1 ? "" : "s"} waiting`,
+        `${workflow.pendingCuts} வெட்டுகள் காத்திருக்கின்றன`,
+      ),
+      detail: tt(
+        locale,
+        "යැවීමට පෙර මිනුම් කැපීම් සම්පූර්ණ කරන්න.",
+        "Complete measured cuts before warehouse dispatch.",
+        "கிடங்கு அனுப்புமுன் அளவிடப்பட்ட வெட்டுகளை முடிக்கவும்.",
+      ),
       href: "/stock/cutting",
       tone: "warning",
     });
@@ -80,11 +105,18 @@ export function buildTextileAttentionActions(
   if (workflow.pendingDispatches) {
     actions.push({
       key: "pending-dispatches",
-      title:
-        locale === "si"
-          ? `යැවීම් ${workflow.pendingDispatches}ක් ක්‍රියාවලියේ ඇත`
-          : `${workflow.pendingDispatches} dispatch${workflow.pendingDispatches === 1 ? "" : "es"} in progress`,
-      detail: locale === "si" ? "රැගෙන යාම, ඇසුරුම් හෝ බෙදාහැරීම තහවුරු කිරීම දිගටම කරගෙන යන්න." : "Continue pick, pack or delivery confirmation.",
+      title: tt(
+        locale,
+        `යැවීම් ${workflow.pendingDispatches}ක් ක්‍රියාවලියේ ඇත`,
+        `${workflow.pendingDispatches} dispatch${workflow.pendingDispatches === 1 ? "" : "es"} in progress`,
+        `${workflow.pendingDispatches} அனுப்புகைகள் நடைபெறுகின்றன`,
+      ),
+      detail: tt(
+        locale,
+        "රැගෙන යාම, ඇසුරුම් හෝ බෙදාහැරීම තහවුරු කිරීම දිගටම කරගෙන යන්න.",
+        "Continue pick, pack or delivery confirmation.",
+        "எடுத்தல், பொதிதல் அல்லது டெலிவரி உறுதிப்படுத்தலைத் தொடரவும்.",
+      ),
       href: "/stock/dispatch",
       tone: "warning",
     });
@@ -219,7 +251,7 @@ function buildSectorModel(
   snapshot: SectorOperationalSnapshot,
   now: Date,
   canSeeFinancials: boolean,
-  locale: "si" | "en",
+  locale: "si" | "en" | "ta",
 ): SectorModel {
   if (sector === "grocery" || sector === "electricals" || sector === "spare_parts") {
     return retailVelocityModel(data, sector, now);
@@ -704,7 +736,7 @@ export function SectorCommandCenter() {
                           {group.count} × {type.replaceAll("_", " ")}
                         </p>
                         <p className="shrink-0 text-xs text-slate-400">
-                          {new Date(group.latest).toLocaleString(locale === "si" ? "si-LK" : "en-LK", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          {new Date(group.latest).toLocaleString(locale === "si" ? "si-LK" : locale === "ta" ? "ta-LK" : "en-LK", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                         </p>
                       </li>
                     ))}
@@ -715,7 +747,9 @@ export function SectorCommandCenter() {
                     className="mt-2 text-xs font-semibold text-teal-700 hover:underline"
                     aria-expanded={activityExpanded}
                   >
-                    {activityExpanded ? (locale === "si" ? "අඩු විස්තර" : "Hide details") : (locale === "si" ? "නවතම විස්තර පෙන්වන්න" : "Show latest details")}
+                    {activityExpanded
+                      ? tt(locale, "අඩු විස්තර", "Hide details", "விவரங்களை மறை")
+                      : tt(locale, "නවතම විස්තර පෙන්වන්න", "Show latest details", "சமீபத்திய விவரங்களைக் காட்டு")}
                   </button>
                   {activityExpanded && (
                     <ul className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { LOCALE_NAMES, nextLocale } from "@/lib/i18n/translations";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useShopNav } from "@/components/shell/use-shop-nav";
 import { NAV_ICON_BY_HREF } from "@/components/shell/nav-icons";
@@ -11,13 +12,13 @@ import { SettingsIcon, SignOutIcon } from "@/components/ui/icons";
 import { initialsFor } from "@/lib/format";
 import type { NavItem } from "@/lib/nav-sections";
 
-function navLabel(item: NavItem, locale: "si" | "en", t: (key: string) => string): string {
+function navLabel(item: NavItem, locale: "si" | "en" | "ta", t: (key: string) => string): string {
   if (locale === "si" && item.labelSi) return item.labelSi;
   if (locale === "en" && item.labelEn) return item.labelEn;
   return item.labelKey ? t(item.labelKey) : item.labelEn ?? item.labelSi ?? item.href;
 }
 
-function NavLink({ item, active, locale, t }: { item: NavItem; active: boolean; locale: "si" | "en"; t: (key: string) => string }) {
+function NavLink({ item, active, locale, t }: { item: NavItem; active: boolean; locale: "si" | "en" | "ta"; t: (key: string) => string }) {
   const Icon = NAV_ICON_BY_HREF[item.href] ?? SettingsIcon;
   return (
     <Link
@@ -42,7 +43,7 @@ function NavLink({ item, active, locale, t }: { item: NavItem; active: boolean; 
  * brand anchor and quiet inactive states so the content remains primary. */
 export function Sidebar() {
   const pathname = usePathname();
-  const { locale, t } = useLocale();
+  const { locale, setLocale, t } = useLocale();
   const { user, logout } = useAuth();
   const { isPlatformAdmin, org } = useSubscription();
   const { sections, managementItems } = useShopNav();
@@ -110,8 +111,18 @@ export function Sidebar() {
             </div>
           </div>
         </div>
+        {/* Desktop had no language control at all before this — only the
+            mobile top bar could switch locale. Cycles si → en → ta → si. */}
+        <button
+          type="button"
+          onClick={() => setLocale(nextLocale(locale))}
+          className="mt-2.5 flex min-h-10 w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-white/[0.06] hover:text-slate-200"
+        >
+          <span>{LOCALE_NAMES[locale]}</span>
+          <span className="text-xs font-semibold text-teal-300/80">{LOCALE_NAMES[nextLocale(locale)]} →</span>
+        </button>
         {user && (
-          <button type="button" onClick={handleLogout} className="mt-2.5 flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-rose-500/10 hover:text-rose-300">
+          <button type="button" onClick={handleLogout} className="mt-1.5 flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-rose-500/10 hover:text-rose-300">
             <SignOutIcon className="h-4 w-4" />{t("sub.sign_out")}
           </button>
         )}

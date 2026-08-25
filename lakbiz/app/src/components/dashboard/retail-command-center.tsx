@@ -491,7 +491,11 @@ function FinancialStrip({ intel, text }: { intel: RetailDashboardIntelligence; t
 export function RetailCommandCenter({ data, sector }: { data: AppData; sector: RetailSector }) {
   const { locale } = useLocale();
   const { org, canSeeFinancials, isReadOnly } = useSubscription();
-  const text = copy[locale];
+  // No Tamil copy yet for this retail (pharmacy/grocery/mobile/electronics/
+  // footwear) command centre — falls back to English rather than indexing
+  // a `ta` key that doesn't exist. Not translated to Sinhala either; this
+  // is a real, tracked coverage gap, not a silent mistranslation.
+  const text = copy[locale === "ta" ? "en" : locale];
   const [referenceDate] = useState(() => new Date());
   const [lots, setLots] = useState<RetailLotSnapshot[]>([]);
   const [lotError, setLotError] = useState<string | null>(null);
