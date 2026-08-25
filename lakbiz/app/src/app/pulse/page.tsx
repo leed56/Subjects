@@ -64,6 +64,31 @@ function formatCompactLkr(amount: number): string {
   return `Rs. ${compact}`;
 }
 
+/**
+ * Illustrative numbers only — shown exclusively when noTransactionsYet is
+ * true, always behind the "Sample preview" banner below, and never written
+ * anywhere real numbers are read from (getDashboardStats, the snapshot,
+ * etc). This exists purely so a brand-new owner can see what Business
+ * Pulse looks like once it has something to show, per explicit request —
+ * it must never be reachable once a real sale exists.
+ */
+const SAMPLE_PULSE = {
+  netSales: 4_820_000,
+  salesChangePct: 12,
+  grossProfit: 1_160_000,
+  marginPct: 24,
+  cashCollected: 3_740_000,
+  cashChangePct: 9,
+  receivables: 1_080_000,
+  receivablesOverdue: 286_000,
+  stockValue: 8_640_000,
+  stockValueChangePct: 6,
+  sparkline: [3.9, 4.15, 3.75, 4.3, 4.0, 4.55, 4.25, 4.82].map((m) => m * 1_000_000),
+  todaySaleCount: 12,
+  todaySalesValue: 684_500,
+  todayCollected: 512_000,
+};
+
 /** Same collection formula getDashboardStats() uses for "payments received
  * today" (see actions.ts) — creditAmount is binary in this data model, so
  * total - creditAmount is exactly what was actually collected — just
@@ -409,76 +434,104 @@ export default function BusinessPulsePage() {
         </p>
       )}
 
-      {/* Hero — Business pulse. */}
-      {noTransactionsYet ? (
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-8">
-          <p className="text-xs font-semibold text-slate-500">{tt(locale, "ව්‍යාපාර ස්පන්දනය", "Business pulse", "வணிக துடிப்பு")}</p>
-          <p className="mt-2 text-xl font-bold tracking-[-0.02em] text-slate-950">
-            {tt(locale, "ඔබේ තොගය සූදානම්", "Your inventory is ready", "உங்கள் சரக்கு தயார்")}
-          </p>
-          <p className="mt-1.5 max-w-md text-sm leading-6 text-slate-500">
+      {/* Sample-preview banner — the one, unmistakable disclosure that
+          everything inside the hero, the stat row and Today-at-a-glance
+          below is illustrative (SAMPLE_PULSE), not real, until a first
+          sale exists. Needs Attention and Roll inventory are NOT covered
+          by this banner because they're already real. */}
+      {noTransactionsYet && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5">
+          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[10px] font-black text-white">i</span>
+          <p className="text-xs leading-5 text-amber-900">
+            <span className="font-bold">{tt(locale, "නියැදි දත්ත", "Sample preview", "மாதிரி முன்னோட்டம்")}</span>{" "}
             {tt(
               locale,
-              `Rolls ${rollSummary?.activeRolls ?? 0}ක් තොගයේ ඇත. පළමු අලෙවියෙන් පසු ලාභය, එකතු කළ මුදල් සහ ප්‍රවණතාව මෙහි දිස්වේ.`,
-              `${rollSummary?.activeRolls ?? 0} rolls are stocked and ready to sell. Profit, cash collected and the trend line show up here the moment your first sale is recorded.`,
-              `${rollSummary?.activeRolls ?? 0} Rolls சரக்கில் தயாராக உள்ளன. முதல் விற்பனை பதிவான உடனேயே லாபம், வசூலிக்கப்பட்ட பணம் மற்றும் போக்கு இங்கே தோன்றும்.`,
+              "පහත ව්‍යාපාර ස්පන්දනය, ලාභය සහ අද දිනය කොටස් නියැදි ගණන් පෙන්වයි — ඔබේ පළමු අලෙවියෙන් පසු සැබෑ ගණන් වලින් ප්‍රතිස්ථාපනය වේ. Roll තොගය සහ අවධානය අවශ්‍ය කොටස් සැබෑය.",
+              "The pulse, profit and Today sections below show sample numbers — they're replaced by your real figures after your first sale. Roll inventory and Needs attention are already real.",
+              "கீழே உள்ள துடிப்பு, லாபம் மற்றும் இன்று பிரிவுகள் மாதிரி எண்களைக் காட்டுகின்றன — உங்கள் முதல் விற்பனைக்குப் பிறகு உண்மையான எண்களால் மாற்றப்படும். Roll சரக்கு மற்றும் கவனம் தேவை பிரிவுகள் ஏற்கனவே உண்மையானவை.",
             )}
           </p>
-          <Link
-            href="/sales"
-            className="mt-4 inline-flex h-10 items-center gap-1.5 rounded-xl bg-teal-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-teal-700"
-          >
-            + {tt(locale, "නව රෙදි අලෙවියක්", "New fabric sale", "புதிய துணி விற்பனை")}
-          </Link>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-500">{tt(locale, "ව්‍යාපාර ස්පන්දනය", "Business pulse", "வணிக துடிப்பு")}</p>
-              <p className="mt-1.5 text-[2.1rem] font-bold leading-none tracking-[-0.03em] text-slate-950 sm:text-4xl">{formatCompactLkr(selected.revenue)}</p>
-              <p className="mt-1.5 text-xs font-medium text-slate-500">{tt(locale, "නිකුත් අලෙවිය", "Net sales", "நிகர விற்பனை")}</p>
-              {salesChangePct != null && (
-                <p className={`mt-2 flex items-center gap-1 text-sm font-bold ${salesUp ? "text-emerald-700" : "text-rose-700"}`}>
-                  {salesUp ? "↑" : "↓"} {Math.abs(salesChangePct)}%
-                  <span className="font-medium text-slate-400">{tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}</span>
-                </p>
-              )}
-            </div>
-            <Sparkline values={sparklineValues} stroke="#0d9488" />
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
-            <div>
-              <p className="text-xs font-semibold text-slate-500">{tt(locale, "දළ ලාභය", "Gross profit", "மொத்த லாபம்")}</p>
-              <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-950">{formatCompactLkr(selected.profit)}</p>
-              <p className="mt-0.5 text-xs font-medium text-emerald-700">{marginPct}% {tt(locale, "ආන්තිකය", "margin", "விளிம்பு")}</p>
-            </div>
-            <div className="border-l border-slate-100 pl-4">
-              <p className="text-xs font-semibold text-slate-500">{tt(locale, "එකතු කළ මුදල්", "Cash collected", "வசூலிக்கப்பட்ட பணம்")}</p>
-              <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-950">{formatCompactLkr(cashCollected)}</p>
-              {cashChangePct != null && (
-                <p className={`mt-0.5 text-xs font-medium ${cashChangePct >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                  {cashChangePct >= 0 ? "↑" : "↓"} {Math.abs(cashChangePct)}% {tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}
-                </p>
-              )}
-            </div>
-          </div>
         </div>
       )}
 
-      {/* Stat carousel — real, unit-safe figures only (see StatCard docstring). */}
+      {/* Hero — Business pulse. */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-slate-500">{tt(locale, "ව්‍යාපාර ස්පන්දනය", "Business pulse", "வணிக துடிப்பு")}</p>
+            <p className="mt-1.5 text-[2.1rem] font-bold leading-none tracking-[-0.03em] text-slate-950 sm:text-4xl">
+              {formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.netSales : selected.revenue)}
+            </p>
+            <p className="mt-1.5 text-xs font-medium text-slate-500">{tt(locale, "නිකුත් අලෙවිය", "Net sales", "நிகர விற்பனை")}</p>
+            {(noTransactionsYet || salesChangePct != null) && (
+              <p className={`mt-2 flex items-center gap-1 text-sm font-bold ${noTransactionsYet || salesUp ? "text-emerald-700" : "text-rose-700"}`}>
+                ↑ {Math.abs(noTransactionsYet ? SAMPLE_PULSE.salesChangePct : (salesChangePct ?? 0))}%
+                <span className="font-medium text-slate-400">{tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}</span>
+              </p>
+            )}
+          </div>
+          <Sparkline values={noTransactionsYet ? SAMPLE_PULSE.sparkline : sparklineValues} stroke="#0d9488" />
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
+          <div>
+            <p className="text-xs font-semibold text-slate-500">{tt(locale, "දළ ලාභය", "Gross profit", "மொத்த லாபம்")}</p>
+            <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-950">
+              {formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.grossProfit : selected.profit)}
+            </p>
+            <p className="mt-0.5 text-xs font-medium text-emerald-700">
+              {noTransactionsYet ? SAMPLE_PULSE.marginPct : marginPct}% {tt(locale, "ආන්තිකය", "margin", "விளிம்பு")}
+            </p>
+          </div>
+          <div className="border-l border-slate-100 pl-4">
+            <p className="text-xs font-semibold text-slate-500">{tt(locale, "එකතු කළ මුදල්", "Cash collected", "வசூலிக்கப்பட்ட பணம்")}</p>
+            <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-950">
+              {formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.cashCollected : cashCollected)}
+            </p>
+            {(noTransactionsYet || cashChangePct != null) && (
+              <p className="mt-0.5 text-xs font-medium text-emerald-700">
+                ↑ {Math.abs(noTransactionsYet ? SAMPLE_PULSE.cashChangePct : (cashChangePct ?? 0))}% {tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {noTransactionsYet && (
+        <p className="-mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          {tt(
+            locale,
+            `සැබෑ Rolls ${rollSummary?.activeRolls ?? 0}ක් තොගයේ ඇත — විකිණීමට සූදානම්.`,
+            `${rollSummary?.activeRolls ?? 0} real rolls are stocked and ready to sell.`,
+            `உண்மையான ${rollSummary?.activeRolls ?? 0} Rolls சரக்கில் தயாராக உள்ளன.`,
+          )}
+        </p>
+      )}
+
+      {/* Stat carousel. Receivables and Stock value use SAMPLE_PULSE while
+          noTransactionsYet (covered by the banner above); Reservations and
+          Quality holds are always real — see StatCard's docstring for why
+          they never carry a fabricated trend line either way. */}
       <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
         <StatCard
           label={tt(locale, "ලැබිය යුතු මුදල්", "Receivables", "பெறத்தக்கவை")}
-          value={formatCompactLkr(stats.creditOutstanding)}
+          value={formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.receivables : stats.creditOutstanding)}
           hint={
-            textileSnapshot && textileSnapshot.textileWorkflow.overdueAmount > 0
-              ? tt(locale, `${formatCompactLkr(textileSnapshot.textileWorkflow.overdueAmount)} පැහැර හැරී ඇත`, `${formatCompactLkr(textileSnapshot.textileWorkflow.overdueAmount)} overdue`, `${formatCompactLkr(textileSnapshot.textileWorkflow.overdueAmount)} தாமதமானது`)
-              : tt(locale, "පැහැර හැරීම් නැත", "None overdue", "தாமதம் இல்லை")
+            noTransactionsYet
+              ? tt(locale, `${formatCompactLkr(SAMPLE_PULSE.receivablesOverdue)} පැහැර හැරී ඇත`, `${formatCompactLkr(SAMPLE_PULSE.receivablesOverdue)} overdue`, `${formatCompactLkr(SAMPLE_PULSE.receivablesOverdue)} தாமதமானது`)
+              : textileSnapshot && textileSnapshot.textileWorkflow.overdueAmount > 0
+                ? tt(locale, `${formatCompactLkr(textileSnapshot.textileWorkflow.overdueAmount)} පැහැර හැරී ඇත`, `${formatCompactLkr(textileSnapshot.textileWorkflow.overdueAmount)} overdue`, `${formatCompactLkr(textileSnapshot.textileWorkflow.overdueAmount)} தாமதமானது`)
+                : tt(locale, "පැහැර හැරීම් නැත", "None overdue", "தாமதம் இல்லை")
           }
-          tone={textileSnapshot && textileSnapshot.textileWorkflow.overdueAmount > 0 ? "danger" : "default"}
+          tone={noTransactionsYet || (textileSnapshot && textileSnapshot.textileWorkflow.overdueAmount > 0) ? "danger" : "default"}
         />
+        {noTransactionsYet && (
+          <StatCard
+            label={tt(locale, "තොග වටිනාකම", "Stock value", "சரக்கு மதிப்பு")}
+            value={formatCompactLkr(SAMPLE_PULSE.stockValue)}
+            hint={`↑ ${SAMPLE_PULSE.stockValueChangePct}% ${tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}`}
+          />
+        )}
         <StatCard
           label={tt(locale, "සක්‍රීය වෙන්කිරීම්", "Reservations", "முன்பதிவுகள்")}
           value={textileSnapshot ? String(textileSnapshot.textileWorkflow.activeReservations) : "—"}
@@ -546,44 +599,40 @@ export default function BusinessPulsePage() {
         </div>
       </div>
 
-      {/* Today at a glance — three real "today" figures already computed
-          by getDashboardStats() for the operational dashboard. The
-          reference mockup's third tile was a same-day cut count; no
-          reliably real, date-scoped "cuts today" figure exists yet (the
-          workflow snapshot only tracks currently-pending cuts, not a
-          completed-today count), so this uses payments collected today
-          instead — real, not a placeholder. */}
+      {/* Today at a glance — real "today" figures from getDashboardStats()
+          while a real sale exists; SAMPLE_PULSE (covered by the banner
+          above) while noTransactionsYet. The reference mockup's third
+          tile was a same-day cut count; no reliably real, date-scoped
+          "cuts today" figure exists yet (the workflow snapshot only
+          tracks currently-pending cuts, not a completed-today count), so
+          the real state uses payments collected today instead. */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
         <h2 className="mb-3 text-base font-bold tracking-tight text-slate-900">{tt(locale, "අද දිනය", "Today at a glance", "இன்று ஒரு பார்வையில்")}</h2>
         <div className="grid grid-cols-3 gap-3">
           <div>
-            <p className="text-lg font-bold text-slate-950">{stats.saleCount}</p>
+            <p className="text-lg font-bold text-slate-950">{noTransactionsYet ? SAMPLE_PULSE.todaySaleCount : stats.saleCount}</p>
             <p className="text-xs text-slate-500">{tt(locale, "අද අලෙවි", "Sales today", "இன்று விற்பனை")}</p>
           </div>
           <div>
-            <p className="text-lg font-bold text-slate-950">{formatCompactLkr(stats.todaySales)}</p>
+            <p className="text-lg font-bold text-slate-950">{formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.todaySalesValue : stats.todaySales)}</p>
             <p className="text-xs text-slate-500">{tt(locale, "අද අලෙවි අගය", "Sales value", "விற்பனை மதிப்பு")}</p>
           </div>
           <div>
-            <p className="text-lg font-bold text-slate-950">{formatCompactLkr(stats.paymentsReceivedToday)}</p>
+            <p className="text-lg font-bold text-slate-950">{formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.todayCollected : stats.paymentsReceivedToday)}</p>
             <p className="text-xs text-slate-500">{tt(locale, "අද එකතු කළ", "Collected today", "இன்று வசூலிக்கப்பட்டது")}</p>
           </div>
         </div>
       </div>
 
-      {/* Primary actions. New fabric sale is skipped here when
-          noTransactionsYet — the hero above already puts that exact same
-          CTA in front of the owner; repeating it a few inches later reads
-          as a mistake, not confidence. */}
+      {/* Primary actions — always both, matching the reference layout;
+          the hero no longer carries its own inline CTA. */}
       <div className="space-y-2 pb-2">
-        {!noTransactionsYet && (
-          <Link
-            href="/sales"
-            className="flex min-h-12 w-full items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-teal-700"
-          >
-            + {tt(locale, "නව රෙදි අලෙවියක්", "New fabric sale", "புதிய துணி விற்பனை")}
-          </Link>
-        )}
+        <Link
+          href="/sales"
+          className="flex min-h-12 w-full items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-teal-700"
+        >
+          + {tt(locale, "නව රෙදි අලෙවියක්", "New fabric sale", "புதிய துணி விற்பனை")}
+        </Link>
         <Link
           href="/stock/rolls?receive=1"
           className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
