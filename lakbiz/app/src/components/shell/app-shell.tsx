@@ -17,7 +17,11 @@ import { MobileNav } from "@/components/shell/mobile-nav";
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-full bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.055),transparent_28rem),radial-gradient(circle_at_95%_12%,rgba(56,189,248,0.035),transparent_26rem),linear-gradient(180deg,#f5f8fc_0%,#edf3f8_100%)] text-slate-950">
-      <a href="#main-content" className="fixed left-3 top-3 z-[120] -translate-y-20 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white shadow-xl transition focus:translate-y-0">Skip to content / අන්තර්ගතයට යන්න</a>
+      {/* Centred at the top of the viewport (not left-anchored) so it never
+          sits on top of the sidebar's brand mark once focused — the sidebar
+          spans x:0..16rem on desktop, which a left-anchored skip link would
+          overlap. */}
+      <a href="#main-content" className="fixed left-1/2 top-3 z-[120] -translate-x-1/2 -translate-y-20 rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white shadow-xl transition focus:translate-y-0">Skip to content / අන්තර්ගතයට යන්න</a>
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileNav />

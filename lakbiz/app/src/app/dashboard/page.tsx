@@ -45,6 +45,8 @@ import { canAccessShopRoute } from "@/lib/org-role/permissions";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
 import { computeJobProfitability, isLowMarginJob, type JobLinkedExpense } from "@/lib/job-profitability";
 import { localizedDashboardPreset } from "@/lib/sector-dashboard";
+import { fetchSectorOperationalSnapshot, type SectorOperationalSnapshot } from "@/lib/supabase/sector-dashboard-client";
+import { buildTextileAttentionActions } from "@/components/dashboard/sector-command-center";
 
 type Locale = "si" | "en";
 type TrendPeriod = "30d" | "3m" | "6m" | "12m";
@@ -196,6 +198,27 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, [showAcJobs, canSeeFinancials, org.isAuthenticated, org.id]);
+
+  // Textile roll/quarantine/receivable snapshot — same fetch the sector
+  // command centre makes (see sector-command-center.tsx), read here too so
+  // the dashboard's own "Needs Attention" card can report the exact same
+  // exceptions (via buildTextileAttentionActions) instead of a second,
+  // independently-derived — and potentially contradictory — list. Gated
+  // identically to the command centre's own effect.
+  const [textileSnapshot, setTextileSnapshot] = useState<SectorOperationalSnapshot | null>(null);
+  useEffect(() => {
+    if (org.sector !== "textile" || !org.isAuthenticated || !org.id) {
+      setTextileSnapshot(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchSectorOperationalSnapshot(org.id, org.sector, canSeeFinancials).then((result) => {
+      if (!cancelled) setTextileSnapshot(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [canSeeFinancials, org.id, org.isAuthenticated, org.sector]);
 
   if (!ready || !data) {
     return (
@@ -423,9 +446,49 @@ export default function DashboardPage() {
   const trendProfitTotal = trend.reduce((s, p) => s + p.profit, 0);
   const trendAvgMargin = trendRevenueTotal > 0 ? Math.round((trendProfitTotal / trendRevenueTotal) * 100) : 0;
 
+  // Dashboard state model (textile) — distinguishes "master data/rolls
+  // exist but nothing has actually been sold or collected yet" from real
+  // operating activity, so the top KPI row and financial snapshot below
+  // don't show a wall of meaningless zeros for an org that just finished
+  // fixture/onboarding setup. data.sales is the same source SectorCommandCenter
+  // already uses for "Complete the first fabric sale" (see its milestones),
+  // so this stays consistent with that component rather than inventing a
+  // second definition of "no transactions yet".
+  const textileHasCatalog =
+    org.sector === "textile" &&
+    (data.products.some((p) => p.sectorId === "textile" && p.active) || (textileSnapshot?.textileRolls.length ?? 0) > 0);
+  const textileNoTransactions = textileHasCatalog && data.sales.length === 0;
+  // Roll-inventory summary shown instead of the generic (and, before any
+  // sale exists, entirely-zero) sales/profit/payments KPIs — same
+  // metre/yard split SectorCommandCenter already uses, kept separate per
+  // the "never add metres and yards" rule.
+  const textileRollSummary = textileSnapshot
+    ? (() => {
+        const live = textileSnapshot.textileRolls.filter((roll) => !["exhausted", "returned"].includes(roll.status));
+        return {
+          activeRolls: live.length,
+          metres: live.filter((r) => r.lengthUnit === "metre").reduce((sum, r) => sum + r.remainingLength, 0),
+          yards: live.filter((r) => r.lengthUnit === "yard").reduce((sum, r) => sum + r.remainingLength, 0),
+          remnants: textileSnapshot.textileWorkflow.remnants,
+        };
+      })()
+    : null;
+
   // Needs Attention — only real, currently-true items, most severe first.
   type Alert = { key: string; title: string; description: string; actionLabel: string; actionHref: string; tone: "danger" | "warning" };
   const alerts: Alert[] = [];
+  if (org.sector === "textile" && textileSnapshot) {
+    for (const action of buildTextileAttentionActions(textileSnapshot, locale)) {
+      alerts.push({
+        key: action.key,
+        title: action.title,
+        description: action.detail,
+        actionLabel: t("dash.view"),
+        actionHref: action.href,
+        tone: action.tone,
+      });
+    }
+  }
   if (canSeeJobs && stats.todayJobsUnassignedCount > 0) {
     alerts.push({
       key: "unassigned",
@@ -590,7 +653,9 @@ export default function DashboardPage() {
           description={`${dashboardPreset.subtitle} · ${dateHeading(locale)}${org.isAuthenticated ? ` · ${t("dash.cloud_synced")}` : ` · ${t("common.saved_browser")}`}${isReadOnly ? ` · ${t("sub.read_only")}` : ""}`}
           actions={
             <>
-              <Link href={dashboardPrimary.href} className={primaryButton}>+ {dashboardPrimary.label}</Link>
+              <Link href={dashboardPrimary.href} className={primaryButton}>
+                + {textileNoTransactions ? (locale === "si" ? "පළමු රෙදි අලෙවිය සම්පූර්ණ කරන්න" : "Complete first fabric sale") : dashboardPrimary.label}
+              </Link>
               {canSeeJobs && <Link href="/jobs" className={primaryButton}>{t("jobs.new")}</Link>}
               <ActionMenu
                 label={t("dash.more")}
@@ -654,6 +719,25 @@ export default function DashboardPage() {
             </>
           }
           metrics={
+            textileNoTransactions ? (
+              // inventory_ready_no_transactions: rolls/products/customers
+              // exist but nothing has been sold yet, so "Today's sales",
+              // "Today's profit" and "Payments received" would all be
+              // real, correctly-computed zeros — meaningless clutter on a
+              // dashboard that just finished setup. Show what's actually
+              // true instead: operational roll inventory.
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <MetricCard label={locale === "si" ? "සක්‍රීය Rolls" : "Active rolls"} value={textileRollSummary ? String(textileRollSummary.activeRolls) : "—"} hint={locale === "si" ? "විකිණීමට ඇති Rolls" : "Available rolls"} />
+                <MetricCard label={locale === "si" ? "මීටර් ශේෂය" : "Metre balance"} value={textileRollSummary ? textileRollSummary.metres.toFixed(3) : "—"} hint={locale === "si" ? "ඉතිරි මීටර්" : "Remaining metres"} />
+                <MetricCard label={locale === "si" ? "යාර්ඩ් ශේෂය" : "Yard balance"} value={textileRollSummary ? textileRollSummary.yards.toFixed(3) : "—"} hint={locale === "si" ? "ඉතිරි යාර්ඩ්" : "Remaining yards"} />
+                <MetricCard
+                  label={locale === "si" ? "ඉතිරි කැබලි" : "Remnants"}
+                  value={textileRollSummary ? String(textileRollSummary.remnants) : "—"}
+                  hint={locale === "si" ? "සමාලෝචනය කරන්න" : "Worth reviewing"}
+                  tone={textileRollSummary && textileRollSummary.remnants > 0 ? "warning" : "default"}
+                />
+              </div>
+            ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard label={t("dash.today_sales")} value={formatLkr(stats.todaySales)} hint={`${stats.saleCount} ${t("dash.sales_today")}`} />
               {canSeeFinancials ? (
@@ -690,6 +774,7 @@ export default function DashboardPage() {
                 />
               )}
             </div>
+            )
           }
         />
 
@@ -730,10 +815,30 @@ export default function DashboardPage() {
 
         {/* Financial Snapshot is omitted entirely for non-financial roles —
             without it, the chart alone should take the full row, not sit
-            in a lopsided two-column grid with an empty second track. */}
-        <div className={`grid gap-4 ${canSeeFinancials && vat && incomeTax ? "lg:grid-cols-[1fr_1.3fr]" : ""}`}>
+            in a lopsided two-column grid with an empty second track. It is
+            also replaced (not just hidden) for a textile org that has no
+            genuine financial activity yet: real zero bank/receivable/VAT
+            balances are not useful before any sale or collection exists. */}
+        <div className={`grid gap-4 ${canSeeFinancials && (vat && incomeTax || textileNoTransactions) ? "lg:grid-cols-[1fr_1.3fr]" : ""}`}>
+          {canSeeFinancials && textileNoTransactions ? (
+            <Card className="flex flex-col justify-center gap-2">
+              <SectionHeader title={t("dash.financial_title")} />
+              <Link
+                href="/settings/team"
+                className="flex min-h-11 items-center justify-between rounded-lg border border-dashed border-slate-300 px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:border-teal-300 hover:bg-teal-50/40 hover:text-slate-900"
+              >
+                <span>{locale === "si" ? "බැංකු සහ බදු තොරතුරු සකසන්න" : "Set up banking and tax"}</span>
+                <span aria-hidden="true">→</span>
+              </Link>
+              <p className="text-xs text-slate-400">
+                {locale === "si"
+                  ? "පළමු අලෙවියෙන් සහ එකතු කිරීමෙන් පසු මෙම කොටස ස්වයංක්‍රීයව සක්‍රීය වේ."
+                  : "This section activates automatically once the first sale and collection exist."}
+              </p>
+            </Card>
+          ) : null}
           {/* Financial Snapshot — compact, VAT/tax no longer dominant. */}
-          {canSeeFinancials && vat && incomeTax && (
+          {canSeeFinancials && vat && incomeTax && !textileNoTransactions && (
             <Card>
               <SectionHeader title={t("dash.financial_title")} />
               <div className="grid grid-cols-2 gap-3">

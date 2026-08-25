@@ -27,6 +27,71 @@ type SectorModel = {
   primaryLabel: string;
 };
 
+/**
+ * Single source of truth for textile "needs attention" items. Both this
+ * command centre and the dashboard's own Needs Attention card call this
+ * exact function against the same snapshot shape, so a quarantined roll (or
+ * any other textile exception) can never be reported by one surface while
+ * the other claims operations are clear — see docs, dashboard Phase 1 fix.
+ */
+export function buildTextileAttentionActions(
+  snapshot: SectorOperationalSnapshot,
+  locale: "si" | "en",
+): Action[] {
+  const held = snapshot.textileRolls.filter((roll) => roll.status === "quarantined").length;
+  const workflow = snapshot.textileWorkflow;
+  const actions: Action[] = [];
+  if (held) {
+    actions.push({
+      key: "roll-holds",
+      title: locale === "si" ? `Roll ${held}ක් රඳවා ඇත` : `${held} roll${held === 1 ? "" : "s"} quarantined`,
+      detail:
+        locale === "si"
+          ? "විකිණීමට පෙර තත්ත්ව හෝ ලැබීමේ ගැටලු විසඳන්න."
+          : "Resolve quality or receiving issues before these rolls return to sellable stock.",
+      href: "/stock/rolls",
+      tone: "danger",
+    });
+  }
+  if (workflow.overdueReceivables) {
+    actions.push({
+      key: "overdue-credit",
+      title:
+        locale === "si"
+          ? `පැහැර හැරුණු ලැබිය යුතු ${workflow.overdueReceivables}ක්`
+          : `${workflow.overdueReceivables} overdue receivable${workflow.overdueReceivables === 1 ? "" : "s"}`,
+      detail:
+        locale === "si"
+          ? `${formatLkr(workflow.overdueAmount)} එකතු කිරීම අවශ්‍යයි.`
+          : `${formatLkr(workflow.overdueAmount)} needs collection follow-up.`,
+      href: "/textile/trade-control",
+      tone: "danger",
+    });
+  }
+  if (workflow.pendingCuts) {
+    actions.push({
+      key: "pending-cuts",
+      title: locale === "si" ? `කැපීම් ${workflow.pendingCuts}ක් රැඳී ඇත` : `${workflow.pendingCuts} cut${workflow.pendingCuts === 1 ? "" : "s"} waiting`,
+      detail: locale === "si" ? "යැවීමට පෙර මිනුම් කැපීම් සම්පූර්ණ කරන්න." : "Complete measured cuts before warehouse dispatch.",
+      href: "/stock/cutting",
+      tone: "warning",
+    });
+  }
+  if (workflow.pendingDispatches) {
+    actions.push({
+      key: "pending-dispatches",
+      title:
+        locale === "si"
+          ? `යැවීම් ${workflow.pendingDispatches}ක් ක්‍රියාවලියේ ඇත`
+          : `${workflow.pendingDispatches} dispatch${workflow.pendingDispatches === 1 ? "" : "es"} in progress`,
+      detail: locale === "si" ? "රැගෙන යාම, ඇසුරුම් හෝ බෙදාහැරීම තහවුරු කිරීම දිගටම කරගෙන යන්න." : "Continue pick, pack or delivery confirmation.",
+      href: "/stock/dispatch",
+      tone: "warning",
+    });
+  }
+  return actions;
+}
+
 const EMPTY_SNAPSHOT: SectorOperationalSnapshot = {
   lots: [],
   units: [],
@@ -154,6 +219,7 @@ function buildSectorModel(
   snapshot: SectorOperationalSnapshot,
   now: Date,
   canSeeFinancials: boolean,
+  locale: "si" | "en",
 ): SectorModel {
   if (sector === "grocery" || sector === "electricals" || sector === "spare_parts") {
     return retailVelocityModel(data, sector, now);
@@ -163,14 +229,13 @@ function buildSectorModel(
     const live = snapshot.textileRolls.filter((roll) => !["exhausted", "returned"].includes(roll.status));
     const metres = live.filter((roll) => roll.lengthUnit === "metre").reduce((sum, roll) => sum + roll.remainingLength, 0);
     const yards = live.filter((roll) => roll.lengthUnit === "yard").reduce((sum, roll) => sum + roll.remainingLength, 0);
-    const held = snapshot.textileRolls.filter((roll) => roll.status === "quarantined").length;
     const reserved = live.reduce((sum, roll) => sum + roll.reservedLength, 0);
     const workflow = snapshot.textileWorkflow;
-    const actions: Action[] = [];
-    if (held) actions.push({ key: "roll-holds", title: `${held} roll${held === 1 ? "" : "s"} quarantined`, detail: "Resolve quality or receiving issues before these rolls return to sellable stock.", href: "/stock/rolls", tone: "danger" });
-    if (workflow.overdueReceivables) actions.push({ key: "overdue-credit", title: `${workflow.overdueReceivables} overdue receivable${workflow.overdueReceivables === 1 ? "" : "s"}`, detail: `${formatLkr(workflow.overdueAmount)} needs collection follow-up.`, href: "/textile/trade-control", tone: "danger" });
-    if (workflow.pendingCuts) actions.push({ key: "pending-cuts", title: `${workflow.pendingCuts} cut${workflow.pendingCuts === 1 ? "" : "s"} waiting`, detail: "Complete measured cuts before warehouse dispatch.", href: "/stock/cutting", tone: "warning" });
-    if (workflow.pendingDispatches) actions.push({ key: "pending-dispatches", title: `${workflow.pendingDispatches} dispatch${workflow.pendingDispatches === 1 ? "" : "es"} in progress`, detail: "Continue pick, pack or delivery confirmation.", href: "/stock/dispatch", tone: "warning" });
+    // Shared with the dashboard's "Needs Attention" card — see
+    // buildTextileAttentionActions docstring. Do not re-derive this list
+    // separately; that duplication is exactly what caused the command
+    // centre and the dashboard to disagree about a quarantined roll.
+    const actions = buildTextileAttentionActions(snapshot, locale);
     return {
       eyebrow: "Textile roll intelligence",
       title: "Physical rolls & measured balance",
@@ -400,6 +465,7 @@ export function SectorCommandCenter() {
   const { locale } = useLocale();
   const [snapshot, setSnapshot] = useState<SectorOperationalSnapshot>(EMPTY_SNAPSHOT);
   const [loading, setLoading] = useState(false);
+  const [activityExpanded, setActivityExpanded] = useState(false);
 
   useEffect(() => {
     if (!org.isAuthenticated || !org.id) {
@@ -424,8 +490,8 @@ export function SectorCommandCenter() {
 
   const model = useMemo(() => {
     if (!data) return null;
-    return buildSectorModel(data, org.sector, snapshot, new Date(), canSeeFinancials);
-  }, [canSeeFinancials, data, org.sector, snapshot]);
+    return buildSectorModel(data, org.sector, snapshot, new Date(), canSeeFinancials, locale);
+  }, [canSeeFinancials, data, org.sector, snapshot, locale]);
 
   if (!ready || !data || !model) return null;
   if (org.sector === "ac_hvac" && !canAccessShopRoute(orgRole, "/jobs")) return null;
@@ -547,7 +613,7 @@ export function SectorCommandCenter() {
         </div>
       )}
       <div className="grid lg:grid-cols-[0.72fr_1.28fr]">
-        <div className="p-5 text-white sm:p-6">
+        <div className="p-4 text-white sm:p-5">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-teal-300">{model.eyebrow}</p>
             {!snapshot.schemaReady && (
@@ -556,9 +622,9 @@ export function SectorCommandCenter() {
               </span>
             )}
           </div>
-          <h2 className="mt-2 text-xl font-semibold tracking-tight">{model.title}</h2>
-          <p className="mt-2 max-w-lg text-sm leading-6 text-slate-300">{model.description}</p>
-          <div className="mt-5 flex flex-wrap items-center gap-3">
+          <h2 className="mt-1.5 text-lg font-semibold tracking-tight">{model.title}</h2>
+          <p className="mt-1.5 max-w-lg text-xs leading-5 text-slate-300">{model.description}</p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <Link href={model.primaryHref} className="inline-flex min-h-10 items-center justify-center rounded-xl bg-teal-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-teal-400">
               {model.primaryLabel}
             </Link>
@@ -601,27 +667,79 @@ export function SectorCommandCenter() {
           </div>
         </div>
       </div>
-      {textile && (
-        <div className="grid gap-px bg-slate-200 lg:grid-cols-3">
-          <div className="bg-white p-4 sm:p-5">
-            <p className="text-xs font-semibold text-slate-500">{locale === "si" ? "අද" : "Today"}</p>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <div><p className="text-xs text-slate-500">{locale === "si" ? "අලෙවි" : "Sales"}</p><p className="mt-1 font-mono text-lg font-semibold text-slate-950">{formatLkr(todayTotal)}</p></div>
-              <div><p className="text-xs text-slate-500">{locale === "si" ? "බිල්" : "Invoices"}</p><p className="mt-1 font-mono text-lg font-semibold text-slate-950">{todaySales.length}</p></div>
-              <div><p className="text-xs text-slate-500">{locale === "si" ? "ණයට" : "On credit"}</p><p className="mt-1 font-mono text-lg font-semibold text-amber-700">{formatLkr(todayCredit)}</p></div>
-              <div><p className="text-xs text-slate-500">{locale === "si" ? "ලැබුණු මුදල" : "Collected now"}</p><p className="mt-1 font-mono text-lg font-semibold text-emerald-700">{formatLkr(Math.max(0, todayTotal - todayCredit))}</p></div>
+      {textile && (() => {
+        // Group the (up to 5) fetched roll movements by type instead of
+        // repeating near-identical "Receipt / Physical roll received" rows —
+        // counts are derived only from rows actually returned by the query,
+        // never inflated to a total the snapshot doesn't provide.
+        const activityGroups = new Map<string, { count: number; latest: string }>();
+        for (const item of textile.recentActivity) {
+          const existing = activityGroups.get(item.movementType);
+          if (existing) existing.count += 1;
+          else activityGroups.set(item.movementType, { count: 1, latest: item.createdAt });
+        }
+        const hasToday = todayTotal > 0 || todaySales.length > 0;
+        const columnCount = hasToday ? 3 : 2;
+        return (
+          <div className={`grid gap-px bg-slate-200 ${columnCount === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
+            {hasToday && (
+              <div className="bg-white p-4 sm:p-5">
+                <p className="text-xs font-semibold text-slate-500">{locale === "si" ? "අද" : "Today"}</p>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div><p className="text-xs text-slate-500">{locale === "si" ? "අලෙවි" : "Sales"}</p><p className="mt-1 font-mono text-lg font-semibold text-slate-950">{formatLkr(todayTotal)}</p></div>
+                  <div><p className="text-xs text-slate-500">{locale === "si" ? "බිල්" : "Invoices"}</p><p className="mt-1 font-mono text-lg font-semibold text-slate-950">{todaySales.length}</p></div>
+                  <div><p className="text-xs text-slate-500">{locale === "si" ? "ණයට" : "On credit"}</p><p className="mt-1 font-mono text-lg font-semibold text-amber-700">{formatLkr(todayCredit)}</p></div>
+                  <div><p className="text-xs text-slate-500">{locale === "si" ? "ලැබුණු මුදල" : "Collected now"}</p><p className="mt-1 font-mono text-lg font-semibold text-emerald-700">{formatLkr(Math.max(0, todayTotal - todayCredit))}</p></div>
+                </div>
+              </div>
+            )}
+            <div className="bg-white p-4 sm:p-5">
+              <p className="text-xs font-semibold text-slate-500">{locale === "si" ? "මෑත Roll ක්‍රියාකාරකම්" : "Recent roll activity"}</p>
+              {activityGroups.size ? (
+                <>
+                  <ul className="mt-2 divide-y divide-slate-100">
+                    {Array.from(activityGroups.entries()).map(([type, group]) => (
+                      <li key={type} className="flex items-center justify-between gap-3 py-2">
+                        <p className="text-sm font-medium capitalize text-slate-800">
+                          {group.count} × {type.replaceAll("_", " ")}
+                        </p>
+                        <p className="shrink-0 text-xs text-slate-400">
+                          {new Date(group.latest).toLocaleString(locale === "si" ? "si-LK" : "en-LK", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => setActivityExpanded((v) => !v)}
+                    className="mt-2 text-xs font-semibold text-teal-700 hover:underline"
+                    aria-expanded={activityExpanded}
+                  >
+                    {activityExpanded ? (locale === "si" ? "අඩු විස්තර" : "Hide details") : (locale === "si" ? "නවතම විස්තර පෙන්වන්න" : "Show latest details")}
+                  </button>
+                  {activityExpanded && (
+                    <ul className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">
+                      {textile.recentActivity.map((item) => (
+                        <li key={item.id} className="text-xs text-slate-500">
+                          <span className="font-medium capitalize text-slate-700">{item.movementType.replaceAll("_", " ")}</span>
+                          {" · "}
+                          {item.reason || `${item.balanceAfter.toFixed(3)} remaining`}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <p className="mt-3 text-sm text-slate-500">{locale === "si" ? "Roll ක්‍රියාකාරකම් තවම නැත." : "No roll activity yet."}</p>
+              )}
+            </div>
+            <div className="bg-white p-4 sm:p-5">
+              <p className="text-xs font-semibold text-slate-500">{incompleteMilestones.length ? (locale === "si" ? "ඊළඟ සැකසුම්" : "Next setup steps") : (locale === "si" ? "සැකසුම සම්පූර්ණයි" : "Setup complete")}</p>
+              {incompleteMilestones.length ? <ul className="mt-2 space-y-2">{incompleteMilestones.map((item) => <li key={item.href + item.label}><Link href={item.href} className="flex min-h-10 items-center justify-between rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:border-teal-300 hover:bg-teal-50/40"><span>{item.label}</span><span aria-hidden="true">→</span></Link></li>)}</ul> : <p className="mt-3 text-sm text-emerald-700">{locale === "si" ? "ප්‍රධාන සැකසුම් පියවර හතරම සම්පූර්ණයි." : "All four operational setup milestones are complete."}</p>}
             </div>
           </div>
-          <div className="bg-white p-4 sm:p-5">
-            <p className="text-xs font-semibold text-slate-500">{locale === "si" ? "මෑත Roll ක්‍රියාකාරකම්" : "Recent roll activity"}</p>
-            {textile.recentActivity.length ? <ul className="mt-2 divide-y divide-slate-100">{textile.recentActivity.slice(0, 4).map((item) => <li key={item.id} className="py-2"><p className="text-sm font-medium capitalize text-slate-800">{item.movementType.replaceAll("_", " ")}</p><p className="truncate text-xs text-slate-500">{item.reason || `${item.balanceAfter.toFixed(3)} remaining`}</p></li>)}</ul> : <p className="mt-3 text-sm text-slate-500">{locale === "si" ? "Roll ක්‍රියාකාරකම් තවම නැත." : "No roll activity yet."}</p>}
-          </div>
-          <div className="bg-white p-4 sm:p-5">
-            <p className="text-xs font-semibold text-slate-500">{incompleteMilestones.length ? (locale === "si" ? "ඊළඟ සැකසුම්" : "Next setup steps") : (locale === "si" ? "සැකසුම සම්පූර්ණයි" : "Setup complete")}</p>
-            {incompleteMilestones.length ? <ul className="mt-2 space-y-2">{incompleteMilestones.map((item) => <li key={item.href + item.label}><Link href={item.href} className="flex min-h-10 items-center justify-between rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:border-teal-300 hover:bg-teal-50/40"><span>{item.label}</span><span aria-hidden="true">→</span></Link></li>)}</ul> : <p className="mt-3 text-sm text-emerald-700">{locale === "si" ? "ප්‍රධාන සැකසුම් පියවර හතරම සම්පූර්ණයි." : "All four operational setup milestones are complete."}</p>}
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </section>
   );
 }

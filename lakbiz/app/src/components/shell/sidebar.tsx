@@ -70,7 +70,10 @@ export function Sidebar() {
         </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3.5 py-5" aria-label="Primary">
+      <nav
+        className="flex-1 overflow-y-auto px-3.5 py-5 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.14)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/[0.14]"
+        aria-label="Primary"
+      >
         {sections.map((section, i) => (
           <div key={section.labelKey ?? "root"} className={i > 0 ? "mt-6" : ""}>
             {section.labelKey && <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600">{t(section.labelKey)}</p>}
