@@ -269,18 +269,33 @@ function buildSectorModel(
     // centre and the dashboard to disagree about a quarantined roll.
     const actions = buildTextileAttentionActions(snapshot, locale);
     return {
-      eyebrow: "Textile roll intelligence",
-      title: "Physical rolls & measured balance",
-      description: "Roll-level visibility by original unit. Metres and yards remain separate so the dashboard never mixes unlike quantities.",
+      eyebrow: tt(locale, "රෙදි Roll බුද්ධි දත්ත", "Textile roll intelligence", "துணி Roll நுண்ணறிவு"),
+      title: tt(locale, "භෞතික Rolls සහ මනින ලද ශේෂය", "Physical rolls & measured balance", "பருநிலை Rolls & அளவிடப்பட்ட இருப்பு"),
+      description: tt(
+        locale,
+        "මුල් ඒකකය අනුව Roll මට්ටමේ දෘශ්‍යතාව. මීටර් සහ යාර වෙන වෙනම තබා ඇති නිසා පුවරුව කිසි විටෙකත් නොගැලපෙන ප්‍රමාණ මිශ්‍ර නොකරයි.",
+        "Roll-level visibility by original unit. Metres and yards remain separate so the dashboard never mixes unlike quantities.",
+        "அசல் அலகின்படி Roll-நிலை பார்வை. மீட்டர்களும் யார்டுகளும் தனித்தனியாக இருப்பதால் dashboard ஒருபோதும் பொருந்தாத அளவுகளைக் கலக்காது.",
+      ),
       metrics: [
-        { label: "Active rolls", value: snapshot.schemaReady ? String(live.length) : "—", hint: "Available rolls", tone: "default" },
-        { label: "Metre balance", value: snapshot.schemaReady ? metres.toFixed(3) : "—", hint: "Remaining metres", tone: "default" },
-        { label: "Yard balance", value: snapshot.schemaReady ? yards.toFixed(3) : "—", hint: "Remaining yards", tone: "default" },
-        { label: "Remnants", value: snapshot.schemaReady ? String(workflow.remnants) : "—", hint: `${workflow.activeReservations} active reservations`, tone: workflow.remnants || reserved ? "warning" : "positive" },
+        { label: tt(locale, "සක්‍රීය Rolls", "Active rolls", "செயலில் உள்ள Rolls"), value: snapshot.schemaReady ? String(live.length) : "—", hint: tt(locale, "විකිණීමට ඇති Rolls", "Available rolls", "கிடைக்கும் Rolls"), tone: "default" },
+        { label: tt(locale, "මීටර් ශේෂය", "Metre balance", "மீட்டர் இருப்பு"), value: snapshot.schemaReady ? metres.toFixed(3) : "—", hint: tt(locale, "ඉතිරි මීටර්", "Remaining metres", "மீதமுள்ள மீட்டர்கள்"), tone: "default" },
+        { label: tt(locale, "යාර්ඩ් ශේෂය", "Yard balance", "யார்டு இருப்பு"), value: snapshot.schemaReady ? yards.toFixed(3) : "—", hint: tt(locale, "ඉතිරි යාර්ඩ්", "Remaining yards", "மீதமுள்ள யார்டுகள்"), tone: "default" },
+        {
+          label: tt(locale, "ඉතිරි කැබලි", "Remnants", "மீதிகள்"),
+          value: snapshot.schemaReady ? String(workflow.remnants) : "—",
+          hint: tt(
+            locale,
+            `සක්‍රීය වෙන් කිරීම් ${workflow.activeReservations}`,
+            `${workflow.activeReservations} active reservations`,
+            `${workflow.activeReservations} செயலில் உள்ள முன்பதிவுகள்`,
+          ),
+          tone: workflow.remnants || reserved ? "warning" : "positive",
+        },
       ],
       actions,
       primaryHref: "/stock/rolls",
-      primaryLabel: "Fabric Rolls",
+      primaryLabel: tt(locale, "රෙදි Rolls", "Fabric Rolls", "துணி Rolls"),
     };
   }
 
@@ -531,21 +546,25 @@ export function SectorCommandCenter() {
 
   const textile = org.sector === "textile" ? snapshot.textileWorkflow : null;
   const textileQuickActions = orgRole === "cashier"
-    ? [{ href: "/sales", label: locale === "si" ? "නව අලෙවිය" : "New sale" }, { href: "/customers", label: locale === "si" ? "පාරිභෝගිකයා එක් කරන්න" : "Add customer" }]
+    ? [{ href: "/sales", label: tt(locale, "නව අලෙවිය", "New sale", "புதிய விற்பனை") }, { href: "/customers", label: tt(locale, "පාරිභෝගිකයා එක් කරන්න", "Add customer", "வாடிக்கையாளரைச் சேர்") }]
     : orgRole === "data_entry"
-      ? [{ href: "/stock/rolls", label: locale === "si" ? "Roll ලබාගන්න" : "Receive roll" }, { href: "/stock/cutting", label: locale === "si" ? "කැපීම් බලන්න" : "Open cutting desk" }, { href: "/stock/dispatch", label: locale === "si" ? "යැවීම් බලන්න" : "Open dispatches" }]
+      ? [
+          { href: "/stock/rolls", label: tt(locale, "Roll ලබාගන්න", "Receive roll", "Roll-ஐப் பெறவும்") },
+          { href: "/stock/cutting", label: tt(locale, "කැපීම් බලන්න", "Open cutting desk", "வெட்டு பணிமேசையைத் திற") },
+          { href: "/stock/dispatch", label: tt(locale, "යැවීම් බලන්න", "Open dispatches", "அனுப்புகைகளைத் திற") },
+        ]
       : [
-          { href: "/stock/rolls", label: locale === "si" ? "Roll ලබාගන්න" : "Receive roll" },
-          { href: "/sales", label: locale === "si" ? "නව අලෙවිය" : "New sale" },
-          { href: "/customers", label: locale === "si" ? "පාරිභෝගිකයා එක් කරන්න" : "Add customer" },
-          ...(canSeeFinancials ? [{ href: "/textile/trade-control", label: locale === "si" ? "මුදල් එකතු කිරීම" : "Record collection" }] : []),
+          { href: "/stock/rolls", label: tt(locale, "Roll ලබාගන්න", "Receive roll", "Roll-ஐப் பெறவும்") },
+          { href: "/sales", label: tt(locale, "නව අලෙවිය", "New sale", "புதிய விற்பனை") },
+          { href: "/customers", label: tt(locale, "පාරිභෝගිකයා එක් කරන්න", "Add customer", "வாடிக்கையாளரைச் சேர்") },
+          ...(canSeeFinancials ? [{ href: "/textile/trade-control", label: tt(locale, "මුදල් එකතු කිරීම", "Record collection", "வசூலிப்பைப் பதிவு செய்") }] : []),
         ];
   const textileMilestones = textile
     ? [
-        { done: data.products.some((product) => product.active && product.sectorId === "textile"), label: locale === "si" ? "රෙදි වර්ග එක් කරන්න" : "Add fabric styles", href: "/stock" },
-        { done: snapshot.textileRolls.length > 0, label: locale === "si" ? "පළමු Roll එක ලබාගන්න" : "Receive the first roll", href: "/stock/rolls" },
-        ...(canSeeFinancials ? [{ done: textile.customerTerms > 0, label: locale === "si" ? "පාරිභෝගික ණය කොන්දේසි සකසන්න" : "Set customer credit terms", href: "/textile/trade-control" }] : []),
-        { done: data.sales.length > 0, label: locale === "si" ? "පළමු රෙදි අලෙවිය සාදන්න" : "Complete the first fabric sale", href: "/sales" },
+        { done: data.products.some((product) => product.active && product.sectorId === "textile"), label: tt(locale, "රෙදි වර්ග එක් කරන්න", "Add fabric styles", "துணி வகைகளைச் சேர்"), href: "/stock" },
+        { done: snapshot.textileRolls.length > 0, label: tt(locale, "පළමු Roll එක ලබාගන්න", "Receive the first roll", "முதல் Roll-ஐப் பெறவும்"), href: "/stock/rolls" },
+        ...(canSeeFinancials ? [{ done: textile.customerTerms > 0, label: tt(locale, "පාරිභෝගික ණය කොන්දේසි සකසන්න", "Set customer credit terms", "வாடிக்கையாளர் கடன் விதிமுறைகளை அமைக்கவும்"), href: "/textile/trade-control" }] : []),
+        { done: data.sales.length > 0, label: tt(locale, "පළමු රෙදි අලෙවිය සාදන්න", "Complete the first fabric sale", "முதல் துணி விற்பனையை முடிக்கவும்"), href: "/sales" },
       ]
     : [];
   const incompleteMilestones = textileMilestones.filter((item) => !item.done);
@@ -572,15 +591,18 @@ export function SectorCommandCenter() {
         <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[0.8fr_1.2fr] lg:p-8">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-teal-700">
-              {locale === "si" ? "රෙදි ව්‍යාපාර සැකසුම" : "Textile workspace setup"}
+              {tt(locale, "රෙදි ව්‍යාපාර සැකසුම", "Textile workspace setup", "துணி பணியிட அமைப்பு")}
             </p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
-              {locale === "si" ? "ඔබේ පළමු රෙදි අලෙවියට සූදානම් වන්න" : "Get ready for your first fabric sale"}
+              {tt(locale, "ඔබේ පළමු රෙදි අලෙවියට සූදානම් වන්න", "Get ready for your first fabric sale", "உங்கள் முதல் துணி விற்பனைக்குத் தயாராகுங்கள்")}
             </h2>
             <p className="mt-2 max-w-lg text-sm leading-6 text-slate-600">
-              {locale === "si"
-                ? "රෙදි වර්ග, Roll ශේෂ සහ පාරිභෝගික කොන්දේසි එක් වරක් සකසන්න. සැබෑ දත්ත ලැබුණු විට දෛනික ප්‍රමිතික ස්වයංක්‍රීයව පෙන්වයි."
-                : "Set up fabric styles, roll balances and customer terms once. Daily operating metrics appear automatically when real activity begins."}
+              {tt(
+                locale,
+                "රෙදි වර්ග, Roll ශේෂ සහ පාරිභෝගික කොන්දේසි එක් වරක් සකසන්න. සැබෑ දත්ත ලැබුණු විට දෛනික ප්‍රමිතික ස්වයංක්‍රීයව පෙන්වයි.",
+                "Set up fabric styles, roll balances and customer terms once. Daily operating metrics appear automatically when real activity begins.",
+                "துணி வகைகள், Roll இருப்புகள் மற்றும் வாடிக்கையாளர் விதிமுறைகளை ஒருமுறை அமைக்கவும். உண்மையான செயல்பாடு தொடங்கியவுடன் தினசரி இயக்க அளவீடுகள் தானாகவே தோன்றும்.",
+              )}
             </p>
             {nextMilestone ? (
               <Link
@@ -596,7 +618,7 @@ export function SectorCommandCenter() {
           <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-slate-900">
-                {locale === "si" ? "සැකසුම් ප්‍රගතිය" : "Setup progress"}
+                {tt(locale, "සැකසුම් ප්‍රගතිය", "Setup progress", "அமைப்பு முன்னேற்றம்")}
               </p>
               <p className="text-xs font-semibold text-slate-500">
                 {completedMilestones} / {textileMilestones.length}
@@ -634,9 +656,15 @@ export function SectorCommandCenter() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-white">{org.name || "LakBiz"}</p>
-              <p className="text-xs text-slate-400">{loading ? (locale === "si" ? "දත්ත යාවත්කාලීන වෙමින්…" : "Refreshing live data…") : snapshot.error ? (locale === "si" ? "සජීවී දත්ත ලබාගත නොහැක" : "Live data unavailable") : (locale === "si" ? "සජීවී දත්ත යාවත්කාලීනයි" : "Live data up to date")}</p>
+              <p className="text-xs text-slate-400">
+                {loading
+                  ? tt(locale, "දත්ත යාවත්කාලීන වෙමින්…", "Refreshing live data…", "நேரடித் தரவு புதுப்பிக்கப்படுகிறது…")
+                  : snapshot.error
+                    ? tt(locale, "සජීවී දත්ත ලබාගත නොහැක", "Live data unavailable", "நேரடித் தரவு கிடைக்கவில்லை")
+                    : tt(locale, "සජීවී දත්ත යාවත්කාලීනයි", "Live data up to date", "நேரடித் தரவு புதுப்பித்த நிலையில் உள்ளது")}
+              </p>
             </div>
-            <div className="flex flex-wrap gap-2" aria-label={locale === "si" ? "ඉක්මන් ක්‍රියා" : "Quick actions"}>
+            <div className="flex flex-wrap gap-2" aria-label={tt(locale, "ඉක්මන් ක්‍රියා", "Quick actions", "விரைவு செயல்கள்")}>
               {textileQuickActions.map((action, index) => (
                 <Link key={action.href} href={action.href} className={index === 0 ? "inline-flex min-h-10 items-center rounded-xl bg-teal-500 px-3 text-sm font-semibold text-slate-950 hover:bg-teal-400" : "inline-flex min-h-10 items-center rounded-xl border border-slate-700 px-3 text-sm font-semibold text-slate-200 hover:border-slate-500 hover:bg-slate-900"}>{action.label}</Link>
               ))}
@@ -716,17 +744,17 @@ export function SectorCommandCenter() {
           <div className={`grid gap-px bg-slate-200 ${columnCount === 3 ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
             {hasToday && (
               <div className="bg-white p-4 sm:p-5">
-                <p className="text-xs font-semibold text-slate-500">{locale === "si" ? "අද" : "Today"}</p>
+                <p className="text-xs font-semibold text-slate-500">{tt(locale, "අද", "Today", "இன்று")}</p>
                 <div className="mt-3 grid grid-cols-2 gap-3">
-                  <div><p className="text-xs text-slate-500">{locale === "si" ? "අලෙවි" : "Sales"}</p><p className="mt-1 font-mono text-lg font-semibold text-slate-950">{formatLkr(todayTotal)}</p></div>
-                  <div><p className="text-xs text-slate-500">{locale === "si" ? "බිල්" : "Invoices"}</p><p className="mt-1 font-mono text-lg font-semibold text-slate-950">{todaySales.length}</p></div>
-                  <div><p className="text-xs text-slate-500">{locale === "si" ? "ණයට" : "On credit"}</p><p className="mt-1 font-mono text-lg font-semibold text-amber-700">{formatLkr(todayCredit)}</p></div>
-                  <div><p className="text-xs text-slate-500">{locale === "si" ? "ලැබුණු මුදල" : "Collected now"}</p><p className="mt-1 font-mono text-lg font-semibold text-emerald-700">{formatLkr(Math.max(0, todayTotal - todayCredit))}</p></div>
+                  <div><p className="text-xs text-slate-500">{tt(locale, "අලෙවි", "Sales", "விற்பனை")}</p><p className="mt-1 font-mono text-lg font-semibold text-slate-950">{formatLkr(todayTotal)}</p></div>
+                  <div><p className="text-xs text-slate-500">{tt(locale, "බිල්", "Invoices", "இன்வாய்ஸ்கள்")}</p><p className="mt-1 font-mono text-lg font-semibold text-slate-950">{todaySales.length}</p></div>
+                  <div><p className="text-xs text-slate-500">{tt(locale, "ණයට", "On credit", "கடனில்")}</p><p className="mt-1 font-mono text-lg font-semibold text-amber-700">{formatLkr(todayCredit)}</p></div>
+                  <div><p className="text-xs text-slate-500">{tt(locale, "ලැබුණු මුදල", "Collected now", "இப்போது வசூலிக்கப்பட்டது")}</p><p className="mt-1 font-mono text-lg font-semibold text-emerald-700">{formatLkr(Math.max(0, todayTotal - todayCredit))}</p></div>
                 </div>
               </div>
             )}
             <div className="bg-white p-4 sm:p-5">
-              <p className="text-xs font-semibold text-slate-500">{locale === "si" ? "මෑත Roll ක්‍රියාකාරකම්" : "Recent roll activity"}</p>
+              <p className="text-xs font-semibold text-slate-500">{tt(locale, "මෑත Roll ක්‍රියාකාරකම්", "Recent roll activity", "சமீபத்திய Roll செயல்பாடு")}</p>
               {activityGroups.size ? (
                 <>
                   <ul className="mt-2 divide-y divide-slate-100">
@@ -764,12 +792,12 @@ export function SectorCommandCenter() {
                   )}
                 </>
               ) : (
-                <p className="mt-3 text-sm text-slate-500">{locale === "si" ? "Roll ක්‍රියාකාරකම් තවම නැත." : "No roll activity yet."}</p>
+                <p className="mt-3 text-sm text-slate-500">{tt(locale, "Roll ක්‍රියාකාරකම් තවම නැත.", "No roll activity yet.", "இதுவரை Roll செயல்பாடு இல்லை.")}</p>
               )}
             </div>
             <div className="bg-white p-4 sm:p-5">
-              <p className="text-xs font-semibold text-slate-500">{incompleteMilestones.length ? (locale === "si" ? "ඊළඟ සැකසුම්" : "Next setup steps") : (locale === "si" ? "සැකසුම සම්පූර්ණයි" : "Setup complete")}</p>
-              {incompleteMilestones.length ? <ul className="mt-2 space-y-2">{incompleteMilestones.map((item) => <li key={item.href + item.label}><Link href={item.href} className="flex min-h-10 items-center justify-between rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:border-teal-300 hover:bg-teal-50/40"><span>{item.label}</span><span aria-hidden="true">→</span></Link></li>)}</ul> : <p className="mt-3 text-sm text-emerald-700">{locale === "si" ? "ප්‍රධාන සැකසුම් පියවර හතරම සම්පූර්ණයි." : "All four operational setup milestones are complete."}</p>}
+              <p className="text-xs font-semibold text-slate-500">{incompleteMilestones.length ? tt(locale, "ඊළඟ සැකසුම්", "Next setup steps", "அடுத்த அமைப்பு படிகள்") : tt(locale, "සැකසුම සම්පූර්ණයි", "Setup complete", "அமைப்பு முடிந்தது")}</p>
+              {incompleteMilestones.length ? <ul className="mt-2 space-y-2">{incompleteMilestones.map((item) => <li key={item.href + item.label}><Link href={item.href} className="flex min-h-10 items-center justify-between rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:border-teal-300 hover:bg-teal-50/40"><span>{item.label}</span><span aria-hidden="true">→</span></Link></li>)}</ul> : <p className="mt-3 text-sm text-emerald-700">{tt(locale, "ප්‍රධාන සැකසුම් පියවර හතරම සම්පූර්ණයි.", "All four operational setup milestones are complete.", "அனைத்து நான்கு செயல்பாட்டு அமைப்பு படிகளும் முடிந்துவிட்டன.")}</p>}
             </div>
           </div>
         );
