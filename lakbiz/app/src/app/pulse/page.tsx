@@ -214,7 +214,12 @@ function PulseShell({
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.055),transparent_28rem),radial-gradient(circle_at_95%_12%,rgba(56,189,248,0.035),transparent_26rem),linear-gradient(180deg,#f5f8fc_0%,#edf3f8_100%)] pb-24 text-slate-950 lg:pb-6">
-      <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
+      {/* Not sticky — a pinned header on a page this short adds a seam
+          (and, in full-page screenshot tools that capture in scrolled
+          slices, can visually duplicate mid-page) for no real benefit;
+          Alerts/More in the bottom tab bar already cover the same
+          reachability on mobile. */}
+      <header className="border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-3 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-400 to-teal-600 text-xs font-bold text-white shadow-sm shadow-teal-900/20">L</span>
@@ -566,14 +571,19 @@ export default function BusinessPulsePage() {
         </div>
       </div>
 
-      {/* Primary actions. */}
+      {/* Primary actions. New fabric sale is skipped here when
+          noTransactionsYet — the hero above already puts that exact same
+          CTA in front of the owner; repeating it a few inches later reads
+          as a mistake, not confidence. */}
       <div className="space-y-2 pb-2">
-        <Link
-          href="/sales"
-          className="flex min-h-12 w-full items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-teal-700"
-        >
-          + {tt(locale, "නව රෙදි අලෙවියක්", "New fabric sale", "புதிய துணி விற்பனை")}
-        </Link>
+        {!noTransactionsYet && (
+          <Link
+            href="/sales"
+            className="flex min-h-12 w-full items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-teal-700"
+          >
+            + {tt(locale, "නව රෙදි අලෙවියක්", "New fabric sale", "புதிய துணி விற்பனை")}
+          </Link>
+        )}
         <Link
           href="/stock/rolls?receive=1"
           className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
