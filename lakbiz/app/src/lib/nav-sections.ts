@@ -13,6 +13,7 @@ export type NavItem = {
   /** Direct labels are useful for new vertical workspaces without forcing a giant translation-file edit. */
   labelEn?: string;
   labelSi?: string;
+  labelTa?: string;
   /** Feature gate key, if this route is plan/addon-gated (see ROUTE_FEATURES). */
   feature?: FeatureKey;
   /** Show this navigation item only for these provisioned business sectors. */
@@ -30,7 +31,17 @@ export type NavSection = {
 export const NAV_SECTIONS: NavSection[] = [
   {
     labelKey: null,
-    items: [{ href: "/dashboard", labelKey: "nav.dashboard" }],
+    items: [
+      { href: "/dashboard", labelKey: "nav.dashboard" },
+      {
+        href: "/pulse",
+        labelEn: "Business Pulse",
+        labelSi: "ව්‍යාපාර ස්පන්දනය",
+        labelTa: "வணிக துடிப்பு",
+        sectorOnly: ["textile"],
+        roleOnly: ["owner"],
+      },
+    ],
   },
   {
     labelKey: "nav.section.sales",

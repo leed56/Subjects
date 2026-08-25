@@ -14,6 +14,7 @@ import type { NavItem } from "@/lib/nav-sections";
 
 function navLabel(item: NavItem, locale: "si" | "en" | "ta", t: (key: string) => string): string {
   if (locale === "si" && item.labelSi) return item.labelSi;
+  if (locale === "ta" && item.labelTa) return item.labelTa;
   if (locale === "en" && item.labelEn) return item.labelEn;
   return item.labelKey ? t(item.labelKey) : item.labelEn ?? item.labelSi ?? item.href;
 }

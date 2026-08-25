@@ -37,7 +37,7 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { paymentLabel } from "@/lib/i18n/payment";
 import { getDashboardStats } from "@/lib/store/actions";
 import { useAppStore } from "@/lib/store/use-app-store";
-import type { ACJob, Contractor, Sale, Technician } from "@/lib/store/types";
+import type { ACJob, Contractor, Technician } from "@/lib/store/types";
 import { getVatQuarterSummary } from "@/lib/vat";
 import { getIncomeTaxYearSummary } from "@/lib/income-tax";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
@@ -45,56 +45,13 @@ import { canAccessShopRoute } from "@/lib/org-role/permissions";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
 import { computeJobProfitability, isLowMarginJob, type JobLinkedExpense } from "@/lib/job-profitability";
 import { localizedDashboardPreset } from "@/lib/sector-dashboard";
-import { fetchSectorOperationalSnapshot, type SectorOperationalSnapshot } from "@/lib/supabase/sector-dashboard-client";
+import {
+  fetchSectorOperationalSnapshot,
+  summarizeTextileRolls,
+  type SectorOperationalSnapshot,
+} from "@/lib/supabase/sector-dashboard-client";
 import { buildTextileAttentionActions } from "@/components/dashboard/sector-command-center";
-
-type Locale = "si" | "en" | "ta";
-type TrendPeriod = "30d" | "3m" | "6m" | "12m";
-type TrendPoint = { key: string; label: string; revenue: number; profit: number };
-
-/**
- * Revenue+profit trend, bucketed daily (30d) or monthly (3/6/12m). A
- * different shape than the Reports page's single-metric daily trend
- * (Phase 14) — kept local to this page rather than forcing that
- * component to support a shape it wasn't built for.
- *
- * `new Date()` is called inside this module-level function, never inline
- * in the component body — matches the codebase's established convention
- * (see Phase 4/5 notes) for keeping render bodies pure.
- */
-function getRevenueTrend(sales: Sale[], period: TrendPeriod, locale: Locale): TrendPoint[] {
-  const now = new Date();
-  if (period === "30d") {
-    return Array.from({ length: 30 }, (_, i) => {
-      const d = new Date(now);
-      d.setDate(d.getDate() - (29 - i));
-      const iso = d.toISOString().slice(0, 10);
-      // Sale.date is a full ISO timestamp (new Date().toISOString() at
-      // creation, see createSale in actions.ts), not a plain YYYY-MM-DD —
-      // startsWith, not ===, matches the convention getDashboardStats
-      // already uses for exactly this reason.
-      const daySales = sales.filter((s) => s.date.startsWith(iso));
-      return {
-        key: iso,
-        label: d.toLocaleDateString(localeTag(locale), { day: "numeric", month: "short" }),
-        revenue: daySales.reduce((s, x) => s + x.total, 0),
-        profit: daySales.reduce((s, x) => s + x.profit, 0),
-      };
-    });
-  }
-  const months = period === "3m" ? 3 : period === "6m" ? 6 : 12;
-  return Array.from({ length: months }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (months - 1 - i), 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const monthSales = sales.filter((s) => s.date.startsWith(key));
-    return {
-      key,
-      label: d.toLocaleDateString(localeTag(locale), { month: "short", year: "2-digit" }),
-      revenue: monthSales.reduce((s, x) => s + x.total, 0),
-      profit: monthSales.reduce((s, x) => s + x.profit, 0),
-    };
-  });
-}
+import { getRevenueTrend, localeTag, type Locale, type TrendPeriod } from "@/lib/revenue-trend";
 
 /** Same assignee-resolution convention as the Schedule page (Phase 7) —
  * a job's "team" is whichever technician or contractor it's assigned to,
@@ -103,15 +60,6 @@ function assigneeName(job: ACJob, technicians: Technician[], contractors: Contra
   if (job.assigneeType === "team") return technicians.find((x) => x.id === job.assigneeId)?.name;
   if (job.assigneeType === "contractor") return contractors.find((x) => x.id === job.assigneeId)?.name;
   return undefined;
-}
-
-/** Intl locale tag for the active UI locale. "ta-LK" is valid BCP 47 even
- * where a browser/Node's ICU data lacks Sri-Lanka-specific Tamil overrides —
- * it falls back to generic "ta" formatting rather than throwing. */
-function localeTag(locale: Locale): string {
-  if (locale === "si") return "si-LK";
-  if (locale === "ta") return "ta-LK";
-  return "en-LK";
 }
 
 /** Small 3-way locale pick for the handful of textile Phase-1 strings below
@@ -458,7 +406,7 @@ export default function DashboardPage() {
     ? getIncomeTaxYearSummary(data, new Date(), 0, jobLinkedExpenseTotals ?? new Map())
     : null;
   const marginPct = stats.todaySales > 0 ? Math.round((stats.todayProfit / stats.todaySales) * 100) : 0;
-  const trend = getRevenueTrend(data.sales, trendPeriod, locale);
+  const trend = getRevenueTrend(data.sales, trendPeriod, locale, new Date());
   const trendMax = Math.max(1, ...trend.map((p) => Math.max(p.revenue, p.profit)));
   const trendRevenueTotal = trend.reduce((s, p) => s + p.revenue, 0);
   const trendProfitTotal = trend.reduce((s, p) => s + p.profit, 0);
@@ -480,17 +428,7 @@ export default function DashboardPage() {
   // sale exists, entirely-zero) sales/profit/payments KPIs — same
   // metre/yard split SectorCommandCenter already uses, kept separate per
   // the "never add metres and yards" rule.
-  const textileRollSummary = textileSnapshot
-    ? (() => {
-        const live = textileSnapshot.textileRolls.filter((roll) => !["exhausted", "returned"].includes(roll.status));
-        return {
-          activeRolls: live.length,
-          metres: live.filter((r) => r.lengthUnit === "metre").reduce((sum, r) => sum + r.remainingLength, 0),
-          yards: live.filter((r) => r.lengthUnit === "yard").reduce((sum, r) => sum + r.remainingLength, 0),
-          remnants: textileSnapshot.textileWorkflow.remnants,
-        };
-      })()
-    : null;
+  const textileRollSummary = textileSnapshot ? summarizeTextileRolls(textileSnapshot) : null;
 
   // Needs Attention — only real, currently-true items, most severe first.
   type Alert = { key: string; title: string; description: string; actionLabel: string; actionHref: string; tone: "danger" | "warning" };

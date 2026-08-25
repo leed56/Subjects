@@ -66,6 +66,31 @@ export type SectorOperationalSnapshot = {
   error: string | null;
 };
 
+export type TextileRollSummary = {
+  activeRolls: number;
+  metres: number;
+  yards: number;
+  remnants: number;
+  reserved: number;
+};
+
+/**
+ * Roll-inventory rollup shared by the dashboard's textile no-transactions
+ * state and the sector command centre's metrics — both previously
+ * re-derived this from `snapshot.textileRolls` independently. Metres and
+ * yards stay separate sums (never added together — different units).
+ */
+export function summarizeTextileRolls(snapshot: SectorOperationalSnapshot): TextileRollSummary {
+  const live = snapshot.textileRolls.filter((roll) => !["exhausted", "returned"].includes(roll.status));
+  return {
+    activeRolls: live.length,
+    metres: live.filter((roll) => roll.lengthUnit === "metre").reduce((sum, roll) => sum + roll.remainingLength, 0),
+    yards: live.filter((roll) => roll.lengthUnit === "yard").reduce((sum, roll) => sum + roll.remainingLength, 0),
+    remnants: snapshot.textileWorkflow.remnants,
+    reserved: live.reduce((sum, roll) => sum + roll.reservedLength, 0),
+  };
+}
+
 function schemaUnavailable(message: string | null | undefined): boolean {
   const value = (message ?? "").toLowerCase();
   return (

@@ -10,6 +10,7 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { canAccessShopRoute } from "@/lib/org-role/permissions";
 import {
   fetchSectorOperationalSnapshot,
+  summarizeTextileRolls,
   type SectorOperationalSnapshot,
 } from "@/lib/supabase/sector-dashboard-client";
 import type { SectorId } from "@/lib/types";
@@ -258,10 +259,7 @@ function buildSectorModel(
   }
 
   if (sector === "textile") {
-    const live = snapshot.textileRolls.filter((roll) => !["exhausted", "returned"].includes(roll.status));
-    const metres = live.filter((roll) => roll.lengthUnit === "metre").reduce((sum, roll) => sum + roll.remainingLength, 0);
-    const yards = live.filter((roll) => roll.lengthUnit === "yard").reduce((sum, roll) => sum + roll.remainingLength, 0);
-    const reserved = live.reduce((sum, roll) => sum + roll.reservedLength, 0);
+    const { activeRolls, metres, yards, reserved } = summarizeTextileRolls(snapshot);
     const workflow = snapshot.textileWorkflow;
     // Shared with the dashboard's "Needs Attention" card — see
     // buildTextileAttentionActions docstring. Do not re-derive this list
@@ -278,7 +276,7 @@ function buildSectorModel(
         "அசல் அலகின்படி Roll-நிலை பார்வை. மீட்டர்களும் யார்டுகளும் தனித்தனியாக இருப்பதால் dashboard ஒருபோதும் பொருந்தாத அளவுகளைக் கலக்காது.",
       ),
       metrics: [
-        { label: tt(locale, "සක්‍රීය Rolls", "Active rolls", "செயலில் உள்ள Rolls"), value: snapshot.schemaReady ? String(live.length) : "—", hint: tt(locale, "විකිණීමට ඇති Rolls", "Available rolls", "கிடைக்கும் Rolls"), tone: "default" },
+        { label: tt(locale, "සක්‍රීය Rolls", "Active rolls", "செயலில் உள்ள Rolls"), value: snapshot.schemaReady ? String(activeRolls) : "—", hint: tt(locale, "විකිණීමට ඇති Rolls", "Available rolls", "கிடைக்கும் Rolls"), tone: "default" },
         { label: tt(locale, "මීටර් ශේෂය", "Metre balance", "மீட்டர் இருப்பு"), value: snapshot.schemaReady ? metres.toFixed(3) : "—", hint: tt(locale, "ඉතිරි මීටර්", "Remaining metres", "மீதமுள்ள மீட்டர்கள்"), tone: "default" },
         { label: tt(locale, "යාර්ඩ් ශේෂය", "Yard balance", "யார்டு இருப்பு"), value: snapshot.schemaReady ? yards.toFixed(3) : "—", hint: tt(locale, "ඉතිරි යාර්ඩ්", "Remaining yards", "மீதமுள்ள யார்டுகள்"), tone: "default" },
         {
