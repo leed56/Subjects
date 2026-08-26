@@ -153,8 +153,13 @@ export function MobileNav() {
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-xs font-bold text-teal-800">{initialsFor(org.name, user?.email)}</span>
               <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-950">{org.name}</p><p className="mt-0.5 truncate text-xs text-slate-500">{user?.email}</p></div>
             </div>
-            {user && (
+            {user ? (
               <button type="button" onClick={() => { setOpen(false); void handleLogout(); }} className="mt-2.5 flex min-h-11 w-full items-center gap-2 rounded-xl px-3.5 py-3 text-sm font-medium text-rose-600 transition hover:bg-rose-50"><SignOutIcon className="h-4.5 w-4.5" />{t("sub.sign_out")}</button>
+            ) : (
+              // Anonymous visitors land here in the local/demo experience —
+              // the drawer had no way back to a real account at all before
+              // this, only a Sign out button gated behind `user`.
+              <Link href="/login" onClick={() => setOpen(false)} className="mt-2.5 flex min-h-11 w-full items-center justify-center rounded-xl bg-teal-600 px-3.5 py-3 text-sm font-semibold text-white transition hover:bg-teal-700">{t("sub.sign_in")}</Link>
             )}
           </div>
         </div>

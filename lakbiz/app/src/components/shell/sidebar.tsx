@@ -122,10 +122,18 @@ export function Sidebar() {
           <span>{LOCALE_NAMES[locale]}</span>
           <span className="text-xs font-semibold text-teal-300/80">{LOCALE_NAMES[nextLocale(locale)]} →</span>
         </button>
-        {user && (
+        {user ? (
           <button type="button" onClick={handleLogout} className="mt-1.5 flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-rose-500/10 hover:text-rose-300">
             <SignOutIcon className="h-4 w-4" />{t("sub.sign_out")}
           </button>
+        ) : (
+          // Anonymous visitors land here in the local/demo experience (see
+          // subscription-provider's loadDemoOrg) — the shell had no way
+          // back to a real account at all before this, only a Sign out
+          // button gated behind `user`.
+          <Link href="/login" className="mt-1.5 flex min-h-10 w-full items-center justify-center rounded-xl bg-teal-400/15 px-3 py-2.5 text-sm font-semibold text-teal-200 transition hover:bg-teal-400/20">
+            {t("sub.sign_in")}
+          </Link>
         )}
       </div>
     </aside>
