@@ -27,6 +27,19 @@
  * so fetched separately here). "Needs purchasing" uses a fixed threshold
  * (LOW_STOCK_THRESHOLD) rather than a per-fabric reorder point, because
  * that setting doesn't exist yet — see the threshold's own docstring.
+ *
+ * A few more additions came from reviewing a sibling product's (nexus-erp)
+ * owner mobile view for ideas worth porting: the phone-locked shell width
+ * (PulseShell's max-w-md border-x wrapper — invisible on an actual phone,
+ * keeps this from stretching into a wide dashboard on desktop), the
+ * plain-language summary line (buildSummaryLine — assembled entirely from
+ * numbers already computed on this page), the per-category Operating
+ * costs breakdown (expensesByCategory, real, not padded), and the
+ * Highlights feed (real positive facts, the counterpart to Needs
+ * attention). Deliberately NOT ported: a synthesized "health score" hero
+ * (would need a new, defensible scoring formula) and nexus-erp's dark
+ * theme (a visual-identity decision, not an information-architecture one)
+ * — both left for a separate decision if wanted later.
  */
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -46,6 +59,14 @@ import {
   SuppliersIcon,
   SyncIcon,
   SignOutIcon,
+  BoltIcon,
+  TeamIcon,
+  VehiclesIcon,
+  ChatIcon,
+  ExpenseIcon,
+  SettingsIcon,
+  ShopIcon,
+  CheckIcon,
 } from "@/components/ui/icons";
 import { initialsFor } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -225,6 +246,42 @@ function attentionActionLabel(key: string, locale: Locale): string {
   return tt(locale, "යවන්න", "Dispatch", "அனுப்பு");
 }
 
+/** Icon per expense category — reuses the app's existing icon set (no
+ * emoji; matches the rest of the codebase's de-emoji convention) rather
+ * than inventing a parallel style just for this card. Falls through to
+ * ExpenseIcon for anything not explicitly mapped. */
+function expenseCategoryIcon(category: string) {
+  if (category === "utilities") return BoltIcon;
+  if (category === "salaries") return TeamIcon;
+  if (category === "fuel" || category === "transport") return VehiclesIcon;
+  if (category === "supplies" || category === "parts_purchase") return SuppliersIcon;
+  if (category === "maintenance" || category === "equipment_rental") return SettingsIcon;
+  if (category === "insurance") return ShieldIcon;
+  if (category === "marketing") return ChatIcon;
+  if (category === "rent") return ShopIcon;
+  return ExpenseIcon;
+}
+
+/** One plain-language sentence summarizing the month, the way a person
+ * would say it out loud rather than making the reader assemble it from
+ * separate numbers — built entirely from figures already computed on this
+ * page (salesChangePct, attentionCount), nothing new fetched or invented. */
+function buildSummaryLine(locale: Locale, salesChangePct: number | null, attentionCount: number): string {
+  const salesPhrase =
+    salesChangePct == null
+      ? tt(locale, "අලෙවිය මෙම මාසය ස්ථාවරයි", "Sales are steady this month", "இந்த மாதம் விற்பனை நிலையானது")
+      : salesChangePct > 0
+        ? tt(locale, `අලෙවිය මෙම මාසය ${salesChangePct}%කින් ඉහළ ගොස් ඇත`, `Sales are up ${salesChangePct}% this month`, `இந்த மாதம் விற்பனை ${salesChangePct}% அதிகரித்துள்ளது`)
+        : salesChangePct < 0
+          ? tt(locale, `අලෙවිය මෙම මාසය ${Math.abs(salesChangePct)}%කින් පහළ ගොස් ඇත`, `Sales are down ${Math.abs(salesChangePct)}% this month`, `இந்த மாதம் விற்பனை ${Math.abs(salesChangePct)}% குறைந்துள்ளது`)
+          : tt(locale, "අලෙවිය මෙම මාසය ස්ථාවරයි", "Sales are flat this month", "இந்த மாதம் விற்பனை மாறவில்லை");
+  const attentionPhrase =
+    attentionCount > 0
+      ? tt(locale, `${attentionCount} ක් ඔබේ තීරණය අවශ්‍යයි`, `${attentionCount} item${attentionCount === 1 ? "" : "s"} need your attention`, `${attentionCount} உருப்படி(கள்) உங்கள் கவனம் தேவை`)
+      : tt(locale, "දැනට කිසිවක් ඔබේ තීරණය අවශ්‍ය නොවේ", "nothing needs your attention right now", "தற்போது எதுவும் உங்கள் கவனத்திற்குத் தேவையில்லை");
+  return `${salesPhrase} — ${attentionPhrase}.`;
+}
+
 /** Fixed, undisclosed-to-user threshold for the v1 "needs purchasing"
  * signal — there's no real reorder-point setting per fabric type yet (see
  * the Business Pulse planning discussion), so this is a simple, honest
@@ -304,54 +361,61 @@ function PulseShell({
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.055),transparent_28rem),radial-gradient(circle_at_95%_12%,rgba(56,189,248,0.035),transparent_26rem),linear-gradient(180deg,#f5f8fc_0%,#edf3f8_100%)] pb-24 text-slate-950 lg:pb-6">
-      {/* Not sticky — a pinned header on a page this short adds a seam
-          (and, in full-page screenshot tools that capture in scrolled
-          slices, can visually duplicate mid-page) for no real benefit;
-          Alerts/More in the bottom tab bar already cover the same
-          reachability on mobile. */}
-      <header className="border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-3 px-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-400 to-teal-600 text-xs font-bold text-white shadow-sm shadow-teal-900/20">L</span>
-            <div className="min-w-0 leading-tight">
-              <p className="truncate text-sm font-bold tracking-tight text-slate-950">LakBiz</p>
+      {/* Locked to phone width (max-w-md) and bordered on both sides —
+          on an actual phone this is invisible (the viewport IS this
+          width), but on a desktop browser it stops Pulse from stretching
+          into a wide dashboard and keeps the "separate, dedicated owner
+          app" feel the rest of this page is built around. */}
+      <div className="mx-auto max-w-md min-h-screen border-x border-slate-200/70">
+        {/* Not sticky — a pinned header on a page this short adds a seam
+            (and, in full-page screenshot tools that capture in scrolled
+            slices, can visually duplicate mid-page) for no real benefit;
+            Alerts/More in the bottom tab bar already cover the same
+            reachability on mobile. */}
+        <header className="border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
+          <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-400 to-teal-600 text-xs font-bold text-white shadow-sm shadow-teal-900/20">L</span>
+              <div className="min-w-0 leading-tight">
+                <p className="truncate text-sm font-bold tracking-tight text-slate-950">LakBiz</p>
+                <button
+                  type="button"
+                  onClick={() => setAccountOpen((v) => !v)}
+                  className="flex items-center gap-0.5 truncate text-xs font-medium text-slate-500 hover:text-slate-700"
+                >
+                  <span className="truncate">{org.name}</span>
+                  <ChevronDownIcon className="h-3.5 w-3.5 shrink-0" />
+                </button>
+              </div>
+            </div>
+            <div className="relative flex shrink-0 items-center gap-2" ref={accountRef}>
+              <button
+                type="button"
+                onClick={onBellClick}
+                aria-label={tt(locale, "දැනුම්දීම්", "Notifications", "அறிவிப்புகள்")}
+                className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:border-teal-200 hover:bg-teal-50"
+              >
+                <BellIcon className="h-4.5 w-4.5" />
+                {attentionCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-black text-white">
+                    {attentionCount > 9 ? "9+" : attentionCount}
+                  </span>
+                )}
+              </button>
               <button
                 type="button"
                 onClick={() => setAccountOpen((v) => !v)}
-                className="flex items-center gap-0.5 truncate text-xs font-medium text-slate-500 hover:text-slate-700"
+                aria-label={tt(locale, "ගිණුම", "Account", "கணக்கு")}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600 text-xs font-bold text-white"
               >
-                <span className="truncate">{org.name}</span>
-                <ChevronDownIcon className="h-3.5 w-3.5 shrink-0" />
+                {initialsFor(org.name, user?.email)}
               </button>
+              {accountPanel}
             </div>
           </div>
-          <div className="relative flex shrink-0 items-center gap-2" ref={accountRef}>
-            <button
-              type="button"
-              onClick={onBellClick}
-              aria-label={tt(locale, "දැනුම්දීම්", "Notifications", "அறிவிப்புகள்")}
-              className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:border-teal-200 hover:bg-teal-50"
-            >
-              <BellIcon className="h-4.5 w-4.5" />
-              {attentionCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-black text-white">
-                  {attentionCount > 9 ? "9+" : attentionCount}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setAccountOpen((v) => !v)}
-              aria-label={tt(locale, "ගිණුම", "Account", "கணக்கு")}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600 text-xs font-bold text-white"
-            >
-              {initialsFor(org.name, user?.email)}
-            </button>
-            {accountPanel}
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-4xl space-y-4 px-4 py-5 sm:px-6 sm:py-8">{children}</main>
+        </header>
+        <main className="space-y-4 px-4 py-5 sm:px-6 sm:py-8">{children}</main>
+      </div>
     </div>
   );
 }
@@ -519,7 +583,20 @@ export default function BusinessPulsePage() {
   // move together instead of some numbers changing period and others not.
   const monthExpenses = expenses ? expenses.filter((expense) => expense.expenseDate.startsWith(selected.key)) : null;
   const expensesTotal = monthExpenses ? monthExpenses.reduce((sum, expense) => sum + expense.amount, 0) : null;
-  const utilitiesTotal = monthExpenses ? monthExpenses.filter((expense) => expense.category === "utilities").reduce((sum, expense) => sum + expense.amount, 0) : null;
+  // Per-category breakdown (Operating costs) — only categories that
+  // actually have spend this period show up; nothing is padded in with
+  // a zero to fill a fixed row. Sorted highest first so the categories
+  // actually worth an owner's attention lead.
+  const expensesByCategory = monthExpenses
+    ? Array.from(
+        monthExpenses.reduce((map, expense) => {
+          map.set(expense.category, (map.get(expense.category) ?? 0) + expense.amount);
+          return map;
+        }, new Map<string, number>()),
+      )
+        .map(([category, amount]) => ({ category, amount }))
+        .sort((a, b) => b.amount - a.amount)
+    : [];
 
   // "Needs purchasing" — real fabric names and real remaining quantities,
   // just measured against a fixed placeholder threshold rather than a
@@ -559,6 +636,31 @@ export default function BusinessPulsePage() {
   }));
   const allAttentionActions = [...attentionActions, ...lowStockActions];
 
+  // Highlights — the positive counterpart to Needs attention: real good
+  // news, not manufactured praise. Every entry here is a fact already
+  // derivable from data computed above; skipped entirely (not shown as an
+  // empty section) when there's nothing genuine to report. The sales-up
+  // entry naturally doesn't appear during noTransactionsYet since
+  // salesChangePct is null there (no real trend yet) — no special-casing
+  // needed for that one.
+  const activeTextileProductCount = data.products.filter((product) => product.active && product.sectorId === "textile").length;
+  const highlights: { key: string; title: string }[] = [];
+  if (salesChangePct != null && salesChangePct > 0) {
+    highlights.push({
+      key: "sales-up",
+      title: tt(locale, `අලෙවිය පසුගිය මාසයට වඩා ${salesChangePct}%කින් ඉහළ`, `Sales up ${salesChangePct}% vs last month`, `கடந்த மாதத்தை விட விற்பனை ${salesChangePct}% அதிகரிப்பு`),
+    });
+  }
+  if (textileSnapshot && textileSnapshot.textileWorkflow.overdueAmount === 0) {
+    highlights.push({ key: "no-overdue", title: tt(locale, "පැහැර හැරුණු ලැබිය යුතු මුදල් නැත", "No overdue receivables", "தாமதமான பெறத்தக்கவை இல்லை") });
+  }
+  if (textileSnapshot && qualityHolds === 0) {
+    highlights.push({ key: "no-holds", title: tt(locale, "තත්ත්ව රඳවා ගැනීම් 0 — සියල්ල පැහැදිලිය", "0 quality holds — all clear", "0 தர நிறுத்தங்கள் — அனைத்தும் தெளிவு") });
+  }
+  if (textileSnapshot && activeTextileProductCount > 0 && lowStockFabrics.length === 0) {
+    highlights.push({ key: "well-stocked", title: tt(locale, "සියලුම රෙදි වර්ග ප්‍රමාණවත් ලෙස තොගයේ ඇත", "All fabrics well stocked", "அனைத்து துணி வகைகளும் போதுமான சரக்கில் உள்ளன") });
+  }
+
   return (
     <PulseShell attentionCount={allAttentionActions.length} onBellClick={scrollToAttention}>
       {/* Title row + period switch. */}
@@ -592,6 +694,16 @@ export default function BusinessPulsePage() {
           )}
         </div>
       </div>
+      {/* Plain-language summary — says what the numbers below mean in one
+          sentence, the way a person would say it out loud, before making
+          the reader assemble it themselves from separate cards. Built
+          entirely from salesChangePct and allAttentionActions.length,
+          both already real and computed above; skipped during
+          noTransactionsYet since there's no real sales trend yet and the
+          sample-preview banner already explains that state. */}
+      {!noTransactionsYet && (
+        <p className="-mt-2 text-sm text-slate-600">{buildSummaryLine(locale, salesChangePct, allAttentionActions.length)}</p>
+      )}
       {org.isAuthenticated && (
         <p className="-mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-700">
           <SyncIcon className="h-3.5 w-3.5" />
@@ -612,9 +724,9 @@ export default function BusinessPulsePage() {
             <span className="font-bold">{tt(locale, "නියැදි දත්ත", "Sample preview", "மாதிரி முன்னோட்டம்")}</span>{" "}
             {tt(
               locale,
-              "පහත ව්‍යාපාර ස්පන්දනය, ලාභය සහ අද දිනය කොටස් නියැදි ගණන් පෙන්වයි — ඔබේ පළමු අලෙවියෙන් පසු සැබෑ ගණන් වලින් ප්‍රතිස්ථාපනය වේ. Roll තොගය, තොගය සහ වියදම්, සහ අවධානය අවශ්‍ය කොටස් සැබෑය.",
-              "The pulse, profit and Today sections below show sample numbers — they're replaced by your real figures after your first sale. Roll inventory, Stock & spending, and Needs attention are already real.",
-              "கீழே உள்ள துடிப்பு, லாபம் மற்றும் இன்று பிரிவுகள் மாதிரி எண்களைக் காட்டுகின்றன — உங்கள் முதல் விற்பனைக்குப் பிறகு உண்மையான எண்களால் மாற்றப்படும். Roll சரக்கு, சரக்கு & செலவு, மற்றும் கவனம் தேவை பிரிவுகள் ஏற்கனவே உண்மையானவை.",
+              "පහත ව්‍යාපාර ස්පන්දනය, ලාභය සහ අද දිනය කොටස් නියැදි ගණන් පෙන්වයි — ඔබේ පළමු අලෙවියෙන් පසු සැබෑ ගණන් වලින් ප්‍රතිස්ථාපනය වේ. Roll තොගය, තොගය සහ වියදම්, විශේෂාංග, සහ අවධානය අවශ්‍ය කොටස් සැබෑය.",
+              "The pulse, profit and Today sections below show sample numbers — they're replaced by your real figures after your first sale. Roll inventory, Stock & spending, Highlights, and Needs attention are already real.",
+              "கீழே உள்ள துடிப்பு, லாபம் மற்றும் இன்று பிரிவுகள் மாதிரி எண்களைக் காட்டுகின்றன — உங்கள் முதல் விற்பனைக்குப் பிறகு உண்மையான எண்களால் மாற்றப்படும். Roll சரக்கு, சரக்கு & செலவு, சிறப்பம்சங்கள், மற்றும் கவனம் தேவை பிரிவுகள் ஏற்கனவே உண்மையானவை.",
             )}
           </p>
         </div>
@@ -751,6 +863,26 @@ export default function BusinessPulsePage() {
         )}
       </div>
 
+      {/* Highlights — the positive counterpart to Needs attention above.
+          Real facts only (see the highlights array's own docstring);
+          the whole card is skipped when there's nothing genuine to show,
+          rather than rendering an empty "no highlights" state. */}
+      {highlights.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
+          <h2 className="mb-3 text-base font-bold tracking-tight text-slate-900">{tt(locale, "විශේෂාංග", "Highlights", "சிறப்பம்சங்கள்")}</h2>
+          <div className="space-y-2">
+            {highlights.map((highlight) => (
+              <div key={highlight.key} className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/50 px-3.5 py-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                  <CheckIcon className="h-4 w-4" />
+                </span>
+                <p className="text-sm font-semibold text-emerald-900">{highlight.title}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Roll inventory. */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
         <div className="mb-3 flex items-center justify-between">
@@ -792,10 +924,13 @@ export default function BusinessPulsePage() {
           expenses follow the page's own This month / Last month switch, so
           it stays consistent with every other figure here. Not covered by
           the sample-preview banner — both sources are real regardless of
-          whether a sale has happened yet. */}
+          whether a sale has happened yet. Operating costs breaks the total
+          into its real categories (rent/utilities/salaries/...) rather than
+          one lump figure — only categories with real spend this period
+          render, nothing padded in. */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
         <h2 className="mb-3 text-base font-bold tracking-tight text-slate-900">{tt(locale, "තොගය සහ වියදම්", "Stock & spending", "சரக்கு & செலவு")}</h2>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <p className="text-lg font-bold text-slate-950">{stockValueLkr != null ? formatCompactLkr(stockValueLkr) : "—"}</p>
             <p className="text-xs text-slate-500">{tt(locale, "තොග වටිනාකම", "Stock value", "சரக்கு மதிப்பு")}</p>
@@ -806,11 +941,31 @@ export default function BusinessPulsePage() {
               {period === "this_month" ? tt(locale, "මෙම මාසයේ වියදම්", "Expenses this month", "இந்த மாத செலவுகள்") : tt(locale, "පසුගිය මාසයේ වියදම්", "Expenses last month", "கடந்த மாத செலவுகள்")}
             </p>
           </div>
-          <div>
-            <p className="text-lg font-bold text-slate-950">{utilitiesTotal != null ? formatCompactLkr(utilitiesTotal) : "—"}</p>
-            <p className="text-xs text-slate-500">{tt(locale, "විදුලි/ජල බිල", "Utilities (elec/water)", "மின்/நீர் கட்டணம்")}</p>
-          </div>
         </div>
+
+        {expensesByCategory.length > 0 && (
+          <>
+            <p className="mb-2 mt-4 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+              {tt(locale, "මෙහෙයුම් වියදම්", "Operating costs", "செயல்பாட்டு செலவுகள்")}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {expensesByCategory.map(({ category, amount }) => {
+                const Icon = expenseCategoryIcon(category);
+                return (
+                  <div key={category} className="flex min-w-[7.5rem] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 ring-1 ring-inset ring-slate-200">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-slate-700">{t(`expenses.cat_${category}`)}</p>
+                      <p className="text-sm font-bold text-slate-950">{formatCompactLkr(amount)}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Today at a glance — real "today" figures from getDashboardStats()
@@ -860,7 +1015,7 @@ export default function BusinessPulsePage() {
           operational sidebar (see PulseShell's docstring). */}
       <nav
         aria-label={tt(locale, "ඉක්මන් සංචලනය", "Quick navigation", "விரைவு வழிசெலுத்தல்")}
-        className="fixed inset-x-0 bottom-0 z-30 grid h-[4.25rem] grid-cols-5 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 mx-auto grid h-[4.25rem] max-w-md grid-cols-5 border-x border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden"
       >
         <span className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-teal-700" aria-current="page">
           <HomeIcon className="h-5 w-5" />
