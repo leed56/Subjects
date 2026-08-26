@@ -207,7 +207,7 @@ export function PharmacyBusinessPulse() {
     title: item.name,
     detail:
       item.stockQty <= 0
-        ? tt(locale, "තොගයේ නැත", "Out of stock", "சரக்கு இல்லை")
+        ? tt(locale, "තොගයේ නැත", "Out of stock", "கையிருப்பு இல்லை")
         : tt(locale, `${item.stockQty} ${item.unit} ඉතිරිය`, `${item.stockQty} ${item.unit} remaining`, `${item.stockQty} ${item.unit} மீதம்`),
     href: "/stock/advanced/receive",
     tone: item.stockQty <= 0 ? "danger" : "warning",
@@ -230,10 +230,10 @@ export function PharmacyBusinessPulse() {
     highlights.push({ key: "no-expiry-risk", title: tt(locale, "කල් ඉකුත් වීමේ අවදානමක් නැත", "No expiry risk right now", "காலாவதி ஆபத்து இல்லை") });
   }
   if (intel.activeSkuCount > 0 && intel.outOfStockCount === 0) {
-    highlights.push({ key: "no-out-of-stock", title: tt(locale, "කිසිදු භාණ්ඩයක් තොගයේ නැති නැත", "Nothing is out of stock", "எதுவும் சரக்கு தீர்ந்துவிடவில்லை") });
+    highlights.push({ key: "no-out-of-stock", title: tt(locale, "කිසිදු භාණ්ඩයක් තොගයේ නැති නැත", "Nothing is out of stock", "எதுவும் கையிருப்பு தீர்ந்துவிடவில்லை") });
   }
   if (intel.activeSkuCount > 0 && intel.lowStockCount === 0) {
-    highlights.push({ key: "well-stocked", title: tt(locale, "සියලුම භාණ්ඩ ප්‍රමාණවත් ලෙස තොගයේ ඇත", "All products well stocked", "அனைத்து பொருட்களும் போதுமான சரக்கில் உள்ளன") });
+    highlights.push({ key: "well-stocked", title: tt(locale, "සියලුම භාණ්ඩ ප්‍රමාණවත් ලෙස තොගයේ ඇත", "All products well stocked", "அனைத்து பொருட்களும் போதுமான கையிருப்பில் உள்ளன") });
   }
 
   return (
@@ -293,7 +293,7 @@ export function PharmacyBusinessPulse() {
               locale,
               "පහත ව්‍යාපාර ස්පන්දනය, ලාභය සහ අද දිනය කොටස් නියැදි ගණන් පෙන්වයි — ඔබේ පළමු අලෙවියෙන් පසු සැබෑ ගණන් වලින් ප්‍රතිස්ථාපනය වේ. භාණ්ඩ තොගය, තොගය සහ වියදම්, විශේෂාංග, සහ අවධානය අවශ්‍ය කොටස් සැබෑය.",
               "The pulse, profit and Today sections below show sample numbers — they're replaced by your real figures after your first sale. Medicine stock, Stock & spending, Highlights, and Needs attention are already real.",
-              "கீழே உள்ள துடிப்பு, லாபம் மற்றும் இன்று பிரிவுகள் மாதிரி எண்களைக் காட்டுகின்றன — உங்கள் முதல் விற்பனைக்குப் பிறகு உண்மையான எண்களால் மாற்றப்படும். மருந்து சரக்கு, சரக்கு & செலவு, சிறப்பம்சங்கள், மற்றும் கவனம் தேவை பிரிவுகள் ஏற்கனவே உண்மையானவை.",
+              "கீழே உள்ள துடிப்பு, லாபம் மற்றும் இன்று பிரிவுகள் மாதிரி எண்களைக் காட்டுகின்றன — உங்கள் முதல் விற்பனைக்குப் பிறகு உண்மையான எண்களால் மாற்றப்படும். மருந்து கையிருப்பு, கையிருப்பு & செலவு, சிறப்பம்சங்கள், மற்றும் கவனம் தேவை பிரிவுகள் ஏற்கனவே உண்மையானவை.",
             )}
           </p>
         </div>
@@ -325,7 +325,7 @@ export function PharmacyBusinessPulse() {
               {formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.grossProfit : selected.profit)}
             </p>
             <p className="mt-0.5 text-xs font-medium text-emerald-400">
-              {noTransactionsYet ? SAMPLE_PULSE.marginPct : marginPct}% {tt(locale, "ආන්තිකය", "margin", "விளிம்பு")}
+              {noTransactionsYet ? SAMPLE_PULSE.marginPct : marginPct}% {tt(locale, "ආන්තිකය", "margin", "லாப வரம்பு")}
             </p>
           </div>
           <div className="border-l border-slate-800 pl-4">
@@ -358,13 +358,13 @@ export function PharmacyBusinessPulse() {
         />
         {noTransactionsYet && (
           <StatCard
-            label={tt(locale, "තොග වටිනාකම", "Stock value", "சரக்கு மதிப்பு")}
+            label={tt(locale, "තොග වටිනාකම", "Stock value", "கையிருப்பு மதிப்பு")}
             value={formatCompactLkr(SAMPLE_PULSE.stockValue)}
-            hint={tt(locale, "වර්තමාන තොගය", "Current inventory", "தற்போதைய சரக்கு")}
+            hint={tt(locale, "වර්තමාන තොගය", "Current inventory", "தற்போதைய கையிருப்பு")}
           />
         )}
         <StatCard
-          label={tt(locale, "අඩු තොග", "Low stock", "குறைந்த சரக்கு")}
+          label={tt(locale, "අඩු තොග", "Low stock", "குறைந்த கையிருப்பு")}
           value={String(intel.lowStockCount)}
           hint={intel.lowStockCount > 0 ? tt(locale, "නැවත ඇණවුම් කරන්න", "Needs reordering", "மறு ஆர்டர் தேவை") : tt(locale, "සියල්ල පැහැදිලිය", "All clear", "அனைத்தும் தெளிவு")}
           tone={intel.lowStockCount > 0 ? "warning" : "positive"}
@@ -409,9 +409,9 @@ export function PharmacyBusinessPulse() {
           the pharmacy analog of textile's Roll inventory tile. */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-bold tracking-tight text-slate-100">{tt(locale, "භාණ්ඩ තොගය", "Medicine stock", "மருந்து சரக்கு")}</h2>
+          <h2 className="text-base font-bold tracking-tight text-slate-100">{tt(locale, "භාණ්ඩ තොගය", "Medicine stock", "மருந்து கையிருப்பு")}</h2>
           <Link href="/stock" className="text-xs font-semibold text-teal-300 hover:underline">
-            {tt(locale, "සියලු තොග බලන්න →", "View all stock →", "அனைத்து சரக்கையும் பார்க்க →")}
+            {tt(locale, "සියලු තොග බලන්න →", "View all stock →", "அனைத்து கையிருப்பையும் பார்க்க →")}
           </Link>
         </div>
         <div className="grid grid-cols-2 divide-x divide-y divide-slate-800 overflow-hidden rounded-xl border border-slate-800">
@@ -421,7 +421,7 @@ export function PharmacyBusinessPulse() {
           </div>
           <div className="p-3.5">
             <p className="text-xl font-bold text-slate-50">{intel.outOfStockCount}</p>
-            <p className="text-xs text-slate-400">{tt(locale, "තොගයේ නැති", "Out of stock", "சரக்கு இல்லை")}</p>
+            <p className="text-xs text-slate-400">{tt(locale, "තොගයේ නැති", "Out of stock", "கையிருப்பு இல்லை")}</p>
           </div>
           <div className="p-3.5">
             <p className="text-xl font-bold text-slate-50">{intel.expiredLotCount}</p>
@@ -436,11 +436,11 @@ export function PharmacyBusinessPulse() {
 
       {/* Stock & spending. */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
-        <h2 className="mb-3 text-base font-bold tracking-tight text-slate-100">{tt(locale, "තොගය සහ වියදම්", "Stock & spending", "சரக்கு & செலவு")}</h2>
+        <h2 className="mb-3 text-base font-bold tracking-tight text-slate-100">{tt(locale, "තොගය සහ වියදම්", "Stock & spending", "கையிருப்பு & செலவு")}</h2>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <p className="text-lg font-bold text-slate-50">{formatCompactLkr(stockValueLkr)}</p>
-            <p className="text-xs text-slate-400">{tt(locale, "තොග වටිනාකම", "Stock value", "சரக்கு மதிப்பு")}</p>
+            <p className="text-xs text-slate-400">{tt(locale, "තොග වටිනාකම", "Stock value", "கையிருப்பு மதிப்பு")}</p>
           </div>
           <div>
             <p className="text-lg font-bold text-slate-50">{expensesTotal != null ? formatCompactLkr(expensesTotal) : "—"}</p>
@@ -500,7 +500,7 @@ export function PharmacyBusinessPulse() {
           href="/stock/advanced/receive"
           className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900 px-4 text-sm font-semibold text-slate-300 hover:bg-slate-800/60"
         >
-          {tt(locale, "තොගය ලබාගන්න", "Receive stock", "சரக்கு பெறவும்")}
+          {tt(locale, "තොගය ලබාගන්න", "Receive stock", "கையிருப்பு பெறவும்")}
         </Link>
       </div>
 
@@ -519,11 +519,11 @@ export function PharmacyBusinessPulse() {
         </Link>
         <Link href="/stock" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-400">
           <StockIcon className="h-5 w-5" />
-          {tt(locale, "තොගය", "Stock", "சரக்கு")}
+          {tt(locale, "තොගය", "Stock", "கையிருப்பு")}
         </Link>
         <button type="button" onClick={scrollToAttention} className="relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-400">
           <BellIcon className="h-5 w-5" />
-          {tt(locale, "ඇඟවීම්", "Alerts", "விழிப்பூட்டல்")}
+          {tt(locale, "ඇඟවීම්", "Alerts", "எச்சரிக்கைகள்")}
           {allAttentionActions.length > 0 && (
             <span className="absolute right-[calc(50%-1.35rem)] top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-black text-white">
               {allAttentionActions.length > 9 ? "9+" : allAttentionActions.length}

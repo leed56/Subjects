@@ -309,7 +309,7 @@ export function TextileBusinessPulse() {
     title: entry.product.name,
     detail:
       entry.remaining <= 0
-        ? tt(locale, "තොගයේ නැත", "Out of stock", "சரக்கு இல்லை")
+        ? tt(locale, "තොගයේ නැත", "Out of stock", "கையிருப்பு இல்லை")
         : tt(
             locale,
             `${entry.remaining.toFixed(1)} ${entry.unit === "metre" ? "m" : "yd"} ඉතිරිය`,
@@ -343,7 +343,7 @@ export function TextileBusinessPulse() {
     highlights.push({ key: "no-holds", title: tt(locale, "තත්ත්ව රඳවා ගැනීම් 0 — සියල්ල පැහැදිලිය", "0 quality holds — all clear", "0 தர நிறுத்தங்கள் — அனைத்தும் தெளிவு") });
   }
   if (textileSnapshot && activeTextileProductCount > 0 && lowStockFabrics.length === 0) {
-    highlights.push({ key: "well-stocked", title: tt(locale, "සියලුම රෙදි වර්ග ප්‍රමාණවත් ලෙස තොගයේ ඇත", "All fabrics well stocked", "அனைத்து துணி வகைகளும் போதுமான சரக்கில் உள்ளன") });
+    highlights.push({ key: "well-stocked", title: tt(locale, "සියලුම රෙදි වර්ග ප්‍රමාණවත් ලෙස තොගයේ ඇත", "All fabrics well stocked", "அனைத்து துணி வகைகளும் போதுமான கையிருப்பில் உள்ளன") });
   }
 
   return (
@@ -404,7 +404,7 @@ export function TextileBusinessPulse() {
               locale,
               "පහත ව්‍යාපාර ස්පන්දනය, ලාභය සහ අද දිනය කොටස් නියැදි ගණන් පෙන්වයි — ඔබේ පළමු අලෙවියෙන් පසු සැබෑ ගණන් වලින් ප්‍රතිස්ථාපනය වේ. Roll තොගය, තොගය සහ වියදම්, විශේෂාංග, සහ අවධානය අවශ්‍ය කොටස් සැබෑය.",
               "The pulse, profit and Today sections below show sample numbers — they're replaced by your real figures after your first sale. Roll inventory, Stock & spending, Highlights, and Needs attention are already real.",
-              "கீழே உள்ள துடிப்பு, லாபம் மற்றும் இன்று பிரிவுகள் மாதிரி எண்களைக் காட்டுகின்றன — உங்கள் முதல் விற்பனைக்குப் பிறகு உண்மையான எண்களால் மாற்றப்படும். Roll சரக்கு, சரக்கு & செலவு, சிறப்பம்சங்கள், மற்றும் கவனம் தேவை பிரிவுகள் ஏற்கனவே உண்மையானவை.",
+              "கீழே உள்ள துடிப்பு, லாபம் மற்றும் இன்று பிரிவுகள் மாதிரி எண்களைக் காட்டுகின்றன — உங்கள் முதல் விற்பனைக்குப் பிறகு உண்மையான எண்களால் மாற்றப்படும். Roll கையிருப்பு, கையிருப்பு & செலவு, சிறப்பம்சங்கள், மற்றும் கவனம் தேவை பிரிவுகள் ஏற்கனவே உண்மையானவை.",
             )}
           </p>
         </div>
@@ -436,7 +436,7 @@ export function TextileBusinessPulse() {
               {formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.grossProfit : selected.profit)}
             </p>
             <p className="mt-0.5 text-xs font-medium text-emerald-400">
-              {noTransactionsYet ? SAMPLE_PULSE.marginPct : marginPct}% {tt(locale, "ආන්තිකය", "margin", "விளிம்பு")}
+              {noTransactionsYet ? SAMPLE_PULSE.marginPct : marginPct}% {tt(locale, "ආන්තිකය", "margin", "லாப வரம்பு")}
             </p>
           </div>
           <div className="border-l border-slate-800 pl-4">
@@ -459,7 +459,7 @@ export function TextileBusinessPulse() {
             locale,
             `සැබෑ Rolls ${rollSummary?.activeRolls ?? 0}ක් තොගයේ ඇත — විකිණීමට සූදානම්.`,
             `${rollSummary?.activeRolls ?? 0} real rolls are stocked and ready to sell.`,
-            `உண்மையான ${rollSummary?.activeRolls ?? 0} Rolls சரக்கில் தயாராக உள்ளன.`,
+            `உண்மையான ${rollSummary?.activeRolls ?? 0} Rolls கையிருப்பில் தயாராக உள்ளன.`,
           )}
         </p>
       )}
@@ -489,7 +489,7 @@ export function TextileBusinessPulse() {
         />
         {noTransactionsYet && (
           <StatCard
-            label={tt(locale, "තොග වටිනාකම", "Stock value", "சரக்கு மதிப்பு")}
+            label={tt(locale, "තොග වටිනාකම", "Stock value", "கையிருப்பு மதிப்பு")}
             value={formatCompactLkr(SAMPLE_PULSE.stockValue)}
             hint={`↑ ${SAMPLE_PULSE.stockValueChangePct}% ${tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}`}
           />
@@ -537,7 +537,7 @@ export function TextileBusinessPulse() {
       {/* Roll inventory. */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-bold tracking-tight text-slate-100">{tt(locale, "රෙදි Roll තොගය", "Roll inventory", "துணி Roll சரக்கு")}</h2>
+          <h2 className="text-base font-bold tracking-tight text-slate-100">{tt(locale, "රෙදි Roll තොගය", "Roll inventory", "துணி Roll கையிருப்பு")}</h2>
           <Link href="/stock/rolls" className="text-xs font-semibold text-teal-300 hover:underline">
             {tt(locale, "සියලු Rolls බලන්න →", "View all rolls →", "அனைத்து Rolls பார்க்க →")}
           </Link>
@@ -570,11 +570,11 @@ export function TextileBusinessPulse() {
 
       {/* Stock & spending. */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
-        <h2 className="mb-3 text-base font-bold tracking-tight text-slate-100">{tt(locale, "තොගය සහ වියදම්", "Stock & spending", "சரக்கு & செலவு")}</h2>
+        <h2 className="mb-3 text-base font-bold tracking-tight text-slate-100">{tt(locale, "තොගය සහ වියදම්", "Stock & spending", "கையிருப்பு & செலவு")}</h2>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <p className="text-lg font-bold text-slate-50">{stockValueLkr != null ? formatCompactLkr(stockValueLkr) : "—"}</p>
-            <p className="text-xs text-slate-400">{tt(locale, "තොග වටිනාකම", "Stock value", "சரக்கு மதிப்பு")}</p>
+            <p className="text-xs text-slate-400">{tt(locale, "තොග වටිනාකම", "Stock value", "கையிருப்பு மதிப்பு")}</p>
           </div>
           <div>
             <p className="text-lg font-bold text-slate-50">{expensesTotal != null ? formatCompactLkr(expensesTotal) : "—"}</p>
@@ -663,7 +663,7 @@ export function TextileBusinessPulse() {
         </Link>
         <button type="button" onClick={scrollToAttention} className="relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-400">
           <BellIcon className="h-5 w-5" />
-          {tt(locale, "ඇඟවීම්", "Alerts", "விழிப்பூட்டல்")}
+          {tt(locale, "ඇඟවීම්", "Alerts", "எச்சரிக்கைகள்")}
           {allAttentionActions.length > 0 && (
             <span className="absolute right-[calc(50%-1.35rem)] top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-black text-white">
               {allAttentionActions.length > 9 ? "9+" : allAttentionActions.length}
