@@ -112,24 +112,35 @@ function monthCashCollected(sales: Sale[], payments: CustomerPayment[], monthKey
 }
 
 /** Small inline sparkline — only ever fed a real series (see hero below).
- * No axes, no labels: it exists purely to show shape/direction at a glance. */
+ * No axes, no labels: it exists purely to show shape/direction at a glance.
+ *
+ * Scales to the series' OWN min..max, not to zero. Anchoring the floor at
+ * zero (the previous `Math.min(...values, 0)`) meant a month range of
+ * 3.9M..4.8M occupied only ~19% of the box — every wave got flattened into
+ * a sliver near the top no matter what the underlying numbers did. A
+ * sparkline's job is relative shape, not absolute magnitude (the real
+ * figure is printed right next to it), so the series range is the correct
+ * domain here. */
 function Sparkline({ values, stroke }: { values: number[]; stroke: string }) {
   if (values.length < 2) return null;
-  const w = 96;
-  const h = 32;
-  const padY = 4;
-  const max = Math.max(...values, 1);
-  const min = Math.min(...values, 0);
-  const range = Math.max(1, max - min);
+  const w = 128;
+  const h = 48;
+  const padY = 6;
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  // Guard a perfectly flat series (every value identical) against /0 — it
+  // then draws as a centred straight line, which is the honest rendering.
+  const range = max - min || 1;
+  const plot = h - padY * 2;
   const points = values.map((v, i) => ({
     x: (i / (values.length - 1)) * w,
-    y: padY + (h - padY * 2) - ((v - min) / range) * (h - padY * 2),
+    y: padY + plot - ((v - min) / range) * plot,
   }));
   const last = points[points.length - 1];
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-8 w-24 shrink-0" aria-hidden="true">
-      <path d={smoothPath(points)} fill="none" stroke={stroke} strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={last.x} cy={last.y} r="2.5" fill={stroke} />
+    <svg viewBox={`0 0 ${w} ${h}`} className="h-12 w-32 shrink-0" aria-hidden="true">
+      <path d={smoothPath(points)} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={last.x} cy={last.y} r="3" fill={stroke} />
     </svg>
   );
 }
