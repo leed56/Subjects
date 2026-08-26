@@ -44,8 +44,6 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { ProLoadingState } from "@/components/ui/pro-shell";
-import { EmptyState } from "@/components/ui/primitives";
 import {
   BellIcon,
   ChevronDownIcon,
@@ -207,10 +205,10 @@ function smoothPath(points: { x: number; y: number }[]): string {
 
 type StatTone = "default" | "positive" | "warning" | "danger";
 const STAT_VALUE_TONE: Record<StatTone, string> = {
-  default: "text-slate-950",
-  positive: "text-emerald-700",
-  warning: "text-amber-700",
-  danger: "text-rose-700",
+  default: "text-slate-50",
+  positive: "text-emerald-400",
+  warning: "text-amber-400",
+  danger: "text-rose-400",
 };
 
 /** One card in the horizontally-scrolling stat row. Deliberately no
@@ -220,10 +218,10 @@ const STAT_VALUE_TONE: Record<StatTone, string> = {
  * that doesn't exist. */
 function StatCard({ label, value, hint, tone = "default" }: { label: string; value: string; hint: string; tone?: StatTone }) {
   return (
-    <div className="w-[13.5rem] shrink-0 snap-start rounded-2xl border border-slate-200 bg-white p-4">
-      <p className="text-xs font-semibold text-slate-500">{label}</p>
+    <div className="w-[13.5rem] shrink-0 snap-start rounded-2xl border border-slate-800 bg-slate-900 p-4">
+      <p className="text-xs font-semibold text-slate-400">{label}</p>
       <p className={`mt-1.5 text-2xl font-bold tracking-[-0.02em] ${STAT_VALUE_TONE[tone]}`}>{value}</p>
-      <p className={`mt-1 text-xs font-medium ${tone === "danger" ? "text-rose-600" : "text-slate-400"}`}>{hint}</p>
+      <p className={`mt-1 text-xs font-medium ${tone === "danger" ? "text-rose-400" : "text-slate-500"}`}>{hint}</p>
     </div>
   );
 }
@@ -290,6 +288,35 @@ function buildSummaryLine(locale: Locale, salesChangePct: number | null, attenti
  * without a settings screen; a real per-fabric threshold is a follow-up. */
 const LOW_STOCK_THRESHOLD = 10;
 
+/** Dark-themed loading state, local to this page — the shared
+ * ProLoadingState (pro-shell.tsx) is hardcoded light (bg-white) and used
+ * across the rest of the app, which stays light; swapping its colors
+ * would break every other page that uses it. Small enough to duplicate
+ * rather than add a theme prop to a component ~30 other pages share. */
+function PulseLoadingState({ label }: { label: string }) {
+  return (
+    <div role="status" aria-live="polite" aria-busy="true" className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-[0_8px_30px_rgba(0,0,0,0.2)]">
+      <div className="flex items-center gap-3 text-sm font-medium text-slate-400">
+        <span aria-hidden="true" className="h-2.5 w-2.5 animate-pulse rounded-full bg-teal-400" />
+        {label}
+      </div>
+    </div>
+  );
+}
+
+/** Dark-themed empty state, local to this page for the same reason as
+ * PulseLoadingState above — the shared EmptyState (primitives.tsx) is
+ * hardcoded light and shared app-wide. */
+function PulseEmptyState({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/60 px-6 py-11 text-center">
+      <p className="text-sm font-bold text-slate-100">{title}</p>
+      {description && <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate-400">{description}</p>}
+      {action && <div className="mt-4 flex justify-center">{action}</div>}
+    </div>
+  );
+}
+
 /**
  * Business Pulse's own chrome — deliberately not <AppShell>. AppShell's
  * Sidebar carries the full 20+-item operational nav (Sales, Stock, Jobs,
@@ -330,27 +357,27 @@ function PulseShell({
   };
 
   const accountPanel = accountOpen && (
-    <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
-      <div className="rounded-xl bg-slate-50 px-3 py-2.5">
-        <p className="truncate text-sm font-semibold text-slate-950">{org.name}</p>
-        <p className="truncate text-xs text-slate-500">{user?.email}</p>
+    <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl border border-slate-800 bg-slate-900 p-2 shadow-xl">
+      <div className="rounded-xl bg-slate-800/60 px-3 py-2.5">
+        <p className="truncate text-sm font-semibold text-slate-50">{org.name}</p>
+        <p className="truncate text-xs text-slate-400">{user?.email}</p>
       </div>
       <button
         type="button"
         onClick={() => setLocale(nextLocale(locale))}
-        className="mt-1.5 flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+        className="mt-1.5 flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/60"
       >
         <span>{LOCALE_NAMES[locale]}</span>
-        <span className="text-xs font-semibold text-teal-700">{LOCALE_NAMES[nextLocale(locale)]} →</span>
+        <span className="text-xs font-semibold text-teal-300">{LOCALE_NAMES[nextLocale(locale)]} →</span>
       </button>
-      <Link href="/dashboard" className="flex min-h-10 w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
+      <Link href="/dashboard" className="flex min-h-10 w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/60">
         {tt(locale, "සම්පූර්ණ dashboard", "Full dashboard", "முழு dashboard")} →
       </Link>
       {user && (
         <button
           type="button"
           onClick={() => void handleLogout()}
-          className="mt-1 flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50"
+          className="mt-1 flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-rose-400 hover:bg-rose-400/10"
         >
           <SignOutIcon className="h-4 w-4" />
           {tt(locale, "පිටවන්න", "Sign out", "வெளியேறு")}
@@ -360,28 +387,28 @@ function PulseShell({
   );
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.055),transparent_28rem),radial-gradient(circle_at_95%_12%,rgba(56,189,248,0.035),transparent_26rem),linear-gradient(180deg,#f5f8fc_0%,#edf3f8_100%)] pb-24 text-slate-950 lg:pb-6">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(45,212,191,0.09),transparent_28rem),radial-gradient(circle_at_95%_12%,rgba(56,189,248,0.05),transparent_26rem),linear-gradient(180deg,#0a1613_0%,#070f0d_100%)] pb-24 text-slate-50 lg:pb-6">
       {/* Locked to phone width (max-w-md) and bordered on both sides —
           on an actual phone this is invisible (the viewport IS this
           width), but on a desktop browser it stops Pulse from stretching
           into a wide dashboard and keeps the "separate, dedicated owner
           app" feel the rest of this page is built around. */}
-      <div className="mx-auto max-w-md min-h-screen border-x border-slate-200/70">
+      <div className="mx-auto max-w-md min-h-screen border-x border-slate-800/70">
         {/* Not sticky — a pinned header on a page this short adds a seam
             (and, in full-page screenshot tools that capture in scrolled
             slices, can visually duplicate mid-page) for no real benefit;
             Alerts/More in the bottom tab bar already cover the same
             reachability on mobile. */}
-        <header className="border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
+        <header className="border-b border-slate-800/70 bg-slate-900/80 backdrop-blur-xl">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
             <div className="flex min-w-0 items-center gap-2.5">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-400 to-teal-600 text-xs font-bold text-white shadow-sm shadow-teal-900/20">L</span>
               <div className="min-w-0 leading-tight">
-                <p className="truncate text-sm font-bold tracking-tight text-slate-950">LakBiz</p>
+                <p className="truncate text-sm font-bold tracking-tight text-slate-50">LakBiz</p>
                 <button
                   type="button"
                   onClick={() => setAccountOpen((v) => !v)}
-                  className="flex items-center gap-0.5 truncate text-xs font-medium text-slate-500 hover:text-slate-700"
+                  className="flex items-center gap-0.5 truncate text-xs font-medium text-slate-400 hover:text-slate-300"
                 >
                   <span className="truncate">{org.name}</span>
                   <ChevronDownIcon className="h-3.5 w-3.5 shrink-0" />
@@ -393,7 +420,7 @@ function PulseShell({
                 type="button"
                 onClick={onBellClick}
                 aria-label={tt(locale, "දැනුම්දීම්", "Notifications", "அறிவிப்புகள்")}
-                className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:border-teal-200 hover:bg-teal-50"
+                className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-slate-400 hover:border-teal-400/30 hover:bg-teal-400/10"
               >
                 <BellIcon className="h-4.5 w-4.5" />
                 {attentionCount > 0 && (
@@ -406,7 +433,7 @@ function PulseShell({
                 type="button"
                 onClick={() => setAccountOpen((v) => !v)}
                 aria-label={tt(locale, "ගිණුම", "Account", "கணக்கு")}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-600 text-xs font-bold text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-500 text-xs font-bold text-white"
               >
                 {initialsFor(org.name, user?.email)}
               </button>
@@ -509,7 +536,7 @@ export default function BusinessPulsePage() {
   if (!ready || !data) {
     return (
       <PulseShell attentionCount={0} onBellClick={() => {}}>
-        <ProLoadingState label={t("common.loading")} />
+        <PulseLoadingState label={t("common.loading")} />
       </PulseShell>
     );
   }
@@ -521,7 +548,7 @@ export default function BusinessPulsePage() {
   if (org.sector !== "textile" || orgRole !== "owner") {
     return (
       <PulseShell attentionCount={0} onBellClick={() => {}}>
-        <EmptyState
+        <PulseEmptyState
           title={tt(locale, "හිමිකරු පමණි", "Owner access only", "உரிமையாளர் அணுகல் மட்டும்")}
           description={tt(
             locale,
@@ -530,7 +557,7 @@ export default function BusinessPulsePage() {
             "Business Pulse தற்போது துணி வணிக உரிமையாளர்களுக்கு மட்டுமே கிடைக்கும்.",
           )}
           action={
-            <Link href="/dashboard" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <Link href="/dashboard" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-800 px-3.5 text-sm font-semibold text-slate-300 hover:bg-slate-800/60">
               {tt(locale, "සම්පූර්ණ dashboard", "Full dashboard", "முழு dashboard")} →
             </Link>
           }
@@ -665,18 +692,18 @@ export default function BusinessPulsePage() {
     <PulseShell attentionCount={allAttentionActions.length} onBellClick={scrollToAttention}>
       {/* Title row + period switch. */}
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-[-0.02em] text-slate-950">{tt(locale, "හිමිකරු දළ විශ්ලේෂණය", "Owner overview", "உரிமையாளர் கண்ணோட்டம்")}</h1>
+        <h1 className="text-2xl font-bold tracking-[-0.02em] text-slate-50">{tt(locale, "හිමිකරු දළ විශ්ලේෂණය", "Owner overview", "உரிமையாளர் கண்ணோட்டம்")}</h1>
         <div className="relative shrink-0" ref={periodRef}>
           <button
             type="button"
             onClick={() => setPeriodOpen((v) => !v)}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            className="flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-300 shadow-sm hover:bg-slate-800/60"
           >
             {period === "this_month" ? tt(locale, "මෙම මාසය", "This month", "இந்த மாதம்") : tt(locale, "පසුගිය මාසය", "Last month", "கடந்த மாதம்")}
-            <ChevronDownIcon className="h-4 w-4 text-slate-400" />
+            <ChevronDownIcon className="h-4 w-4 text-slate-500" />
           </button>
           {periodOpen && (
-            <div className="absolute right-0 top-full z-20 mt-1.5 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+            <div className="absolute right-0 top-full z-20 mt-1.5 w-40 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 py-1 shadow-lg">
               {(["this_month", "last_month"] as const).map((p) => (
                 <button
                   key={p}
@@ -685,7 +712,7 @@ export default function BusinessPulsePage() {
                     setPeriod(p);
                     setPeriodOpen(false);
                   }}
-                  className={`flex w-full items-center px-3 py-2 text-left text-sm font-medium ${period === p ? "bg-teal-50 text-teal-800" : "text-slate-600 hover:bg-slate-50"}`}
+                  className={`flex w-full items-center px-3 py-2 text-left text-sm font-medium ${period === p ? "bg-teal-400/10 text-teal-200" : "text-slate-300 hover:bg-slate-800/60"}`}
                 >
                   {p === "this_month" ? tt(locale, "මෙම මාසය", "This month", "இந்த மாதம்") : tt(locale, "පසුගිය මාසය", "Last month", "கடந்த மாதம்")}
                 </button>
@@ -702,13 +729,13 @@ export default function BusinessPulsePage() {
           noTransactionsYet since there's no real sales trend yet and the
           sample-preview banner already explains that state. */}
       {!noTransactionsYet && (
-        <p className="-mt-2 text-sm text-slate-600">{buildSummaryLine(locale, salesChangePct, allAttentionActions.length)}</p>
+        <p className="-mt-2 text-sm text-slate-300">{buildSummaryLine(locale, salesChangePct, allAttentionActions.length)}</p>
       )}
       {org.isAuthenticated && (
-        <p className="-mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+        <p className="-mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-400">
           <SyncIcon className="h-3.5 w-3.5" />
           {t("dash.cloud_synced")}
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
         </p>
       )}
 
@@ -718,9 +745,9 @@ export default function BusinessPulsePage() {
           sale exists. Needs Attention and Roll inventory are NOT covered
           by this banner because they're already real. */}
       {noTransactionsYet && (
-        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5">
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3.5 py-2.5">
           <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[10px] font-black text-white">i</span>
-          <p className="text-xs leading-5 text-amber-900">
+          <p className="text-xs leading-5 text-amber-200">
             <span className="font-bold">{tt(locale, "නියැදි දත්ත", "Sample preview", "மாதிரி முன்னோட்டம்")}</span>{" "}
             {tt(
               locale,
@@ -733,41 +760,41 @@ export default function BusinessPulsePage() {
       )}
 
       {/* Hero — Business pulse. */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-slate-500">{tt(locale, "ව්‍යාපාර ස්පන්දනය", "Business pulse", "வணிக துடிப்பு")}</p>
-            <p className="mt-1.5 text-[2.1rem] font-bold leading-none tracking-[-0.03em] text-slate-950 sm:text-4xl">
+            <p className="text-xs font-semibold text-slate-400">{tt(locale, "ව්‍යාපාර ස්පන්දනය", "Business pulse", "வணிக துடிப்பு")}</p>
+            <p className="mt-1.5 text-[2.1rem] font-bold leading-none tracking-[-0.03em] text-slate-50 sm:text-4xl">
               {formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.netSales : selected.revenue)}
             </p>
-            <p className="mt-1.5 text-xs font-medium text-slate-500">{tt(locale, "නිකුත් අලෙවිය", "Net sales", "நிகர விற்பனை")}</p>
+            <p className="mt-1.5 text-xs font-medium text-slate-400">{tt(locale, "නිකුත් අලෙවිය", "Net sales", "நிகர விற்பனை")}</p>
             {(noTransactionsYet || salesChangePct != null) && (
-              <p className={`mt-2 flex items-center gap-1 text-sm font-bold ${noTransactionsYet || salesUp ? "text-emerald-700" : "text-rose-700"}`}>
+              <p className={`mt-2 flex items-center gap-1 text-sm font-bold ${noTransactionsYet || salesUp ? "text-emerald-400" : "text-rose-400"}`}>
                 ↑ {Math.abs(noTransactionsYet ? SAMPLE_PULSE.salesChangePct : (salesChangePct ?? 0))}%
-                <span className="font-medium text-slate-400">{tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}</span>
+                <span className="font-medium text-slate-500">{tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}</span>
               </p>
             )}
           </div>
-          <Sparkline values={noTransactionsYet ? SAMPLE_PULSE.sparkline : sparklineValues} stroke="#0d9488" />
+          <Sparkline values={noTransactionsYet ? SAMPLE_PULSE.sparkline : sparklineValues} stroke="#2dd4bf" />
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
+        <div className="mt-4 grid grid-cols-2 gap-4 border-t border-slate-800 pt-4">
           <div>
-            <p className="text-xs font-semibold text-slate-500">{tt(locale, "දළ ලාභය", "Gross profit", "மொத்த லாபம்")}</p>
-            <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-950">
+            <p className="text-xs font-semibold text-slate-400">{tt(locale, "දළ ලාභය", "Gross profit", "மொத்த லாபம்")}</p>
+            <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-50">
               {formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.grossProfit : selected.profit)}
             </p>
-            <p className="mt-0.5 text-xs font-medium text-emerald-700">
+            <p className="mt-0.5 text-xs font-medium text-emerald-400">
               {noTransactionsYet ? SAMPLE_PULSE.marginPct : marginPct}% {tt(locale, "ආන්තිකය", "margin", "விளிம்பு")}
             </p>
           </div>
-          <div className="border-l border-slate-100 pl-4">
-            <p className="text-xs font-semibold text-slate-500">{tt(locale, "එකතු කළ මුදල්", "Cash collected", "வசூலிக்கப்பட்ட பணம்")}</p>
-            <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-950">
+          <div className="border-l border-slate-800 pl-4">
+            <p className="text-xs font-semibold text-slate-400">{tt(locale, "එකතු කළ මුදල්", "Cash collected", "வசூலிக்கப்பட்ட பணம்")}</p>
+            <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-50">
               {formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.cashCollected : cashCollected)}
             </p>
             {(noTransactionsYet || cashChangePct != null) && (
-              <p className="mt-0.5 text-xs font-medium text-emerald-700">
+              <p className="mt-0.5 text-xs font-medium text-emerald-400">
                 ↑ {Math.abs(noTransactionsYet ? SAMPLE_PULSE.cashChangePct : (cashChangePct ?? 0))}% {tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}
               </p>
             )}
@@ -776,7 +803,7 @@ export default function BusinessPulsePage() {
       </div>
 
       {noTransactionsYet && (
-        <p className="-mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+        <p className="-mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
           {tt(
             locale,
             `සැබෑ Rolls ${rollSummary?.activeRolls ?? 0}ක් තොගයේ ඇත — විකිණීමට සූදානම්.`,
@@ -839,7 +866,7 @@ export default function BusinessPulsePage() {
           about which card is actually in view. */}
       <div className="-mt-1.5 flex items-center justify-center gap-1.5" aria-hidden="true">
         {Array.from({ length: statCardCount }, (_, i) => (
-          <span key={i} className={`h-1.5 rounded-full transition-all ${i === activeCard ? "w-4 bg-teal-600" : "w-1.5 bg-slate-300"}`} />
+          <span key={i} className={`h-1.5 rounded-full transition-all ${i === activeCard ? "w-4 bg-teal-500" : "w-1.5 bg-slate-700"}`} />
         ))}
       </div>
 
@@ -847,15 +874,15 @@ export default function BusinessPulsePage() {
           Needs Attention card and the sector command centre
           (buildTextileAttentionActions). Never a separate, potentially
           contradictory list. */}
-      <div ref={attentionSectionRef} className="scroll-mt-20 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
+      <div ref={attentionSectionRef} className="scroll-mt-20 rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
         <div className="mb-3 flex items-center gap-2">
-          <h2 className="text-base font-bold tracking-tight text-slate-900">{tt(locale, "අවධානය අවශ්‍යයි", "Needs attention", "கவனம் தேவை")}</h2>
+          <h2 className="text-base font-bold tracking-tight text-slate-100">{tt(locale, "අවධානය අවශ්‍යයි", "Needs attention", "கவனம் தேவை")}</h2>
           {allAttentionActions.length > 0 && (
             <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[11px] font-bold text-white">{allAttentionActions.length}</span>
           )}
         </div>
         {allAttentionActions.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-sm text-slate-500">
+          <p className="rounded-lg border border-dashed border-slate-800 bg-slate-800/40 px-4 py-3 text-sm text-slate-400">
             {tt(locale, "සියල්ල පැහැදිලිය — කිසිවක් ඔබේ තීරණය අවශ්‍ය නොවේ.", "Everything is clear — nothing needs your decision right now.", "அனைத்தும் தெளிவாக உள்ளது — தற்போது எதுவும் உங்கள் முடிவுக்குத் தேவையில்லை.")}
           </p>
         ) : (
@@ -868,15 +895,15 @@ export default function BusinessPulsePage() {
           the whole card is skipped when there's nothing genuine to show,
           rather than rendering an empty "no highlights" state. */}
       {highlights.length > 0 && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
-          <h2 className="mb-3 text-base font-bold tracking-tight text-slate-900">{tt(locale, "විශේෂාංග", "Highlights", "சிறப்பம்சங்கள்")}</h2>
+        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
+          <h2 className="mb-3 text-base font-bold tracking-tight text-slate-100">{tt(locale, "විශේෂාංග", "Highlights", "சிறப்பம்சங்கள்")}</h2>
           <div className="space-y-2">
             {highlights.map((highlight) => (
-              <div key={highlight.key} className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/50 px-3.5 py-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+              <div key={highlight.key} className="flex items-center gap-3 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3.5 py-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-400">
                   <CheckIcon className="h-4 w-4" />
                 </span>
-                <p className="text-sm font-semibold text-emerald-900">{highlight.title}</p>
+                <p className="text-sm font-semibold text-emerald-200">{highlight.title}</p>
               </div>
             ))}
           </div>
@@ -884,35 +911,35 @@ export default function BusinessPulsePage() {
       )}
 
       {/* Roll inventory. */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-bold tracking-tight text-slate-900">{tt(locale, "රෙදි Roll තොගය", "Roll inventory", "துணி Roll சரக்கு")}</h2>
-          <Link href="/stock/rolls" className="text-xs font-semibold text-teal-700 hover:underline">
+          <h2 className="text-base font-bold tracking-tight text-slate-100">{tt(locale, "රෙදි Roll තොගය", "Roll inventory", "துணி Roll சரக்கு")}</h2>
+          <Link href="/stock/rolls" className="text-xs font-semibold text-teal-300 hover:underline">
             {tt(locale, "සියලු Rolls බලන්න →", "View all rolls →", "அனைத்து Rolls பார்க்க →")}
           </Link>
         </div>
-        <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-100">
+        <div className="grid grid-cols-2 divide-x divide-y divide-slate-800 overflow-hidden rounded-xl border border-slate-800">
           <div className="p-3.5">
-            <p className="text-xl font-bold text-slate-950">{rollSummary ? rollSummary.activeRolls : "—"}</p>
-            <p className="text-xs text-slate-500">{tt(locale, "විකිණිය හැකි Rolls", "Sellable rolls", "விற்கக்கூடிய Rolls")}</p>
+            <p className="text-xl font-bold text-slate-50">{rollSummary ? rollSummary.activeRolls : "—"}</p>
+            <p className="text-xs text-slate-400">{tt(locale, "විකිණිය හැකි Rolls", "Sellable rolls", "விற்கக்கூடிய Rolls")}</p>
           </div>
           <div className="p-3.5">
-            <p className="text-xl font-bold text-slate-950">
+            <p className="text-xl font-bold text-slate-50">
               {rollSummary ? rollSummary.metres.toLocaleString("en-LK", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : "—"}
-              <span className="ml-1 text-xs font-medium text-slate-400">m</span>
+              <span className="ml-1 text-xs font-medium text-slate-500">m</span>
             </p>
-            <p className="text-xs text-slate-500">{tt(locale, "මුළු මීටර්", "Total metres", "மொத்த மீட்டர்கள்")}</p>
+            <p className="text-xs text-slate-400">{tt(locale, "මුළු මීටර්", "Total metres", "மொத்த மீட்டர்கள்")}</p>
           </div>
           <div className="p-3.5">
-            <p className="text-xl font-bold text-slate-950">
+            <p className="text-xl font-bold text-slate-50">
               {rollSummary ? rollSummary.yards.toLocaleString("en-LK", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : "—"}
-              <span className="ml-1 text-xs font-medium text-slate-400">yd</span>
+              <span className="ml-1 text-xs font-medium text-slate-500">yd</span>
             </p>
-            <p className="text-xs text-slate-500">{tt(locale, "මුළු යාර්ඩ්", "Total yards", "மொத்த யார்டுகள்")}</p>
+            <p className="text-xs text-slate-400">{tt(locale, "මුළු යාර්ඩ්", "Total yards", "மொத்த யார்டுகள்")}</p>
           </div>
           <div className="p-3.5">
-            <p className="text-xl font-bold text-slate-950">{rollSummary ? rollSummary.remnants : "—"}</p>
-            <p className="text-xs text-slate-500">{tt(locale, "ඉතිරි කැබලි", "Remnants", "மீதிகள்")}</p>
+            <p className="text-xl font-bold text-slate-50">{rollSummary ? rollSummary.remnants : "—"}</p>
+            <p className="text-xs text-slate-400">{tt(locale, "ඉතිරි කැබලි", "Remnants", "மீதிகள்")}</p>
           </div>
         </div>
       </div>
@@ -928,16 +955,16 @@ export default function BusinessPulsePage() {
           into its real categories (rent/utilities/salaries/...) rather than
           one lump figure — only categories with real spend this period
           render, nothing padded in. */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
-        <h2 className="mb-3 text-base font-bold tracking-tight text-slate-900">{tt(locale, "තොගය සහ වියදම්", "Stock & spending", "சரக்கு & செலவு")}</h2>
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
+        <h2 className="mb-3 text-base font-bold tracking-tight text-slate-100">{tt(locale, "තොගය සහ වියදම්", "Stock & spending", "சரக்கு & செலவு")}</h2>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <p className="text-lg font-bold text-slate-950">{stockValueLkr != null ? formatCompactLkr(stockValueLkr) : "—"}</p>
-            <p className="text-xs text-slate-500">{tt(locale, "තොග වටිනාකම", "Stock value", "சரக்கு மதிப்பு")}</p>
+            <p className="text-lg font-bold text-slate-50">{stockValueLkr != null ? formatCompactLkr(stockValueLkr) : "—"}</p>
+            <p className="text-xs text-slate-400">{tt(locale, "තොග වටිනාකම", "Stock value", "சரக்கு மதிப்பு")}</p>
           </div>
           <div>
-            <p className="text-lg font-bold text-slate-950">{expensesTotal != null ? formatCompactLkr(expensesTotal) : "—"}</p>
-            <p className="text-xs text-slate-500">
+            <p className="text-lg font-bold text-slate-50">{expensesTotal != null ? formatCompactLkr(expensesTotal) : "—"}</p>
+            <p className="text-xs text-slate-400">
               {period === "this_month" ? tt(locale, "මෙම මාසයේ වියදම්", "Expenses this month", "இந்த மாத செலவுகள்") : tt(locale, "පසුගිය මාසයේ වියදම්", "Expenses last month", "கடந்த மாத செலவுகள்")}
             </p>
           </div>
@@ -945,20 +972,20 @@ export default function BusinessPulsePage() {
 
         {expensesByCategory.length > 0 && (
           <>
-            <p className="mb-2 mt-4 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+            <p className="mb-2 mt-4 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
               {tt(locale, "මෙහෙයුම් වියදම්", "Operating costs", "செயல்பாட்டு செலவுகள்")}
             </p>
             <div className="flex flex-wrap gap-2">
               {expensesByCategory.map(({ category, amount }) => {
                 const Icon = expenseCategoryIcon(category);
                 return (
-                  <div key={category} className="flex min-w-[7.5rem] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 ring-1 ring-inset ring-slate-200">
+                  <div key={category} className="flex min-w-[7.5rem] flex-1 items-center gap-2 rounded-xl border border-slate-800 bg-slate-800/40 px-3 py-2">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-slate-400 ring-1 ring-inset ring-slate-800">
                       <Icon className="h-4 w-4" />
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-xs font-semibold text-slate-700">{t(`expenses.cat_${category}`)}</p>
-                      <p className="text-sm font-bold text-slate-950">{formatCompactLkr(amount)}</p>
+                      <p className="truncate text-xs font-semibold text-slate-300">{t(`expenses.cat_${category}`)}</p>
+                      <p className="text-sm font-bold text-slate-50">{formatCompactLkr(amount)}</p>
                     </div>
                   </div>
                 );
@@ -975,20 +1002,20 @@ export default function BusinessPulsePage() {
           "cuts today" figure exists yet (the workflow snapshot only
           tracks currently-pending cuts, not a completed-today count), so
           the real state uses payments collected today instead. */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
-        <h2 className="mb-3 text-base font-bold tracking-tight text-slate-900">{tt(locale, "අද දිනය", "Today at a glance", "இன்று ஒரு பார்வையில்")}</h2>
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
+        <h2 className="mb-3 text-base font-bold tracking-tight text-slate-100">{tt(locale, "අද දිනය", "Today at a glance", "இன்று ஒரு பார்வையில்")}</h2>
         <div className="grid grid-cols-3 gap-3">
           <div>
-            <p className="text-lg font-bold text-slate-950">{noTransactionsYet ? SAMPLE_PULSE.todaySaleCount : stats.saleCount}</p>
-            <p className="text-xs text-slate-500">{tt(locale, "අද අලෙවි", "Sales today", "இன்று விற்பனை")}</p>
+            <p className="text-lg font-bold text-slate-50">{noTransactionsYet ? SAMPLE_PULSE.todaySaleCount : stats.saleCount}</p>
+            <p className="text-xs text-slate-400">{tt(locale, "අද අලෙවි", "Sales today", "இன்று விற்பனை")}</p>
           </div>
           <div>
-            <p className="text-lg font-bold text-slate-950">{formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.todaySalesValue : stats.todaySales)}</p>
-            <p className="text-xs text-slate-500">{tt(locale, "අද අලෙවි අගය", "Sales value", "விற்பனை மதிப்பு")}</p>
+            <p className="text-lg font-bold text-slate-50">{formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.todaySalesValue : stats.todaySales)}</p>
+            <p className="text-xs text-slate-400">{tt(locale, "අද අලෙවි අගය", "Sales value", "விற்பனை மதிப்பு")}</p>
           </div>
           <div>
-            <p className="text-lg font-bold text-slate-950">{formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.todayCollected : stats.paymentsReceivedToday)}</p>
-            <p className="text-xs text-slate-500">{tt(locale, "අද එකතු කළ", "Collected today", "இன்று வசூலிக்கப்பட்டது")}</p>
+            <p className="text-lg font-bold text-slate-50">{formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.todayCollected : stats.paymentsReceivedToday)}</p>
+            <p className="text-xs text-slate-400">{tt(locale, "අද එකතු කළ", "Collected today", "இன்று வசூலிக்கப்பட்டது")}</p>
           </div>
         </div>
       </div>
@@ -998,13 +1025,13 @@ export default function BusinessPulsePage() {
       <div className="space-y-2 pb-2">
         <Link
           href="/sales"
-          className="flex min-h-12 w-full items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-teal-700"
+          className="flex min-h-12 w-full items-center justify-center gap-1.5 rounded-xl bg-teal-500 px-4 text-sm font-bold text-white shadow-sm hover:bg-teal-600"
         >
           + {tt(locale, "නව රෙදි අලෙවියක්", "New fabric sale", "புதிய துணி விற்பனை")}
         </Link>
         <Link
           href="/stock/rolls?receive=1"
-          className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900 px-4 text-sm font-semibold text-slate-300 hover:bg-slate-800/60"
         >
           {tt(locale, "Roll ලබාගන්න", "Receive roll", "Roll பெறவும்")}
         </Link>
@@ -1015,21 +1042,21 @@ export default function BusinessPulsePage() {
           operational sidebar (see PulseShell's docstring). */}
       <nav
         aria-label={tt(locale, "ඉක්මන් සංචලනය", "Quick navigation", "விரைவு வழிசெலுத்தல்")}
-        className="fixed inset-x-0 bottom-0 z-30 mx-auto grid h-[4.25rem] max-w-md grid-cols-5 border-x border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 mx-auto grid h-[4.25rem] max-w-md grid-cols-5 border-x border-t border-slate-800 bg-slate-900/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden"
       >
-        <span className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-teal-700" aria-current="page">
+        <span className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-teal-300" aria-current="page">
           <HomeIcon className="h-5 w-5" />
           {tt(locale, "මුල් පිටුව", "Home", "முகப்பு")}
         </span>
-        <Link href="/sales" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-500">
+        <Link href="/sales" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-400">
           <SalesIcon className="h-5 w-5" />
           {tt(locale, "අලෙවි", "Sales", "விற்பனை")}
         </Link>
-        <Link href="/stock/rolls" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-500">
+        <Link href="/stock/rolls" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-400">
           <StockIcon className="h-5 w-5" />
           {tt(locale, "Rolls", "Rolls", "Rolls")}
         </Link>
-        <button type="button" onClick={scrollToAttention} className="relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-500">
+        <button type="button" onClick={scrollToAttention} className="relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-400">
           <BellIcon className="h-5 w-5" />
           {tt(locale, "ඇඟවීම්", "Alerts", "விழிப்பூட்டல்")}
           {allAttentionActions.length > 0 && (
@@ -1038,7 +1065,7 @@ export default function BusinessPulsePage() {
             </span>
           )}
         </button>
-        <Link href="/dashboard" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-500">
+        <Link href="/dashboard" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-400">
           <MoreIcon className="h-5 w-5" />
           {tt(locale, "තව", "More", "மேலும்")}
         </Link>
@@ -1056,21 +1083,21 @@ function AttentionList({ actions, locale }: { actions: ReturnType<typeof buildTe
     <div className="space-y-2">
       {visible.map((action) => {
         const Icon = attentionIcon(action.key);
-        const tone = action.tone === "danger" ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600";
+        const tone = action.tone === "danger" ? "bg-rose-400/10 text-rose-400" : "bg-amber-400/10 text-amber-400";
         return (
-          <div key={action.key} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3.5 py-3">
+          <div key={action.key} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 px-3.5 py-3">
             <div className="flex min-w-0 items-center gap-3">
               <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}>
                 <Icon className="h-4.5 w-4.5" />
               </span>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-900">{action.title}</p>
-                <p className="truncate text-xs text-slate-500">{action.detail}</p>
+                <p className="truncate text-sm font-semibold text-slate-100">{action.title}</p>
+                <p className="truncate text-xs text-slate-400">{action.detail}</p>
               </div>
             </div>
             <Link
               href={action.href}
-              className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-bold ${action.tone === "danger" ? "border-rose-200 text-rose-700 hover:bg-rose-50" : "border-amber-200 text-amber-700 hover:bg-amber-50"}`}
+              className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-bold ${action.tone === "danger" ? "border-rose-400/30 text-rose-400 hover:bg-rose-400/10" : "border-amber-400/30 text-amber-400 hover:bg-amber-400/10"}`}
             >
               {attentionActionLabel(action.key as AttentionActionKey, locale)}
             </Link>
@@ -1078,7 +1105,7 @@ function AttentionList({ actions, locale }: { actions: ReturnType<typeof buildTe
         );
       })}
       {actions.length > 2 && (
-        <button type="button" onClick={() => setExpanded((v) => !v)} className="flex w-full items-center justify-center gap-1 pt-1 text-xs font-semibold text-teal-700 hover:underline">
+        <button type="button" onClick={() => setExpanded((v) => !v)} className="flex w-full items-center justify-center gap-1 pt-1 text-xs font-semibold text-teal-300 hover:underline">
           {expanded ? tt(locale, "අඩුවෙන් පෙන්වන්න", "Show less", "குறைவாகக் காட்டு") : tt(locale, `තව ${actions.length - 2}ක් බලන්න`, `View ${actions.length - 2} more`, `மேலும் ${actions.length - 2} பார்க்க`)}
           <ChevronDownIcon className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
         </button>
