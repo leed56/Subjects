@@ -38,7 +38,7 @@ export const NAV_SECTIONS: NavSection[] = [
         labelEn: "Business Pulse",
         labelSi: "ව්‍යාපාර ස්පන්දනය",
         labelTa: "வணிக துடிப்பு",
-        sectorOnly: ["textile"],
+        sectorOnly: ["textile", "pharmacy"],
         roleOnly: ["owner"],
       },
     ],
