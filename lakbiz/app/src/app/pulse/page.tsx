@@ -83,7 +83,13 @@ const SAMPLE_PULSE = {
   receivablesOverdue: 286_000,
   stockValue: 8_640_000,
   stockValueChangePct: 6,
-  sparkline: [3.9, 4.15, 3.75, 4.3, 4.0, 4.55, 4.25, 4.82].map((m) => m * 1_000_000),
+  // A gently-rising trend with small wiggles, not a saw-tooth — even the
+  // smoothed Catmull-Rom curve this feeds (see Sparkline/smoothPath below)
+  // looks spiky in a 32px-tall box if consecutive points swing sharply up
+  // and down. Two soft dips against an overall climb reads as a real
+  // "premium fintech" chart; large frequent reversals don't, regardless of
+  // how the line between them is drawn.
+  sparkline: [3.95, 4.08, 4.02, 4.2, 4.15, 4.4, 4.55, 4.82].map((m) => m * 1_000_000),
   todaySaleCount: 12,
   todaySalesValue: 684_500,
   todayCollected: 512_000,
