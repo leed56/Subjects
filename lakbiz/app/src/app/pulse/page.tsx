@@ -612,9 +612,9 @@ export default function BusinessPulsePage() {
             <span className="font-bold">{tt(locale, "නියැදි දත්ත", "Sample preview", "மாதிரி முன்னோட்டம்")}</span>{" "}
             {tt(
               locale,
-              "පහත ව්‍යාපාර ස්පන්දනය, ලාභය සහ අද දිනය කොටස් නියැදි ගණන් පෙන්වයි — ඔබේ පළමු අලෙවියෙන් පසු සැබෑ ගණන් වලින් ප්‍රතිස්ථාපනය වේ. Roll තොගය සහ අවධානය අවශ්‍ය කොටස් සැබෑය.",
-              "The pulse, profit and Today sections below show sample numbers — they're replaced by your real figures after your first sale. Roll inventory and Needs attention are already real.",
-              "கீழே உள்ள துடிப்பு, லாபம் மற்றும் இன்று பிரிவுகள் மாதிரி எண்களைக் காட்டுகின்றன — உங்கள் முதல் விற்பனைக்குப் பிறகு உண்மையான எண்களால் மாற்றப்படும். Roll சரக்கு மற்றும் கவனம் தேவை பிரிவுகள் ஏற்கனவே உண்மையானவை.",
+              "පහත ව්‍යාපාර ස්පන්දනය, ලාභය සහ අද දිනය කොටස් නියැදි ගණන් පෙන්වයි — ඔබේ පළමු අලෙවියෙන් පසු සැබෑ ගණන් වලින් ප්‍රතිස්ථාපනය වේ. Roll තොගය, තොගය සහ වියදම්, සහ අවධානය අවශ්‍ය කොටස් සැබෑය.",
+              "The pulse, profit and Today sections below show sample numbers — they're replaced by your real figures after your first sale. Roll inventory, Stock & spending, and Needs attention are already real.",
+              "கீழே உள்ள துடிப்பு, லாபம் மற்றும் இன்று பிரிவுகள் மாதிரி எண்களைக் காட்டுகின்றன — உங்கள் முதல் விற்பனைக்குப் பிறகு உண்மையான எண்களால் மாற்றப்படும். Roll சரக்கு, சரக்கு & செலவு, மற்றும் கவனம் தேவை பிரிவுகள் ஏற்கனவே உண்மையானவை.",
             )}
           </p>
         </div>
