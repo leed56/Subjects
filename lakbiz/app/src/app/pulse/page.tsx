@@ -24,7 +24,7 @@ import { EmptyState } from "@/components/ui/primitives";
 import {
   BellIcon,
   ChevronDownIcon,
-  DashboardIcon,
+  HomeIcon,
   SalesIcon,
   StockIcon,
   MoreIcon,
@@ -299,6 +299,8 @@ export default function BusinessPulsePage() {
   const [periodOpen, setPeriodOpen] = useState(false);
   const periodRef = useRef<HTMLDivElement>(null);
   const attentionSectionRef = useRef<HTMLDivElement>(null);
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const [activeCard, setActiveCard] = useState(0);
 
   useEffect(() => {
     if (!periodOpen) return;
@@ -373,6 +375,8 @@ export default function BusinessPulsePage() {
   // one, for a shop that just finished onboarding. Real rolls exist, real
   // sales don't yet: show that honestly instead of a wall of zeros.
   const noTransactionsYet = (rollSummary?.activeRolls ?? 0) > 0 && data.sales.length === 0;
+  // Receivables + [Stock value while noTransactionsYet] + Reservations + Quality holds.
+  const statCardCount = noTransactionsYet ? 4 : 3;
 
   // One 12-month trend backs the hero, its sparkline and both period
   // options ("this month" / "last month") — a single bucket definition
@@ -512,7 +516,19 @@ export default function BusinessPulsePage() {
           noTransactionsYet (covered by the banner above); Reservations and
           Quality holds are always real — see StatCard's docstring for why
           they never carry a fabricated trend line either way. */}
-      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+      <div
+        ref={carouselRef}
+        onScroll={(e) => {
+          // StatCard is w-[13.5rem] (216px) with gap-3 (12px) between —
+          // 228px per step. Rounding the scroll position to the nearest
+          // step keeps the dot indicator honestly in sync with whichever
+          // card is actually snapped into view, rather than a static
+          // decoration that never moves.
+          const index = Math.round(e.currentTarget.scrollLeft / 228);
+          setActiveCard(Math.max(0, Math.min(statCardCount - 1, index)));
+        }}
+        className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
+      >
         <StatCard
           label={tt(locale, "ලැබිය යුතු මුදල්", "Receivables", "பெறத்தக்கவை")}
           value={formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.receivables : stats.creditOutstanding)}
@@ -543,6 +559,14 @@ export default function BusinessPulsePage() {
           hint={qualityHolds > 0 ? tt(locale, "සමාලෝචනය අවශ්‍යයි", "Needs review", "மறுஆய்வு தேவை") : tt(locale, "සියල්ල පැහැදිලිය", "All clear", "அனைத்தும் தெளிவு")}
           tone={qualityHolds > 0 ? "warning" : "positive"}
         />
+      </div>
+      {/* Dot pagination — genuinely scroll-linked (see the carousel's
+          onScroll above), not a static decoration; it tells the truth
+          about which card is actually in view. */}
+      <div className="-mt-1.5 flex items-center justify-center gap-1.5" aria-hidden="true">
+        {Array.from({ length: statCardCount }, (_, i) => (
+          <span key={i} className={`h-1.5 rounded-full transition-all ${i === activeCard ? "w-4 bg-teal-600" : "w-1.5 bg-slate-300"}`} />
+        ))}
       </div>
 
       {/* Needs attention — same single source of truth as the dashboard's
@@ -649,7 +673,7 @@ export default function BusinessPulsePage() {
         className="fixed inset-x-0 bottom-0 z-30 grid h-[4.25rem] grid-cols-5 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden"
       >
         <span className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-teal-700" aria-current="page">
-          <DashboardIcon className="h-5 w-5" />
+          <HomeIcon className="h-5 w-5" />
           {tt(locale, "මුල් පිටුව", "Home", "முகப்பு")}
         </span>
         <Link href="/sales" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-500">
