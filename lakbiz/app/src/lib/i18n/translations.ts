@@ -1558,6 +1558,10 @@ const si: Dict = {
   "sub.resend_email": "තහවුරු කිරීමේ ඊමේල් නැවත යවන්න",
   "sub.resend_ok": "ඊමේල් යවන ලදී — එන ලිපි, spam, සහ Promotions ෆෝල්ඩර පරීක්ෂා කරන්න",
   "sub.email_required": "පළමුව ඔබේ ඊමේල් ලිපිනය ඇතුළත් කරන්න",
+  "sub.admin_created_shops": "වෙළඳසැල් වේදිකා පරිපාලක විසින් නිර්මාණය කරයි. ඔබට ලැබුණු අක්තපත්‍ර සමඟ පිවිසෙන්න.",
+  "sub.need_access": "ප්‍රවේශය අවශ්‍යද? ඔබේ පිවිසුම් විස්තර ලබා ගැනීමට LakBiz අමතන්න.",
+  "sub.signup_disabled": "පොදු ලියාපදිංචිය අක්‍රියයි. ඔබේ LakBiz පරිපාලක අමතන්න.",
+  "sub.login_failed": "පිවිසීම අසාර්ථක විය",
   "sub.pick_sector": "ව්‍යාපාර වර්ගය",
   "sub.pick_sector_hint": "ඔබේ වෙළඳසැලට ගැලපෙන ක්ෂේත්‍රය තෝරන්න — භාණ්ඩ පෝරමයේ අමතර ක්ෂේත්‍ර සකසයි",
 
@@ -3248,6 +3252,10 @@ const en: Dict = {
   "sub.resend_email": "Resend confirmation email",
   "sub.resend_ok": "Email sent — check your inbox, spam, and Promotions folders",
   "sub.email_required": "Enter your email address first",
+  "sub.admin_created_shops": "Shops are created by the platform admin. Sign in with the credentials you received.",
+  "sub.need_access": "Need access? Contact LakBiz to receive your login details.",
+  "sub.signup_disabled": "Public signup is disabled. Contact your LakBiz administrator.",
+  "sub.login_failed": "Login failed",
   "sub.pick_sector": "Business sector",
   "sub.pick_sector_hint": "Pick the sector that matches your shop — product forms use the right fields",
 
@@ -3622,6 +3630,35 @@ const ta: Dict = {
   "sub.read_only": "கணக்கு செயலற்றது — பார்வை மட்டும் பயன்முறை",
   "sub.sign_in": "உள்நுழைக",
   "sub.sign_out": "வெளியேறு",
+  // Login page — this whole block was missing from the Tamil dictionary,
+  // so every one of these silently fell back to English on /login while
+  // the page's few already-translated strings (sign in/out) showed Tamil,
+  // producing a mixed-language screen. Added after that was reported.
+  "admin.login_title": "மேடை நிர்வாகி உள்நுழைவு",
+  "admin.login_hint": "உங்கள் super-admin மின்னஞ்சலைப் பயன்படுத்தவும் (எ.கா. admin@lakbiz.lk). கடை உரிமையாளர் உள்நுழைவுகள் /admin ஐ அணுக முடியாது.",
+  "sub.create_account": "கணக்கை உருவாக்கு",
+  "sub.create_shop": "கடையை உருவாக்கு",
+  "sub.email": "மின்னஞ்சல்",
+  "sub.email_required": "முதலில் உங்கள் மின்னஞ்சல் முகவரியை உள்ளிடவும்",
+  "sub.login_email_hint": "மின்னஞ்சல் + கடவுச்சொல் — 14 நாள் இலவச சோதனை",
+  "sub.login_soon": "உள்நுழைவு தற்காலிகமாகக் கிடைக்கவில்லை. பின்னர் மீண்டும் முயற்சிக்கவும்.",
+  "sub.login_subtitle": "தொலைபேசி OTP — இலங்கை வணிகங்களுக்காக உருவாக்கப்பட்டது",
+  "sub.login_title": "LakBiz இல் உள்நுழைக",
+  "sub.password": "கடவுச்சொல்",
+  "sub.phone": "தொலைபேசி எண்",
+  "sub.resend_email": "உறுதிப்படுத்தல் மின்னஞ்சலை மீண்டும் அனுப்பு",
+  "sub.resend_ok": "மின்னஞ்சல் அனுப்பப்பட்டது — உங்கள் இன்பாக்ஸ், ஸ்பேம் மற்றும் Promotions கோப்புறைகளைச் சரிபார்க்கவும்",
+  "sub.shop_name": "கடையின் பெயர்",
+  "sub.shop_required": "கடையின் பெயர் தேவை",
+  "sub.signup_ok": "கணக்கு உருவாக்கப்பட்டது — dashboard க்குச் செல்லவும்",
+  "sub.title": "திட்டங்கள் & கணக்கு",
+  // Three strings on /login were fully hardcoded English — never routed
+  // through t() at all, so no locale (not even Sinhala) could change them.
+  // New keys added to all three dictionaries, not just Tamil.
+  "sub.admin_created_shops": "கடைகள் தளநிர்வாகியால் உருவாக்கப்படுகின்றன. நீங்கள் பெற்ற சான்றுகளுடன் உள்நுழையவும்.",
+  "sub.need_access": "அணுகல் தேவையா? உங்கள் உள்நுழைவு விவரங்களைப் பெற LakBiz ஐத் தொடர்பு கொள்ளவும்.",
+  "sub.signup_disabled": "பொது பதிவு முடக்கப்பட்டுள்ளது. உங்கள் LakBiz நிர்வாகியைத் தொடர்பு கொள்ளவும்.",
+  "sub.login_failed": "உள்நுழைவு தோல்வியடைந்தது",
 };
 
 const dictionaries: Record<Locale, Dict> = { si, en, ta };

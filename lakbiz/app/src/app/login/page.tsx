@@ -86,7 +86,7 @@ export default function LoginPage() {
     try {
       if (mode === "signup") {
         if (adminOnly) {
-          setMessage("Public signup is disabled. Contact your LakBiz administrator.");
+          setMessage(t("sub.signup_disabled"));
           return;
         }
         if (!shopName.trim()) {
@@ -111,7 +111,7 @@ export default function LoginPage() {
       } else if (err instanceof Error) {
         setMessage(err.message);
       } else {
-        setMessage("Login failed");
+        setMessage(t("sub.login_failed"));
       }
     } finally {
       setLoading(false);
@@ -234,8 +234,7 @@ export default function LoginPage() {
 
           {adminOnly && (
             <p className="mb-4 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">
-              Shops are created by the platform admin. Sign in with the credentials you
-              received.
+              {t("sub.admin_created_shops")}
             </p>
           )}
 
@@ -339,7 +338,7 @@ export default function LoginPage() {
 
         {!adminLogin && !alreadySignedIn && (
           <p className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm text-slate-600">
-            Need access? Contact LakBiz to receive your login details.
+            {t("sub.need_access")}
           </p>
         )}
 
