@@ -38,6 +38,7 @@ export interface SectorTemplate {
   id: SectorId;
   nameEn: string;
   nameSi: string;
+  nameTa: string;
   description: string;
   extraFields: string[];
   reports: string[];
