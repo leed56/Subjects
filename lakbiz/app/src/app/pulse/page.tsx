@@ -15,6 +15,18 @@
  * the exact same formula the dashboard already uses for "today", just
  * re-scoped to a month. No fabricated numbers, no fake trend lines: a
  * stat card only gets a sparkline where a real time series backs it.
+ *
+ * "Stock & spending" (stock value, expenses, needs-purchasing) was added
+ * after explicit feedback that a sales/profit-only view isn't what an
+ * owner actually wants first. Stock value comes from
+ * fetchTextileOwnerIntelligence() — the same owner-gated RPC that backs
+ * /textile/owner-intelligence — not the generic getDashboardStats().
+ * stockValue, which is driven by a product-count field textile roll
+ * receiving never updates and would be stale for a fabric business.
+ * Expenses come from fetchOrgExpenses() (not part of the offline store,
+ * so fetched separately here). "Needs purchasing" uses a fixed threshold
+ * (LOW_STOCK_THRESHOLD) rather than a per-fabric reorder point, because
+ * that setting doesn't exist yet — see the threshold's own docstring.
  */
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -45,6 +57,8 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { fetchSectorOperationalSnapshot, summarizeTextileRolls, type SectorOperationalSnapshot } from "@/lib/supabase/sector-dashboard-client";
 import { buildTextileAttentionActions } from "@/components/dashboard/sector-command-center";
 import { getRevenueTrend, type Locale } from "@/lib/revenue-trend";
+import { fetchTextileOwnerIntelligence, type TextileOwnerIntelligence } from "@/lib/supabase/textile-intelligence-client";
+import { fetchOrgExpenses, type Expense } from "@/lib/supabase/expenses-client";
 
 /** Local 3-way locale pick — same convention as dashboard/page.tsx and
  * sector-command-center.tsx; kept duplicated per file rather than shared
@@ -193,12 +207,13 @@ function StatCard({ label, value, hint, tone = "default" }: { label: string; val
   );
 }
 
-type AttentionActionKey = "roll-holds" | "overdue-credit" | "pending-cuts" | "pending-dispatches";
+type AttentionActionKey = "roll-holds" | "overdue-credit" | "pending-cuts" | "pending-dispatches" | "low-stock-fabric";
 
 function attentionIcon(key: string) {
   if (key === "roll-holds") return ShieldIcon;
   if (key === "overdue-credit") return AlertTriangleIcon;
   if (key === "pending-cuts") return CostingIcon;
+  if (key === "low-stock-fabric") return StockIcon;
   return SuppliersIcon;
 }
 
@@ -206,8 +221,17 @@ function attentionActionLabel(key: string, locale: Locale): string {
   if (key === "roll-holds") return tt(locale, "සමාලෝචනය", "Review", "மறுஆய்வு");
   if (key === "overdue-credit") return tt(locale, "එකතු කරන්න", "Collect", "வசூலி");
   if (key === "pending-cuts") return tt(locale, "කපන්න", "Cut", "வெட்டு");
+  if (key === "low-stock-fabric") return tt(locale, "මිලදී ගන්න", "Buy", "வாங்கு");
   return tt(locale, "යවන්න", "Dispatch", "அனுப்பு");
 }
+
+/** Fixed, undisclosed-to-user threshold for the v1 "needs purchasing"
+ * signal — there's no real reorder-point setting per fabric type yet (see
+ * the Business Pulse planning discussion), so this is a simple, honest
+ * placeholder: flag any active fabric with 10 or fewer units remaining
+ * across all its live rolls. Good enough to catch "about to run out"
+ * without a settings screen; a real per-fabric threshold is a follow-up. */
+const LOW_STOCK_THRESHOLD = 10;
 
 /**
  * Business Pulse's own chrome — deliberately not <AppShell>. AppShell's
@@ -369,6 +393,51 @@ export default function BusinessPulsePage() {
     };
   }, [canSeeFinancials, org.id, org.isAuthenticated, org.sector]);
 
+  // Real stock value (Σ remaining_length × real roll cost) — the same
+  // owner-gated database function that backs /textile/owner-intelligence's
+  // "Stock value" figure, not the generic stats.stockValue (that one is
+  // driven by a product-count field roll receiving never updates, so it's
+  // stale/meaningless for a fabric business — confirmed while planning
+  // this addition, deliberately not reused here). stock_by_unit is a
+  // current-state snapshot, not period-bound, so the from/to window only
+  // needs to be wide enough for the RPC call to succeed; 30 days is enough.
+  const [ownerIntelligence, setOwnerIntelligence] = useState<TextileOwnerIntelligence | null>(null);
+  useEffect(() => {
+    if (org.sector !== "textile" || !org.isAuthenticated || !org.id) {
+      setOwnerIntelligence(null);
+      return;
+    }
+    let cancelled = false;
+    const to = new Date();
+    const from = new Date(to);
+    from.setDate(from.getDate() - 30);
+    void fetchTextileOwnerIntelligence(org.id, from.toISOString().slice(0, 10), to.toISOString().slice(0, 10)).then((result) => {
+      if (!cancelled) setOwnerIntelligence(result.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [org.id, org.isAuthenticated, org.sector]);
+
+  // This month's / last month's expenses (rent, utilities, salaries, ...) —
+  // real, from the same expense tracker /expenses uses. Never loaded into
+  // the offline app store, so it's fetched here the same way textileSnapshot
+  // and ownerIntelligence are.
+  const [expenses, setExpenses] = useState<Expense[] | null>(null);
+  useEffect(() => {
+    if (!org.isAuthenticated || !org.id) {
+      setExpenses(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchOrgExpenses(org.id).then((result) => {
+      if (!cancelled) setExpenses(result.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [org.id, org.isAuthenticated]);
+
   const scrollToAttention = () => {
     attentionSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -438,8 +507,60 @@ export default function BusinessPulsePage() {
 
   const salesUp = (salesChangePct ?? 0) >= 0;
 
+  // Real stock value — Σ across both length units from the owner
+  // intelligence RPC (see the fetch effect above for why this, not
+  // stats.stockValue). null while the RPC hasn't returned yet, so the UI
+  // can show "—" instead of a false Rs. 0.
+  const stockValueLkr = ownerIntelligence ? ownerIntelligence.stock_by_unit.reduce((sum, unit) => sum + (unit.stock_value_lkr ?? 0), 0) : null;
+
+  // Expenses for whichever period the page's own "This month / Last month"
+  // switch is set to — same monthKey convention as the sparkline/hero
+  // above, so a reader flipping the switch sees every figure on the page
+  // move together instead of some numbers changing period and others not.
+  const monthExpenses = expenses ? expenses.filter((expense) => expense.expenseDate.startsWith(selected.key)) : null;
+  const expensesTotal = monthExpenses ? monthExpenses.reduce((sum, expense) => sum + expense.amount, 0) : null;
+  const utilitiesTotal = monthExpenses ? monthExpenses.filter((expense) => expense.category === "utilities").reduce((sum, expense) => sum + expense.amount, 0) : null;
+
+  // "Needs purchasing" — real fabric names and real remaining quantities,
+  // just measured against a fixed placeholder threshold rather than a
+  // per-fabric reorder point nobody has set yet (see LOW_STOCK_THRESHOLD).
+  const remainingByProduct = new Map<string, { remaining: number; unit: "metre" | "yard" }>();
+  if (textileSnapshot) {
+    for (const roll of textileSnapshot.textileRolls) {
+      if (roll.status === "exhausted" || roll.status === "returned") continue;
+      const existing = remainingByProduct.get(roll.productId);
+      remainingByProduct.set(roll.productId, { remaining: (existing?.remaining ?? 0) + roll.remainingLength, unit: roll.lengthUnit });
+    }
+  }
+  const lowStockFabrics = textileSnapshot
+    ? data.products
+        .filter((product) => product.active && product.sectorId === "textile")
+        .map((product) => {
+          const stock = remainingByProduct.get(product.id);
+          return { product, remaining: stock?.remaining ?? 0, unit: stock?.unit ?? ("metre" as const) };
+        })
+        .filter((entry) => entry.remaining <= LOW_STOCK_THRESHOLD)
+        .sort((a, b) => a.remaining - b.remaining)
+    : [];
+  const lowStockActions = lowStockFabrics.slice(0, 5).map((entry) => ({
+    key: "low-stock-fabric" as const,
+    title: entry.product.name,
+    detail:
+      entry.remaining <= 0
+        ? tt(locale, "තොගයේ නැත", "Out of stock", "சரக்கு இல்லை")
+        : tt(
+            locale,
+            `${entry.remaining.toFixed(1)} ${entry.unit === "metre" ? "m" : "yd"} ඉතිරිය`,
+            `${entry.remaining.toFixed(1)} ${entry.unit === "metre" ? "m" : "yd"} remaining`,
+            `${entry.remaining.toFixed(1)} ${entry.unit === "metre" ? "m" : "yd"} மீதம்`,
+          ),
+    href: "/stock/rolls?receive=1",
+    tone: (entry.remaining <= 0 ? "danger" : "warning") as "danger" | "warning",
+  }));
+  const allAttentionActions = [...attentionActions, ...lowStockActions];
+
   return (
-    <PulseShell attentionCount={attentionActions.length} onBellClick={scrollToAttention}>
+    <PulseShell attentionCount={allAttentionActions.length} onBellClick={scrollToAttention}>
       {/* Title row + period switch. */}
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-[-0.02em] text-slate-950">{tt(locale, "හිමිකරු දළ විශ්ලේෂණය", "Owner overview", "உரிமையாளர் கண்ணோட்டம்")}</h1>
@@ -617,16 +738,16 @@ export default function BusinessPulsePage() {
       <div ref={attentionSectionRef} className="scroll-mt-20 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
         <div className="mb-3 flex items-center gap-2">
           <h2 className="text-base font-bold tracking-tight text-slate-900">{tt(locale, "අවධානය අවශ්‍යයි", "Needs attention", "கவனம் தேவை")}</h2>
-          {attentionActions.length > 0 && (
-            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[11px] font-bold text-white">{attentionActions.length}</span>
+          {allAttentionActions.length > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[11px] font-bold text-white">{allAttentionActions.length}</span>
           )}
         </div>
-        {attentionActions.length === 0 ? (
+        {allAttentionActions.length === 0 ? (
           <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3 text-sm text-slate-500">
             {tt(locale, "සියල්ල පැහැදිලිය — කිසිවක් ඔබේ තීරණය අවශ්‍ය නොවේ.", "Everything is clear — nothing needs your decision right now.", "அனைத்தும் தெளிவாக உள்ளது — தற்போது எதுவும் உங்கள் முடிவுக்குத் தேவையில்லை.")}
           </p>
         ) : (
-          <AttentionList actions={attentionActions} locale={locale} />
+          <AttentionList actions={allAttentionActions} locale={locale} />
         )}
       </div>
 
@@ -660,6 +781,34 @@ export default function BusinessPulsePage() {
           <div className="p-3.5">
             <p className="text-xl font-bold text-slate-950">{rollSummary ? rollSummary.remnants : "—"}</p>
             <p className="text-xs text-slate-500">{tt(locale, "ඉතිරි කැබලි", "Remnants", "மீதிகள்")}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Stock & spending — the "what's on the shelf and what did it cost"
+          half of the page, deliberately separate from the sales/profit
+          hero above. Stock value is real (owner intelligence RPC — see the
+          fetch effect's docstring for why this, not stats.stockValue);
+          expenses follow the page's own This month / Last month switch, so
+          it stays consistent with every other figure here. Not covered by
+          the sample-preview banner — both sources are real regardless of
+          whether a sale has happened yet. */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
+        <h2 className="mb-3 text-base font-bold tracking-tight text-slate-900">{tt(locale, "තොගය සහ වියදම්", "Stock & spending", "சரக்கு & செலவு")}</h2>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <p className="text-lg font-bold text-slate-950">{stockValueLkr != null ? formatCompactLkr(stockValueLkr) : "—"}</p>
+            <p className="text-xs text-slate-500">{tt(locale, "තොග වටිනාකම", "Stock value", "சரக்கு மதிப்பு")}</p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-slate-950">{expensesTotal != null ? formatCompactLkr(expensesTotal) : "—"}</p>
+            <p className="text-xs text-slate-500">
+              {period === "this_month" ? tt(locale, "මෙම මාසයේ වියදම්", "Expenses this month", "இந்த மாத செலவுகள்") : tt(locale, "පසුගිය මාසයේ වියදම්", "Expenses last month", "கடந்த மாத செலவுகள்")}
+            </p>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-slate-950">{utilitiesTotal != null ? formatCompactLkr(utilitiesTotal) : "—"}</p>
+            <p className="text-xs text-slate-500">{tt(locale, "විදුලි/ජල බිල", "Utilities (elec/water)", "மின்/நீர் கட்டணம்")}</p>
           </div>
         </div>
       </div>
@@ -728,9 +877,9 @@ export default function BusinessPulsePage() {
         <button type="button" onClick={scrollToAttention} className="relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-500">
           <BellIcon className="h-5 w-5" />
           {tt(locale, "ඇඟවීම්", "Alerts", "விழிப்பூட்டல்")}
-          {attentionActions.length > 0 && (
+          {allAttentionActions.length > 0 && (
             <span className="absolute right-[calc(50%-1.35rem)] top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-black text-white">
-              {attentionActions.length > 9 ? "9+" : attentionActions.length}
+              {allAttentionActions.length > 9 ? "9+" : allAttentionActions.length}
             </span>
           )}
         </button>
