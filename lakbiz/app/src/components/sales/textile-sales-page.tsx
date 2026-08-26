@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
+import { setBottomBarOccupied } from "@/components/shell/bottom-bar-overlay";
 import { ProBadge, ProButton, ProCard, ProEmptyState, ProLoadingState, ProMain, ProPageHeader } from "@/components/ui/pro-shell";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { LK_BANKS } from "@/lib/banks";
@@ -141,6 +142,13 @@ export function TextileSalesPage() {
   const [fullRoll, setFullRoll] = useState(false);
   const [manualPrice, setManualPrice] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
+  // Tell the shared mobile bottom nav to step aside only while our own
+  // fixed settlement bar is actually showing (cart non-empty) — see
+  // bottom-bar-overlay.ts.
+  useEffect(() => {
+    setBottomBarOccupied(cart.length > 0);
+    return () => setBottomBarOccupied(false);
+  }, [cart.length]);
   const [discount, setDiscount] = useState(0);
   const [payment, setPayment] = useState<CheckoutTenderKind>("cash");
   const [split, setSplit] = useState(false);

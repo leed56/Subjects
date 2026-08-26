@@ -9,6 +9,7 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { LOCALE_NAMES, nextLocale } from "@/lib/i18n/translations";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useShopNav } from "@/components/shell/use-shop-nav";
+import { useBottomBarOccupied } from "@/components/shell/bottom-bar-overlay";
 import { NAV_ICON_BY_HREF } from "@/components/shell/nav-icons";
 import { MenuIcon, CloseIcon, SettingsIcon, SignOutIcon } from "@/components/ui/icons";
 import { initialsFor } from "@/lib/format";
@@ -29,6 +30,7 @@ export function MobileNav() {
   const { user, logout } = useAuth();
   const { isPlatformAdmin, org } = useSubscription();
   const { sections, managementItems } = useShopNav();
+  const bottomBarOccupied = useBottomBarOccupied();
   const [open, setOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -112,7 +114,11 @@ export function MobileNav() {
     .map((href) => allItems.find((item) => item.href === href))
     .filter((item): item is NavItem => Boolean(item))
     .slice(0, 3);
-  const showBottomNav = !isPlatformAdmin && !pathname.startsWith("/sales");
+  // The checkout/settlement pages render their own fixed bottom bar once
+  // the cart has items — the shared tab bar steps aside only for that,
+  // not for the whole /sales route (an empty cart has nothing to collide
+  // with, and hiding it there made the nav look like it had vanished).
+  const showBottomNav = !isPlatformAdmin && !bottomBarOccupied;
 
   return (
     <>
