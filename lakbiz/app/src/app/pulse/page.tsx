@@ -112,21 +112,46 @@ function Sparkline({ values, stroke }: { values: number[]; stroke: string }) {
   if (values.length < 2) return null;
   const w = 96;
   const h = 32;
+  const padY = 4;
   const max = Math.max(...values, 1);
   const min = Math.min(...values, 0);
   const range = Math.max(1, max - min);
-  const points = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * w;
-    const y = h - ((v - min) / range) * h;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  const last = points[points.length - 1].split(",");
+  const points = values.map((v, i) => ({
+    x: (i / (values.length - 1)) * w,
+    y: padY + (h - padY * 2) - ((v - min) / range) * (h - padY * 2),
+  }));
+  const last = points[points.length - 1];
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="h-8 w-24 shrink-0" aria-hidden="true">
-      <polyline points={points.join(" ")} fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={last[0]} cy={last[1]} r="2.5" fill={stroke} />
+      <path d={smoothPath(points)} fill="none" stroke={stroke} strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={last.x} cy={last.y} r="2.5" fill={stroke} />
     </svg>
   );
+}
+
+/** Catmull-Rom → cubic Bézier (standard 1/6-tension conversion) — turns a
+ * raw point list into one continuous, flowing curve. The straight polyline
+ * this replaced connected points with sharp corners, which at a 96x32
+ * sparkline size reads as a jagged, hand-drawn zigzag rather than the
+ * smooth line every reference fintech sparkline (this app's own mockup
+ * included) actually uses. Passes exactly through every real value —
+ * nothing here is smoothed away, only how the segments between them are
+ * drawn. */
+function smoothPath(points: { x: number; y: number }[]): string {
+  if (points.length < 2) return "";
+  let d = `M ${points[0].x.toFixed(2)},${points[0].y.toFixed(2)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i - 1] ?? points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] ?? p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${c1x.toFixed(2)},${c1y.toFixed(2)} ${c2x.toFixed(2)},${c2y.toFixed(2)} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
+  }
+  return d;
 }
 
 type StatTone = "default" | "positive" | "warning" | "danger";
