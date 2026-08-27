@@ -353,11 +353,22 @@ export default function ReportsPage() {
             <div className="flex h-48 items-end gap-1.5 overflow-x-auto pb-1">
               {trendDays.map((iso, i) => (
                 <div key={iso} className="flex min-w-8 flex-1 flex-col items-center gap-1.5">
-                  <div
-                    title={`${dayLabel(iso, locale)}: ${formatLkr(trendValues[i])}`}
-                    className={`w-full rounded-t ${trendValues[i] > 0 ? "bg-teal-500" : "bg-slate-100"}`}
-                    style={{ height: `${Math.max(2, (trendValues[i] / trendMax) * 100)}%` }}
-                  />
+                  {/* This inner div is the percentage-height basis for the bar
+                      below. A percentage height only resolves against a
+                      parent with a *definite* height — this flex item had
+                      none (its height was content-auto, only bottom-aligned
+                      via the grandparent's `items-end`), so every bar's
+                      `height: N%` was resolving to 0 regardless of the real
+                      value: axis labels rendered (they size from their own
+                      text), bars never did. `h-40` gives it a real height to
+                      be a percentage of. */}
+                  <div className="flex h-40 w-full items-end">
+                    <div
+                      title={`${dayLabel(iso, locale)}: ${formatLkr(trendValues[i])}`}
+                      className={`w-full rounded-t ${trendValues[i] > 0 ? "bg-teal-500" : "bg-slate-100"}`}
+                      style={{ height: `${Math.max(2, (trendValues[i] / trendMax) * 100)}%` }}
+                    />
+                  </div>
                   <span className="text-[10px] text-slate-400">{dayLabel(iso, locale)}</span>
                 </div>
               ))}
