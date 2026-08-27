@@ -169,14 +169,14 @@ export default function VatReturnPage() {
         <ProStatCard
           label={t("tax.revenue")}
           value={formatLkr(incomeTax.revenue)}
-          hint={incomeTax.creditNoteCount > 0 ? `${incomeTax.creditNoteCount} credit note${incomeTax.creditNoteCount === 1 ? "" : "s"} netted` : `${incomeTax.salesCount} ${t("vat.sales_in_period")}`}
+          hint={`${t("tax.fiscal_year_to_date")} (${incomeTax.bounds.label})`}
           icon={<SalesIcon className="h-5 w-5" />}
           tone="blue"
         />
         <ProStatCard
           label={t("tax.sales_profit")}
           value={formatLkr(incomeTax.salesProfit)}
-          hint={incomeTax.returnProfitReversal !== 0 ? `${formatLkr(incomeTax.returnProfitReversal)} return profit reversed` : t("tax.estimated_profit")}
+          hint={`${t("tax.fiscal_year_to_date")} (${incomeTax.bounds.label})`}
           icon={<ReportsIcon className="h-5 w-5" />}
           tone="emerald"
         />
