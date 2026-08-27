@@ -397,8 +397,15 @@ export default function SuppliersPage() {
           metrics={
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard label={t("nav.suppliers")} value={String(data.suppliers.length)} hint="Active supplier profiles" icon={<SuppliersIcon className="h-5 w-5" />} />
-              <MetricCard label={t("sup.you_owe_col")} value={formatLkr(totalPayable)} hint={`${payableSuppliers} suppliers payable`} icon={<InboxIcon className="h-5 w-5" />} tone={totalPayable > 0 ? "warning" : "positive"} />
-              <MetricCard label={t("sup.vat_number")} value={String(vatSuppliers)} hint="VAT-ready records" icon={<VatIcon className="h-5 w-5" />} />
+              <MetricCard label={t("sup.you_owe_col")} value={formatLkr(totalPayable)} hint={`${payableSuppliers} supplier${payableSuppliers === 1 ? "" : "s"} payable`} icon={<InboxIcon className="h-5 w-5" />} tone={totalPayable > 0 ? "warning" : "positive"} />
+              {/* Round 3 addendum -- this card's headline is a count of
+                  suppliers, not a VAT/BR number, but it used to borrow the
+                  "VAT/BR number" label (also used for actual VAT number
+                  fields elsewhere on this page) — read at a glance as "this
+                  business has no VAT number" instead of "0 suppliers have
+                  VAT records on file". Dedicated label, same underlying
+                  count. */}
+              <MetricCard label={t("sup.vat_ready_suppliers")} value={String(vatSuppliers)} hint="VAT-ready records" icon={<VatIcon className="h-5 w-5" />} />
               <MetricCard label={t("sup.recent_grn")} value={formatLkr(recentPurchaseValue)} hint="Latest 10 receipts" icon={<BillsIcon className="h-5 w-5" />} tone="positive" />
             </section>
           }

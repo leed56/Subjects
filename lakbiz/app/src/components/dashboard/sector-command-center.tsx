@@ -17,7 +17,13 @@ import type { SectorId } from "@/lib/types";
 import { NEAR_EXPIRY_DAYS } from "@/lib/dashboard/pharmacy-config";
 
 type Tone = "default" | "positive" | "warning" | "danger";
-type Metric = { label: string; value: string; hint: string; tone: Tone };
+// hintHref: Round 3 addendum — "Available batch qty" used to cram every
+// unit-group into the value string itself ("1,331 100T · 454 pcs · 441
+// 30T +56 more"), wrapping a KPI tile meant for one short number across
+// five lines with a dead-end "+N more" tail. hintHref lets a metric's
+// hint act as a real link (e.g. "+3 more unit types" -> Batch Control)
+// instead of adding a second, differently-shaped card type just for this.
+type Metric = { label: string; value: string; hint: string; hintHref?: string; tone: Tone };
 type Action = { key: string; title: string; detail: string; href: string; tone: "warning" | "danger" };
 type SectorModel = {
   eyebrow: string;
@@ -321,10 +327,18 @@ function buildSectorModel(
       availableByUnit.set(unit, (availableByUnit.get(unit) ?? 0) + lot.qtyOnHand);
     }
     const unitGroups = [...availableByUnit.entries()].sort((a, b) => b[1] - a[1]);
-    const availableQtyLabel = unitGroups.length === 0
-      ? "0"
-      : unitGroups.slice(0, 3).map(([unit, qty]) => `${qty.toLocaleString()} ${unit}`).join(" · ") +
-        (unitGroups.length > 3 ? ` +${unitGroups.length - 3} more` : "");
+    // Round 3 addendum — a KPI tile shows one headline number, not a
+    // joined list of every unit-group. Lead with the single largest
+    // group; if there are others, say so in the hint and link straight
+    // to the full per-unit breakdown instead of truncating a sentence
+    // with a dead-end "+N more".
+    const [leadUnit, leadQty] = unitGroups[0] ?? ["units", 0];
+    const availableQtyLabel = unitGroups.length === 0 ? "0" : `${leadQty.toLocaleString()} ${leadUnit}`;
+    const moreUnitGroups = Math.max(0, unitGroups.length - 1);
+    const availableQtyHint =
+      moreUnitGroups > 0
+        ? `+${moreUnitGroups} more unit type${moreUnitGroups === 1 ? "" : "s"}`
+        : "Sellable batch stock, by unit — never summed across units";
     const actions: Action[] = [];
     if (expired.length || blocked.length) {
       actions.push({
@@ -349,7 +363,13 @@ function buildSectorModel(
       title: "Expiry & batch safety",
       description: "FEFO-focused operational control. Cost remains owner-only; this panel uses batch identity and sellable quantity only.",
       metrics: [
-        { label: "Available batch qty", value: snapshot.schemaReady ? availableQtyLabel : "—", hint: "Sellable batch stock, by unit — never summed across units", tone: "default" },
+        {
+          label: "Available batch qty",
+          value: snapshot.schemaReady ? availableQtyLabel : "—",
+          hint: snapshot.schemaReady ? availableQtyHint : "Sellable batch stock, by unit — never summed across units",
+          hintHref: snapshot.schemaReady && moreUnitGroups > 0 ? "/stock/advanced" : undefined,
+          tone: "default",
+        },
         { label: `Expiry ≤${NEAR_EXPIRY_DAYS}d`, value: snapshot.schemaReady ? String(expiringNear.length) : "—", hint: "FEFO attention", tone: expiringNear.length ? "warning" : "positive" },
         { label: "Blocked batches", value: snapshot.schemaReady ? String(expired.length + blocked.length) : "—", hint: "Expired / recall / hold", tone: expired.length + blocked.length ? "danger" : "positive" },
         { label: "Low-stock SKUs", value: String(data.products.filter((p) => p.active && p.sectorId === sector && p.stockQty <= (p.reorderLevel ?? 5)).length), hint: "Aggregate reorder signal", tone: "default" },
@@ -737,7 +757,13 @@ export function SectorCommandCenter() {
                   )}
                 </div>
                 <p className="mt-1.5 font-mono text-2xl font-semibold tabular-nums">{metric.value}</p>
-                <p className="mt-1 text-[11px] font-medium opacity-65">{metric.hint}</p>
+                {metric.hintHref ? (
+                  <Link href={metric.hintHref} className="mt-1 inline-block text-[11px] font-semibold text-teal-700 underline-offset-2 hover:underline">
+                    {metric.hint}
+                  </Link>
+                ) : (
+                  <p className="mt-1 text-[11px] font-medium opacity-65">{metric.hint}</p>
+                )}
               </div>
             ))}
           </div>

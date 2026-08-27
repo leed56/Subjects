@@ -114,6 +114,20 @@ export default function AdvancedInventoryPage() {
     return [values[0] ?? "variant", values[1] ?? "option"];
   }, [profile?.variantAxes, preset.variantAxes]);
 
+  // Round 3 addendum — a product's saved mode can legitimately sit outside
+  // the sector's current allowedModes (e.g. it predates pharmacy's
+  // allowedModes narrowing to lot-only; inventory-tracking.ts's own
+  // comment already documents that an existing product is never silently
+  // converted). The <select> below is a controlled input bound to `mode`
+  // — the same source the "Current tracking mode" label reads — but a
+  // <select> can only visually show a value that has a matching <option>;
+  // when `mode` wasn't in preset.allowedModes, the browser silently fell
+  // back to whatever option rendered first, while the label (reading
+  // `mode` directly, not the DOM) kept telling the truth. Always
+  // including the real current mode as an option is what keeps the two
+  // in sync, for this product and any other in the same situation.
+  const selectableModes = preset.allowedModes.includes(mode) ? preset.allowedModes : [mode, ...preset.allowedModes];
+
   const availableLots = lots.filter(
     (lot) =>
       lot.status === "available" &&
@@ -399,7 +413,7 @@ export default function AdvancedInventoryPage() {
                 <div className="min-w-[230px]">
                   <label className={label}>{si ? "Tracking ආකාරය" : "Tracking mode"}</label>
                   <select className={input} value={mode} disabled={saving} onChange={(event) => void saveProfile(event.target.value as InventoryTrackingMode)}>
-                    {preset.allowedModes.map((value) => (
+                    {selectableModes.map((value) => (
                       <option key={value} value={value}>{inventoryModeLabel(value, locale)}</option>
                     ))}
                   </select>

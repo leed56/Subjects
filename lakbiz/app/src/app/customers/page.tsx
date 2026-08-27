@@ -423,7 +423,7 @@ export default function CustomersPage() {
             {hasCreditActivity && (
               <section className="mt-5" aria-label={t("cust.credit_owed")}>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  <MetricCard label={t("cust.credit_owed")} value={formatLkr(totalCredit)} hint={`${payingCustomers} customers with credit`} tone="warning" />
+                  <MetricCard label={t("cust.credit_owed")} value={formatLkr(totalCredit)} hint={`${payingCustomers} customer${payingCustomers === 1 ? "" : "s"} with credit`} tone="warning" />
                   <MetricCard label={t("cust.over_limit")} value={String(overLimitCount)} hint={overLimitCount ? t("cust.needs_attention") : t("cust.within_limits")} tone={overLimitCount ? "danger" : "default"} />
                   <MetricCard className="col-span-2 sm:col-span-1" label={t("cust.recent_payments")} value={formatLkr(recentPaymentsTotal)} hint={t("cust.latest_records")} tone="positive" />
                 </div>
