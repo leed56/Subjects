@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ProductForm } from "@/components/product-form";
 import { StockCommandHeader } from "@/components/stock/stock-command-header";
 import { ExportActions } from "@/components/export/export-actions";
@@ -109,7 +110,15 @@ export default function StockPage() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
-  const [search, setSearch] = useState("");
+  // The pharmacy/grocery dashboard's "Low stock" KPI card and Replenishment
+  // Queue rows link here with ?filter=low-stock and ?q=<product name>
+  // respectively — before this, both links landed on an unfiltered list
+  // (the dashboard promised a filtered detail view; this page never read
+  // either param, so a "clickable" KPI card wasn't actually clickable in
+  // any meaningful sense). Seeded once at mount, same pattern as
+  // stock/rolls/page.tsx's `?receive=1`.
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
   // Discontinued items default to hidden — matches getLowStockProducts/the
   // sale picker, which already ignore inactive items — with an explicit
@@ -117,7 +126,7 @@ export default function StockPage() {
   const [showInactive, setShowInactive] = useState(false);
   // HVAC platform Phase 12 — a real filtered view of exactly what needs
   // reordering, not just the metric-card count that existed before.
-  const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+  const [showLowStockOnly, setShowLowStockOnly] = useState(() => searchParams.get("filter") === "low-stock");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [page, setPage] = useState(1);
 

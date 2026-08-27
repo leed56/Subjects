@@ -4,6 +4,33 @@ import { NEAR_EXPIRY_DAYS } from "./pharmacy-config";
 
 export type RetailSector = "pharmacy" | "grocery";
 
+/** Sales Performance / Owner Financial Snapshot used to be hardcoded to a
+ * rolling 30-day window with no way to change it — this is the real
+ * period selector behind that control. "custom" carries its own
+ * start/end; the named presets are resolved against `referenceDate` in
+ * resolvePeriodRange() below. Week-over-week/month-over-month/
+ * year-over-year all fall out of the same mechanism: each preset also
+ * resolves the *immediately preceding* period of equal length, and
+ * periodChangePct compares actual recorded totals between the two —
+ * never an assumed or interpolated number. */
+export type DashboardPeriod =
+  | "7d"
+  | "30d"
+  | "this_week"
+  | "this_month"
+  | "last_month"
+  | { custom: { start: string; end: string } };
+
+export type ResolvedPeriodRange = {
+  /** Inclusive day-string bounds (YYYY-MM-DD), matching Sale.date's own
+   * format so range filtering stays a plain string comparison. */
+  startKey: string;
+  endKey: string;
+  priorStartKey: string;
+  priorEndKey: string;
+  label: string;
+};
+
 export type RetailLotSnapshot = {
   id: string;
   productId: string;
@@ -78,6 +105,15 @@ export type RetailDashboardIntelligence = {
   periodTransactions: number;
   periodProfit: number | null;
   grossMarginPct: number | null;
+  /** Label for whatever range periodSales/periodProfit/topMovers/etc. were
+   * actually computed over — was a hardcoded "30-day sales" string before;
+   * now reflects the real selected DashboardPeriod. */
+  periodLabel: string;
+  /** periodSales vs. the immediately preceding period of equal length
+   * (the "this_week"/"this_month" presets are how week-over-week and
+   * month-over-month land here) — real data, same null-when-no-baseline
+   * rule as todaySalesChangePct. */
+  periodChangePct: number | null;
   medicineCount: number;
   nonMedicineCount: number;
   nearExpiryCount: number;
@@ -116,21 +152,94 @@ function productUnit(product: Product): string {
   return String(product.customFields.unit ?? "units");
 }
 
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setUTCDate(result.getUTCDate() + days);
+  return result;
+}
+
+/** Monday-start week, so "this_week" reads as a normal business week. */
+function startOfWeek(date: Date): Date {
+  const day = date.getUTCDay();
+  const diff = day === 0 ? 6 : day - 1;
+  return addDays(date, -diff);
+}
+
+function startOfMonth(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+/** Resolves a DashboardPeriod into concrete day-key bounds plus the
+ * immediately preceding period of equal length — the mechanism behind
+ * every "vs previous period" comparison this module computes. Never
+ * looks past `data.sales` itself: a period with no prior activity just
+ * yields a `null` comparison upstream, not an invented one. */
+export function resolvePeriodRange(period: DashboardPeriod, referenceDate: Date): ResolvedPeriodRange {
+  if (typeof period === "object") {
+    const { start, end } = period.custom;
+    const startDate = new Date(`${start}T00:00:00Z`);
+    const endDate = new Date(`${end}T00:00:00Z`);
+    const lengthDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / DAY_MS) + 1);
+    const priorEnd = addDays(startDate, -1);
+    const priorStart = addDays(priorEnd, -(lengthDays - 1));
+    return {
+      startKey: start,
+      endKey: end,
+      priorStartKey: dayKey(priorStart),
+      priorEndKey: dayKey(priorEnd),
+      label: start === end ? start : `${start} – ${end}`,
+    };
+  }
+
+  if (period === "7d") {
+    const end = referenceDate;
+    const start = addDays(end, -6);
+    const priorEnd = addDays(start, -1);
+    const priorStart = addDays(priorEnd, -6);
+    return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "Last 7 days" };
+  }
+  if (period === "this_week") {
+    const start = startOfWeek(referenceDate);
+    const end = referenceDate;
+    const priorEnd = addDays(start, -1);
+    const priorStart = addDays(priorEnd, -6);
+    return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "This week" };
+  }
+  if (period === "this_month") {
+    const start = startOfMonth(referenceDate);
+    const end = referenceDate;
+    // Normalize `end` to midnight before diffing — referenceDate carries
+    // whatever time-of-day the caller passed (real callers use "now"),
+    // and that fractional day was rounding daysSoFar up by one.
+    const endAtMidnight = new Date(`${dayKey(end)}T00:00:00Z`);
+    const daysSoFar = Math.round((endAtMidnight.getTime() - start.getTime()) / DAY_MS) + 1;
+    const priorMonthStart = startOfMonth(addDays(start, -1));
+    const priorStart = priorMonthStart;
+    const priorEnd = addDays(priorMonthStart, daysSoFar - 1);
+    return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "This month" };
+  }
+  if (period === "last_month") {
+    const thisMonthStart = startOfMonth(referenceDate);
+    const lastMonthStart = startOfMonth(addDays(thisMonthStart, -1));
+    const lastMonthEnd = addDays(thisMonthStart, -1);
+    const priorMonthStart = startOfMonth(addDays(lastMonthStart, -1));
+    const priorMonthEnd = addDays(lastMonthStart, -1);
+    return { startKey: dayKey(lastMonthStart), endKey: dayKey(lastMonthEnd), priorStartKey: dayKey(priorMonthStart), priorEndKey: dayKey(priorMonthEnd), label: "Last month" };
+  }
+  // "30d" — the original default window, kept as the fallback.
+  const end = referenceDate;
+  const start = addDays(end, -29);
+  const priorEnd = addDays(start, -1);
+  const priorStart = addDays(priorEnd, -29);
+  return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "Last 30 days" };
+}
+
 export function isPharmacyMedicine(product: Product): boolean {
   const kind = String(product.customFields.productKind ?? "").toLowerCase();
   if (kind === "medicine") return true;
   const category = product.category.toLowerCase();
   if (category.includes("medicine")) return true;
   return Boolean(product.customFields.genericName || product.customFields.dosageForm || product.customFields.strength);
-}
-
-function salesWithinDays(sales: Sale[], referenceDate: Date, days: number): Sale[] {
-  const end = referenceDate.getTime() + DAY_MS;
-  const start = referenceDate.getTime() - (days - 1) * DAY_MS;
-  return sales.filter((sale) => {
-    const time = parseTime(sale.date);
-    return time >= start && time < end;
-  });
 }
 
 function buildTrend(sales: Sale[], canSeeFinancials: boolean, referenceDate: Date): RetailTrendPoint[] {
@@ -340,6 +449,7 @@ export function buildRetailDashboardIntelligence(
   canSeeFinancials: boolean,
   lots: RetailLotSnapshot[] = [],
   referenceDate = new Date(),
+  period: DashboardPeriod = "30d",
 ): RetailDashboardIntelligence {
   const products = data.products;
   const activeProducts = products.filter((product) => product.active);
@@ -347,7 +457,17 @@ export function buildRetailDashboardIntelligence(
   const outOfStock = activeProducts.filter((product) => product.stockQty <= 0);
   const today = dayKey(referenceDate);
   const todaySalesRows = data.sales.filter((sale) => sale.date.startsWith(today));
-  const recentSales = salesWithinDays(data.sales, referenceDate, 30);
+  const range = resolvePeriodRange(period, referenceDate);
+  const recentSales = data.sales.filter((sale) => {
+    const key = sale.date.slice(0, 10);
+    return key >= range.startKey && key <= range.endKey;
+  });
+  const priorPeriodSalesTotal = data.sales
+    .filter((sale) => {
+      const key = sale.date.slice(0, 10);
+      return key >= range.priorStartKey && key <= range.priorEndKey;
+    })
+    .reduce((sum, sale) => sum + sale.total, 0);
   const rankingSales = recentSales.length ? recentSales : data.sales;
   const todaySales = todaySalesRows.reduce((sum, sale) => sum + sale.total, 0);
   const yesterday = new Date(referenceDate);
@@ -359,6 +479,7 @@ export function buildRetailDashboardIntelligence(
   const todaySalesChangePct = yesterdaySales > 0 ? ((todaySales - yesterdaySales) / yesterdaySales) * 100 : null;
   const periodSales = recentSales.reduce((sum, sale) => sum + sale.total, 0);
   const periodProfit = canSeeFinancials ? recentSales.reduce((sum, sale) => sum + sale.profit, 0) : null;
+  const periodChangePct = priorPeriodSalesTotal > 0 ? ((periodSales - priorPeriodSalesTotal) / priorPeriodSalesTotal) * 100 : null;
   const averageBase = todaySalesRows.length ? todaySalesRows : recentSales;
   const averageTotal = averageBase.reduce((sum, sale) => sum + sale.total, 0);
   const medicines = sector === "pharmacy" ? activeProducts.filter(isPharmacyMedicine).length : 0;
@@ -377,6 +498,8 @@ export function buildRetailDashboardIntelligence(
     todayTransactions: todaySalesRows.length,
     averageBasket: averageBase.length ? averageTotal / averageBase.length : 0,
     periodSales,
+    periodLabel: range.label,
+    periodChangePct,
     periodTransactions: recentSales.length,
     periodProfit,
     grossMarginPct: canSeeFinancials && periodSales > 0 && periodProfit != null ? (periodProfit / periodSales) * 100 : null,
