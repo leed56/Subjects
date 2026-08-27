@@ -15,7 +15,7 @@ import {
   type NotificationLogEntry,
   type NotificationSettings,
 } from "@/lib/messaging";
-import { formatSlPhoneDisplay } from "@/lib/messaging";
+import { formatSlPhoneDisplay, isValidSlMobile } from "@/lib/messaging";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useSmsApiConfigured } from "@/lib/messaging/use-sms-api-configured";
 import {
@@ -35,6 +35,15 @@ export default function NotificationsSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
+  // Owner/technician phone previously had a placeholder but zero
+  // validation — anything typed persisted on blur, so a malformed number
+  // silently broke SMS delivery with no indication why. Blocking (not
+  // just warning) here: unlike VAT/BR/TIN, the LK mobile pattern isn't
+  // uncertain, and reusing the app's own isValidSlMobile (already the
+  // real send-eligibility check in message-composer.tsx) means this
+  // can't reject a number the send path would have accepted anyway.
+  const [ownerPhoneError, setOwnerPhoneError] = useState(false);
+  const [technicianPhoneError, setTechnicianPhoneError] = useState(false);
   const [batchResult, setBatchResult] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const smsApiConfigured = useSmsApiConfigured();
@@ -132,7 +141,9 @@ export default function NotificationsSettingsPage() {
       if (matched === 0 && (data.sent ?? 0) === 0) {
         const remindDays =
           settings.serviceDueRemindDays.length > 0
-            ? settings.serviceDueRemindDays.join(", ")
+            ? settings.serviceDueRemindDays
+                .map((day) => (day === 0 ? t("msg.remind_day_of") : t("msg.remind_days_before").replace("{{days}}", String(day))))
+                .join(", ")
             : "—";
         message += `. ${t("msg.send_service_due_none").replace("{{days}}", remindDays)}`;
       }
@@ -325,10 +336,45 @@ export default function NotificationsSettingsPage() {
                   {t("msg.remind_add_day")}
                 </button>
               </div>
+              {/* Custom-added days (anything outside the 14/7/2/0 preset
+                  chips above) had no chip of their own to toggle off with —
+                  once added via "Add" there was no way to remove one short
+                  of clearing the whole list. Rendering them here as their
+                  own removable chips, right next to the raw list they used
+                  to be dumped into unformatted ("Active reminders: 3, 0" —
+                  settings.serviceDueRemindDays.join(", ") with no label),
+                  fixes both: the value is now a real label, not a bare
+                  array, and every entry has an actual remove control. */}
+              {settings.serviceDueRemindDays.some((d) => ![14, 7, 2, 0].includes(d)) && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-slate-500">{t("msg.remind_custom_active")}:</span>
+                  {settings.serviceDueRemindDays
+                    .filter((d) => ![14, 7, 2, 0].includes(d))
+                    .map((day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() =>
+                          persist({
+                            ...settings,
+                            serviceDueRemindDays: settings.serviceDueRemindDays.filter((d) => d !== day),
+                          })
+                        }
+                        title={t("msg.remind_remove_day")}
+                        className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-800 hover:border-cyan-300 hover:bg-cyan-100"
+                      >
+                        {t("msg.remind_days_before").replace("{{days}}", String(day))}
+                        <span aria-hidden="true">×</span>
+                      </button>
+                    ))}
+                </div>
+              )}
               {settings.serviceDueRemindDays.length > 0 && (
                 <p className="mt-2 text-xs text-slate-500">
                   {t("msg.remind_active")}:{" "}
-                  {settings.serviceDueRemindDays.join(", ")}
+                  {settings.serviceDueRemindDays
+                    .map((day) => (day === 0 ? t("msg.remind_day_of") : t("msg.remind_days_before").replace("{{days}}", String(day))))
+                    .join(", ")}
                 </p>
               )}
             </div>
@@ -375,40 +421,56 @@ export default function NotificationsSettingsPage() {
                 <input
                   type="tel"
                   value={settings.ownerPhone}
-                  onChange={(e) =>
-                    setSettings((s) => ({ ...s, ownerPhone: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    if (ownerPhoneError) setOwnerPhoneError(false);
+                    setSettings((s) => ({ ...s, ownerPhone: e.target.value }));
+                  }}
                   onBlur={(e) => {
-                    const ownerPhone = e.target.value;
+                    const ownerPhone = e.target.value.trim();
+                    if (ownerPhone !== "" && !isValidSlMobile(ownerPhone)) {
+                      setOwnerPhoneError(true);
+                      return;
+                    }
+                    setOwnerPhoneError(false);
                     setSettings((s) => {
                       const next = { ...s, ownerPhone };
                       void persist(next);
                       return next;
                     });
                   }}
-                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                  aria-invalid={ownerPhoneError}
+                  className={`mt-1 w-full rounded-lg border px-3 py-2 ${ownerPhoneError ? "border-rose-300 focus:border-rose-400" : ""}`}
                   placeholder="07XXXXXXXX"
                 />
+                {ownerPhoneError && <span className="mt-1 block text-xs font-semibold text-rose-600">{t("msg.phone_format_hint")}</span>}
               </label>
               <label className="block text-sm">
                 {t("msg.technician_phone")}
                 <input
                   type="tel"
                   value={settings.technicianPhone}
-                  onChange={(e) =>
-                    setSettings((s) => ({ ...s, technicianPhone: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    if (technicianPhoneError) setTechnicianPhoneError(false);
+                    setSettings((s) => ({ ...s, technicianPhone: e.target.value }));
+                  }}
                   onBlur={(e) => {
-                    const technicianPhone = e.target.value;
+                    const technicianPhone = e.target.value.trim();
+                    if (technicianPhone !== "" && !isValidSlMobile(technicianPhone)) {
+                      setTechnicianPhoneError(true);
+                      return;
+                    }
+                    setTechnicianPhoneError(false);
                     setSettings((s) => {
                       const next = { ...s, technicianPhone };
                       void persist(next);
                       return next;
                     });
                   }}
-                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                  aria-invalid={technicianPhoneError}
+                  className={`mt-1 w-full rounded-lg border px-3 py-2 ${technicianPhoneError ? "border-rose-300 focus:border-rose-400" : ""}`}
                   placeholder="07XXXXXXXX"
                 />
+                {technicianPhoneError && <span className="mt-1 block text-xs font-semibold text-rose-600">{t("msg.phone_format_hint")}</span>}
               </label>
             </div>
 

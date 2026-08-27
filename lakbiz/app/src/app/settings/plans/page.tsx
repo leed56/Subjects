@@ -68,7 +68,7 @@ export default function PlansPage() {
             value={t(`sub.status_${subscription.status}`)}
             hint={
               daysLeftInTrial != null
-                ? `${daysLeftInTrial} days left`
+                ? `${daysLeftInTrial} day${daysLeftInTrial === 1 ? "" : "s"} left`
                 : t("sub.plans_managed_account")
             }
             icon="OK"
@@ -167,14 +167,17 @@ export default function PlansPage() {
                     key={plan.id}
                     className={`rounded-[1.25rem] border p-4 ${
                       plan.id === subscription.planId
-                        ? "border-teal-200 bg-teal-50"
+                        ? "border-teal-300 bg-teal-50 ring-2 ring-teal-500 ring-offset-2"
                         : "border-slate-200 bg-white"
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-lg font-bold text-slate-950">{name}</p>
                       {plan.id === subscription.planId && (
-                        <ProBadge tone="teal">{t("sub.plans_current_badge")}</ProBadge>
+                        <ProBadge tone="teal">
+                          <span className="mr-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-teal-600 text-[8px] text-white">✓</span>
+                          {t("sub.plans_current_badge")}
+                        </ProBadge>
                       )}
                     </div>
                     <p className="mt-2 font-mono text-xl font-bold text-teal-700">
@@ -217,6 +220,19 @@ export default function PlansPage() {
                     <p className="mt-2 text-xs font-semibold text-slate-500">
                       {t("sub.plans_contact_activate")}
                     </p>
+                    {/* "Contact LakBiz to activate" had no actual contact
+                        mechanism anywhere on the page — per your decision,
+                        a direct mailto link, reusing the same support
+                        address the marketing site already uses everywhere
+                        (hello@lakbiz.app), not a new one invented here. */}
+                    <a
+                      href={`mailto:hello@lakbiz.app?subject=${encodeURIComponent(
+                        `Activate ${locale === "si" ? addon.nameSi : addon.nameEn} — ${org.name}`,
+                      )}`}
+                      className="mt-3 inline-flex min-h-9 items-center justify-center rounded-lg border border-teal-200 bg-teal-50 px-3 text-xs font-bold text-teal-800 hover:bg-teal-100"
+                    >
+                      {t("sub.plans_contact_support")}
+                    </a>
                   </div>
                 ))}
               </div>

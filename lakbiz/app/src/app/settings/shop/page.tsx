@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/pro-shell";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { formatRelativeTime } from "@/lib/format";
 import type { BusinessInfo } from "@/lib/invoice";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import {
@@ -25,9 +26,24 @@ import { useAppStore } from "@/lib/store/use-app-store";
 
 const SHOP_KEY = "lakbiz-shop-settings-v1";
 const APP_KEY = "lakbiz-app-data-v2";
+const SAVED_AT_KEY = "lakbiz-shop-settings-saved-at-v1";
 
 type Msg = { ok: boolean; text: string };
 type BtnState = "idle" | "saving" | "saved";
+
+// Loose, advisory-only checks — Sri Lankan VAT/BR/TIN formats have real
+// edge cases this isn't an authoritative source on, so these only ever
+// produce a warning, never block a save. Better to let a genuinely valid
+// number through than to reject one because this pattern is slightly off.
+function looksLikeVatNumber(value: string): boolean {
+  return /^\d{6,12}-?\d{3,4}$/.test(value.trim());
+}
+function looksLikeBrNumber(value: string): boolean {
+  return /^[A-Za-z]{1,4}\s?\d{3,8}$/.test(value.trim());
+}
+function looksLikeTin(value: string): boolean {
+  return /^\d{6,12}$/.test(value.trim());
+}
 
 function readStorage(): Partial<BusinessInfo> | null {
   try {
@@ -137,8 +153,11 @@ async function fileToLogoDataUrl(file: File): Promise<string> {
   });
 }
 
-function fieldClass() {
-  return "mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-100";
+function fieldClass(hasError = false) {
+  const border = hasError
+    ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100"
+    : "border-slate-200 focus:border-teal-300 focus:ring-teal-100";
+  return `mt-2 h-12 w-full rounded-2xl border ${border} bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition focus:ring-4`;
 }
 
 function labelClass() {
@@ -153,6 +172,16 @@ export default function ShopSettingsPage() {
   const [btnState, setBtnState] = useState<BtnState>("idle");
   const [logoDataUrl, setLogoDataUrl] = useState<string | undefined>(undefined);
   const [incomeTaxPreset, setIncomeTaxPreset] = useState("30");
+  const [nameError, setNameError] = useState(false);
+  const [vatNumberError, setVatNumberError] = useState(false);
+  const [vatFormatWarning, setVatFormatWarning] = useState(false);
+  const [brFormatWarning, setBrFormatWarning] = useState(false);
+  const [tinFormatWarning, setTinFormatWarning] = useState(false);
+  // Persisted across visits (not just this session) — "returning user
+  // can't tell if that sync happened moments ago or days ago" needs a
+  // timestamp that survives a reload, not one reset to null on mount.
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [, forceTick] = useState(0);
 
   const { user } = useAuth();
   const { org } = useSubscription();
@@ -185,7 +214,20 @@ export default function ShopSettingsPage() {
       if (saved.logoDataUrl) setLogoDataUrl(saved.logoDataUrl);
       setIncomeTaxPreset(incomeTaxPresetValue(saved.companyIncomeTaxRate));
     }
+    try {
+      const savedAt = localStorage.getItem(SAVED_AT_KEY);
+      if (savedAt) setLastSavedAt(Number(savedAt));
+    } catch {}
   }, []);
+
+  // Keeps "Synced N minutes ago" honest without a save happening again —
+  // otherwise it would say "Just now" forever until the next render was
+  // triggered by something else entirely.
+  useEffect(() => {
+    if (lastSavedAt == null) return;
+    const id = setInterval(() => forceTick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, [lastSavedAt]);
 
   useEffect(() => {
     if (!org.id || !isSupabaseConfigured()) return;
@@ -206,7 +248,35 @@ export default function ShopSettingsPage() {
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const payload = readForm(e.currentTarget, logoDataUrl);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    const rawName = String(fd.get("name") ?? "").trim();
+    const rawVatRegistered = fd.get("vatRegistered") === "on";
+    const rawVatNumber = String(fd.get("vatNumber") ?? "").trim();
+    const rawBrNumber = String(fd.get("brNumber") ?? "").trim();
+    const rawTin = String(fd.get("tin") ?? "").trim();
+
+    // Required fields: block and show inline state rather than the old
+    // behavior of silently substituting "My Shop" for an empty name with
+    // no indication anything was wrong.
+    const nameMissing = rawName === "";
+    const vatNumberMissing = rawVatRegistered && rawVatNumber === "";
+    setNameError(nameMissing);
+    setVatNumberError(vatNumberMissing);
+    if (nameMissing || vatNumberMissing) {
+      showMsg({ ok: false, text: t("shop.fix_errors_hint") }, "idle");
+      const target = form.elements.namedItem(nameMissing ? "name" : "vatNumber");
+      if (target instanceof HTMLInputElement) target.focus();
+      return;
+    }
+
+    // Format warnings — advisory only (confirmed: warn, don't block), so
+    // these never prevent the save below from happening.
+    setVatFormatWarning(rawVatNumber !== "" && !looksLikeVatNumber(rawVatNumber));
+    setBrFormatWarning(rawBrNumber !== "" && !looksLikeBrNumber(rawBrNumber));
+    setTinFormatWarning(rawTin !== "" && !looksLikeTin(rawTin));
+
+    const payload = readForm(form, logoDataUrl);
     showMsg({ ok: true, text: t("vat.saving") }, "saving");
 
     try {
@@ -242,6 +312,12 @@ export default function ShopSettingsPage() {
       );
       return;
     }
+
+    const savedAt = Date.now();
+    setLastSavedAt(savedAt);
+    try {
+      localStorage.setItem(SAVED_AT_KEY, String(savedAt));
+    } catch {}
 
     showMsg(
       {
@@ -293,6 +369,15 @@ export default function ShopSettingsPage() {
             <div className="mt-5 rounded-2xl border border-teal-100 bg-teal-50 p-4 text-sm font-semibold leading-6 text-teal-900">
               {cloudReady ? t("vat.settings_saved_cloud") : t("vat.cloud_sync_note")}
             </div>
+            {/* "Saved — synced to cloud" used to say nothing about *when* —
+                a returning user had no way to tell a sync from moments ago
+                apart from one from days ago. Persists across visits
+                (SAVED_AT_KEY), not just within this session. */}
+            {lastSavedAt != null && (
+              <p className="mt-2 text-xs font-semibold text-slate-500">
+                {t("shop.last_synced")}: {formatRelativeTime(lastSavedAt)}
+              </p>
+            )}
           </ProCard>
 
           <ProCard title={t("vat.shop_settings")} eyebrow="Details and VAT">
@@ -317,13 +402,42 @@ export default function ShopSettingsPage() {
                   )}
                 </label>
 
-                <label className={`${labelClass()} sm:col-span-2`}>{t("vat.shop_name")} *<input name="name" required autoComplete="organization" className={fieldClass()} /></label>
+                <label className={`${labelClass()} sm:col-span-2`}>
+                  {t("vat.shop_name")} *
+                  <input
+                    name="name"
+                    required
+                    autoComplete="organization"
+                    aria-invalid={nameError}
+                    onInput={() => nameError && setNameError(false)}
+                    className={fieldClass(nameError)}
+                  />
+                  {nameError && <span className="mt-1 block text-xs font-semibold text-rose-600">{t("shop.name_required")}</span>}
+                </label>
                 <label className={labelClass()}>{t("shop.name_si")}<input name="nameSi" className={fieldClass()} /></label>
                 <label className={labelClass()}>{t("common.phone")}<input name="phone" autoComplete="tel" className={fieldClass()} /></label>
                 <label className={labelClass()}>{t("shop.email")}<input name="email" type="email" autoComplete="email" className={fieldClass()} /></label>
                 <label className={labelClass()}>{t("common.address")}<input name="address" autoComplete="street-address" className={fieldClass()} /></label>
-                <label className={labelClass()}>{t("shop.br_number")}<input name="brNumber" placeholder={t("shop.br_placeholder")} className={fieldClass()} /></label>
-                <label className={labelClass()}>{t("shop.tin")}<input name="tin" className={fieldClass()} /></label>
+                <label className={labelClass()}>
+                  {t("shop.br_number")}
+                  <input
+                    name="brNumber"
+                    placeholder={t("shop.br_placeholder")}
+                    onInput={() => brFormatWarning && setBrFormatWarning(false)}
+                    className={fieldClass()}
+                  />
+                  {brFormatWarning && <span className="mt-1 block text-xs font-semibold text-amber-600">{t("shop.br_format_hint")}</span>}
+                </label>
+                <label className={labelClass()}>
+                  {t("shop.tin")}
+                  <input
+                    name="tin"
+                    placeholder={t("shop.tin_placeholder")}
+                    onInput={() => tinFormatWarning && setTinFormatWarning(false)}
+                    className={fieldClass()}
+                  />
+                  {tinFormatWarning && <span className="mt-1 block text-xs font-semibold text-amber-600">{t("shop.tin_format_hint")}</span>}
+                </label>
                 <label className={`${labelClass()} sm:col-span-2`}>{t("shop.invoice_footer")}<textarea name="invoiceFooter" rows={3} placeholder={t("shop.invoice_footer_placeholder")} className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-100" /></label>
               </div>
 
@@ -333,7 +447,21 @@ export default function ShopSettingsPage() {
                   {t("vat.registered")}
                 </label>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <label className={labelClass()}>{t("vat.vat_number")}<input name="vatNumber" className={fieldClass()} /></label>
+                  <label className={labelClass()}>
+                    {t("vat.vat_number")}
+                    <input
+                      name="vatNumber"
+                      placeholder={t("vat.vat_number_placeholder")}
+                      aria-invalid={vatNumberError}
+                      onInput={() => {
+                        if (vatNumberError) setVatNumberError(false);
+                        if (vatFormatWarning) setVatFormatWarning(false);
+                      }}
+                      className={fieldClass(vatNumberError)}
+                    />
+                    {vatNumberError && <span className="mt-1 block text-xs font-semibold text-rose-600">{t("shop.vat_number_required")}</span>}
+                    {!vatNumberError && vatFormatWarning && <span className="mt-1 block text-xs font-semibold text-amber-600">{t("shop.vat_format_hint")}</span>}
+                  </label>
                   <label className={labelClass()}>
                     {t("vat.quarter_start")}
                     <select name="quarterStartMonth" defaultValue="4" className={fieldClass()}>

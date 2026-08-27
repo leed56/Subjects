@@ -100,3 +100,23 @@ export function newId(): string {
   }
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
+
+/** "Just now" / "5 minutes ago" / "3 hours ago" / "2 days ago", falling
+ * back to a plain date once it's old enough that a relative phrase stops
+ * being useful (e.g. Shop Settings' "Saved — synced to cloud" message —
+ * a returning user couldn't tell if that sync happened moments ago or
+ * days ago with no timestamp at all). `now` is an explicit parameter so
+ * this stays a pure function callers can re-run on a timer without
+ * `new Date()` living inside the formatter itself. */
+export function formatRelativeTime(thenMs: number, now: Date = new Date()): string {
+  const diffSec = Math.max(0, Math.round((now.getTime() - thenMs) / 1000));
+  if (diffSec < 30) return "Just now";
+  if (diffSec < 60) return `${diffSec} seconds ago`;
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? "" : "s"} ago`;
+  const diffDay = Math.round(diffHr / 24);
+  if (diffDay < 7) return `${diffDay} day${diffDay === 1 ? "" : "s"} ago`;
+  return new Date(thenMs).toLocaleDateString("en-LK", { day: "numeric", month: "short", year: "numeric" });
+}

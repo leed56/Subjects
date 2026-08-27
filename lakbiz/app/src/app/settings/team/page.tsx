@@ -11,7 +11,7 @@ import {
   ProMain,
   ProPageHeader,
 } from "@/components/ui/pro-shell";
-import { ConfirmDialog } from "@/components/ui/overlay";
+import { ConfirmDialog, Dialog } from "@/components/ui/overlay";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/components/auth-provider";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -19,6 +19,18 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { OrgRole } from "@/lib/subscription/types";
 
 const EDITABLE_ROLES: OrgRole[] = ["data_entry", "cashier", "technician", "manager"];
+
+// Grounded in org-role/permissions.ts's actual route tables, not marketing
+// copy — SHOP_STAFF_ROUTES/MANAGER_ROUTES/DATA_ENTRY_ROUTES/TECHNICIAN_ROUTES
+// and FINANCIAL_ROLES = ["owner"] only. So an owner deciding what to grant
+// sees the real access boundary before creating a login, not a guess.
+const ROLE_DESCRIPTION_KEYS: Record<OrgRole, string> = {
+  owner: "team.role_desc_owner",
+  manager: "team.role_desc_manager",
+  data_entry: "team.role_desc_data_entry",
+  cashier: "team.role_desc_cashier",
+  technician: "team.role_desc_technician",
+};
 
 type MemberRow = {
   userId: string;
@@ -43,6 +55,15 @@ export default function TeamSettingsPage() {
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<MemberRow | null>(null);
   const [removing, setRemoving] = useState(false);
+  // Reset-password: the API already supported action: "reset_password"
+  // (create-team-member.ts's resetTeamMemberPassword) — there was just no
+  // UI calling it, so an owner had no way to help a staff member back into
+  // a login besides removing and re-creating the whole account.
+  const [resetTarget, setResetTarget] = useState<MemberRow | null>(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetConfirmPassword, setResetConfirmPassword] = useState("");
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [resetError, setResetError] = useState("");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -125,6 +146,40 @@ export default function TeamSettingsPage() {
     setMembers((prev) => prev.filter((m) => m.userId !== removeTarget.userId));
     toast({ tone: "success", title: t("common.delete"), description: removeTarget.email ?? undefined });
     setRemoveTarget(null);
+  };
+
+  const openReset = (m: MemberRow) => {
+    setResetTarget(m);
+    setResetPassword("");
+    setResetConfirmPassword("");
+    setResetError("");
+  };
+
+  const confirmReset = async () => {
+    if (!resetTarget || resettingPassword) return;
+    if (resetPassword !== resetConfirmPassword) {
+      setResetError(t("team.password_mismatch"));
+      return;
+    }
+    if (!resetTarget.email) {
+      setResetError(t("team.reset_no_email"));
+      return;
+    }
+    setResettingPassword(true);
+    setResetError("");
+    const res = await fetch("/api/settings/team", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reset_password", email: resetTarget.email, password: resetPassword }),
+    });
+    const json = (await res.json()) as { ok?: boolean; error?: string };
+    setResettingPassword(false);
+    if (!json.ok) {
+      setResetError(json.error ?? t("common.save_failed"));
+      return;
+    }
+    toast({ tone: "success", title: t("team.reset_ok"), description: resetTarget.email ?? undefined });
+    setResetTarget(null);
   };
 
   if (!canManageTeam) {
@@ -214,6 +269,7 @@ export default function TeamSettingsPage() {
                   <option value="technician">{t("team.role_technician")}</option>
                   <option value="manager">{t("team.role_manager")}</option>
                 </select>
+                <span className="mt-1.5 block text-xs font-medium leading-4 text-slate-500">{t(ROLE_DESCRIPTION_KEYS[role])}</span>
               </label>
               <button
                 type="submit"
@@ -257,6 +313,15 @@ export default function TeamSettingsPage() {
                           </select>
                           <button
                             type="button"
+                            onClick={() => openReset(m)}
+                            disabled={!m.email}
+                            title={m.email ? undefined : t("team.reset_no_email")}
+                            className="text-xs font-semibold text-teal-700 hover:underline disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:no-underline"
+                          >
+                            {t("team.reset_password")}
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setRemoveTarget(m)}
                             className="text-xs font-semibold text-rose-600 hover:underline"
                           >
@@ -283,6 +348,60 @@ export default function TeamSettingsPage() {
           onConfirm={() => void confirmRemove()}
           onClose={() => setRemoveTarget(null)}
         />
+
+        <Dialog
+          open={!!resetTarget}
+          onClose={() => setResetTarget(null)}
+          title={t("team.reset_password")}
+          description={resetTarget?.email ?? undefined}
+          footer={
+            <>
+              <button type="button" onClick={() => setResetTarget(null)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                {t("common.cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmReset()}
+                disabled={resettingPassword || resetPassword.length < 8 || resetPassword !== resetConfirmPassword}
+                className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-bold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {resettingPassword ? t("common.saving") : t("team.reset_password")}
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            {resetError && (
+              <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{resetError}</p>
+            )}
+            <label className="block text-sm font-bold text-slate-700">
+              {t("team.password")}
+              <input
+                type="password"
+                minLength={8}
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+                className="mt-1 h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold"
+              />
+            </label>
+            <label className="block text-sm font-bold text-slate-700">
+              {t("team.confirm_password")}
+              <input
+                type="password"
+                minLength={8}
+                value={resetConfirmPassword}
+                onChange={(e) => setResetConfirmPassword(e.target.value)}
+                aria-invalid={resetConfirmPassword.length > 0 && resetConfirmPassword !== resetPassword}
+                className={`mt-1 h-11 w-full rounded-xl border px-3 text-sm font-semibold ${
+                  resetConfirmPassword.length > 0 && resetConfirmPassword !== resetPassword ? "border-rose-300" : "border-slate-200"
+                }`}
+              />
+              {resetConfirmPassword.length > 0 && resetConfirmPassword !== resetPassword && (
+                <span className="mt-1 block text-xs font-semibold text-rose-600">{t("team.password_mismatch")}</span>
+              )}
+            </label>
+          </div>
+        </Dialog>
 
         <p className="mt-6 text-center text-sm text-slate-500">
           <Link href="/dashboard" className="text-teal-700 underline">
