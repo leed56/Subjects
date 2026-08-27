@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BulkWhatsAppComposer } from "@/components/messaging/bulk-whatsapp-composer";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { ContactTypeBadge } from "@/components/contact-type-badge";
@@ -86,7 +86,10 @@ export default function CustomersPage() {
   const [savingPriceProductId, setSavingPriceProductId] = useState<string | null>(null);
 
   const [typeFilter, setTypeFilter] = useState<ContactFilter>("all");
-  const [search, setSearch] = useState("");
+  // Global search (Cmd/Ctrl+K) links a customer result here with ?q=<name>
+  // — same seeded-once-at-mount pattern as /stock's own ?q= handling.
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [bulkWaOpen, setBulkWaOpen] = useState(false);
 
   useEffect(() => {

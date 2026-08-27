@@ -11,9 +11,10 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useShopNav } from "@/components/shell/use-shop-nav";
 import { useBottomBarOccupied } from "@/components/shell/bottom-bar-overlay";
 import { NAV_ICON_BY_HREF } from "@/components/shell/nav-icons";
-import { MenuIcon, CloseIcon, SettingsIcon, SignOutIcon } from "@/components/ui/icons";
+import { MenuIcon, CloseIcon, SettingsIcon, SignOutIcon, BellIcon } from "@/components/ui/icons";
 import { initialsFor } from "@/lib/format";
 import type { NavItem } from "@/lib/nav-sections";
+import { useCriticalAlertCount } from "@/lib/dashboard/use-critical-alert-count";
 
 function navLabel(item: NavItem, locale: "si" | "en" | "ta", t: (key: string) => string): string {
   if (locale === "si" && item.labelSi) return item.labelSi;
@@ -31,6 +32,7 @@ export function MobileNav() {
   const { isPlatformAdmin, org } = useSubscription();
   const { sections, managementItems } = useShopNav();
   const bottomBarOccupied = useBottomBarOccupied();
+  const criticalAlertCount = useCriticalAlertCount();
   const [open, setOpen] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -129,6 +131,24 @@ export function MobileNav() {
         </Link>
         <div className="flex items-center gap-2">
           <AcAlertsBell />
+          {/* ac_hvac already has its own richer alerts bell above; this
+              badge covers pharmacy/grocery/other sectors so the same
+              expired/blocked/low-stock signal is visible from anywhere,
+              not just the desktop sidebar. See useCriticalAlertCount. */}
+          {!isPlatformAdmin && org.sector !== "ac_hvac" && (
+            <Link
+              href="/dashboard"
+              aria-label={criticalAlertCount > 0 ? `${criticalAlertCount} alerts need attention` : "No alerts"}
+              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-slate-50"
+            >
+              <BellIcon className="h-4.5 w-4.5" />
+              {criticalAlertCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-white">
+                  {criticalAlertCount > 99 ? "99+" : criticalAlertCount}
+                </span>
+              )}
+            </Link>
+          )}
           <button type="button" onClick={() => setLocale(nextLocale(locale))} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 shadow-sm">{LOCALE_NAMES[nextLocale(locale)]}</button>
           <button type="button" aria-label="Open menu" onClick={openDrawer} className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-950 text-white shadow-sm"><MenuIcon className="h-5 w-5" /></button>
         </div>

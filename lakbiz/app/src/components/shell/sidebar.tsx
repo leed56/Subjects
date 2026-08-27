@@ -8,9 +8,11 @@ import { LOCALE_NAMES, nextLocale } from "@/lib/i18n/translations";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useShopNav } from "@/components/shell/use-shop-nav";
 import { NAV_ICON_BY_HREF } from "@/components/shell/nav-icons";
-import { SettingsIcon, SignOutIcon } from "@/components/ui/icons";
+import { SettingsIcon, SignOutIcon, BellIcon } from "@/components/ui/icons";
 import { initialsFor } from "@/lib/format";
 import type { NavItem } from "@/lib/nav-sections";
+import { useCriticalAlertCount } from "@/lib/dashboard/use-critical-alert-count";
+import { GlobalSearch } from "@/components/shell/global-search";
 
 function navLabel(item: NavItem, locale: "si" | "en" | "ta", t: (key: string) => string): string {
   if (locale === "si" && item.labelSi) return item.labelSi;
@@ -48,6 +50,7 @@ export function Sidebar() {
   const { user, logout } = useAuth();
   const { isPlatformAdmin, org } = useSubscription();
   const { sections, managementItems } = useShopNav();
+  const criticalAlertCount = useCriticalAlertCount();
   const allItems = [...sections.flatMap((section) => section.items), ...managementItems];
   // Nested workspaces such as /stock/advanced must not make both /stock and
   // the more-specific child item look active. Longest matching href wins.
@@ -62,14 +65,41 @@ export function Sidebar() {
 
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/[0.06] bg-[#08111f] lg:flex">
-      <div className="flex h-20 items-center border-b border-white/[0.06] px-5">
-        <Link href={isPlatformAdmin ? "/admin" : "/dashboard"} className="flex min-w-0 items-center gap-3">
+      <div className="flex h-20 items-center gap-2 border-b border-white/[0.06] px-5">
+        <Link href={isPlatformAdmin ? "/admin" : "/dashboard"} className="flex min-w-0 flex-1 items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-400 to-teal-600 text-sm font-bold text-white shadow-lg shadow-teal-950/30">L</span>
           <div className="min-w-0 leading-tight">
             <span className="block truncate text-lg font-bold tracking-tight text-white">LakBiz</span>
             <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Business workspace</span>
           </div>
         </Link>
+        {/* Persistent, header-level alert badge — expired lots, blocked
+            batches and critical low-stock items surface from anywhere in
+            the app, not only by scrolling to the dashboard's own "Needs
+            attention" card. See useCriticalAlertCount for scope. ac_hvac
+            excluded: it has its own richer, job-based alerts bell today,
+            but only on the mobile top bar (MobileNav's AcAlertsBell) —
+            desktop has no equivalent yet. Not adding this stock-based
+            badge there instead, since it would show a different number
+            than mobile for the same org; that gap stays open. */}
+        {!isPlatformAdmin && org.sector !== "ac_hvac" && (
+          <Link
+            href="/dashboard"
+            aria-label={criticalAlertCount > 0 ? `${criticalAlertCount} alerts need attention` : "No alerts"}
+            className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/[0.06] hover:text-white"
+          >
+            <BellIcon className="h-4.5 w-4.5" />
+            {criticalAlertCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-[#08111f]">
+                {criticalAlertCount > 99 ? "99+" : criticalAlertCount}
+              </span>
+            )}
+          </Link>
+        )}
+      </div>
+
+      <div className="px-3.5 pt-3.5">
+        <GlobalSearch />
       </div>
 
       {/* `min-h-0` is load-bearing here, not decorative: a flex item's
