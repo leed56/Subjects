@@ -268,7 +268,12 @@ export default function CustomersPage() {
       header: t("common.actions"),
       align: "right",
       render: (c) => (
-        <div className="flex items-center justify-end gap-1.5">
+        // whitespace-nowrap + shrink-0 on every button here: this row can
+        // hold 2-3 buttons plus the Actions menu in a right-aligned,
+        // width-constrained cell, and without them a crowded row squeezes
+        // a button below its own label width, wrapping the text mid-word
+        // ("Message" -> "Messa/ge") instead of just letting the row scroll.
+        <div className="flex items-center justify-end gap-1.5 overflow-x-auto">
           {c.phone && (
             <MessageSendButton
               phone={c.phone}
@@ -284,7 +289,7 @@ export default function CustomersPage() {
                 setPayCustomerId(c.id);
                 setPayAmount(String(c.creditBalance));
               }}
-              className="rounded-lg bg-teal-50 px-2.5 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-100"
+              className="shrink-0 whitespace-nowrap rounded-lg bg-teal-50 px-2.5 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-100"
             >
               {t("cust.record_payment")}
             </button>

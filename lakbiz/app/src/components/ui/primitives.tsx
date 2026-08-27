@@ -407,14 +407,14 @@ export function ActionMenu({ items, label = "Actions" }: { items: ActionMenuItem
   }, [open]);
 
   return (
-    <div ref={ref} className="relative inline-block text-left">
+    <div ref={ref} className="relative inline-block shrink-0 text-left">
       <button
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={label}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
       >
         <MoreIcon className="h-4.5 w-4.5" />
       </button>
@@ -444,6 +444,48 @@ export function ActionMenu({ items, label = "Actions" }: { items: ActionMenuItem
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Shared page-count control — "1-50 of 1,230 · 50 per page" with
+ * First/Prev/Page N of M/Next/Last. Originally built once for Stock
+ * Control (as a page-local component); Bills reuses it verbatim rather
+ * than growing its own copy, so any future page that also needs
+ * pagination has one implementation to reach for instead of a third
+ * hand-rolled version. */
+export function Pagination({
+  page,
+  totalPages,
+  start,
+  end,
+  total,
+  pageSize,
+  itemLabel = "items",
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  start: number;
+  end: number;
+  total: number;
+  pageSize: number;
+  itemLabel?: string;
+  onPageChange: (page: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-sm text-slate-600 shadow-[0_6px_20px_rgba(15,23,42,0.035)]">
+      <p>
+        <span className="font-semibold text-slate-900">{start}–{end}</span> of {total.toLocaleString()} {itemLabel}
+        <span className="ml-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">· {pageSize} per page</span>
+      </p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button type="button" disabled={page <= 1} onClick={() => onPageChange(1)} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">First</button>
+        <button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))} className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">←</button>
+        <span className="min-w-[92px] text-center text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Page {page} / {totalPages}</span>
+        <button type="button" aria-label="Next page" disabled={page >= totalPages} onClick={() => onPageChange(Math.min(totalPages, page + 1))} className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">→</button>
+        <button type="button" disabled={page >= totalPages} onClick={() => onPageChange(totalPages)} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">Last</button>
+      </div>
     </div>
   );
 }

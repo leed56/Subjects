@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { AppShell } from "@/components/shell/app-shell";
 import {
@@ -16,7 +16,7 @@ import {
   ProStatCard,
 } from "@/components/ui/pro-shell";
 import { BillsIcon, CostingIcon, ReportsIcon, CustomersIcon, FilterIcon, SearchIcon } from "@/components/ui/icons";
-import { ActionMenu } from "@/components/ui/primitives";
+import { ActionMenu, Pagination } from "@/components/ui/primitives";
 import { formatLkr } from "@/lib/format";
 import { buildInvoiceText, buildQuoteText, whatsappShareUrl } from "@/lib/invoice";
 import { exportSalesCsv, printSalesReport } from "@/lib/export";
@@ -26,6 +26,13 @@ import { useAppStore } from "@/lib/store/use-app-store";
 import type { Sale } from "@/lib/store/types";
 import type { PaymentMethod } from "@/lib/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+
+// Same page size and pattern Stock Control already uses — see
+// Pagination in components/ui/primitives.tsx. Bills rendered its full
+// filtered invoice list in one continuously-scrolling table/card list
+// with no pagination at all; a shop with 1,200+ invoices had no way to
+// jump to a page, only to keep scrolling.
+const BILLS_PAGE_SIZE = 50;
 
 function customerPhoneForSale(
   sale: Sale,
@@ -44,6 +51,11 @@ export default function BillsPage() {
   const [paymentFilter, setPaymentFilter] = useState<PaymentMethod | "all">("all");
   const [invoiceType, setInvoiceType] = useState<"all" | "vehicle" | "retail">("all");
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, paymentFilter, invoiceType]);
 
   if (!ready || !data) {
     return (
@@ -75,6 +87,12 @@ export default function BillsPage() {
       sale.lines.some((line) => line.productName.toLowerCase().includes(query))
     );
   });
+
+  const totalPages = Math.max(1, Math.ceil(bills.length / BILLS_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * BILLS_PAGE_SIZE;
+  const pageBills = bills.slice(pageStart, pageStart + BILLS_PAGE_SIZE);
+  const pageEnd = Math.min(pageStart + BILLS_PAGE_SIZE, bills.length);
 
   const canExport = can("export");
   const activeFilterCount = Number(paymentFilter !== "all") + Number(invoiceType !== "all");
@@ -194,6 +212,18 @@ export default function BillsPage() {
             </ProCard>
           ) : (
             <ProCard title={t("bills.invoice_history")} action={<ProBadge tone="teal">{bills.length} {t("bills.invoices_count")}</ProBadge>}>
+              <div className="mb-3">
+                <Pagination
+                  page={currentPage}
+                  totalPages={totalPages}
+                  start={pageStart + 1}
+                  end={pageEnd}
+                  total={bills.length}
+                  pageSize={BILLS_PAGE_SIZE}
+                  itemLabel={t("bills.invoices_count")}
+                  onPageChange={setPage}
+                />
+              </div>
               <div className="hidden overflow-hidden rounded-2xl border border-slate-200 lg:block">
                 <table className="w-full text-left text-sm">
                   <thead className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -207,7 +237,7 @@ export default function BillsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {bills.map((s) => {
+                    {pageBills.map((s) => {
                       const isVehicle = vehicleSaleIds.has(s.id);
                       const phone = customerPhoneForSale(s, data.customers);
                       const invoiceWa = whatsappShareUrl(
@@ -265,7 +295,7 @@ export default function BillsPage() {
               </div>
 
               <div className="grid gap-3 lg:hidden">
-                {bills.map((s) => (
+                {pageBills.map((s) => (
                   <Link key={s.id} href={`/bills/${s.id}`} className="block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-white">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -285,6 +315,21 @@ export default function BillsPage() {
                   </Link>
                 ))}
               </div>
+
+              {bills.length > BILLS_PAGE_SIZE && (
+                <div className="mt-3">
+                  <Pagination
+                    page={currentPage}
+                    totalPages={totalPages}
+                    start={pageStart + 1}
+                    end={pageEnd}
+                    total={bills.length}
+                    pageSize={BILLS_PAGE_SIZE}
+                    itemLabel={t("bills.invoices_count")}
+                    onPageChange={setPage}
+                  />
+                </div>
+              )}
             </ProCard>
           )}
         </section>

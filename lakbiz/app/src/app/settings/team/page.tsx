@@ -37,6 +37,7 @@ export default function TeamSettingsPage() {
   const [message, setMessage] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<OrgRole>("data_entry");
   const [submitting, setSubmitting] = useState(false);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
@@ -60,6 +61,15 @@ export default function TeamSettingsPage() {
 
   const handleCreateUser = async (e: FormEvent) => {
     e.preventDefault();
+    // Credentials for this login are handed to the staff member off-screen
+    // (there's no "reset password" flow yet) — a typo here silently hands
+    // them a login they can't use, with no way for either side to notice
+    // until they try to sign in. Catching the mismatch before it's ever
+    // sent is the whole point; the server never sees a typo'd password.
+    if (password !== confirmPassword) {
+      setMessage(t("team.password_mismatch"));
+      return;
+    }
     setSubmitting(true);
     setMessage("");
     const res = await fetch("/api/settings/team", {
@@ -76,6 +86,7 @@ export default function TeamSettingsPage() {
     setMessage(t("team.create_ok"));
     setEmail("");
     setPassword("");
+    setConfirmPassword("");
     load();
   };
 
@@ -173,6 +184,25 @@ export default function TeamSettingsPage() {
                 />
               </label>
               <label className="block text-sm font-bold text-slate-700">
+                {t("team.confirm_password")}
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  aria-invalid={confirmPassword.length > 0 && confirmPassword !== password}
+                  className={`mt-1 h-11 w-full rounded-xl border px-3 text-sm font-semibold ${
+                    confirmPassword.length > 0 && confirmPassword !== password
+                      ? "border-rose-300 focus:border-rose-400"
+                      : "border-slate-200"
+                  }`}
+                />
+                {confirmPassword.length > 0 && confirmPassword !== password && (
+                  <span className="mt-1 block text-xs font-semibold text-rose-600">{t("team.password_mismatch")}</span>
+                )}
+              </label>
+              <label className="block text-sm font-bold text-slate-700">
                 {t("team.role")}
                 <select
                   value={role}
@@ -187,7 +217,7 @@ export default function TeamSettingsPage() {
               </label>
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || (confirmPassword.length > 0 && confirmPassword !== password)}
                 className="w-full rounded-2xl bg-teal-600 py-3 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-50"
               >
                 {submitting ? t("common.saving") : t("team.create_btn")}

@@ -8,7 +8,7 @@ import { ExportActions } from "@/components/export/export-actions";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
-import { EmptyState, StatusBadge, SearchInput, FilterBar, ActionMenu } from "@/components/ui/primitives";
+import { EmptyState, StatusBadge, SearchInput, FilterBar, ActionMenu, Pagination } from "@/components/ui/primitives";
 import { Drawer, Dialog, ConfirmDialog } from "@/components/ui/overlay";
 import { FormField, TextInput } from "@/components/ui/form";
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
@@ -29,38 +29,6 @@ import type { Product, ProductCondition } from "@/lib/types";
 type ConditionFilter = "all" | ProductCondition;
 
 const STOCK_PAGE_SIZE = 50;
-
-function StockPagination({
-  page,
-  totalPages,
-  start,
-  end,
-  total,
-  onPageChange,
-}: {
-  page: number;
-  totalPages: number;
-  start: number;
-  end: number;
-  total: number;
-  onPageChange: (page: number) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-sm text-slate-600 shadow-[0_6px_20px_rgba(15,23,42,0.035)]">
-      <p>
-        <span className="font-semibold text-slate-900">{start}–{end}</span> of {total.toLocaleString()} items
-        <span className="ml-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">· {STOCK_PAGE_SIZE} per page</span>
-      </p>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <button type="button" disabled={page <= 1} onClick={() => onPageChange(1)} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">First</button>
-        <button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))} className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">←</button>
-        <span className="min-w-[92px] text-center text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Page {page} / {totalPages}</span>
-        <button type="button" aria-label="Next page" disabled={page >= totalPages} onClick={() => onPageChange(Math.min(totalPages, page + 1))} className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">→</button>
-        <button type="button" disabled={page >= totalPages} onClick={() => onPageChange(totalPages)} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">Last</button>
-      </div>
-    </div>
-  );
-}
 
 export default function StockPage() {
   const {
@@ -529,24 +497,26 @@ export default function StockPage() {
         ) : (
           <>
             <div className="mb-3">
-              <StockPagination
+              <Pagination
                 page={currentPage}
                 totalPages={totalPages}
                 start={pageStart + 1}
                 end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
                 total={products.length}
+                pageSize={STOCK_PAGE_SIZE}
                 onPageChange={setPage}
               />
             </div>
             <DataTable columns={columns} rows={pageProducts} emptyState={<EmptyState title={t("sales.no_match")} description={t("stock.search_no_match_desc")} />} />
             {products.length > STOCK_PAGE_SIZE && (
               <div className="mt-3">
-                <StockPagination
+                <Pagination
                   page={currentPage}
                   totalPages={totalPages}
                   start={pageStart + 1}
                   end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
                   total={products.length}
+                  pageSize={STOCK_PAGE_SIZE}
                   onPageChange={setPage}
                 />
               </div>
