@@ -95,12 +95,21 @@ export default function StockPage() {
   // HVAC platform Phase 12 — a real filtered view of exactly what needs
   // reordering, not just the metric-card count that existed before.
   const [showLowStockOnly, setShowLowStockOnly] = useState(() => searchParams.get("filter") === "low-stock");
+  // Round 2 Section 8 — the product form has never required a non-zero
+  // price (only the name field is `required`; buy/sell price both default
+  // to and accept 0), so a Rs. 0 item isn't necessarily a demo-seed
+  // artifact — the same gap exists for real data entry today, most easily
+  // hit by a role that never sees the buy-price field at all (see
+  // `canSeeFinancials` below) leaving it at its 0 default. This filter is
+  // the data-quality view requested: a zero sell price (or, for financial
+  // roles, a zero buy price) silently breaks margin math on that item.
+  const [showZeroPriceOnly, setShowZeroPriceOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [page, setPage] = useState(1);
 
   useEffect(() => {
     setPage(1);
-  }, [search, conditionFilter, showInactive, showLowStockOnly, categoryFilter]);
+  }, [search, conditionFilter, showInactive, showLowStockOnly, showZeroPriceOnly, categoryFilter]);
 
   useEffect(() => {
     if (!conditionFilterRelevant && conditionFilter !== "all") setConditionFilter("all");
@@ -132,7 +141,11 @@ export default function StockPage() {
   const byCategory = categoryFilter === "all" ? byActive : byActive.filter((p) => p.category === categoryFilter);
   const lowStock = getLowStockProducts(data.products);
   const lowStockIds = new Set(lowStock.map((p) => p.id));
-  const products = showLowStockOnly ? byCategory.filter((p) => lowStockIds.has(p.id)) : byCategory;
+  const isZeroPriced = (p: Product) => p.sellPrice <= 0 || (canSeeFinancials && p.buyPrice <= 0);
+  const zeroPriced = data.products.filter((p) => p.active && isZeroPriced(p));
+  const zeroPricedIds = new Set(zeroPriced.map((p) => p.id));
+  const byLowStock = showLowStockOnly ? byCategory.filter((p) => lowStockIds.has(p.id)) : byCategory;
+  const products = showZeroPriceOnly ? byLowStock.filter((p) => zeroPricedIds.has(p.id)) : byLowStock;
   const totalPages = Math.max(1, Math.ceil(products.length / STOCK_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * STOCK_PAGE_SIZE;
@@ -346,7 +359,16 @@ export default function StockPage() {
             header: t("stock.buy_price"),
             align: "right" as const,
             hideOnMobile: true,
-            render: (p: Product) => formatLkr(p.buyPrice),
+            render: (p: Product) => (
+              <div className="text-right">
+                <span>{formatLkr(p.buyPrice)}</span>
+                {p.buyPrice <= 0 && (
+                  <div className="mt-0.5">
+                    <StatusBadge tone="danger">{t("stock.zero_price_badge")}</StatusBadge>
+                  </div>
+                )}
+              </div>
+            ),
           },
         ]
       : []),
@@ -354,7 +376,16 @@ export default function StockPage() {
       key: "sell",
       header: t("stock.sell_price"),
       align: "right",
-      render: (p) => <span className="font-mono font-semibold text-teal-700">{formatLkr(p.sellPrice)}</span>,
+      render: (p) => (
+        <div className="text-right">
+          <span className="font-mono font-semibold text-teal-700">{formatLkr(p.sellPrice)}</span>
+          {p.sellPrice <= 0 && (
+            <div className="mt-0.5">
+              <StatusBadge tone="danger">{t("stock.zero_price_badge")}</StatusBadge>
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       key: "actions",
@@ -479,6 +510,17 @@ export default function StockPage() {
               }`}
             >
               {t("stock.filter_inactive")} <span className="opacity-70">({inactiveCount})</span>
+            </button>
+          )}
+          {canSeeFinancials && zeroPriced.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowZeroPriceOnly((v) => !v)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                showZeroPriceOnly ? "bg-rose-600 text-white" : "border border-rose-200 bg-rose-50 text-rose-800 hover:border-rose-300"
+              }`}
+            >
+              {t("stock.zero_price_filter")} <span className="opacity-70">({zeroPriced.length})</span>
             </button>
           )}
         </FilterBar>

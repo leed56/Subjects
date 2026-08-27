@@ -180,20 +180,33 @@ export default function VatReturnPage() {
           icon={<ReportsIcon className="h-5 w-5" />}
           tone="emerald"
         />
-        <ProStatCard
-          label={t("tax.vehicle_profit")}
-          value={formatLkr(incomeTax.vehicleProfit)}
-          hint={t("nav.vehicles")}
-          icon={<VehiclesIcon className="h-5 w-5" />}
-          tone="teal"
-        />
-        <ProStatCard
-          label={t("tax.ac_job_profit")}
-          value={formatLkr(incomeTax.acJobProfit)}
-          hint={t("nav.jobs")}
-          icon={<JobsIcon className="h-5 w-5" />}
-          tone={incomeTax.acJobProfit < 0 ? "rose" : "teal"}
-        />
+        {/* Round 2 Section 8 — Reports and the Dashboard already gate their
+            AC-job sections behind can("ac_jobs") (a vehicles/ac_jobs are
+            paid add-on modules, not something every org has); this income
+            tax breakdown never did, so a pharmacy tenant without either
+            module saw "Vehicle profit" and "AC job profit" cards next to
+            its real numbers regardless. They contribute 0 to
+            estimatedTaxableProfit when the org has no such records either
+            way — this only changes whether the (in that case always-zero,
+            not-applicable) card is shown. */}
+        {can("vehicles") && (
+          <ProStatCard
+            label={t("tax.vehicle_profit")}
+            value={formatLkr(incomeTax.vehicleProfit)}
+            hint={t("nav.vehicles")}
+            icon={<VehiclesIcon className="h-5 w-5" />}
+            tone="teal"
+          />
+        )}
+        {can("ac_jobs") && (
+          <ProStatCard
+            label={t("tax.ac_job_profit")}
+            value={formatLkr(incomeTax.acJobProfit)}
+            hint={t("nav.jobs")}
+            icon={<JobsIcon className="h-5 w-5" />}
+            tone={incomeTax.acJobProfit < 0 ? "rose" : "teal"}
+          />
+        )}
         <ProStatCard
           label={t("tax.estimated_profit")}
           value={formatLkr(incomeTax.estimatedTaxableProfit)}
