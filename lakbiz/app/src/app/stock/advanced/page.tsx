@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { PureVariantStockAssignment } from "@/components/stock/pure-variant-stock-assignment";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui/primitives";
+import { ConfirmDialog } from "@/components/ui/overlay";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import {
   inventoryModeLabel,
@@ -26,6 +28,7 @@ import {
   type InventoryUnit,
   type ProductVariant,
 } from "@/lib/supabase/advanced-inventory-client";
+import { resolveBlockedLot, blockedLotSchemaUnavailable, type BlockedLotAction } from "@/lib/supabase/blocked-lot-client";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
@@ -52,11 +55,17 @@ function identityLabel(unit: InventoryUnit): string {
 
 export default function AdvancedInventoryPage() {
   const { data, ready } = useAppStore();
-  const { org, canSeeFinancials } = useSubscription();
+  const { org, canSeeFinancials, orgRole } = useSubscription();
   const { locale } = useLocale();
   const si = locale === "si";
+  const canDisposeLots = orgRole === "owner" || orgRole === "manager";
 
-  const [productId, setProductId] = useState("");
+  // The dashboard's expiry queue / "Blocked batches" links here with
+  // ?product=<id> so an owner lands directly on the affected product
+  // instead of having to hunt through the picker — this page otherwise
+  // shows lots for one manually-selected product at a time.
+  const searchParams = useSearchParams();
+  const [productId, setProductId] = useState(() => searchParams.get("product") ?? "");
   const [profile, setProfile] = useState<InventoryProfile | null>(null);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [lots, setLots] = useState<InventoryLot[]>([]);
@@ -77,6 +86,13 @@ export default function AdvancedInventoryPage() {
   const [lotQty, setLotQty] = useState("1");
   const [lotCost, setLotCost] = useState("");
   const [lotVariantId, setLotVariantId] = useState("");
+
+  // Blocked-batch disposition (dispose / return to supplier) — section 4.5
+  // of the pharmacy dashboard audit. A quarantined/recalled/expired lot
+  // used to have no next step here beyond the read-only status badge.
+  const [disposeNotes, setDisposeNotes] = useState<Record<string, string>>({});
+  const [disposeTarget, setDisposeTarget] = useState<{ lot: InventoryLot; action: BlockedLotAction } | null>(null);
+  const [disposingLotId, setDisposingLotId] = useState<string | null>(null);
 
   const [serialNo, setSerialNo] = useState("");
   const [imei, setImei] = useState("");
@@ -234,6 +250,30 @@ export default function AdvancedInventoryPage() {
     setLotQty("1");
     setLotCost("");
     setLotVariantId("");
+    await refresh(selected.id);
+  }
+
+  async function disposeLot() {
+    if (!disposeTarget || !org.id || !selected) return;
+    const { lot, action } = disposeTarget;
+    setDisposingLotId(lot.id);
+    setMessage(null);
+    const result = await resolveBlockedLot(org.id, lot.id, action, disposeNotes[lot.id]);
+    setDisposingLotId(null);
+    setDisposeTarget(null);
+    if (!result.ok) {
+      setMessage(
+        blockedLotSchemaUnavailable(result.error)
+          ? (si ? "Batch disposition විශේෂාංගය තවම ලබාගත නොහැක." : "Batch disposition isn't available yet — the database migration hasn't been applied.")
+          : result.error ?? (si ? "Batch disposition අසාර්ථකයි." : "Batch disposition failed."),
+      );
+      return;
+    }
+    setDisposeNotes((current) => {
+      const next = { ...current };
+      delete next[lot.id];
+      return next;
+    });
     await refresh(selected.id);
   }
 
@@ -473,20 +513,86 @@ export default function AdvancedInventoryPage() {
                   {lots.length === 0 ? (
                     <p className="p-5 text-sm text-slate-500">{si ? "Batch වාර්තා තවම නැත." : "No batch records yet."}</p>
                   ) : (
-                    lots.map((lot) => (
-                      <div key={lot.id} className="grid gap-2 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:grid-cols-[1fr_auto_auto] sm:items-center">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">{lot.batchNo}</p>
-                          <p className="mt-0.5 text-xs text-slate-500">{lot.expiryDate ? `Expiry: ${lot.expiryDate}` : (si ? "Expiry නැත" : "No expiry set")}</p>
+                    lots.map((lot) => {
+                      // "Blocked" mirrors sector-command-center.tsx's own
+                      // definition exactly (quarantine/recalled/expired-by-
+                      // status-or-date) — see 20260825000001_blocked_lot_
+                      // disposition.sql. Was a read-only badge with no next
+                      // step; dispose/return-to-supplier now actually do
+                      // something. No "release back to available" action —
+                      // out of scope by design, see the migration's header.
+                      const isBlocked =
+                        lot.qtyOnHand > 0 &&
+                        (lot.status === "quarantine" || lot.status === "expired" || lot.status === "recalled" ||
+                          (lot.expiryDate != null && lot.expiryDate < new Date().toISOString().slice(0, 10)));
+                      return (
+                        <div key={lot.id} className="border-b border-slate-100 px-4 py-3 last:border-b-0">
+                          <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{lot.batchNo}</p>
+                              <p className="mt-0.5 text-xs text-slate-500">{lot.expiryDate ? `Expiry: ${lot.expiryDate}` : (si ? "Expiry නැත" : "No expiry set")}</p>
+                            </div>
+                            <div className="text-right"><p className="text-sm font-semibold text-slate-900">{lot.qtyOnHand}</p><p className="text-[10px] uppercase tracking-wide text-slate-400">{si ? "තිබෙන තොගය" : "on hand"}</p></div>
+                            <StatusBadge tone={lot.status === "available" ? "positive" : lot.status === "expired" || lot.status === "recalled" ? "danger" : "warning"}>{lot.status}</StatusBadge>
+                          </div>
+                          {isBlocked && canDisposeLots && (
+                            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                              <input
+                                type="text"
+                                value={disposeNotes[lot.id] ?? ""}
+                                onChange={(event) => setDisposeNotes((current) => ({ ...current, [lot.id]: event.target.value }))}
+                                placeholder={si ? "සටහන (විකල්ප)" : "Note (optional)"}
+                                className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-900 outline-none focus:border-teal-400"
+                              />
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  disabled={disposingLotId === lot.id}
+                                  onClick={() => setDisposeTarget({ lot, action: "dispose" })}
+                                  className="inline-flex h-9 items-center rounded-lg bg-rose-600 px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-50"
+                                >
+                                  {si ? "විනාශ කරන්න (Dispose)" : "Dispose"}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={disposingLotId === lot.id}
+                                  onClick={() => setDisposeTarget({ lot, action: "return_to_supplier" })}
+                                  className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
+                                >
+                                  {si ? "සැපයුම්කරුට ආපසු" : "Return to supplier"}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <div className="text-right"><p className="text-sm font-semibold text-slate-900">{lot.qtyOnHand}</p><p className="text-[10px] uppercase tracking-wide text-slate-400">{si ? "තිබෙන තොගය" : "on hand"}</p></div>
-                        <StatusBadge tone={lot.status === "available" ? "positive" : lot.status === "expired" || lot.status === "recalled" ? "danger" : "warning"}>{lot.status}</StatusBadge>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </section>
             )}
+
+            <ConfirmDialog
+              open={disposeTarget != null}
+              title={
+                disposeTarget?.action === "dispose"
+                  ? (si ? "Batch එක විනාශ කරන්නද?" : "Dispose of this batch?")
+                  : (si ? "සැපයුම්කරුට ආපසු එවන්නද?" : "Return this batch to the supplier?")
+              }
+              description={
+                disposeTarget
+                  ? (si
+                      ? `Batch ${disposeTarget.lot.batchNo} (${disposeTarget.lot.qtyOnHand} ඒකක) මෙය ආපසු හැරවිය නොහැක.`
+                      : `Batch ${disposeTarget.lot.batchNo} (${disposeTarget.lot.qtyOnHand} units) — this cannot be undone. Stock is removed from this product's total immediately.`)
+                  : undefined
+              }
+              confirmLabel={si ? "තහවුරු කරන්න" : "Confirm"}
+              cancelLabel={si ? "අවලංගු කරන්න" : "Cancel"}
+              tone={disposeTarget?.action === "dispose" ? "danger" : "default"}
+              loading={disposingLotId != null}
+              onConfirm={() => void disposeLot()}
+              onClose={() => setDisposeTarget(null)}
+            />
 
             {usesSerial && (
               <section className={card}>

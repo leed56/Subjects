@@ -524,14 +524,19 @@ function ExpiryControl({ intel, text, lotError, loading }: { intel: RetailDashbo
                 <div className="flex items-center gap-2 py-3 text-sm text-slate-500"><CheckIcon className="h-4 w-4 text-emerald-600" /> {text.noRows}</div>
               ) : (
                 <div className="divide-y divide-slate-100">
+                  {/* Deep-links straight to the affected product on the
+                      batch-disposition page (see /stock/advanced's
+                      ?product= handling) instead of leaving the owner to
+                      hunt for it in a product picker after clicking
+                      through from a count-only KPI. */}
                   {intel.expiryQueue.slice(0, 5).map((item) => (
-                    <div key={item.id} className="flex items-center justify-between gap-4 py-3">
+                    <Link key={item.id} href={`/stock/advanced?product=${encodeURIComponent(item.productId)}`} className="group flex items-center justify-between gap-4 py-3 transition hover:bg-slate-50/70">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-800">{item.productName}</p>
+                        <p className="truncate text-sm font-semibold text-slate-800 group-hover:text-teal-700">{item.productName}</p>
                         <p className="mt-0.5 truncate text-[11px] text-slate-400">Batch {item.batchNo} · {item.expiryDate}</p>
                       </div>
                       <span className={`shrink-0 rounded-lg px-2 py-1 text-xs font-bold tabular-nums ${item.daysToExpiry <= 30 ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>{item.daysToExpiry} {text.days}</span>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               )}

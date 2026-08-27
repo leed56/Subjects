@@ -8,7 +8,7 @@ export type SectorLotSnapshot = {
   batchNo: string;
   expiryDate: string | null;
   qtyOnHand: number;
-  status: "available" | "quarantine" | "expired" | "depleted" | "returned" | "recalled";
+  status: "available" | "quarantine" | "expired" | "depleted" | "returned" | "recalled" | "disposed" | "supplier_returned";
 };
 
 export type SectorUnitSnapshot = {

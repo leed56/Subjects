@@ -37,7 +37,12 @@ export type RetailLotSnapshot = {
   batchNo: string;
   expiryDate: string | null;
   qtyOnHand: number;
-  status: "available" | "quarantine" | "expired" | "depleted" | "returned" | "recalled";
+  // "disposed"/"supplier_returned" are terminal post-disposition states
+  // (see 20260825000001_blocked_lot_disposition.sql) — qtyOnHand is always
+  // 0 by the time a lot reaches either, so they never affect
+  // available/near-expiry/blocked counts; listed here only so the type
+  // doesn't lie about what the DB can actually return.
+  status: "available" | "quarantine" | "expired" | "depleted" | "returned" | "recalled" | "disposed" | "supplier_returned";
 };
 
 export type RetailTrendPoint = {
