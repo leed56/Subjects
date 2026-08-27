@@ -93,6 +93,9 @@ const copy = {
     lotUnavailable: "Batch intelligence is temporarily unavailable; core inventory remains available.",
     loadingBatchData: "Loading batch & expiry data…",
     operationalHealth: "Inventory readiness",
+    allClear: "All clear",
+    needsReview: "Needs review",
+    needsDisposal: "Needs disposal",
   },
   si: {
     pharmacyEyebrow: "මෙහෙයුම් වැඩබිම",
@@ -153,6 +156,9 @@ const copy = {
     lotUnavailable: "බැච් තොරතුරු තාවකාලිකව ලබාගත නොහැක. මූලික තොග දත්ත ක්‍රියාත්මකයි.",
     loadingBatchData: "බැච් සහ කල් ඉකුත් දත්ත පූරණය වෙමින්…",
     operationalHealth: "තොග සූදානම",
+    allClear: "සියල්ල පැහැදිලිය",
+    needsReview: "සමාලෝචනය අවශ්‍යයි",
+    needsDisposal: "ඉවත් කිරීම අවශ්‍යයි",
   },
 } as const;
 
@@ -288,9 +294,19 @@ function SalesTrend({ intel, canSeeFinancials }: { intel: RetailDashboardIntelli
               period the selector next to the section title actually
               picked. */}
           <p className="text-xs font-medium text-slate-500">{intel.periodLabel}</p>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             <p className="text-3xl font-semibold tracking-[-0.045em] text-slate-950">{formatLkr(intel.periodSales)}</p>
-            {intel.periodChangePct != null && <TrendBadge pct={intel.periodChangePct} />}
+            {intel.periodChangePct != null && (
+              <span className="flex items-center gap-1.5">
+                <TrendBadge pct={intel.periodChangePct} />
+                {/* Different screens compare growth on different bases (this
+                    rolling window vs. a calendar-month figure elsewhere) —
+                    spelling out what this badge is measured against avoids
+                    two correct numbers looking like they contradict each
+                    other. */}
+                <span className="text-[11px] font-medium text-slate-400">{intel.periodComparisonLabel}</span>
+              </span>
+            )}
           </div>
         </div>
         <div className="flex gap-5 text-right">
@@ -742,7 +758,7 @@ export function RetailCommandCenter({ data, sector }: { data: AppData; sector: R
 
       <OfflineSyncNotice />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className={`grid gap-3 sm:grid-cols-2 ${isPharmacy ? "xl:grid-cols-3 2xl:grid-cols-6" : "xl:grid-cols-5"}`}>
         <KpiCard
           label={text.todaySales}
           value={formatLkrCompact(intel.todaySales)}
@@ -756,14 +772,28 @@ export function RetailCommandCenter({ data, sector }: { data: AppData; sector: R
         <KpiCard label={text.activeSkus} value={intel.activeSkuCount.toLocaleString()} hint={isPharmacy ? `${intel.medicineCount} ${text.medicines.toLowerCase()}` : text.recorded} tone="default" icon={<StockIcon className="h-4 w-4" />} href="/stock" />
         <KpiCard label={text.lowStock} value={String(intel.lowStockCount)} hint={`${intel.outOfStockCount} ${text.outOfStock.toLowerCase()}`} tone={intel.lowStockCount > 0 ? "warning" : "default"} icon={<AlertTriangleIcon className="h-4 w-4" />} href="/stock?filter=low-stock" />
         {isPharmacy ? (
-          <KpiCard
-            label={text.nearExpiry}
-            value={lotsLoading ? "—" : String(intel.nearExpiryCount)}
-            hint={lotsLoading ? text.loadingBatchData : `${intel.expiredLotCount} ${text.expired.toLowerCase()}`}
-            tone={lotsLoading ? "default" : intel.expiredLotCount > 0 ? "danger" : intel.nearExpiryCount > 0 ? "warning" : "default"}
-            icon={<CalendarIcon className="h-4 w-4" />}
-            href="/stock/advanced"
-          />
+          <>
+            {/* Previously one card: value = nearExpiryCount, hint =
+                "N expired lots" — two unrelated counts presented as if the
+                hint explained the headline number. Split into two cards,
+                each reporting its own metric. */}
+            <KpiCard
+              label={text.nearExpiry}
+              value={lotsLoading ? "—" : String(intel.nearExpiryCount)}
+              hint={lotsLoading ? text.loadingBatchData : intel.nearExpiryCount > 0 ? text.needsReview : text.allClear}
+              tone={lotsLoading ? "default" : intel.nearExpiryCount > 0 ? "warning" : "default"}
+              icon={<CalendarIcon className="h-4 w-4" />}
+              href="/stock/advanced"
+            />
+            <KpiCard
+              label={text.expired}
+              value={lotsLoading ? "—" : String(intel.expiredLotCount)}
+              hint={lotsLoading ? text.loadingBatchData : intel.expiredLotCount > 0 ? text.needsDisposal : text.allClear}
+              tone={lotsLoading ? "default" : intel.expiredLotCount > 0 ? "danger" : "default"}
+              icon={<CalendarIcon className="h-4 w-4" />}
+              href="/stock/advanced"
+            />
+          </>
         ) : (
           <KpiCard label={text.averageBasket} value={formatLkrCompact(intel.averageBasket)} fullValue={formatLkr(intel.averageBasket)} hint={`${intel.periodTransactions} ${text.transactions.toLowerCase()} · ${intel.periodLabel}`} tone="teal" icon={<BillsIcon className="h-4 w-4" />} />
         )}

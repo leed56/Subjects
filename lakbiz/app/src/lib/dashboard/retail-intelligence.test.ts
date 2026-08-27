@@ -161,6 +161,20 @@ describe("retail dashboard intelligence", () => {
     expect(lastMonth.endKey).toBe("2026-07-31");
   });
 
+  // Round 2 Section 6: a rolling-window trend badge ("Last 30 days")
+  // and a calendar-month trend badge ("This month") compare against
+  // different baselines even though both render as "▲N%" — each preset
+  // must carry an explicit, distinct comparisonLabel so the two can't be
+  // read as the same measurement.
+  it("gives every period preset an explicit, distinct comparison basis", () => {
+    const reference = new Date("2026-08-23T12:00:00Z");
+    expect(resolvePeriodRange("7d", reference).comparisonLabel).toBe("vs prior 7 days");
+    expect(resolvePeriodRange("30d", reference).comparisonLabel).toBe("vs prior 30 days");
+    expect(resolvePeriodRange("this_week", reference).comparisonLabel).toBe("vs last week");
+    expect(resolvePeriodRange("this_month", reference).comparisonLabel).toBe("vs same days last month");
+    expect(resolvePeriodRange("last_month", reference).comparisonLabel).toBe("vs month before");
+  });
+
   it("switches periodSales/periodLabel with the selected DashboardPeriod, defaulting to 30d for existing callers", () => {
     const reference = new Date("2026-08-23T12:00:00Z");
     const result30d = buildRetailDashboardIntelligence(data(products), "pharmacy", false, [], reference);

@@ -29,6 +29,14 @@ export type ResolvedPeriodRange = {
   priorStartKey: string;
   priorEndKey: string;
   label: string;
+  /** What periodChangePct is actually comparing against. Every preset
+   * compares to "the immediately preceding period of equal length" under
+   * the hood, but that basis differs in kind — a rolling window (30d)
+   * compares to the 30 days before it, while "this_month" compares to the
+   * same number of days into last calendar month. Surfacing this next to
+   * the trend badge is what distinguishes it from a *different* screen's
+   * "vs last month" figure, which may be comparing on a different basis. */
+  comparisonLabel: string;
 };
 
 export type RetailLotSnapshot = {
@@ -119,6 +127,12 @@ export type RetailDashboardIntelligence = {
    * month-over-month land here) — real data, same null-when-no-baseline
    * rule as todaySalesChangePct. */
   periodChangePct: number | null;
+  /** What periodChangePct is compared against, in words — see
+   * ResolvedPeriodRange.comparisonLabel. Render this next to the trend
+   * badge so "▲500%" always says what it's measured against, since that
+   * basis differs by preset (rolling window vs. calendar month) and can't
+   * be assumed from periodLabel alone. */
+  periodComparisonLabel: string;
   medicineCount: number;
   nonMedicineCount: number;
   nearExpiryCount: number;
@@ -193,6 +207,7 @@ export function resolvePeriodRange(period: DashboardPeriod, referenceDate: Date)
       priorStartKey: dayKey(priorStart),
       priorEndKey: dayKey(priorEnd),
       label: start === end ? start : `${start} – ${end}`,
+      comparisonLabel: "vs prior period",
     };
   }
 
@@ -201,14 +216,14 @@ export function resolvePeriodRange(period: DashboardPeriod, referenceDate: Date)
     const start = addDays(end, -6);
     const priorEnd = addDays(start, -1);
     const priorStart = addDays(priorEnd, -6);
-    return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "Last 7 days" };
+    return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "Last 7 days", comparisonLabel: "vs prior 7 days" };
   }
   if (period === "this_week") {
     const start = startOfWeek(referenceDate);
     const end = referenceDate;
     const priorEnd = addDays(start, -1);
     const priorStart = addDays(priorEnd, -6);
-    return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "This week" };
+    return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "This week", comparisonLabel: "vs last week" };
   }
   if (period === "this_month") {
     const start = startOfMonth(referenceDate);
@@ -221,7 +236,7 @@ export function resolvePeriodRange(period: DashboardPeriod, referenceDate: Date)
     const priorMonthStart = startOfMonth(addDays(start, -1));
     const priorStart = priorMonthStart;
     const priorEnd = addDays(priorMonthStart, daysSoFar - 1);
-    return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "This month" };
+    return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "This month", comparisonLabel: "vs same days last month" };
   }
   if (period === "last_month") {
     const thisMonthStart = startOfMonth(referenceDate);
@@ -229,14 +244,14 @@ export function resolvePeriodRange(period: DashboardPeriod, referenceDate: Date)
     const lastMonthEnd = addDays(thisMonthStart, -1);
     const priorMonthStart = startOfMonth(addDays(lastMonthStart, -1));
     const priorMonthEnd = addDays(lastMonthStart, -1);
-    return { startKey: dayKey(lastMonthStart), endKey: dayKey(lastMonthEnd), priorStartKey: dayKey(priorMonthStart), priorEndKey: dayKey(priorMonthEnd), label: "Last month" };
+    return { startKey: dayKey(lastMonthStart), endKey: dayKey(lastMonthEnd), priorStartKey: dayKey(priorMonthStart), priorEndKey: dayKey(priorMonthEnd), label: "Last month", comparisonLabel: "vs month before" };
   }
   // "30d" — the original default window, kept as the fallback.
   const end = referenceDate;
   const start = addDays(end, -29);
   const priorEnd = addDays(start, -1);
   const priorStart = addDays(priorEnd, -29);
-  return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "Last 30 days" };
+  return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "Last 30 days", comparisonLabel: "vs prior 30 days" };
 }
 
 export function isPharmacyMedicine(product: Product): boolean {
@@ -505,6 +520,7 @@ export function buildRetailDashboardIntelligence(
     periodSales,
     periodLabel: range.label,
     periodChangePct,
+    periodComparisonLabel: range.comparisonLabel,
     periodTransactions: recentSales.length,
     periodProfit,
     grossMarginPct: canSeeFinancials && periodSales > 0 && periodProfit != null ? (periodProfit / periodSales) * 100 : null,
