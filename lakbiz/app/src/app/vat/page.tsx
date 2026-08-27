@@ -21,7 +21,7 @@ import {
 } from "@/lib/export/vat-returns";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
-import { getVatQuarterSummary } from "@/lib/vat";
+import { getVatQuarterSummary, resolveSaleOutputVat, resolvePurchaseInputVat } from "@/lib/vat";
 import { getIncomeTaxYearSummary } from "@/lib/income-tax";
 import type { JobLinkedExpense } from "@/lib/job-profitability";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
@@ -359,7 +359,7 @@ export default function VatReturnPage() {
                       <p className="mt-1 truncate text-sm font-bold text-slate-950">{s.customerName || "Walk-in customer"}</p>
                       <p className="mt-1 text-xs font-semibold text-slate-500">{new Date(s.date).toLocaleDateString("en-LK")}</p>
                     </div>
-                    <p className="shrink-0 font-mono text-sm font-bold text-amber-700">{formatLkr(s.outputVat ?? 0)}</p>
+                    <p className="shrink-0 font-mono text-sm font-bold text-amber-700">{formatLkr(resolveSaleOutputVat(s))}</p>
                   </Link>
                 ))}
               </div>
@@ -383,7 +383,7 @@ export default function VatReturnPage() {
                       <p className="mt-1 truncate text-sm font-bold text-slate-950">{p.supplierName}</p>
                       <p className="mt-1 text-xs font-semibold text-slate-500">{new Date(p.date).toLocaleDateString("en-LK")}</p>
                     </div>
-                    <p className="shrink-0 font-mono text-sm font-bold text-teal-700">{formatLkr(p.inputVat ?? 0)}</p>
+                    <p className="shrink-0 font-mono text-sm font-bold text-teal-700">{formatLkr(resolvePurchaseInputVat(p))}</p>
                   </div>
                 ))}
               </div>

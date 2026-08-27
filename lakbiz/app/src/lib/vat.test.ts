@@ -7,6 +7,8 @@ import {
   getVatQuarterBounds,
   isDateInQuarter,
   getVatQuarterSummary,
+  resolveSaleOutputVat,
+  resolvePurchaseInputVat,
 } from "./vat";
 import type { AppData, Sale, Purchase } from "./store/types";
 
@@ -240,5 +242,81 @@ describe("getVatQuarterSummary", () => {
 
     expect(summary.netPayable).toBe(1000 - 5000);
     expect(summary.netPayable).toBeLessThan(0);
+  });
+
+  it("REGRESSION: a stored outputVat/inputVat of exactly 0 does not zero out a real invoice or purchase", () => {
+    // The actual Round 2 bug: actions.ts stores a literal outputVat: 0 /
+    // inputVat: 0 (not null) for any sale/purchase recorded while the
+    // business wasn't VAT-registered at the time. The VAT Return page
+    // read that stored field directly, so a shop that later registered
+    // for VAT saw Rs. 0 output/input VAT for every historical invoice —
+    // 185 invoices and 3 purchases counted correctly, VAT all zero.
+    const data = makeAppData({
+      sales: [makeSale({ date: "2026-05-01", total: 11800, outputVat: 0 })],
+      purchases: [makePurchase({ date: "2026-05-01", total: 11800, subtotal: 10000, inputVat: 0 })],
+    });
+
+    const summary = getVatQuarterSummary(data, new Date(2026, 5, 15));
+
+    expect(summary.outputVat).toBe(splitInclusiveTotal(11800).vat);
+    expect(summary.inputVat).toBe(calcInputVat(10000));
+    expect(summary.outputVat).toBeGreaterThan(0);
+    expect(summary.inputVat).toBeGreaterThan(0);
+  });
+
+  it("REGRESSION: Net VAT Payable is non-zero when real taxable sales/purchases exist in the period", () => {
+    const data = makeAppData({
+      sales: [
+        makeSale({ id: "s1", date: "2026-05-01", total: 11800, outputVat: 0 }),
+        makeSale({ id: "s2", date: "2026-05-10", total: 23600 }),
+      ],
+      purchases: [makePurchase({ date: "2026-05-01", total: 5900, subtotal: 5000, inputVat: 0 })],
+    });
+
+    const summary = getVatQuarterSummary(data, new Date(2026, 5, 15));
+
+    expect(summary.outputVat).toBeGreaterThan(0);
+    expect(summary.inputVat).toBeGreaterThan(0);
+    expect(summary.netPayable).not.toBe(0);
+  });
+
+  it("still trusts a genuine zero when the total itself is zero (nothing to derive VAT from)", () => {
+    const data = makeAppData({
+      sales: [makeSale({ date: "2026-05-01", total: 0, outputVat: 0 })],
+    });
+
+    const summary = getVatQuarterSummary(data, new Date(2026, 5, 15));
+
+    expect(summary.outputVat).toBe(0);
+  });
+});
+
+describe("resolveSaleOutputVat", () => {
+  it("trusts a stored positive value as-is", () => {
+    expect(resolveSaleOutputVat({ outputVat: 1234, total: 11800 })).toBe(1234);
+  });
+
+  it("derives from the sale's total when outputVat is 0, undefined, or missing", () => {
+    expect(resolveSaleOutputVat({ outputVat: 0, total: 11800 })).toBe(splitInclusiveTotal(11800).vat);
+    expect(resolveSaleOutputVat({ outputVat: undefined, total: 11800 })).toBe(splitInclusiveTotal(11800).vat);
+  });
+
+  it("never returns a positive amount for a zero-total sale", () => {
+    expect(resolveSaleOutputVat({ outputVat: 0, total: 0 })).toBe(0);
+  });
+});
+
+describe("resolvePurchaseInputVat", () => {
+  it("trusts a stored positive value as-is", () => {
+    expect(resolvePurchaseInputVat({ inputVat: 500, subtotal: 10000, total: 11800 })).toBe(500);
+  });
+
+  it("derives from subtotal (falling back to total) when inputVat is 0, undefined, or missing", () => {
+    expect(resolvePurchaseInputVat({ inputVat: 0, subtotal: 10000, total: 11800 })).toBe(calcInputVat(10000));
+    expect(resolvePurchaseInputVat({ inputVat: undefined, subtotal: undefined, total: 10000 })).toBe(calcInputVat(10000));
+  });
+
+  it("never returns a positive amount when there is no subtotal or total to derive from", () => {
+    expect(resolvePurchaseInputVat({ inputVat: 0, subtotal: 0, total: 0 })).toBe(0);
   });
 });

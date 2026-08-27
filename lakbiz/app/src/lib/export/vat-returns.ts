@@ -1,7 +1,7 @@
 import type { BusinessInfo } from "@/lib/invoice";
 import type { Purchase, Sale } from "@/lib/store/types";
 import type { ReturnAccountingAdjustment } from "@/lib/supabase/return-accounting-client";
-import type { VatQuarterSummary } from "@/lib/vat";
+import { resolveSaleOutputVat, resolvePurchaseInputVat, type VatQuarterSummary } from "@/lib/vat";
 import { downloadCsv, exportFilename, rowsToCsv } from "./csv";
 import { printHtmlReport, tableHtml } from "./print-report";
 
@@ -52,7 +52,7 @@ export function buildVatReconciliationCsv(
       sale.billNo ?? sale.id.slice(0, 8),
       shortDate(sale.date),
       sale.customerName ?? "",
-      sale.outputVat ?? 0,
+      resolveSaleOutputVat(sale),
     ]),
     [],
     [noteTitle],
@@ -73,7 +73,7 @@ export function buildVatReconciliationCsv(
       purchase.grnNo,
       shortDate(purchase.date),
       purchase.supplierName,
-      purchase.inputVat ?? 0,
+      resolvePurchaseInputVat(purchase),
     ]),
   ];
 
@@ -116,7 +116,7 @@ export function printVatReconciliationReport(
       sale.billNo ?? sale.id.slice(0, 8),
       shortDate(sale.date),
       sale.customerName ?? "—",
-      sale.outputVat ?? 0,
+      resolveSaleOutputVat(sale),
     ]),
     [3],
   );
@@ -140,7 +140,7 @@ export function printVatReconciliationReport(
       purchase.grnNo,
       shortDate(purchase.date),
       purchase.supplierName,
-      purchase.inputVat ?? 0,
+      resolvePurchaseInputVat(purchase),
     ]),
     [3],
   );
