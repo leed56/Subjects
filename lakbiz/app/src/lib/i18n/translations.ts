@@ -486,6 +486,7 @@ const si: Dict = {
   "sales.title": "නව විකුණුම",
   "sales.subtitle": "ගනුදෙනුකරුට බිල් කරන්න — තොග අඩු වේ",
   "sales.bill_summary": "බිල් සාරාංශය",
+  "sales.cart_title": "බිල් අයිතම",
   "sales.no_selected": "භාණ්ඩ තෝරා නැත",
   "sales.walkin": "සාමාන්‍ය ගනුදෙනුකරු",
   "sales.walkin_name": "නම (අවශ්‍ය නොවේ)",
@@ -973,7 +974,7 @@ const si: Dict = {
 
   "team.eyebrow": "කණ්ඩායම",
   "team.title": "කණ්ඩායම් සාමාජිකයින්",
-  "team.subtitle": "data_entry පරිශීලකයෙකු සාදන්න — ඊමේල්/මුරපදය ඔබ දෙනවා. ආරාධනා ඊමේල් නැත; /login වෙතින් වහාම පිවිසිය හැක.",
+  "team.subtitle": "කාර්ය මණ්ඩල පිවිසුමක් සාදන්න — ඊමේල්/මුරපදය ඔබ දෙනවා. ආරාධනා ඊමේල් නැත; /login වෙතින් වහාම පිවිසිය හැක.",
   "team.create_title": "data entry පරිශීලකයා සාදන්න",
   "team.create_eyebrow": "ඊමේල් + මුරපදය",
   "team.create_hint": "ඊමේල් යවන්නේ නැත. මෙම ඊමේල් + මුරපදය data entry කෙනාට දෙන්න — /login වෙත Sign in (Create account නොවේ). Login අසාර්ථක නම්, එම ඊමේල් + නව මුරපදය නැවත Create user කරන්න.",
@@ -984,6 +985,7 @@ const si: Dict = {
   "team.role_cashier": "මුදල් අයකරු",
   "team.role_technician": "තාක්ෂණික",
   "team.role_manager": "කළමනාකරු",
+  "team.role_owner": "හිමිකරු",
   "team.remove": "ඉවත් කරන්න",
   "team.remove_confirm_title": "කණ්ඩායමෙන් ඉවත් කරන්නද?",
   "team.create_btn": "පරිශීලකයා සාදන්න",
@@ -992,7 +994,7 @@ const si: Dict = {
   "team.load_error": "කණ්ඩායම පූරණය කළ නොහැක.",
   "team.owner_only": "මෙම පිටුව අයිතිකරුට පමණි.",
   "team.members_title": "වත්මන් සාමාජිකයින්",
-  "team.members_eyebrow": "org_members",
+  "team.members_eyebrow": "සංවිධානයේ සාමාජිකයින්",
   "team.back_shop": "වෙළඳසැල් සැකසුම්",
   "team.back_dash": "← Dashboard",
 
@@ -1522,6 +1524,11 @@ const si: Dict = {
   "sub.plans_current_badge": "Current",
   "sub.plans_assigned_hint": "LakBiz විසින් assign",
   "sub.plans_managed_account": "Managed account",
+  "sub.status_trialing": "අත්හදා බැලීම",
+  "sub.status_active": "සක්‍රියයි",
+  "sub.status_past_due": "ගෙවීම ප්‍රමාදයි",
+  "sub.status_canceled": "අවලංගු කර ඇත",
+  "sub.status_read_only": "කියවීමට පමණි",
   "sub.plans_manual_period": "Manual",
   "sub.plans_updated_by": "LakBiz විසින් update",
   "sub.users": "පරිශීලක",
@@ -2189,6 +2196,7 @@ const en: Dict = {
   "sales.title": "New sale",
   "sales.subtitle": "Bill customer — stock goes down",
   "sales.bill_summary": "Bill summary",
+  "sales.cart_title": "Bill items",
   "sales.no_selected": "No items selected",
   "sales.walkin": "Walk-in / no account",
   "sales.walkin_name": "Walk-in name (optional)",
@@ -2672,7 +2680,7 @@ const en: Dict = {
 
   "team.eyebrow": "Team",
   "team.title": "Team members",
-  "team.subtitle": "Create a data_entry login — you choose email and password. No invite email is sent; they sign in at /login right away.",
+  "team.subtitle": "Create a staff login — you choose email and password. No invite email is sent; they sign in at /login right away.",
   "team.create_title": "Create data entry user",
   "team.create_eyebrow": "Email + password",
   "team.create_hint": "No email is sent. Give this email and password to your data entry staff — they sign in at /login (Sign in tab, not Create account). To fix login, enter the same email here again with a new password.",
@@ -2683,6 +2691,7 @@ const en: Dict = {
   "team.role_cashier": "Cashier",
   "team.role_technician": "Technician",
   "team.role_manager": "Manager",
+  "team.role_owner": "Owner",
   "team.remove": "Remove",
   "team.remove_confirm_title": "Remove from team?",
   "team.create_btn": "Create user",
@@ -2691,7 +2700,7 @@ const en: Dict = {
   "team.load_error": "Could not load team.",
   "team.owner_only": "This page is for the shop owner only.",
   "team.members_title": "Current members",
-  "team.members_eyebrow": "org_members",
+  "team.members_eyebrow": "Organization members",
   "team.back_shop": "Shop settings",
   "team.back_dash": "← Dashboard",
 
@@ -3216,6 +3225,11 @@ const en: Dict = {
   "sub.plans_current_badge": "Current",
   "sub.plans_assigned_hint": "Assigned by LakBiz",
   "sub.plans_managed_account": "Managed account",
+  "sub.status_trialing": "Trialing",
+  "sub.status_active": "Active",
+  "sub.status_past_due": "Past due",
+  "sub.status_canceled": "Canceled",
+  "sub.status_read_only": "Read only",
   "sub.plans_manual_period": "Manual",
   "sub.plans_updated_by": "Updated by LakBiz",
   "sub.users": "users",
@@ -3659,6 +3673,9 @@ const ta: Dict = {
   "sub.need_access": "அணுகல் தேவையா? உங்கள் உள்நுழைவு விவரங்களைப் பெற LakBiz ஐத் தொடர்பு கொள்ளவும்.",
   "sub.signup_disabled": "பொது பதிவு முடக்கப்பட்டுள்ளது. உங்கள் LakBiz நிர்வாகியைத் தொடர்பு கொள்ளவும்.",
   "sub.login_failed": "உள்நுழைவு தோல்வியடைந்தது",
+  // Round 2 audit — "sales.cart_title" had no key in any dictionary at
+  // all, so it rendered as the literal raw key in the POS checkout panel.
+  "sales.cart_title": "பில் பொருட்கள்",
 };
 
 const dictionaries: Record<Locale, Dict> = { si, en, ta };
@@ -3682,6 +3699,21 @@ export function nextLocale(current: Locale): Locale {
   return "si";
 }
 
+/** Last-resort fallback for a key present in neither the requested locale
+ * nor English — turns "team.role_owner" into "Owner", "sales.cart_title"
+ * into "Cart Title", etc. Never perfect English, but it can never render
+ * a raw dotted/underscored identifier the way `?? key` alone did — see
+ * the Round 2 audit: "sales.cart_title" leaking verbatim into the POS
+ * cart panel, and "org_members"/"data_entry" typed as literal English
+ * copy elsewhere, were both symptoms of the same root cause (a missing
+ * or mistyped key falling all the way through to its own raw text). */
+function humanizeMissingKey(key: string): string {
+  const shortKey = key.includes(".") ? key.slice(key.lastIndexOf(".") + 1) : key;
+  const words = shortKey.replace(/[_-]+/g, " ").trim();
+  if (!words) return key;
+  return words.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 export function translate(locale: Locale, key: string): string {
-  return dictionaries[locale][key] ?? dictionaries.en[key] ?? key;
+  return dictionaries[locale][key] ?? dictionaries.en[key] ?? humanizeMissingKey(key);
 }

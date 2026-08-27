@@ -146,7 +146,12 @@ export function Sidebar() {
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-white">{org.name}</p>
               <p className="mt-0.5 truncate text-[11px] text-slate-500">{user?.email}</p>
-              <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-teal-300/80">{org.role.replace("_", " ")}</p>
+              {/* Same raw-enum-leak class as Team Members' "data_entry"/
+                  "ORG_MEMBERS" bug — .replace() stripped the underscore
+                  here so no literal underscore ever showed, but it was
+                  still unlocalized. Reuses the same team.role_* keys
+                  Team Members already has for every OrgRole. */}
+              <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-teal-300/80">{t(`team.role_${org.role}`)}</p>
             </div>
           </div>
         </div>

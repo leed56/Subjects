@@ -49,7 +49,13 @@ export default function PlansPage() {
         />
         <SettingsNav />
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        {/* Real content here — a plan name, a shop name like "LakBiz
+            Pharmacy Demo" — is longer than the numeric/short-label values
+            other ProStatCard grids in this app usually carry. Jumping
+            straight from 2 to 5 columns left each card ~180px wide at the
+            xl breakpoint; a 3-column step in between gives long values
+            room to wrap across a couple of lines before 5-up. */}
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
           <ProStatCard
             label={t("sub.plans_stat_plan")}
             value={planName}
@@ -59,7 +65,7 @@ export default function PlansPage() {
           />
           <ProStatCard
             label={t("sub.plans_stat_status")}
-            value={subscription.status.replace("_", " ")}
+            value={t(`sub.status_${subscription.status}`)}
             hint={
               daysLeftInTrial != null
                 ? `${daysLeftInTrial} days left`

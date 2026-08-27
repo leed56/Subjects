@@ -123,7 +123,16 @@ export function ProStatCard({ label, value, hint, icon, tone = "teal", className
       <div className="flex items-start justify-between gap-2.5 sm:gap-4">
         <div className="min-w-0">
           <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-400 sm:text-[10px] sm:tracking-[0.14em]">{label}</p>
-          <p className="mt-2 break-words text-[1.35rem] font-bold leading-tight tracking-[-0.035em] text-slate-950 sm:mt-3 sm:text-[1.7rem]">{value}</p>
+          {/* `break-words` (overflow-wrap: break-word) opts into breaking
+              mid-word whenever a narrow card is under pressure — exactly
+              how "Business" and "LakBiz Pharmacy Demo" ended up
+              hyphenating awkwardly in a 5-up grid. Plain wrapping (the
+              default: wrap at spaces, never split a word) plus the wider
+              grid columns on the Plans page is the fix; a genuinely
+              unbreakable single "word" longer than the card would now
+              overflow instead of being forced apart mid-letter, which is
+              the correct tradeoff for real plan/shop names. */}
+          <p className="mt-2 text-[1.35rem] font-bold leading-tight tracking-[-0.035em] text-slate-950 sm:mt-3 sm:text-[1.7rem]">{value}</p>
           {hint && <p className="mt-1 text-[11px] font-medium leading-4 text-slate-500 sm:mt-1.5 sm:text-xs sm:leading-5">{hint}</p>}
         </div>
         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm ring-1 ring-inset sm:h-11 sm:w-11 sm:rounded-xl sm:text-base ${tones.icon}`}>

@@ -208,7 +208,7 @@ export default function TeamSettingsPage() {
                       <div className="min-w-0">
                         <p className="truncate font-bold text-slate-900">{m.email ?? m.userId.slice(0, 8)}</p>
                         {(isSelf || isOwner) && (
-                          <p className="text-xs font-semibold text-slate-500">{m.role.replace("_", " ")}</p>
+                          <p className="text-xs font-semibold text-slate-500">{t(`team.role_${m.role}`)}</p>
                         )}
                       </div>
                       {!isSelf && !isOwner && (
