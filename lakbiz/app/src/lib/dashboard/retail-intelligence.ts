@@ -1,5 +1,6 @@
 import type { Product } from "@/lib/types";
 import type { AppData, Sale, StockLog } from "@/lib/store/types";
+import { NEAR_EXPIRY_DAYS } from "./pharmacy-config";
 
 export type RetailSector = "pharmacy" | "grocery";
 
@@ -98,8 +99,15 @@ function parseTime(value: string): number {
   return Number.isFinite(time) ? time : 0;
 }
 
+/** `unit` (e.g. "tablets", "ml", "strips") is the only field that belongs
+ * next to a quantity. `packSize` is a separate, free-text *descriptive*
+ * field ("10 tablets", "100 ml", or shorthand like "100C") — see
+ * sector-fields.ts. Falling back to it here used to render nonsense like
+ * "0 100C" (stock qty + a pack-size code with no separator or label) in
+ * the Replenishment Queue; a bare generic unit is honest where "unit" is
+ * genuinely unset, packSize never is. */
 function productUnit(product: Product): string {
-  return String(product.customFields.unit ?? product.customFields.packSize ?? "pcs");
+  return String(product.customFields.unit ?? "units");
 }
 
 export function isPharmacyMedicine(product: Product): boolean {
@@ -236,7 +244,7 @@ function buildExpiryMetrics(
 ): Pick<RetailDashboardIntelligence, "nearExpiryCount" | "expiredLotCount" | "quarantineLotCount" | "fefoProductCount" | "availableLotCount" | "expiryQueue"> {
   const productById = new Map(products.map((product) => [product.id, product]));
   const today = new Date(dayKey(referenceDate)).getTime();
-  const nearCutoff = today + 90 * DAY_MS;
+  const nearCutoff = today + NEAR_EXPIRY_DAYS * DAY_MS;
   const availableByProduct = new Map<string, number>();
   let nearExpiryCount = 0;
   let expiredLotCount = 0;

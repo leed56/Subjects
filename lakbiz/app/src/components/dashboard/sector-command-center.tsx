@@ -14,6 +14,7 @@ import {
   type SectorOperationalSnapshot,
 } from "@/lib/supabase/sector-dashboard-client";
 import type { SectorId } from "@/lib/types";
+import { NEAR_EXPIRY_DAYS } from "@/lib/dashboard/pharmacy-config";
 
 type Tone = "default" | "positive" | "warning" | "danger";
 type Metric = { label: string; value: string; hint: string; tone: Tone };
@@ -300,9 +301,30 @@ function buildSectorModel(
   if (sector === "pharmacy") {
     const stockedLots = snapshot.lots.filter((lot) => lot.qtyOnHand > 0);
     const expired = stockedLots.filter((lot) => lot.status === "expired" || (lot.expiryDate ? daysBetween(lot.expiryDate, now) < 0 : false));
-    const expiring30 = stockedLots.filter((lot) => lot.status === "available" && lot.expiryDate && daysBetween(lot.expiryDate, now) >= 0 && daysBetween(lot.expiryDate, now) <= 30);
+    // Same NEAR_EXPIRY_DAYS window retail-intelligence.ts's
+    // buildExpiryMetrics() uses for the "Near expiry" KPI, "Needs
+    // attention" panel and "Batch & expiry control" queue — this used to
+    // be a separately hardcoded 30 here vs. 90 there, so the same batch
+    // could read "0" in this widget and "1" in the other three at once.
+    const expiringNear = stockedLots.filter((lot) => lot.status === "available" && lot.expiryDate && daysBetween(lot.expiryDate, now) >= 0 && daysBetween(lot.expiryDate, now) <= NEAR_EXPIRY_DAYS);
     const blocked = stockedLots.filter((lot) => lot.status === "quarantine" || lot.status === "recalled" || lot.status === "returned");
-    const availableQty = stockedLots.filter((lot) => lot.status === "available").reduce((sum, lot) => sum + lot.qtyOnHand, 0);
+    const availableLots = stockedLots.filter((lot) => lot.status === "available");
+    // A batch's qtyOnHand is only meaningful next to its own unit — tablets,
+    // ml and boxes cannot be added into one number without lying about what
+    // it means. Group by the owning product's unit instead of summing
+    // everything into a single "Available batch qty" figure (see the
+    // pharmacy-dashboard audit: that single sum was mixing units).
+    const productById = new Map(data.products.map((p) => [p.id, p]));
+    const availableByUnit = new Map<string, number>();
+    for (const lot of availableLots) {
+      const unit = String(productById.get(lot.productId)?.customFields.unit ?? "units");
+      availableByUnit.set(unit, (availableByUnit.get(unit) ?? 0) + lot.qtyOnHand);
+    }
+    const unitGroups = [...availableByUnit.entries()].sort((a, b) => b[1] - a[1]);
+    const availableQtyLabel = unitGroups.length === 0
+      ? "0"
+      : unitGroups.slice(0, 3).map(([unit, qty]) => `${qty.toLocaleString()} ${unit}`).join(" · ") +
+        (unitGroups.length > 3 ? ` +${unitGroups.length - 3} more` : "");
     const actions: Action[] = [];
     if (expired.length || blocked.length) {
       actions.push({
@@ -313,10 +335,10 @@ function buildSectorModel(
         tone: "danger",
       });
     }
-    if (expiring30.length) {
+    if (expiringNear.length) {
       actions.push({
-        key: "expiry-30",
-        title: `${expiring30.length} batch${expiring30.length === 1 ? "" : "es"} expire within 30 days`,
+        key: "expiry-near",
+        title: `${expiringNear.length} batch${expiringNear.length === 1 ? "" : "es"} expire within ${NEAR_EXPIRY_DAYS} days`,
         detail: "Prioritize FEFO dispensing and avoid unnecessary replenishment of the same line.",
         href: "/stock/advanced",
         tone: "warning",
@@ -327,8 +349,8 @@ function buildSectorModel(
       title: "Expiry & batch safety",
       description: "FEFO-focused operational control. Cost remains owner-only; this panel uses batch identity and sellable quantity only.",
       metrics: [
-        { label: "Available batch qty", value: snapshot.schemaReady ? String(availableQty) : "—", hint: "Sellable batch stock", tone: "default" },
-        { label: "Expiry ≤30d", value: snapshot.schemaReady ? String(expiring30.length) : "—", hint: "FEFO attention", tone: expiring30.length ? "warning" : "positive" },
+        { label: "Available batch qty", value: snapshot.schemaReady ? availableQtyLabel : "—", hint: "Sellable batch stock, by unit — never summed across units", tone: "default" },
+        { label: `Expiry ≤${NEAR_EXPIRY_DAYS}d`, value: snapshot.schemaReady ? String(expiringNear.length) : "—", hint: "FEFO attention", tone: expiringNear.length ? "warning" : "positive" },
         { label: "Blocked batches", value: snapshot.schemaReady ? String(expired.length + blocked.length) : "—", hint: "Expired / recall / hold", tone: expired.length + blocked.length ? "danger" : "positive" },
         { label: "Low-stock SKUs", value: String(data.products.filter((p) => p.active && p.sectorId === sector && p.stockQty <= (p.reorderLevel ?? 5)).length), hint: "Aggregate reorder signal", tone: "default" },
       ],

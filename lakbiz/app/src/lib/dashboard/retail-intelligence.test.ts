@@ -126,4 +126,29 @@ describe("retail dashboard intelligence", () => {
     expect(result.topMovers[0]?.qty).toBe(3);
     expect(result.categoryMix.length).toBeGreaterThan(0);
   });
+
+  it("never renders a product's free-text pack size where a unit belongs (Replenishment Queue bug)", () => {
+    // packSize is a descriptive field ("100 tablets", or shorthand like
+    // "100C") — not a unit noun. A product missing an explicit `unit` used
+    // to fall back to packSize here, producing "0 100C" next to a
+    // reorder-queue quantity with no separator or label.
+    const noUnitProduct = product({
+      id: "capsule-only-packsize",
+      name: "CEPHALEXIN CAP 250MG BP (NOVALEXIN)",
+      category: "Medicines",
+      stockQty: 0,
+      reorderLevel: 10,
+      customFields: { packSize: "100C", productKind: "medicine" },
+    });
+    const result = buildRetailDashboardIntelligence(
+      data([noUnitProduct, products[1]]),
+      "pharmacy",
+      false,
+      [],
+      new Date("2026-08-23T12:00:00Z"),
+    );
+    const row = result.reorderQueue.find((item) => item.productId === "capsule-only-packsize");
+    expect(row?.unit).toBe("units");
+    expect(row?.unit).not.toContain("100C");
+  });
 });

@@ -14,7 +14,7 @@ import {
   StockIcon,
   SuppliersIcon,
 } from "@/components/ui/icons";
-import { formatLkr } from "@/lib/format";
+import { formatLkr, formatLkrCompact } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { AppData } from "@/lib/store/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
@@ -25,6 +25,7 @@ import {
   type RetailSector,
 } from "@/lib/dashboard/retail-intelligence";
 import { fetchRetailDashboardLots } from "@/lib/supabase/retail-dashboard-client";
+import { NEAR_EXPIRY_DAYS } from "@/lib/dashboard/pharmacy-config";
 
 const copy = {
   en: {
@@ -43,7 +44,7 @@ const copy = {
     activeSkus: "Active SKUs",
     lowStock: "Low stock",
     outOfStock: "Out of stock",
-    nearExpiry: "Near expiry",
+    nearExpiry: `Near expiry (≤${NEAR_EXPIRY_DAYS}d)`,
     stockValue: "Stock cost value",
     sellValue: "Retail stock value",
     thirtyDaySales: "30-day sales",
@@ -81,6 +82,12 @@ const copy = {
     unitsSold: "units sold",
     inStock: "in stock",
     noSales: "No recorded sales yet",
+    // Distinct from noSales: transactions exist (Sales Performance / period
+    // totals are non-zero) but none of them carry line-item detail, so
+    // nothing can be ranked by product. Saying "no recorded sales" here
+    // would contradict the sales total sitting right next to this panel —
+    // see the pharmacy-dashboard audit's Top Movers/Sales Performance bug.
+    noLineDetail: "Sales are recorded, but item-level detail isn't available for this period",
     noRows: "Nothing to show yet",
     lotUnavailable: "Batch intelligence is temporarily unavailable; core inventory remains available.",
     operationalHealth: "Inventory readiness",
@@ -101,7 +108,7 @@ const copy = {
     activeSkus: "සක්‍රීය SKU",
     lowStock: "අඩු තොග",
     outOfStock: "තොග අවසන්",
-    nearExpiry: "කල් ඉකුත් වීමට ළඟ",
+    nearExpiry: `කල් ඉකුත් වීමට ළඟ (≤${NEAR_EXPIRY_DAYS} දින)`,
     stockValue: "තොග පිරිවැය",
     sellValue: "සිල්ලර තොග වටිනාකම",
     thirtyDaySales: "දින 30 විකුණුම්",
@@ -139,6 +146,7 @@ const copy = {
     unitsSold: "ඒකක විකිණී ඇත",
     inStock: "තොගයේ",
     noSales: "තවම විකුණුම් සටහන් නැත",
+    noLineDetail: "විකුණුම් සටහන් වී ඇත, නමුත් මෙම කාලය සඳහා අයිතම-මට්ටමේ විස්තර නොමැත",
     noRows: "තවම දත්ත නැත",
     lotUnavailable: "බැච් තොරතුරු තාවකාලිකව ලබාගත නොහැක. මූලික තොග දත්ත ක්‍රියාත්මකයි.",
     operationalHealth: "තොග සූදානම",
@@ -155,7 +163,7 @@ function Surface({ children, className = "" }: { children: ReactNode; className?
   );
 }
 
-function KpiCard({ label, value, hint, tone = "default", icon }: { label: string; value: string; hint?: string; tone?: KpiTone; icon: ReactNode }) {
+function KpiCard({ label, value, hint, tone = "default", icon, fullValue }: { label: string; value: string; hint?: string; tone?: KpiTone; icon: ReactNode; fullValue?: string }) {
   const tones: Record<KpiTone, string> = {
     default: "border-slate-200 bg-white text-slate-950",
     teal: "border-teal-200/80 bg-teal-50/75 text-slate-950",
@@ -170,7 +178,13 @@ function KpiCard({ label, value, hint, tone = "default", icon }: { label: string
         <p className={`text-[11px] font-bold uppercase tracking-[0.13em] ${tone === "navy" ? "text-slate-400" : "text-slate-500"}`}>{label}</p>
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${iconTone}`}>{icon}</span>
       </div>
-      <p className="mt-4 truncate text-[1.65rem] font-semibold tracking-[-0.045em] tabular-nums">{value}</p>
+      {/* `title` carries the full, unabbreviated figure (formatLkr) so a
+          compact/abbreviated `value` (formatLkrCompact) is never the only
+          place the exact number exists — see docs on the "Stock Cost
+          Value" truncation bug this replaced. `truncate` stays as a safety
+          net for labels this abbreviation scheme doesn't anticipate, not
+          as the primary defense against clipping. */}
+      <p className="mt-4 truncate text-[1.65rem] font-semibold tracking-[-0.045em] tabular-nums" title={fullValue}>{value}</p>
       {hint && <p className={`mt-1 text-xs ${tone === "navy" ? "text-slate-400" : "text-slate-500"}`}>{hint}</p>}
     </div>
   );
@@ -299,7 +313,9 @@ function Movers({ intel, text }: { intel: RetailDashboardIntelligence; text: (ty
     <Surface className="overflow-hidden">
       <SectionTitle title={text.topMovers} hint={text.topMoversHint} action={<Link href="/reports" className="text-xs font-semibold text-teal-700 hover:text-teal-800">{text.viewAll}</Link>} />
       <div className="divide-y divide-slate-100 px-5 sm:px-6">
-        {intel.topMovers.length === 0 ? <p className="py-6 text-sm text-slate-500">{text.noSales}</p> : intel.topMovers.slice(0, 6).map((item, index) => (
+        {intel.topMovers.length === 0 ? (
+          <p className="py-6 text-sm text-slate-500">{intel.periodTransactions > 0 ? text.noLineDetail : text.noSales}</p>
+        ) : intel.topMovers.slice(0, 6).map((item, index) => (
           <div key={item.productId} className="flex items-center gap-3 py-3.5">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xs font-bold text-slate-500">{index + 1}</span>
             <div className="min-w-0 flex-1">
@@ -565,18 +581,18 @@ export function RetailCommandCenter({ data, sector }: { data: AppData; sector: R
       <OfflineSyncNotice />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <KpiCard label={text.todaySales} value={formatLkr(intel.todaySales)} hint={`${intel.todayTransactions} ${text.transactions.toLowerCase()}`} tone="navy" icon={<SalesIcon className="h-4 w-4" />} />
+        <KpiCard label={text.todaySales} value={formatLkrCompact(intel.todaySales)} fullValue={formatLkr(intel.todaySales)} hint={`${intel.todayTransactions} ${text.transactions.toLowerCase()}`} tone="navy" icon={<SalesIcon className="h-4 w-4" />} />
         <KpiCard label={text.activeSkus} value={intel.activeSkuCount.toLocaleString()} hint={isPharmacy ? `${intel.medicineCount} ${text.medicines.toLowerCase()}` : text.recorded} tone="default" icon={<StockIcon className="h-4 w-4" />} />
         <KpiCard label={text.lowStock} value={String(intel.lowStockCount)} hint={`${intel.outOfStockCount} ${text.outOfStock.toLowerCase()}`} tone={intel.lowStockCount > 0 ? "warning" : "default"} icon={<AlertTriangleIcon className="h-4 w-4" />} />
         {isPharmacy ? (
           <KpiCard label={text.nearExpiry} value={String(intel.nearExpiryCount)} hint={`${intel.expiredLotCount} ${text.expired.toLowerCase()}`} tone={intel.expiredLotCount > 0 ? "danger" : intel.nearExpiryCount > 0 ? "warning" : "default"} icon={<CalendarIcon className="h-4 w-4" />} />
         ) : (
-          <KpiCard label={text.averageBasket} value={formatLkr(intel.averageBasket)} hint={`${intel.periodTransactions} ${text.transactions.toLowerCase()} / 30d`} tone="teal" icon={<BillsIcon className="h-4 w-4" />} />
+          <KpiCard label={text.averageBasket} value={formatLkrCompact(intel.averageBasket)} fullValue={formatLkr(intel.averageBasket)} hint={`${intel.periodTransactions} ${text.transactions.toLowerCase()} / 30d`} tone="teal" icon={<BillsIcon className="h-4 w-4" />} />
         )}
         {canSeeFinancials ? (
-          <KpiCard label={text.stockValue} value={formatLkr(intel.inventoryCostValue ?? 0)} hint={text.financialHint} tone="teal" icon={<StockIcon className="h-4 w-4" />} />
+          <KpiCard label={text.stockValue} value={formatLkrCompact(intel.inventoryCostValue ?? 0)} fullValue={formatLkr(intel.inventoryCostValue ?? 0)} hint={text.financialHint} tone="teal" icon={<StockIcon className="h-4 w-4" />} />
         ) : (
-          <KpiCard label={text.sellValue} value={formatLkr(intel.inventorySellValue)} hint={`${intel.outOfStockCount} ${text.outOfStock.toLowerCase()}`} tone="teal" icon={<SalesIcon className="h-4 w-4" />} />
+          <KpiCard label={text.sellValue} value={formatLkrCompact(intel.inventorySellValue)} fullValue={formatLkr(intel.inventorySellValue)} hint={`${intel.outOfStockCount} ${text.outOfStock.toLowerCase()}`} tone="teal" icon={<SalesIcon className="h-4 w-4" />} />
         )}
       </div>
 

@@ -2,6 +2,20 @@ export function formatLkr(amount: number): string {
   return `Rs. ${amount.toLocaleString("en-LK", { maximumFractionDigits: 0 })}`;
 }
 
+/** Abbreviated form for currency figures shown inside fixed-width KPI
+ * cards (e.g. "Rs. 43.7M"), so a large stock-cost or turnover value never
+ * gets clipped by a `truncate` class the way the full `formatLkr()` string
+ * can be. Callers should still pass the full `formatLkr()` value as a
+ * `title`/tooltip so the exact figure is one hover away, never only
+ * available in abbreviated form. Same notation pulse-shared.tsx's
+ * formatCompactLkr() already uses for the owner Business Pulse view —
+ * duplicated here (not imported) because that helper lives in a
+ * pulse-specific module and this one needs to be dashboard-wide. */
+export function formatLkrCompact(amount: number): string {
+  const compact = new Intl.NumberFormat("en-LK", { notation: "compact", maximumFractionDigits: 1 }).format(amount);
+  return `Rs. ${compact}`;
+}
+
 /** Global premium UI phase — Part 4/9's "avatar initials, no profile
  * photography required": 1-2 uppercase letters for a compact avatar
  * badge. Prefers the first letter of up to two words in `name` (an org
