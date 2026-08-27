@@ -98,6 +98,18 @@ describe("retail dashboard intelligence", () => {
     expect(result.lowStockCount).toBe(2);
   });
 
+  it("computes today's sales trend against yesterday's actual recorded total, never a guess", () => {
+    // Fixture: sale-1 is today (2026-08-23, total 200), sale-2 is
+    // yesterday (2026-08-22, total 250) — a real 20% drop.
+    const result = buildRetailDashboardIntelligence(data(products), "pharmacy", false, [], new Date("2026-08-23T12:00:00Z"));
+    expect(result.todaySalesChangePct).toBeCloseTo(-20, 5);
+  });
+
+  it("reports no trend (never a fabricated 0% or infinite jump) when yesterday had no sales", () => {
+    const result = buildRetailDashboardIntelligence(data(products), "pharmacy", false, [], new Date("2026-08-25T12:00:00Z"));
+    expect(result.todaySalesChangePct).toBeNull();
+  });
+
   it("exposes owner financial metrics only when explicitly allowed", () => {
     const result = buildRetailDashboardIntelligence(data(products), "pharmacy", true, [], new Date("2026-08-23T12:00:00Z"));
     expect(result.inventoryCostValue).toBeGreaterThan(0);

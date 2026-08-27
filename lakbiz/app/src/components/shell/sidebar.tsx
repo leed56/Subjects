@@ -72,8 +72,16 @@ export function Sidebar() {
         </Link>
       </div>
 
+      {/* `min-h-0` is load-bearing here, not decorative: a flex item's
+          default min-height is `auto` (its content size), so without this
+          the nav never actually shrinks to the space `flex-1` gives it —
+          it overflows the fixed-height `<aside>` above instead of
+          scrolling within itself, silently clipping whatever section
+          lands past the viewport (reported: "Inventory" cut off at some
+          viewport heights). `overflow-y-auto` alone does nothing until
+          the flex item is allowed to be smaller than its content. */}
       <nav
-        className="flex-1 overflow-y-auto px-3.5 py-5 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.14)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/[0.14]"
+        className="min-h-0 flex-1 overflow-y-auto px-3.5 py-5 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.14)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/[0.14]"
         aria-label="Primary"
       >
         {sections.map((section, i) => (

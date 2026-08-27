@@ -67,6 +67,12 @@ export type RetailDashboardIntelligence = {
   inventoryCostValue: number | null;
   todaySales: number;
   todayTransactions: number;
+  /** vs. the same total computed for yesterday, from the same `data.sales`
+   * — null only when yesterday had zero recorded sales (nothing to divide
+   * by), never fabricated. Active SKUs and Low Stock have no equivalent:
+   * neither Product nor StockLog carries the history needed to know what
+   * either count was N days ago without guessing. */
+  todaySalesChangePct: number | null;
   averageBasket: number;
   periodSales: number;
   periodTransactions: number;
@@ -344,6 +350,13 @@ export function buildRetailDashboardIntelligence(
   const recentSales = salesWithinDays(data.sales, referenceDate, 30);
   const rankingSales = recentSales.length ? recentSales : data.sales;
   const todaySales = todaySalesRows.reduce((sum, sale) => sum + sale.total, 0);
+  const yesterday = new Date(referenceDate);
+  yesterday.setUTCDate(referenceDate.getUTCDate() - 1);
+  const yesterdayKey = dayKey(yesterday);
+  const yesterdaySales = data.sales
+    .filter((sale) => sale.date.startsWith(yesterdayKey))
+    .reduce((sum, sale) => sum + sale.total, 0);
+  const todaySalesChangePct = yesterdaySales > 0 ? ((todaySales - yesterdaySales) / yesterdaySales) * 100 : null;
   const periodSales = recentSales.reduce((sum, sale) => sum + sale.total, 0);
   const periodProfit = canSeeFinancials ? recentSales.reduce((sum, sale) => sum + sale.profit, 0) : null;
   const averageBase = todaySalesRows.length ? todaySalesRows : recentSales;
@@ -360,6 +373,7 @@ export function buildRetailDashboardIntelligence(
       ? activeProducts.reduce((sum, product) => sum + product.stockQty * product.buyPrice, 0)
       : null,
     todaySales,
+    todaySalesChangePct,
     todayTransactions: todaySalesRows.length,
     averageBasket: averageBase.length ? averageTotal / averageBase.length : 0,
     periodSales,

@@ -39,6 +39,7 @@ const copy = {
     batchControl: "Batch control",
     suppliers: "Suppliers",
     todaySales: "Today's sales",
+    vsYesterday: "vs yesterday",
     transactions: "Transactions",
     averageBasket: "Average basket",
     activeSkus: "Active SKUs",
@@ -103,6 +104,7 @@ const copy = {
     batchControl: "බැච් පාලනය",
     suppliers: "සැපයුම්කරුවන්",
     todaySales: "අද විකුණුම්",
+    vsYesterday: "ඊයේට වඩා",
     transactions: "ගනුදෙනු",
     averageBasket: "සාමාන්‍ය බිල්පත",
     activeSkus: "සක්‍රීය SKU",
@@ -163,7 +165,22 @@ function Surface({ children, className = "" }: { children: ReactNode; className?
   );
 }
 
-function KpiCard({ label, value, hint, tone = "default", icon, fullValue }: { label: string; value: string; hint?: string; tone?: KpiTone; icon: ReactNode; fullValue?: string }) {
+/** Real vs. previous-period comparison only — never rendered for a metric
+ * this codebase can't actually compute historically. Today's Sales can
+ * (yesterday's total is just another `data.sales` filter); Active SKUs and
+ * Low Stock currently can't (Product/StockLog carry no history of past
+ * active-flag or stock-level state), so they don't get a `trendPct` prop
+ * rather than showing an invented number. */
+function TrendBadge({ pct }: { pct: number }) {
+  const up = pct >= 0;
+  return (
+    <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${up ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+      {up ? "▲" : "▼"} {Math.abs(pct).toFixed(0)}%
+    </span>
+  );
+}
+
+function KpiCard({ label, value, hint, tone = "default", icon, fullValue, trendPct }: { label: string; value: string; hint?: string; tone?: KpiTone; icon: ReactNode; fullValue?: string; trendPct?: number | null }) {
   const tones: Record<KpiTone, string> = {
     default: "border-slate-200 bg-white text-slate-950",
     teal: "border-teal-200/80 bg-teal-50/75 text-slate-950",
@@ -172,11 +189,24 @@ function KpiCard({ label, value, hint, tone = "default", icon, fullValue }: { la
     navy: "border-slate-800 bg-[#101d30] text-white",
   };
   const iconTone = tone === "navy" ? "bg-white/10 text-teal-300" : tone === "warning" ? "bg-amber-100 text-amber-700" : tone === "danger" ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-600";
+  // Danger-tone cards (blocked batches, expired lots) are the ones an
+  // owner needs to see first, not just eventually notice by their color —
+  // a stronger shadow, a visible ring and a quiet pulsing dot on the icon
+  // pull the eye there before the routine cards next to it.
+  const elevation = tone === "danger" ? "shadow-[0_14px_34px_rgba(225,29,72,0.18)] ring-1 ring-rose-300/70" : "shadow-[0_8px_24px_rgba(15,23,42,0.04)]";
   return (
-    <div className={`min-w-0 rounded-2xl border p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] ${tones[tone]}`}>
+    <div className={`relative min-w-0 rounded-2xl border p-4 ${elevation} ${tones[tone]}`}>
       <div className="flex items-start justify-between gap-3">
         <p className={`text-[11px] font-bold uppercase tracking-[0.13em] ${tone === "navy" ? "text-slate-400" : "text-slate-500"}`}>{label}</p>
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${iconTone}`}>{icon}</span>
+        <span className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${iconTone}`}>
+          {icon}
+          {tone === "danger" && (
+            <span className="absolute -right-1 -top-1 flex h-3 w-3" aria-hidden="true">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-500 opacity-60" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-rose-500" />
+            </span>
+          )}
+        </span>
       </div>
       {/* `title` carries the full, unabbreviated figure (formatLkr) so a
           compact/abbreviated `value` (formatLkrCompact) is never the only
@@ -184,7 +214,10 @@ function KpiCard({ label, value, hint, tone = "default", icon, fullValue }: { la
           Value" truncation bug this replaced. `truncate` stays as a safety
           net for labels this abbreviation scheme doesn't anticipate, not
           as the primary defense against clipping. */}
-      <p className="mt-4 truncate text-[1.65rem] font-semibold tracking-[-0.045em] tabular-nums" title={fullValue}>{value}</p>
+      <div className="mt-4 flex items-center gap-2">
+        <p className="truncate text-[1.65rem] font-semibold tracking-[-0.045em] tabular-nums" title={fullValue}>{value}</p>
+        {trendPct != null && <TrendBadge pct={trendPct} />}
+      </div>
       {hint && <p className={`mt-1 text-xs ${tone === "navy" ? "text-slate-400" : "text-slate-500"}`}>{hint}</p>}
     </div>
   );
@@ -226,15 +259,30 @@ function SalesTrend({ intel, canSeeFinancials, label }: { intel: RetailDashboard
       </div>
       <div className="flex h-44 items-end gap-2 sm:gap-3" role="img" aria-label="Seven-day sales chart">
         {intel.trend.map((point) => {
-          const height = point.revenue > 0 ? Math.max(8, (point.revenue / max) * 100) : 3;
+          // A genuinely zero-revenue day used to render as the same ~3%
+          // sliver as a real-but-tiny sale — indistinguishable from "no
+          // data yet" at a glance. Zero now gets its own dashed-outline
+          // placeholder and an explicit "0" label instead of a filled bar.
+          const isZero = point.revenue <= 0;
+          const height = isZero ? 10 : Math.max(8, (point.revenue / max) * 100);
           return (
             <div key={point.key} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-2">
               <div className="group relative flex h-32 w-full items-end justify-center rounded-xl bg-slate-50 px-1 ring-1 ring-inset ring-slate-100">
-                <div
-                  className="w-full max-w-10 rounded-lg bg-teal-500/90 shadow-[0_6px_18px_rgba(13,148,136,0.18)] transition-[height]"
-                  style={{ height: `${height}%` }}
-                  title={`${point.label}: ${formatLkr(point.revenue)}`}
-                />
+                {isZero ? (
+                  <div
+                    className="flex w-full max-w-10 items-start justify-center rounded-lg border border-dashed border-slate-300 bg-slate-100/60"
+                    style={{ height: `${height}%` }}
+                    title={`${point.label}: ${formatLkr(0)}`}
+                  >
+                    <span className="mt-1 text-[9px] font-bold text-slate-400">0</span>
+                  </div>
+                ) : (
+                  <div
+                    className="w-full max-w-10 rounded-lg bg-teal-500/90 shadow-[0_6px_18px_rgba(13,148,136,0.18)] transition-[height]"
+                    style={{ height: `${height}%` }}
+                    title={`${point.label}: ${formatLkr(point.revenue)}`}
+                  />
+                )}
               </div>
               <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{point.label}</span>
             </div>
@@ -271,12 +319,21 @@ function AttentionPanel({ sector, intel, text }: { sector: RetailSector; intel: 
           </div>
         ) : visible.map((row) => {
           const dot = row.tone === "rose" ? "bg-rose-500" : row.tone === "amber" ? "bg-amber-500" : row.tone === "teal" ? "bg-teal-500" : "bg-slate-400";
+          // "rose" rows (expired lots, quarantine/recall) are the ones that
+          // must be scanned first — a plain grey row with a colored dot
+          // reads the same as every other row until you read the text.
+          // Give them a visibly different card, not just a different dot.
+          const isUrgent = row.tone === "rose";
+          const rowStyle = isUrgent
+            ? "border-rose-200 bg-rose-50/50 shadow-[0_6px_18px_rgba(225,29,72,0.1)] hover:border-rose-300 hover:bg-rose-50"
+            : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/70";
+          const badgeStyle = isUrgent ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-700";
           return (
-            <Link key={row.key} href={row.href} className="group flex items-center gap-3 rounded-xl border border-slate-200 px-3.5 py-3 transition hover:border-slate-300 hover:bg-slate-50/70">
+            <Link key={row.key} href={row.href} className={`group flex items-center gap-3 rounded-xl border px-3.5 py-3 transition ${rowStyle}`}>
               <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dot}`} />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{row.title}</span>
-              <span className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold tabular-nums text-slate-700">{row.count}</span>
-              <ChevronRightIcon className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500" />
+              <span className={`min-w-0 flex-1 truncate text-sm font-medium ${isUrgent ? "text-rose-950" : "text-slate-700"}`}>{row.title}</span>
+              <span className={`rounded-lg px-2 py-1 text-xs font-bold tabular-nums ${badgeStyle}`}>{row.count}</span>
+              <ChevronRightIcon className={`h-4 w-4 transition group-hover:translate-x-0.5 ${isUrgent ? "text-rose-300 group-hover:text-rose-500" : "text-slate-300 group-hover:text-slate-500"}`} />
             </Link>
           );
         })}
@@ -581,7 +638,15 @@ export function RetailCommandCenter({ data, sector }: { data: AppData; sector: R
       <OfflineSyncNotice />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <KpiCard label={text.todaySales} value={formatLkrCompact(intel.todaySales)} fullValue={formatLkr(intel.todaySales)} hint={`${intel.todayTransactions} ${text.transactions.toLowerCase()}`} tone="navy" icon={<SalesIcon className="h-4 w-4" />} />
+        <KpiCard
+          label={text.todaySales}
+          value={formatLkrCompact(intel.todaySales)}
+          fullValue={formatLkr(intel.todaySales)}
+          trendPct={intel.todaySalesChangePct}
+          hint={intel.todaySalesChangePct == null ? `${intel.todayTransactions} ${text.transactions.toLowerCase()}` : `${intel.todayTransactions} ${text.transactions.toLowerCase()} · ${text.vsYesterday}`}
+          tone="navy"
+          icon={<SalesIcon className="h-4 w-4" />}
+        />
         <KpiCard label={text.activeSkus} value={intel.activeSkuCount.toLocaleString()} hint={isPharmacy ? `${intel.medicineCount} ${text.medicines.toLowerCase()}` : text.recorded} tone="default" icon={<StockIcon className="h-4 w-4" />} />
         <KpiCard label={text.lowStock} value={String(intel.lowStockCount)} hint={`${intel.outOfStockCount} ${text.outOfStock.toLowerCase()}`} tone={intel.lowStockCount > 0 ? "warning" : "default"} icon={<AlertTriangleIcon className="h-4 w-4" />} />
         {isPharmacy ? (

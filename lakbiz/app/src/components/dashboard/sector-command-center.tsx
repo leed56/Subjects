@@ -716,8 +716,26 @@ export function SectorCommandCenter() {
         <div className="bg-slate-50 p-4 sm:p-5">
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             {model.metrics.map((metric) => (
-              <div key={metric.label} className={`rounded-xl border p-3.5 ${toneClasses(metric.tone)}`}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-60">{metric.label}</p>
+              <div
+                key={metric.label}
+                // Same base shadow depth as the retail command centre's
+                // KpiCard (same visual role — a small stat tile) — this had
+                // no shadow at all before, an ad hoc gap between two
+                // components rendering the identical kind of card.
+                className={`rounded-xl border p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.04)] ${toneClasses(metric.tone)} ${metric.tone === "danger" ? "shadow-[0_10px_28px_rgba(225,29,72,0.16)] ring-1 ring-rose-300/70" : ""}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] opacity-60">{metric.label}</p>
+                  {/* Same "first thing scanned" treatment as the retail
+                      command centre's KpiCard danger tone — a quiet
+                      pulsing dot, not a whole-card animation. */}
+                  {metric.tone === "danger" && (
+                    <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-500 opacity-60" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" />
+                    </span>
+                  )}
+                </div>
                 <p className="mt-1.5 font-mono text-2xl font-semibold tabular-nums">{metric.value}</p>
                 <p className="mt-1 text-[11px] font-medium opacity-65">{metric.hint}</p>
               </div>
