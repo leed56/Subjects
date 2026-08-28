@@ -69,7 +69,7 @@ import { canManageAcJobs, canOperateAcJobs } from "@/lib/org-role/permissions";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { fetchAsset, fetchCustomerAssets, fetchJobAssetId, linkJobAsset, type AcAsset } from "@/lib/supabase/ac-assets-client";
-import { computeJobProfitability, type JobLinkedExpense } from "@/lib/job-profitability";
+import { computeJobProfitability, type JobLinkedExpense, type JobProfitability } from "@/lib/job-profitability";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
 import { invoiceableLinesTotal } from "@/lib/job-invoice";
 
@@ -168,6 +168,41 @@ export default function JobsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formOpen]);
   const formDirty = formOpen && formSnapshot !== formSnapshotRef.current;
+
+  // Round 5 finding: JobCard's "Margin" figure (contractor-assigned jobs
+  // only) was its own simplified quotedAmount - subcontractCost formula,
+  // entirely bypassing computeJobProfitability -- the "one authoritative
+  // job-cost/profit calculation" this codebase explicitly established
+  // (see job-profitability.ts's own header comment, and Round 2's fix
+  // for the same class of cross-page mismatch on Dashboard/Reports/VAT).
+  // A contractor job that also has material/other costs recorded showed
+  // a Margin here that didn't match Net Profit in the Job Sheet a click
+  // away. Same fetch-on-mount pattern job-costing/reports/the Job Sheet
+  // drawer itself already use for job-linked Expenses (cloud-only, not
+  // part of the local-first store), lifted to the list level so every
+  // JobCard can use the real calculation instead of a second one.
+  const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<string, JobLinkedExpense[]> | null>(null);
+  useEffect(() => {
+    if (!org.id || !canSeeFinancials) {
+      setJobLinkedExpenseTotals(new Map());
+      return;
+    }
+    let cancelled = false;
+    void fetchOrgExpenses(org.id).then((result) => {
+      if (cancelled) return;
+      const totals = new Map<string, JobLinkedExpense[]>();
+      for (const e of result.data) {
+        if (!e.jobId) continue;
+        const list = totals.get(e.jobId) ?? [];
+        list.push({ category: e.category, amount: e.amount });
+        totals.set(e.jobId, list);
+      }
+      setJobLinkedExpenseTotals(totals);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [org.id, canSeeFinancials]);
 
   if (!ready || !data) {
     return (
@@ -314,6 +349,15 @@ export default function JobsPage() {
     toast({ tone: "success", title: t("common.delete"), description: deleteTarget.jobNo });
     setDeleteTarget(null);
   };
+
+  // Same authoritative-calculation fix as above -- built once here
+  // rather than re-filtering data.jobItems per card.
+  const jobItemsByJob = new Map<string, typeof data.jobItems>();
+  for (const item of data.jobItems) {
+    const list = jobItemsByJob.get(item.jobId) ?? [];
+    list.push(item);
+    jobItemsByJob.set(item.jobId, list);
+  }
 
   const query = search.trim().toLowerCase();
   const teamOptions = [
@@ -640,6 +684,7 @@ export default function JobsPage() {
               <JobCard
                 key={job.id}
                 job={job}
+                profit={computeJobProfitability(job, jobItemsByJob.get(job.id) ?? [], jobLinkedExpenseTotals?.get(job.id) ?? [])}
                 assigneePhone={job.assigneeType === "team" ? data.technicians.find((x) => x.id === job.assigneeId)?.phone : job.assigneeType === "contractor" ? data.contractors.find((x) => x.id === job.assigneeId)?.phone : undefined}
                 locale={locale}
                 business={data.business}
@@ -907,15 +952,11 @@ export default function JobsPage() {
  * Only one primary action per context: the status-workflow action
  * (Schedule/Mark installed/Complete) when one applies, otherwise "Open"
  * is promoted to primary so the card never has zero primary actions. */
-function JobCard({ job, assigneePhone, locale, business, notificationLogs, notifySettings, canManageJobs, canOperateJobs, canSeeFinancials, canWrite, disabledHint, onServiceDone, onJobSheet, onEdit, onSchedule, onInstalled, onComplete, onDelete, deleting }: { job: ACJob; assigneePhone?: string; locale: Locale; business: BusinessInfo; notificationLogs: ReturnType<typeof useNotificationLogs>; notifySettings: ReturnType<typeof loadNotificationSettings>; canManageJobs: boolean; canOperateJobs: boolean; canSeeFinancials: boolean; canWrite: boolean; disabledHint: string | null; onServiceDone: () => void; onJobSheet: () => void; onEdit: () => void; onSchedule: () => void; onInstalled: () => void; onComplete: () => void; onDelete: () => void; deleting?: boolean }) {
+function JobCard({ job, profit, assigneePhone, locale, business, notificationLogs, notifySettings, canManageJobs, canOperateJobs, canSeeFinancials, canWrite, disabledHint, onServiceDone, onJobSheet, onEdit, onSchedule, onInstalled, onComplete, onDelete, deleting }: { job: ACJob; profit: JobProfitability; assigneePhone?: string; locale: Locale; business: BusinessInfo; notificationLogs: ReturnType<typeof useNotificationLogs>; notifySettings: ReturnType<typeof loadNotificationSettings>; canManageJobs: boolean; canOperateJobs: boolean; canSeeFinancials: boolean; canWrite: boolean; disabledHint: string | null; onServiceDone: () => void; onJobSheet: () => void; onEdit: () => void; onSchedule: () => void; onInstalled: () => void; onComplete: () => void; onDelete: () => void; deleting?: boolean }) {
   const { t } = useLocale();
   const router = useRouter();
   const balance = job.quotedAmount - job.depositAmount;
   const isContractor = job.assigneeType === "contractor";
-  const margin =
-    isContractor && job.subcontractCost != null
-      ? job.quotedAmount - job.subcontractCost
-      : null;
   const [messageTarget, setMessageTarget] = useState<"customer" | "assignee" | null>(null);
 
   const statusAction =
@@ -984,8 +1025,15 @@ function JobCard({ job, assigneePhone, locale, business, notificationLogs, notif
           {canSeeFinancials && isContractor && job.subcontractCost != null && (
             <Metric label={t("jobs.subcontract_cost")} value={formatLkr(job.subcontractCost)} />
           )}
-          {canSeeFinancials && margin != null && (
-            <Metric label={t("jobs.margin")} value={formatLkr(margin)} />
+          {/* Round 5 finding: this used to be its own quotedAmount -
+              subcontractCost shortcut, bypassing computeJobProfitability
+              entirely -- wrong the moment a contractor job also has
+              material/other costs recorded, and a real cross-page
+              mismatch against the Job Sheet's Net Profit. Now the same
+              authoritative figure, with the same "—" until hasCostData
+              is true as everywhere else it's shown. */}
+          {canSeeFinancials && isContractor && job.subcontractCost != null && (
+            <Metric label={t("jobs.margin")} value={profit.hasCostData ? formatLkr(profit.grossProfit) : "—"} />
           )}
         </div>
         {(job.scheduledDate || job.serviceDueDate) && <div className="mt-3 flex flex-wrap gap-1.5 text-xs font-semibold">{job.scheduledDate && <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700">{t("jobs.install_label")}: {job.scheduledDate}</span>}{job.serviceDueDate && <span className={`rounded-md border px-2 py-1 ${serviceDueUrgencyClass(serviceDueUrgency(job.serviceDueDate))}`}>{t("jobs.service_due_label")}: {job.serviceDueDate} ({serviceDueLabel(job.serviceDueDate, locale)}){job.serviceDueManual && ` · ${t("jobs.service_due_manual_short")}`}</span>}</div>}
@@ -1889,7 +1937,12 @@ function JobSheetDrawer({ job, locale, business, items, history, products, suppl
           <Metric label={t("jobs.quote_label")} value={formatLkr(job.quotedAmount)} />
           <Metric label={t("jobs.collected_label")} value={formatLkr(job.depositAmount)} />
           <Metric label={t("jobs.cost_label")} value={formatLkr(profit.totalCost)} />
-          <Metric label={t("jobs.net_profit")} value={formatLkr(profit.grossProfit)} />
+          {/* Round 5 finding, same root cause as Job Costing's misleading
+              100%: a job with no costs recorded yet has grossProfit equal
+              to its full quoted amount by construction, not because it
+              genuinely cost nothing -- show "—" here too until
+              hasCostData is true (see job-profitability.ts). */}
+          <Metric label={t("jobs.net_profit")} value={profit.hasCostData ? formatLkr(profit.grossProfit) : "—"} />
           <Metric label={t("jobs.balance_label")} value={formatLkr(balance)} />
         </div>
       )}
@@ -2140,7 +2193,15 @@ function JobSheetDrawer({ job, locale, business, items, history, products, suppl
               </tr>
               <tr className="bg-slate-50">
                 <td className="px-3 py-2 font-semibold text-slate-900">{t("jobs.economics_gross_profit")}</td>
-                <td className={`px-3 py-2 text-right font-mono font-semibold ${profit.grossProfit < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatLkr(profit.grossProfit)}</td>
+                {/* Same fix as the Margin row below (and the Net Profit
+                    quick-metric above): a job with no cost data has
+                    grossProfit === its full quoted amount by construction,
+                    not a real profit -- match Margin's existing "—" until
+                    hasCostData is true instead of showing that number
+                    bolded in profit-green. */}
+                <td className={`px-3 py-2 text-right font-mono font-semibold ${!profit.hasCostData ? "text-slate-400" : profit.grossProfit < 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                  {profit.hasCostData ? formatLkr(profit.grossProfit) : "—"}
+                </td>
               </tr>
               <tr>
                 <td className="px-3 py-2 text-slate-600">{t("jobs.economics_margin")}</td>
