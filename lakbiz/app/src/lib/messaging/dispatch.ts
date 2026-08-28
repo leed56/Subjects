@@ -1,5 +1,6 @@
 import type { MessageChannel, SendMessageResult } from "./types";
 import { normalizeSlPhone } from "./phone";
+import { openMessageChannel } from "./channels";
 
 export type ApiSmsPayload = {
   phone: string;
@@ -116,6 +117,20 @@ export async function dispatchMessage(
     return sendApiWhatsApp({ phone, message: text, ...meta });
   }
 
-  const { openMessageChannel } = await import("./channels");
+  // Reported: "I sent a message but they didn't receive it" -- for the
+  // manual whatsapp/sms channels, the only thing this function ever did
+  // was window.open() a wa.me/sms: link; nothing is actually transmitted
+  // until the customer's browser/app tab opens and a human presses Send
+  // inside it. That open() used to sit behind an `await import("./channels")`
+  // -- a dynamic import breaks the synchronous call stack a click handler
+  // needs for window.open() to reliably count as user-activated, so on a
+  // cold chunk load (the common case: first WhatsApp send of the session)
+  // browsers are free to silently block it as a pop-up. openMessageChannel
+  // returned `ok: true` unconditionally either way, so the composer showed
+  // "Ready -- app opened" and auto-closed even when no tab ever opened.
+  // Importing it statically keeps window.open() inside the same
+  // synchronous gesture as the click that triggered handleSend, and
+  // openMessageChannel (below) now also checks whether the popup actually
+  // opened instead of assuming it did.
   return openMessageChannel(channel, text, phone);
 }

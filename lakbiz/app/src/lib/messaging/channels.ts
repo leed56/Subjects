@@ -36,8 +36,27 @@ export function openMessageChannel(
       ? whatsappShareUrl(text, phone)
       : smsShareUrl(text, phone);
 
-  if (typeof window !== "undefined") {
-    window.open(url, "_blank", "noopener,noreferrer");
+  if (typeof window === "undefined") {
+    return { ok: true, channel, url };
+  }
+
+  // window.open() returns null (Safari/Firefox) or a Window whose
+  // `.closed` is already true (Chrome, some ad-block/popup extensions)
+  // when the browser silently blocks it as a pop-up -- no thrown error,
+  // no visible sign, just nothing on screen. This used to report success
+  // either way, so a blocked pop-up looked identical to a sent message:
+  // the composer showed "Ready -- app opened" and closed even though
+  // nothing ever opened and the customer was never going to receive
+  // anything. Now surfaced as a real failure the caller can act on.
+  const popup = window.open(url, "_blank", "noopener,noreferrer");
+  if (!popup || popup.closed) {
+    return {
+      ok: false,
+      channel,
+      url,
+      error:
+        "Pop-up blocked by the browser -- allow pop-ups for this site, or use Auto WhatsApp instead.",
+    };
   }
 
   return { ok: true, channel, url };
