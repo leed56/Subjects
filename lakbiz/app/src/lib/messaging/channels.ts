@@ -27,6 +27,9 @@ export function openMessageChannel(
   if (channel === "api_sms") {
     return { ok: false, channel, error: "Use sendApiSms() for API delivery" };
   }
+  if (channel === "api_whatsapp") {
+    return { ok: false, channel, error: "Use sendApiWhatsApp() for API delivery" };
+  }
 
   const url =
     channel === "whatsapp"

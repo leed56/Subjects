@@ -2,7 +2,7 @@ import type { ACJob } from "@/lib/store/types";
 import type { Sale } from "@/lib/store/types";
 import type { BusinessInfo } from "@/lib/invoice";
 
-export type MessageChannel = "whatsapp" | "sms" | "api_sms";
+export type MessageChannel = "whatsapp" | "sms" | "api_sms" | "api_whatsapp";
 
 export type MessageTemplateId =
   | "bill_receipt"

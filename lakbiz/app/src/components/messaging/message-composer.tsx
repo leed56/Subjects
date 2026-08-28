@@ -17,7 +17,7 @@ import {
   type MessageContext,
   type MessageTemplateId,
 } from "@/lib/messaging";
-import { useSmsApiConfigured } from "@/lib/messaging/use-sms-api-configured";
+import { useSmsApiConfigured, useWhatsAppApiConfigured } from "@/lib/messaging/use-sms-api-configured";
 
 type MessageComposerProps = {
   open: boolean;
@@ -53,6 +53,12 @@ const CHANNELS: {
     icon: "⚡",
     color: "from-violet-500 to-purple-600",
   },
+  {
+    id: "api_whatsapp",
+    labelKey: "msg.api_whatsapp",
+    icon: "🚀",
+    color: "from-green-600 to-teal-700",
+  },
 ];
 
 export function MessageComposer({
@@ -65,8 +71,13 @@ export function MessageComposer({
   contextId,
 }: MessageComposerProps) {
   const { t } = useLocale();
-  const { can, refreshOrg } = useSubscription();
+  const { can, refreshOrg, org } = useSubscription();
   const canApiSms = can("bulk_messaging");
+  // WhatsApp API sending is a pharmacy-only pilot for now (WasenderAPI
+  // ties one WhatsApp Business number to one account, and there's only
+  // one connected — every other sector stays on the wa.me deep link).
+  // Same bulk_messaging plan gate as SMS API.
+  const canApiWhatsApp = can("bulk_messaging") && org.sector === "pharmacy";
   const settings = loadNotificationSettings();
   const [channel, setChannel] = useState<MessageChannel>(settings.defaultChannel);
   const [templateId, setTemplateId] = useState<MessageTemplateId>(
@@ -82,6 +93,8 @@ export function MessageComposer({
   const templates = templatesForContext(context.type);
   const smsApiConfigured = useSmsApiConfigured();
   const apiEnabled = smsApiConfigured === true;
+  const whatsappApiConfigured = useWhatsAppApiConfigured();
+  const whatsappApiEnabled = whatsappApiConfigured === true;
 
   useEffect(() => {
     if (!open) return;
@@ -90,11 +103,13 @@ export function MessageComposer({
     setChannel(
       settings.defaultChannel === "api_sms" && !canApiSms
         ? "whatsapp"
-        : settings.defaultChannel,
+        : settings.defaultChannel === "api_whatsapp" && !canApiWhatsApp
+          ? "whatsapp"
+          : settings.defaultChannel,
     );
     setMessageLang(settings.preferredLanguage);
     setFeedback(null);
-  }, [open, defaultTemplate, context, settings.defaultChannel, settings.preferredLanguage, canApiSms, refreshOrg]);
+  }, [open, defaultTemplate, context, settings.defaultChannel, settings.preferredLanguage, canApiSms, canApiWhatsApp, refreshOrg]);
 
   useEffect(() => {
     if (!open) return;
@@ -131,7 +146,7 @@ export function MessageComposer({
       contextType: context.type,
       contextId,
       delivery: result.ok
-        ? channel === "api_sms"
+        ? channel === "api_sms" || channel === "api_whatsapp"
           ? "api_sent"
           : "opened"
         : "api_failed",
@@ -185,9 +200,11 @@ export function MessageComposer({
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5 sm:flex-row">
           <div className="flex-1 space-y-4">
             <div className="flex gap-2">
-              {CHANNELS.filter(
-                (c) => c.id !== "api_sms" || (apiEnabled && canApiSms),
-              ).map(
+              {CHANNELS.filter((c) => {
+                if (c.id === "api_sms") return apiEnabled && canApiSms;
+                if (c.id === "api_whatsapp") return whatsappApiEnabled && canApiWhatsApp;
+                return true;
+              }).map(
                 (c) => (
                   <button
                     key={c.id}
@@ -310,9 +327,11 @@ export function MessageComposer({
               ? t("msg.sending")
               : channel === "api_sms"
                 ? t("msg.send_api")
-                : channel === "whatsapp"
-                  ? t("msg.send_whatsapp")
-                  : t("msg.send_sms")}
+                : channel === "api_whatsapp"
+                  ? t("msg.send_api_whatsapp")
+                  : channel === "whatsapp"
+                    ? t("msg.send_whatsapp")
+                    : t("msg.send_sms")}
           </button>
         </div>
       </div>

@@ -53,6 +53,49 @@ export async function sendApiSms(
   }
 }
 
+export async function sendApiWhatsApp(
+  payload: ApiSmsPayload,
+): Promise<SendMessageResult> {
+  const phone = normalizeSlPhone(payload.phone);
+  if (!phone) {
+    return { ok: false, channel: "api_whatsapp", error: "Invalid phone number" };
+  }
+
+  try {
+    const res = await fetch("/api/messages/send-whatsapp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, phone }),
+    });
+
+    const data = (await res.json()) as {
+      ok?: boolean;
+      error?: string;
+      providerRef?: string;
+    };
+
+    if (!res.ok || !data.ok) {
+      return {
+        ok: false,
+        channel: "api_whatsapp",
+        error: data.error ?? "WhatsApp send failed",
+      };
+    }
+
+    return {
+      ok: true,
+      channel: "api_whatsapp",
+      providerRef: data.providerRef,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      channel: "api_whatsapp",
+      error: err instanceof Error ? err.message : "Network error",
+    };
+  }
+}
+
 export async function dispatchMessage(
   channel: MessageChannel,
   text: string,
@@ -64,6 +107,13 @@ export async function dispatchMessage(
       return { ok: false, channel, error: "Phone required for SMS API" };
     }
     return sendApiSms({ phone, message: text, ...meta });
+  }
+
+  if (channel === "api_whatsapp") {
+    if (!phone) {
+      return { ok: false, channel, error: "Phone required for WhatsApp API" };
+    }
+    return sendApiWhatsApp({ phone, message: text, ...meta });
   }
 
   const { openMessageChannel } = await import("./channels");
