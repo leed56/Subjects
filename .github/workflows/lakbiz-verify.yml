@@ -53,6 +53,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: i18n key parity
+        run: npm run check:i18n
+
       - name: Unit tests
         run: npm run test
 
