@@ -18,6 +18,7 @@ import {
   type MessageTemplateId,
 } from "@/lib/messaging";
 import { useSmsApiConfigured, useWhatsAppApiConfigured } from "@/lib/messaging/use-sms-api-configured";
+import { sectorAllowsApiWhatsApp } from "@/lib/messaging/wasender-sectors";
 
 type MessageComposerProps = {
   open: boolean;
@@ -73,11 +74,10 @@ export function MessageComposer({
   const { t } = useLocale();
   const { can, refreshOrg, org } = useSubscription();
   const canApiSms = can("bulk_messaging");
-  // WhatsApp API sending is a pharmacy-only pilot for now (WasenderAPI
-  // ties one WhatsApp Business number to one account, and there's only
-  // one connected — every other sector stays on the wa.me deep link).
-  // Same bulk_messaging plan gate as SMS API.
-  const canApiWhatsApp = can("bulk_messaging") && org.sector === "pharmacy";
+  // WhatsApp API sending is a rollout pilot, not yet every sector (see
+  // wasender-sectors.ts for why — one connected number, shared by whichever
+  // sectors are listed there). Same bulk_messaging plan gate as SMS API.
+  const canApiWhatsApp = can("bulk_messaging") && sectorAllowsApiWhatsApp(org.sector);
   const settings = loadNotificationSettings();
   const [channel, setChannel] = useState<MessageChannel>(settings.defaultChannel);
   const [templateId, setTemplateId] = useState<MessageTemplateId>(

@@ -25,6 +25,7 @@ import { formatLkr } from "@/lib/format";
 import { buildQuoteTextFromLines, whatsappShareUrl } from "@/lib/invoice";
 import { sendApiWhatsApp } from "@/lib/messaging";
 import { useWhatsAppApiConfigured } from "@/lib/messaging/use-sms-api-configured";
+import { sectorAllowsApiWhatsApp } from "@/lib/messaging/wasender-sectors";
 import { isValidSlMobile } from "@/lib/messaging/phone";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
@@ -96,11 +97,13 @@ export function AtomicRetailSalesPageV2() {
 
   // The quote share button here was a plain wa.me deep link only — always
   // opens WhatsApp with the text pre-filled, but never actually sends.
-  // canApiWhatsApp mirrors message-composer.tsx's exact gate (pharmacy
-  // pilot + same bulk_messaging plan check) so this button only offers
-  // real API sending where it's actually wired up server-side.
+  // canApiWhatsApp mirrors message-composer.tsx's exact gate (same sector
+  // allowlist + bulk_messaging plan check) so this button only offers real
+  // API sending where it's actually wired up server-side. In practice this
+  // page only renders for pharmacy/grocery/advanced-retail sectors, so
+  // today that's just pharmacy — see wasender-sectors.ts.
   const whatsappApiConfigured = useWhatsAppApiConfigured();
-  const canApiWhatsApp = whatsappApiConfigured === true && can("bulk_messaging") && org.sector === "pharmacy";
+  const canApiWhatsApp = whatsappApiConfigured === true && can("bulk_messaging") && sectorAllowsApiWhatsApp(org.sector);
   const [sendingQuoteApi, setSendingQuoteApi] = useState(false);
   const [quoteApiFeedback, setQuoteApiFeedback] = useState<string | null>(null);
 

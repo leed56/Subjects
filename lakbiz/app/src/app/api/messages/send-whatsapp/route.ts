@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
 import { orgAllowsBulkMessaging } from "@/lib/messaging/plan-gate-server";
 import { sendWasenderWhatsApp, isWasenderConfigured } from "@/lib/messaging/wasender-server";
+import { sectorAllowsApiWhatsApp } from "@/lib/messaging/wasender-sectors";
 import { normalizeSlPhone } from "@/lib/messaging/phone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 // Mirrors /api/messages/send (the Text.lk SMS route) — same auth/role/
 // plan-gate shape, same notification_log write-back — but for the
 // WasenderAPI WhatsApp channel. One deliberate addition: a sector gate.
-// This is a pharmacy-only pilot for now (explicit product decision, not
-// a technical limitation) — WasenderAPI ties a single WhatsApp Business
+// This is a rollout pilot for now (explicit product decision, not a
+// technical limitation) — WasenderAPI ties a single WhatsApp Business
 // number to one account, and there's only one connected today. No
-// per-org credential storage yet, so every org would otherwise be
-// sending from the same pharmacy's number.
+// per-org credential storage yet, so every org in wasender-sectors.ts's
+// allowlist sends from that same shared number.
 //
 // No standalone daily-quota table check (unlike SMS's checkOrgSmsQuota)
 // — WasenderAPI's own free-trial plan already enforces a hard 1
@@ -58,9 +59,9 @@ export async function POST(request: Request) {
     .eq("id", member.organization_id)
     .maybeSingle();
 
-  if (org?.sector !== "pharmacy") {
+  if (!sectorAllowsApiWhatsApp(org?.sector)) {
     return NextResponse.json(
-      { ok: false, error: "WhatsApp API sending is currently enabled for pharmacy shops only." },
+      { ok: false, error: "WhatsApp API sending isn't enabled for this shop's sector yet." },
       { status: 403 },
     );
   }
