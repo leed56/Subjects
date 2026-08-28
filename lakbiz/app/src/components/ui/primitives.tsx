@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDownIcon, MoreIcon, SearchIcon, FilterIcon } from "@/components/ui/icons";
 
 type PageHeaderProps = {
@@ -386,29 +387,78 @@ export type ActionMenuItem = {
   disabled?: boolean;
 };
 
+const ACTION_MENU_WIDTH = 192; // px, matches the menu's w-48
+
+/**
+ * Reported: opening the "..." menu on Customers (and, by the same shared
+ * component, Bills/Stock/Jobs/Banking/Teams/Assets/Dashboard) did nothing
+ * visible -- the click *was* registering (aria-expanded flipped) but the
+ * menu itself never appeared. Root cause: this component used to render
+ * its dropdown as `position: absolute` inside the row it belongs to, and
+ * every one of those rows sits inside a table wrapper with
+ * `overflow-x-auto` (DataTable's own scroll container, sometimes a second
+ * one on the row itself). Setting overflow-x to a non-visible value forces
+ * the browser to also compute overflow-y as auto, per the CSS Overflow
+ * spec -- so that ancestor became a real (if invisible, scrollbar-less at
+ * a glance) scroll clipping box, and the dropdown's painted content past
+ * the row's own height got clipped by it instead of floating over the
+ * table like it was designed to.
+ *
+ * Fixed by rendering the dropdown through a portal straight onto
+ * document.body, positioned with `fixed` coordinates read off the trigger
+ * button's own getBoundingClientRect() -- it now floats above every
+ * ancestor's overflow/clipping and stacking context entirely, the same
+ * pattern any table-safe popover needs.
+ */
 export function ActionMenu({ items, label = "Actions" }: { items: ActionMenuItem[]; label?: string }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
+
+    const updatePosition = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setCoords({
+        top: rect.bottom + 8,
+        left: Math.min(
+          Math.max(8, rect.right - ACTION_MENU_WIDTH),
+          window.innerWidth - ACTION_MENU_WIDTH - 8,
+        ),
+      });
+    };
+    updatePosition();
+
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
     document.addEventListener("mousedown", onClick);
     document.addEventListener("keydown", onKey);
+    // capture:true -- a table's own overflow-x-auto wrapper is a common
+    // ancestor scroll container, and only capture-phase scroll listeners
+    // fire for scrolling inside it (it doesn't bubble like window scroll).
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
     return () => {
       document.removeEventListener("mousedown", onClick);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
     };
   }, [open]);
 
   return (
-    <div ref={ref} className="relative inline-block shrink-0 text-left">
+    <>
       <button
+        ref={buttonRef}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -418,33 +468,38 @@ export function ActionMenu({ items, label = "Actions" }: { items: ActionMenuItem
       >
         <MoreIcon className="h-4.5 w-4.5" />
       </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.14)]"
-        >
-          {items.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              role="menuitem"
-              disabled={item.disabled}
-              onClick={() => {
-                setOpen(false);
-                item.onSelect();
-              }}
-              className={`block min-h-11 w-full px-3.5 py-2.5 text-left text-sm transition disabled:opacity-40 ${
-                item.tone === "danger"
-                  ? "text-rose-600 hover:bg-rose-50"
-                  : "text-slate-700 hover:bg-slate-50 hover:text-slate-950"
-              }`}
+      {open && coords && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="menu"
+              style={{ top: coords.top, left: coords.left, width: ACTION_MENU_WIDTH }}
+              className="fixed z-50 overflow-hidden rounded-xl border border-slate-200 bg-white py-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.14)]"
             >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+              {items.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  role="menuitem"
+                  disabled={item.disabled}
+                  onClick={() => {
+                    setOpen(false);
+                    item.onSelect();
+                  }}
+                  className={`block min-h-11 w-full px-3.5 py-2.5 text-left text-sm transition disabled:opacity-40 ${
+                    item.tone === "danger"
+                      ? "text-rose-600 hover:bg-rose-50"
+                      : "text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 

@@ -180,7 +180,15 @@ export async function fetchSaleReturns(
 
   // Do not select `settled_at` here: that column belongs to finance migration
   // 00009. The physical-return workspace must still function with only 00008.
-  const [returnResult, lineResult] = await Promise.all([
+  //
+  // All three reads below are independently scoped by organization_id +
+  // sale_id -- credit notes never depended on returns/lines resolving
+  // first, so firing it as a second, awaited-after-the-fact query only
+  // added a full extra network round trip to every single invoice view,
+  // even the (overwhelmingly common) case of a sale with no returns at
+  // all. Folded into the same Promise.all: same three queries, one round
+  // trip's worth of wall-clock time instead of two.
+  const [returnResult, lineResult, creditNoteResult] = await Promise.all([
     supabase
       .from("sale_returns")
       .select(
@@ -197,6 +205,17 @@ export async function fetchSaleReturns(
       .eq("organization_id", organizationId)
       .eq("sale_id", saleId)
       .order("created_at", { ascending: true }),
+    // Finance enrichment (see below) is optional -- a missing finance
+    // schema must not fail the physical-return read below, so its error is
+    // inspected separately rather than folded into physicalError.
+    supabase
+      .from("sale_credit_notes")
+      .select(
+        "id, credit_note_no, return_id, sale_id, issued_at, gross_credit, output_vat_reversal, net_revenue_reversal",
+      )
+      .eq("organization_id", organizationId)
+      .eq("sale_id", saleId)
+      .order("issued_at", { ascending: false }),
   ]);
 
   const physicalError = returnResult.error ?? lineResult.error;
@@ -231,17 +250,8 @@ export async function fetchSaleReturns(
     restocked: Boolean(row.restocked),
   }));
 
-  // Finance enrichment is a second, optional read. A missing finance schema is
-  // not an error for physical-return intake/history.
-  const creditNoteResult = await supabase
-    .from("sale_credit_notes")
-    .select(
-      "id, credit_note_no, return_id, sale_id, issued_at, gross_credit, output_vat_reversal, net_revenue_reversal",
-    )
-    .eq("organization_id", organizationId)
-    .eq("sale_id", saleId)
-    .order("issued_at", { ascending: false });
-
+  // Finance enrichment is optional -- a missing finance schema is not an
+  // error for physical-return intake/history (see the fetch above).
   if (creditNoteResult.error) {
     return {
       returns,

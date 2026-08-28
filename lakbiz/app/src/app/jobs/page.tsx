@@ -760,6 +760,31 @@ export default function JobsPage() {
               </FormField>
               <FormField label={t("common.phone")}>
                 <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} />
+                {/* Reported: editing a customer's phone on /customers left this
+                    job showing the old number -- expected, not a bug. A job's
+                    contact fields are a snapshot copied in the moment a
+                    customer is picked above (site phone can legitimately
+                    diverge from the customer's registered one), not a live
+                    join, so a later edit on the customer record never
+                    reaches jobs that already captured their own copy. Surface
+                    the drift instead of silently re-syncing it -- opt-in,
+                    one click, only shown once the two numbers actually
+                    differ. */}
+                {customerId && (() => {
+                  const linkedCustomer = data.customers.find((x) => x.id === customerId);
+                  if (!linkedCustomer || (linkedCustomer.phone ?? "") === phone) return null;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setPhone(linkedCustomer.phone ?? "")}
+                      className="mt-1 text-left text-xs font-semibold text-teal-700 hover:underline"
+                    >
+                      {locale === "si"
+                        ? `පාරිභෝගිකයාගේ දැනට ඇති දුරකථනය භාවිත කරන්න (${linkedCustomer.phone || "—"})`
+                        : `Use customer's current phone (${linkedCustomer.phone || "—"})`}
+                    </button>
+                  );
+                })()}
               </FormField>
             </div>
             <FormField label={t("jobs.site_address")} required>
