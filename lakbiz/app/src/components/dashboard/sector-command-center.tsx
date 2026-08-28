@@ -477,21 +477,84 @@ function buildSectorModel(
     const overdue = data.acJobs.filter((job) => job.serviceDueDate && job.serviceDueDate < today && job.status !== "cancelled").length;
     const dueSoon = data.acJobs.filter((job) => job.serviceDueDate && job.serviceDueDate >= today && job.serviceDueDate <= due30Key && job.status !== "cancelled").length;
     const actions: Action[] = [];
-    if (unassigned > 0) actions.push({ key: "unassigned", title: `${unassigned} active job${unassigned === 1 ? "" : "s"} unassigned`, detail: "Assign technicians or contractors before work is delayed.", href: "/jobs", tone: "danger" });
-    if (overdue > 0) actions.push({ key: "service-overdue", title: `${overdue} service${overdue === 1 ? "" : "s"} overdue`, detail: "Recover missed preventive-maintenance visits and customer follow-up.", href: "/jobs", tone: "danger" });
+    if (unassigned > 0) {
+      actions.push({
+        key: "unassigned",
+        title: tt(
+          locale,
+          `සක්‍රීය රැකියා ${unassigned}ක් නොපවරා ඇත`,
+          `${unassigned} active job${unassigned === 1 ? "" : "s"} unassigned`,
+          `செயலில் உள்ள ${unassigned} பணிகள் ஒதுக்கப்படவில்லை`,
+        ),
+        detail: tt(
+          locale,
+          "වැඩ ප්‍රමාද වීමට පෙර තාක්ෂණවේදීන් හෝ කොන්ත්‍රාත්කරුවන් පවරන්න.",
+          "Assign technicians or contractors before work is delayed.",
+          "பணி தாமதமாவதற்கு முன் தொழில்நுட்பர்கள் அல்லது ஒப்பந்ததாரர்களை ஒதுக்கவும்.",
+        ),
+        href: "/jobs",
+        tone: "danger",
+      });
+    }
+    if (overdue > 0) {
+      actions.push({
+        key: "service-overdue",
+        title: tt(
+          locale,
+          `සේවා ${overdue}ක් කල් ඉකුත් වී ඇත`,
+          `${overdue} service${overdue === 1 ? "" : "s"} overdue`,
+          `${overdue} சேவைகள் காலாவதியாகிவிட்டன`,
+        ),
+        detail: tt(
+          locale,
+          "මග හැරුණු නිවාරණ නඩත්තු චාරිකා සහ පාරිභෝගික පසු විපරම යථා තත්ත්වයට පත් කරන්න.",
+          "Recover missed preventive-maintenance visits and customer follow-up.",
+          "தவறவிட்ட தடுப்பு பராமரிப்பு வருகைகள் மற்றும் வாடிக்கையாளர் பின்தொடர்தலை மீட்டெடுக்கவும்.",
+        ),
+        href: "/jobs",
+        tone: "danger",
+      });
+    }
     return {
-      eyebrow: "HVAC operations intelligence",
-      title: "Jobs, crews & service retention",
-      description: "A service-business pulse built around assignment discipline, today's field load and recurring-maintenance retention.",
+      eyebrow: tt(locale, "HVAC මෙහෙයුම් බුද්ධි දත්ත", "HVAC operations intelligence", "HVAC செயல்பாட்டு நுண்ணறிவு"),
+      title: tt(locale, "රැකියා, කණ්ඩායම් සහ සේවා රඳවා ගැනීම", "Jobs, crews & service retention", "பணிகள், குழுக்கள் & சேவை தக்கவைப்பு"),
+      description: tt(
+        locale,
+        "පැවරුම් විනය, අද දින ක්ෂේත්‍ර වැඩ බර සහ පුනරාවර්තන නඩත්තු රඳවා ගැනීම මත පදනම් වූ සේවා ව්‍යාපාරයේ ස්පන්දනයකි.",
+        "A service-business pulse built around assignment discipline, today's field load and recurring-maintenance retention.",
+        "பணி ஒதுக்கீட்டு ஒழுக்கம், இன்றைய கள பணிச்சுமை மற்றும் தொடர் பராமரிப்பு தக்கவைப்பை மையமாகக் கொண்ட சேவை வணிக துடிப்பு.",
+      ),
       metrics: [
-        { label: "Active jobs", value: String(activeJobs.length), hint: "Open operational work", tone: "default" },
-        { label: "Scheduled today", value: String(scheduledToday), hint: "Field workload", tone: "default" },
-        { label: "Unassigned", value: String(unassigned), hint: "Needs ownership", tone: unassigned ? "danger" : "positive" },
-        { label: "Service due ≤30d", value: String(overdue + dueSoon), hint: overdue ? `${overdue} overdue` : "Retention pipeline", tone: overdue ? "danger" : dueSoon ? "warning" : "positive" },
+        {
+          label: tt(locale, "සක්‍රීය රැකියා", "Active jobs", "செயலில் உள்ள பணிகள்"),
+          value: String(activeJobs.length),
+          hint: tt(locale, "විවෘත මෙහෙයුම් වැඩ", "Open operational work", "திறந்த செயல்பாட்டு பணி"),
+          tone: "default",
+        },
+        {
+          label: tt(locale, "අද සැලසුම් කළ", "Scheduled today", "இன்று திட்டமிடப்பட்டவை"),
+          value: String(scheduledToday),
+          hint: tt(locale, "ක්ෂේත්‍ර වැඩ බර", "Field workload", "கள பணிச்சுமை"),
+          tone: "default",
+        },
+        {
+          label: tt(locale, "පවරා නැත", "Unassigned", "ஒதுக்கப்படவில்லை"),
+          value: String(unassigned),
+          hint: tt(locale, "වගකීමක් අවශ්‍යයි", "Needs ownership", "பொறுப்பு தேவை"),
+          tone: unassigned ? "danger" : "positive",
+        },
+        {
+          label: tt(locale, "සේවා කල් ඉකුත් ≤30ද", "Service due ≤30d", "சேவை காலக்கெடு ≤30நா"),
+          value: String(overdue + dueSoon),
+          hint: overdue
+            ? tt(locale, `කල් ඉකුත් ${overdue}`, `${overdue} overdue`, `${overdue} காலாவதி`)
+            : tt(locale, "රඳවා ගැනීමේ පයිප්ලයින්", "Retention pipeline", "தக்கவைப்பு பைப்லைன்"),
+          tone: overdue ? "danger" : dueSoon ? "warning" : "positive",
+        },
       ],
       actions,
       primaryHref: "/jobs",
-      primaryLabel: "Open Jobs",
+      primaryLabel: tt(locale, "රැකියා විවෘත කරන්න", "Open Jobs", "பணிகளைத் திற"),
     };
   }
 
@@ -511,28 +574,120 @@ function buildSectorModel(
     const aged60 = forSale.filter((v) => now.getTime() - new Date(v.dateAdded).getTime() >= 60 * 86_400_000);
     const aged90 = forSale.filter((v) => now.getTime() - new Date(v.dateAdded).getTime() >= 90 * 86_400_000);
     const actions: Action[] = [];
-    if (aged90.length > 0) actions.push({ key: "aged-90", title: `${aged90.length} vehicle${aged90.length === 1 ? "" : "s"} listed 90+ days`, detail: "Review merchandising, condition, pricing strategy and follow-up before stock becomes stale.", href: "/vehicles", tone: "danger" });
-    else if (aged60.length > 0) actions.push({ key: "aged-60", title: `${aged60.length} vehicle${aged60.length === 1 ? "" : "s"} listed 60+ days`, detail: "Aging inventory needs active follow-up before carrying time grows further.", href: "/vehicles", tone: "warning" });
+    if (aged90.length > 0) {
+      actions.push({
+        key: "aged-90",
+        title: tt(
+          locale,
+          `වාහන ${aged90.length}ක් දින 90+ ලැයිස්තුගත වී ඇත`,
+          `${aged90.length} vehicle${aged90.length === 1 ? "" : "s"} listed 90+ days`,
+          `${aged90.length} வாகனங்கள் 90+ நாட்களாக பட்டியலிடப்பட்டுள்ளன`,
+        ),
+        detail: tt(
+          locale,
+          "තොගය පැරණි වීමට පෙර අලෙවිකරණය, තත්ත්වය, මිල උපායමාර්ගය සහ පසු විපරම සමාලෝචනය කරන්න.",
+          "Review merchandising, condition, pricing strategy and follow-up before stock becomes stale.",
+          "இருப்பு பழையதாகும் முன் விற்பனை உத்தி, நிலை, விலை உத்தி மற்றும் பின்தொடர்தலை மதிப்பாய்வு செய்யவும்.",
+        ),
+        href: "/vehicles",
+        tone: "danger",
+      });
+    } else if (aged60.length > 0) {
+      actions.push({
+        key: "aged-60",
+        title: tt(
+          locale,
+          `වාහන ${aged60.length}ක් දින 60+ ලැයිස්තුගත වී ඇත`,
+          `${aged60.length} vehicle${aged60.length === 1 ? "" : "s"} listed 60+ days`,
+          `${aged60.length} வாகனங்கள் 60+ நாட்களாக பட்டியலிடப்பட்டுள்ளன`,
+        ),
+        detail: tt(
+          locale,
+          "රැගෙන යාමේ කාලය තවදුරටත් වැඩි වීමට පෙර වයස්ගත තොගයට ක්‍රියාකාරී පසු විපරමක් අවශ්‍යයි.",
+          "Aging inventory needs active follow-up before carrying time grows further.",
+          "வைத்திருக்கும் காலம் மேலும் அதிகரிக்கும் முன் வயதான இருப்புக்கு தீவிர பின்தொடர்தல் தேவை.",
+        ),
+        href: "/vehicles",
+        tone: "warning",
+      });
+    }
     return {
-      eyebrow: "Vehicle retail intelligence",
-      title: "Stock age & reconditioning",
-      description: "Operational vehicle aging without exposing purchase cost, minimum price or internal margin to non-owner roles.",
+      eyebrow: tt(locale, "වාහන සිල්ලර බුද්ධි දත්ත", "Vehicle retail intelligence", "வாகன சில்லறை நுண்ணறிவு"),
+      title: tt(locale, "තොග වයස සහ ප්‍රතිසංස්කරණය", "Stock age & reconditioning", "இருப்பு வயது & மறுசீரமைப்பு"),
+      description: tt(
+        locale,
+        "හිමිකරු නොවන භූමිකාවලට මිලදී ගැනීමේ පිරිවැය, අවම මිල හෝ අභ්‍යන්තර ලාභය නොහෙළිදරව් කරමින් මෙහෙයුම් වාහන වයස්ගත වීම.",
+        "Operational vehicle aging without exposing purchase cost, minimum price or internal margin to non-owner roles.",
+        "உரிமையாளர் அல்லாத பாத்திரங்களுக்கு கொள்முதல் விலை, குறைந்தபட்ச விலை அல்லது உள் லாபத்தை வெளிப்படுத்தாமல் செயல்பாட்டு வாகன வயதாதல்.",
+      ),
       metrics: canSeeFinancials
         ? [
-            { label: "For sale", value: String(forSale.length), hint: `${incoming.length} incoming · ${reconditioning.length} preparing`, tone: "default" },
-            { label: "Capital tied up", value: formatLkr(capitalTiedUp), hint: "Unsold purchase + preparation", tone: "default" },
-            { label: "Preparation cost", value: formatLkr(preparationCost), hint: "Unsold vehicles", tone: preparationCost ? "warning" : "positive" },
-            { label: "Margin this month", value: formatLkr(realizedMargin), hint: `${soldThisMonth.length} vehicle${soldThisMonth.length === 1 ? "" : "s"} sold`, tone: realizedMargin > 0 ? "positive" : realizedMargin < 0 ? "danger" : "default" },
+            {
+              label: tt(locale, "විකිණීමට", "For sale", "விற்பனைக்கு"),
+              value: String(forSale.length),
+              hint: tt(
+                locale,
+                `පැමිණෙන ${incoming.length} · සකසමින් ${reconditioning.length}`,
+                `${incoming.length} incoming · ${reconditioning.length} preparing`,
+                `${incoming.length} வரவு · ${reconditioning.length} தயாராகிறது`,
+              ),
+              tone: "default",
+            },
+            {
+              label: tt(locale, "බැඳුනු ප්‍රාග්ධනය", "Capital tied up", "கட்டப்பட்ட மூலதனம்"),
+              value: formatLkr(capitalTiedUp),
+              hint: tt(locale, "විකුණා නැති මිලදී ගැනීම + සකස් කිරීම", "Unsold purchase + preparation", "விற்காத கொள்முதல் + தயாரிப்பு"),
+              tone: "default",
+            },
+            {
+              label: tt(locale, "සකස් කිරීමේ පිරිවැය", "Preparation cost", "தயாரிப்பு செலவு"),
+              value: formatLkr(preparationCost),
+              hint: tt(locale, "විකුණා නැති වාහන", "Unsold vehicles", "விற்காத வாகனங்கள்"),
+              tone: preparationCost ? "warning" : "positive",
+            },
+            {
+              label: tt(locale, "මෙම මාසයේ ලාභය", "Margin this month", "இந்த மாத லாபம்"),
+              value: formatLkr(realizedMargin),
+              hint: tt(
+                locale,
+                `වාහන ${soldThisMonth.length}ක් විකුණන ලදී`,
+                `${soldThisMonth.length} vehicle${soldThisMonth.length === 1 ? "" : "s"} sold`,
+                `${soldThisMonth.length} வாகனங்கள் விற்கப்பட்டன`,
+              ),
+              tone: realizedMargin > 0 ? "positive" : realizedMargin < 0 ? "danger" : "default",
+            },
           ]
         : [
-            { label: "For sale", value: String(forSale.length), hint: "Current vehicle stock", tone: "default" },
-            { label: "Incoming", value: String(incoming.length), hint: "Expected stock", tone: incoming.length ? "default" : "positive" },
-            { label: "Reconditioning", value: String(reconditioning.length), hint: "Not ready for sale", tone: reconditioning.length ? "warning" : "positive" },
-            { label: "Aged 60+d", value: String(aged60.length), hint: aged90.length ? `${aged90.length} at 90+ days` : "Listing age", tone: aged90.length ? "danger" : aged60.length ? "warning" : "positive" },
+            {
+              label: tt(locale, "විකිණීමට", "For sale", "விற்பனைக்கு"),
+              value: String(forSale.length),
+              hint: tt(locale, "වත්මන් වාහන තොගය", "Current vehicle stock", "தற்போதைய வாகன இருப்பு"),
+              tone: "default",
+            },
+            {
+              label: tt(locale, "පැමිණෙන", "Incoming", "வரவு"),
+              value: String(incoming.length),
+              hint: tt(locale, "අපේක්ෂිත තොගය", "Expected stock", "எதிர்பார்க்கப்படும் இருப்பு"),
+              tone: incoming.length ? "default" : "positive",
+            },
+            {
+              label: tt(locale, "ප්‍රතිසංස්කරණය", "Reconditioning", "மறுசீரமைப்பு"),
+              value: String(reconditioning.length),
+              hint: tt(locale, "විකිණීමට සූදානම් නැත", "Not ready for sale", "விற்பனைக்குத் தயாரில்லை"),
+              tone: reconditioning.length ? "warning" : "positive",
+            },
+            {
+              label: tt(locale, "දින 60+ පැරණි", "Aged 60+d", "60+நா பழையது"),
+              value: String(aged60.length),
+              hint: aged90.length
+                ? tt(locale, `දින 90+ හි ${aged90.length}`, `${aged90.length} at 90+ days`, `${aged90.length} 90+நாட்களில்`)
+                : tt(locale, "ලැයිස්තුගත වයස", "Listing age", "பட்டியல் வயது"),
+              tone: aged90.length ? "danger" : aged60.length ? "warning" : "positive",
+            },
           ],
       actions,
       primaryHref: "/vehicles",
-      primaryLabel: "Vehicle Stock",
+      primaryLabel: tt(locale, "වාහන තොගය", "Vehicle Stock", "வாகன இருப்பு"),
     };
   }
 
