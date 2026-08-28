@@ -7,7 +7,6 @@ import {
   composeFromContext,
   defaultTemplateForContext,
   dispatchMessage,
-  formatSlPhoneDisplay,
   isValidSlMobile,
   loadNotificationSettings,
   appendNotificationLog,
@@ -89,6 +88,15 @@ export function MessageComposer({
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  // Reported live: this dialog only ever displayed the phone it was
+  // handed -- no way to add or fix one when it was missing/invalid, on
+  // any sector (pharmacy Sales quote, HVAC Jobs, Textile, Vehicle...),
+  // short of closing the composer and hunting for a phone field
+  // elsewhere on the page (one doesn't always exist for every caller).
+  // Editable here, for this send only -- it does not write back to the
+  // underlying customer/job record, the same scope the pharmacy
+  // walk-in-phone field already established for the Sales page.
+  const [editablePhone, setEditablePhone] = useState(phone ?? "");
 
   const templates = templatesForContext(context.type);
   const smsApiConfigured = useSmsApiConfigured();
@@ -123,6 +131,7 @@ export function MessageComposer({
           : settings.defaultChannel,
     );
     setMessageLang(settings.preferredLanguage);
+    setEditablePhone(phone ?? "");
     setFeedback(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, contextId, defaultTemplate, settings.defaultChannel, settings.preferredLanguage, canApiSms, canApiWhatsApp, refreshOrg]);
@@ -142,7 +151,7 @@ export function MessageComposer({
     [body, messageLang],
   );
 
-  const phoneOk = isValidSlMobile(phone);
+  const phoneOk = isValidSlMobile(editablePhone);
 
   if (!open) return null;
 
@@ -151,7 +160,7 @@ export function MessageComposer({
     setSending(true);
     setFeedback(null);
 
-    const result = await dispatchMessage(channel, body, phone, {
+    const result = await dispatchMessage(channel, body, editablePhone, {
       templateId,
       contextType: context.type,
       contextId,
@@ -161,7 +170,7 @@ export function MessageComposer({
     appendNotificationLog({
       channel,
       templateId,
-      recipientPhone: phone ?? "",
+      recipientPhone: editablePhone,
       recipientName,
       messageBody: body,
       contextType: context.type,
@@ -199,14 +208,24 @@ export function MessageComposer({
                 {t("msg.compose_title")}
               </p>
               <h2 className="text-lg font-bold">{recipientName}</h2>
-              <p className="text-sm text-teal-50">
-                {formatSlPhoneDisplay(phone)}
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  value={editablePhone}
+                  onChange={(e) => setEditablePhone(e.target.value)}
+                  placeholder={messageLang === "si" ? "දුරකථන අංකය" : "07XXXXXXXX"}
+                  aria-label={t("msg.phone_invalid")}
+                  className={`w-40 rounded-lg border px-2 py-1 text-sm font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-white/70 ${
+                    phoneOk ? "border-white/40 bg-white" : "border-amber-300 bg-amber-50"
+                  }`}
+                />
                 {!phoneOk && (
-                  <span className="ml-2 rounded bg-amber-400/30 px-1.5 py-0.5 text-xs text-amber-100">
+                  <span className="rounded bg-amber-400/30 px-1.5 py-0.5 text-xs text-amber-100">
                     {t("msg.phone_invalid")}
                   </span>
                 )}
-              </p>
+              </div>
             </div>
             <button
               type="button"
