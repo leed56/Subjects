@@ -409,6 +409,16 @@ const ACTION_MENU_WIDTH = 192; // px, matches the menu's w-48
  * button's own getBoundingClientRect() -- it now floats above every
  * ancestor's overflow/clipping and stacking context entirely, the same
  * pattern any table-safe popover needs.
+ *
+ * That first pass still shipped this menu at z-50, which is exactly the
+ * bug again one layer up: ActionMenu is also opened *from inside* the
+ * Job Detail Drawer (Drawer/Dialog render at z-[80], overlay.tsx), so the
+ * portal painted the dropdown correctly but stacked underneath the
+ * drawer's own panel -- same symptom the reporter saw ("nothing appears")
+ * for a different reason. z-[110] clears every overlay in the app today
+ * (Drawer/Dialog 80, sync-conflict 70, MessageComposer/mobile nav 60,
+ * global-search/toast 100), so this menu now always wins regardless of
+ * what it was opened from.
  */
 export function ActionMenu({ items, label = "Actions" }: { items: ActionMenuItem[]; label?: string }) {
   const [open, setOpen] = useState(false);
@@ -474,7 +484,7 @@ export function ActionMenu({ items, label = "Actions" }: { items: ActionMenuItem
               ref={menuRef}
               role="menu"
               style={{ top: coords.top, left: coords.left, width: ACTION_MENU_WIDTH }}
-              className="fixed z-50 overflow-hidden rounded-xl border border-slate-200 bg-white py-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.14)]"
+              className="fixed z-[110] overflow-hidden rounded-xl border border-slate-200 bg-white py-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.14)]"
             >
               {items.map((item) => (
                 <button
