@@ -105,7 +105,16 @@ export function AtomicRetailSalesPageV2() {
   const whatsappApiConfigured = useWhatsAppApiConfigured();
   const canApiWhatsApp = whatsappApiConfigured === true && can("bulk_messaging") && sectorAllowsApiWhatsApp(org.sector);
   const [sendingQuoteApi, setSendingQuoteApi] = useState(false);
-  const [quoteApiFeedback, setQuoteApiFeedback] = useState<string | null>(null);
+  // Reported: a failed send (e.g. a rejected/invalid provider API key)
+  // rendered as raw unstyled text -- "invalid API key" straight from
+  // WasenderAPI's own response, no icon/border/action, reading like a
+  // debug string that leaked into production. The button above only
+  // ever shows once canApiWhatsApp is already true (config+plan+sector
+  // all pre-checked client-side), so any error that reaches this state
+  // is realistically always a provider/config-level failure, not a
+  // validation one -- worth a real actionable warning box every time,
+  // not just a generic error string.
+  const [quoteApiFeedback, setQuoteApiFeedback] = useState<{ ok: boolean; message: string } | null>(null);
 
   const [cart, setCart] = useState<Record<string, number>>({});
   const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
@@ -239,7 +248,10 @@ export function AtomicRetailSalesPageV2() {
       recipientName: buyerName || undefined,
     });
     setSendingQuoteApi(false);
-    setQuoteApiFeedback(result.ok ? t("msg.api_sent_ok") : (result.error ?? t("msg.sent_fail")));
+    setQuoteApiFeedback({
+      ok: result.ok,
+      message: result.ok ? t("msg.api_sent_ok") : (result.error ?? t("msg.sent_fail")),
+    });
   };
 
   const inStock = data.products.filter((product) => product.active && product.stockQty > 0);
@@ -963,7 +975,19 @@ export function AtomicRetailSalesPageV2() {
                         )}
                       </div>
                       {quoteApiFeedback && (
-                        <p className="text-center text-xs font-semibold text-slate-500">{quoteApiFeedback}</p>
+                        quoteApiFeedback.ok ? (
+                          <p className="text-center text-xs font-semibold text-emerald-700">{quoteApiFeedback.message}</p>
+                        ) : (
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">
+                            <p className="font-semibold">{quoteApiFeedback.message}</p>
+                            <Link
+                              href="/settings/notifications"
+                              className="mt-1 inline-block font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-900"
+                            >
+                              {t("msg.configure_whatsapp_link")}
+                            </Link>
+                          </div>
+                        )
                       )}
                     </div>
                   )}
