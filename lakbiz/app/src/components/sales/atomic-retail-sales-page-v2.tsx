@@ -23,6 +23,9 @@ import { customerPrimaryLabel } from "@/lib/contact-type";
 import { effectiveUnitPrice } from "@/lib/company-pricing";
 import { formatLkr } from "@/lib/format";
 import { buildQuoteTextFromLines, whatsappShareUrl } from "@/lib/invoice";
+import { sendApiWhatsApp } from "@/lib/messaging";
+import { useWhatsAppApiConfigured } from "@/lib/messaging/use-sms-api-configured";
+import { isValidSlMobile } from "@/lib/messaging/phone";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { buildSaleInventoryAllocationLine } from "@/lib/inventory-sale-allocation";
@@ -84,12 +87,22 @@ function boolField(value: unknown): boolean {
 export function AtomicRetailSalesPageV2() {
   const { data, ready } = useAppStore();
   const { t, locale } = useLocale();
-  const { org, canSeeFinancials } = useSubscription();
+  const { org, canSeeFinancials, can } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
   const si = locale === "si";
   const fastRetail = FAST_RETAIL_SECTORS.has(org.sector);
   const advancedRetail = ADVANCED_RETAIL_SECTORS.has(org.sector);
   const conditionRelevant = !fastRetail;
+
+  // The quote share button here was a plain wa.me deep link only — always
+  // opens WhatsApp with the text pre-filled, but never actually sends.
+  // canApiWhatsApp mirrors message-composer.tsx's exact gate (pharmacy
+  // pilot + same bulk_messaging plan check) so this button only offers
+  // real API sending where it's actually wired up server-side.
+  const whatsappApiConfigured = useWhatsAppApiConfigured();
+  const canApiWhatsApp = whatsappApiConfigured === true && can("bulk_messaging") && org.sector === "pharmacy";
+  const [sendingQuoteApi, setSendingQuoteApi] = useState(false);
+  const [quoteApiFeedback, setQuoteApiFeedback] = useState<string | null>(null);
 
   const [cart, setCart] = useState<Record<string, number>>({});
   const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
@@ -203,6 +216,21 @@ export function AtomicRetailSalesPageV2() {
     { customerName: buyerName || undefined, discount: discountClamped, t },
   );
   const quoteWaUrl = whatsappShareUrl(quoteText, selectedCustomer?.phone);
+
+  const handleSendQuoteApi = async () => {
+    if (sendingQuoteApi || !isValidSlMobile(selectedCustomer?.phone)) return;
+    setSendingQuoteApi(true);
+    setQuoteApiFeedback(null);
+    const result = await sendApiWhatsApp({
+      phone: selectedCustomer!.phone!,
+      message: quoteText,
+      templateId: "sales_quote",
+      contextType: "custom",
+      recipientName: buyerName || undefined,
+    });
+    setSendingQuoteApi(false);
+    setQuoteApiFeedback(result.ok ? t("msg.api_sent_ok") : (result.error ?? t("msg.sent_fail")));
+  };
 
   const inStock = data.products.filter((product) => product.active && product.stockQty > 0);
   const query = search.trim().toLowerCase();
@@ -879,14 +907,38 @@ export function AtomicRetailSalesPageV2() {
                   )}
 
                   {lines.length > 0 && (
-                    <a
-                      href={quoteWaUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex min-h-11 w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
-                    >
-                      {t("bills.quote_whatsapp")}
-                    </a>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <a
+                          href={quoteWaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+                        >
+                          {t("bills.quote_whatsapp")}
+                        </a>
+                        {/* Was always just this one deep link — opens
+                            WhatsApp with the quote pre-filled, but someone
+                            still has to press Send by hand. When the real
+                            WhatsApp API is available for this org, offer an
+                            actual auto-send too instead of only the manual
+                            open-and-send flow. */}
+                        {canApiWhatsApp && (
+                          <button
+                            type="button"
+                            disabled={sendingQuoteApi || !isValidSlMobile(selectedCustomer?.phone)}
+                            title={!isValidSlMobile(selectedCustomer?.phone) ? t("msg.phone_invalid") : undefined}
+                            onClick={() => void handleSendQuoteApi()}
+                            className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg border border-teal-300 bg-teal-50 px-4 text-sm font-bold text-teal-800 hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            🚀 {sendingQuoteApi ? t("msg.sending") : t("msg.send_api_whatsapp")}
+                          </button>
+                        )}
+                      </div>
+                      {quoteApiFeedback && (
+                        <p className="text-center text-xs font-semibold text-slate-500">{quoteApiFeedback}</p>
+                      )}
+                    </div>
                   )}
 
                   <button
