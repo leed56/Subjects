@@ -96,6 +96,21 @@ export function MessageComposer({
   const whatsappApiConfigured = useWhatsAppApiConfigured();
   const whatsappApiEnabled = whatsappApiConfigured === true;
 
+  // Reported live: picking a different template card (e.g. "Job
+  // completed") while the composer was open kept snapping back to
+  // whatever defaultTemplate opened it with. Root cause: `context` is a
+  // fresh object literal built by every caller on every one of *their*
+  // renders (e.g. job-invoice-view.tsx's `context={{ type: "ac_job", job,
+  // business, items }}`) -- a new reference regardless of whether the
+  // job/sale/customer it describes actually changed. This effect had
+  // `context` in its dependency array, so any unrelated re-render of the
+  // page this composer lives on (which happens on every state update
+  // anywhere upstream, template selection included once it round-trips
+  // through React) re-ran it and reset templateId back to defaultTemplate
+  // -- overwriting the user's own pick before they could even send it.
+  // `contextId` is the actual identity signal here: a plain string prop
+  // that only changes when this composer is really being pointed at a
+  // different record, unlike `context` itself.
   useEffect(() => {
     if (!open) return;
     void refreshOrg();
@@ -109,12 +124,18 @@ export function MessageComposer({
     );
     setMessageLang(settings.preferredLanguage);
     setFeedback(null);
-  }, [open, defaultTemplate, context, settings.defaultChannel, settings.preferredLanguage, canApiSms, canApiWhatsApp, refreshOrg]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, contextId, defaultTemplate, settings.defaultChannel, settings.preferredLanguage, canApiSms, canApiWhatsApp, refreshOrg]);
 
+  // Same unstable-`context`-reference issue as the effect above, and
+  // arguably worse here: without this, a manually edited message body
+  // could get silently overwritten back to the template text by an
+  // unrelated re-render, not just a template switch getting reverted.
   useEffect(() => {
     if (!open) return;
     setBody(composeFromContext(context, templateId, messageLang));
-  }, [open, context, templateId, messageLang]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, contextId, templateId, messageLang]);
 
   const segment = useMemo(
     () => smsSegmentInfo(body, messageLang),
