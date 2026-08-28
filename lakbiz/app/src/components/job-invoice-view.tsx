@@ -50,6 +50,15 @@ export function JobInvoiceView({ job, business, customerAddress, showActions = t
         // own, and left the deep-link one permanently stuck manual since
         // it could never reach the API path at all. Message now covers
         // both -- see message-composer.tsx's channel picker.
+        //
+        // Reported live right after that change: clicking Message from
+        // this exact screen defaulted to the "Job completed" status
+        // template, not the invoice -- there was no template that sent
+        // the actual bill at all. defaultTemplate is now "job_invoice"
+        // (composeFromContext swaps in the real itemized text, same
+        // pattern as sale/bill_receipt), and `items` is passed through so
+        // it itemizes correctly for jobs with priced parts instead of
+        // always falling back to the flat quotedAmount.
         <div className="no-print mb-6 flex flex-wrap gap-3">
           <button
             onClick={() => window.print()}
@@ -60,8 +69,8 @@ export function JobInvoiceView({ job, business, customerAddress, showActions = t
           <MessageSendButton
             phone={job.phone}
             recipientName={job.customerName}
-            context={{ type: "ac_job", job, business }}
-            defaultTemplate="job_completed"
+            context={{ type: "ac_job", job, business, items }}
+            defaultTemplate="job_invoice"
             contextId={job.id}
             variant="compact"
           />

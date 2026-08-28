@@ -1,6 +1,7 @@
 import { formatLkr } from "@/lib/format";
 import { buildInvoiceText, buildQuoteText } from "@/lib/invoice";
 import { formatPaymentLabel } from "@/lib/invoice";
+import { buildJobInvoiceText } from "@/lib/job-invoice";
 import type { Locale } from "@/lib/i18n/translations";
 import { defaultTemplateForJob } from "./templates";
 import { getTemplate } from "./templates";
@@ -103,6 +104,15 @@ export function composeFromContext(
 
   if (context.type === "sale" && templateId === "sales_quote") {
     return buildQuoteText(context.sale, context.business);
+  }
+
+  // Reported live: opening "Message" from the Job invoice screen only ever
+  // offered generic job-status templates ("Job completed" etc.) -- none of
+  // which contain the actual bill (itemized lines, VAT, total, balance).
+  // Same fix as sale/bill_receipt above: swap in the real invoice text
+  // instead of a token-filled status line.
+  if (context.type === "ac_job" && templateId === "job_invoice") {
+    return buildJobInvoiceText(context.job, context.business, locale, undefined, context.items);
   }
 
   return composeMessage(templateId, locale, vars);
