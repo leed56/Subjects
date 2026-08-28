@@ -9,6 +9,11 @@ import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { LK_BANKS } from "@/lib/banks";
 import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { buildQuoteTextFromLines, whatsappShareUrl } from "@/lib/invoice";
+import { sendApiWhatsApp } from "@/lib/messaging";
+import { isValidSlMobile } from "@/lib/messaging/phone";
+import { useWhatsAppApiConfigured } from "@/lib/messaging/use-sms-api-configured";
+import { sectorAllowsApiWhatsApp } from "@/lib/messaging/wasender-sectors";
 import { buildCheckoutTenders, type CheckoutTenderKind } from "@/lib/retail-tender-checkout";
 import { validateSaleTenders } from "@/lib/sale-tender";
 import { saveAppData } from "@/lib/store/storage";
@@ -115,7 +120,7 @@ const TAMIL_TENDER_ERRORS: Record<string, string> = {
 };
 
 export function TextileSalesPage() {
-  const { locale } = useLocale();
+  const { t, locale } = useLocale();
   const copy = TEXTILE_POS_COPY[locale];
   const tenderLabel = (kind: string) => ({ cash: copy.cash, card: copy.card, bank_transfer: copy.bankTransfer, cheque: copy.cheque, credit: copy.credit }[kind] ?? kind);
   const tenderError = (error: string) =>
@@ -124,8 +129,18 @@ export function TextileSalesPage() {
   const saleModeLabel = (mode: string) => ({ retail_cut: copy.retailCut, wholesale_cut: copy.wholesaleCut, full_roll: copy.fullRollMode }[mode] ?? mode.replaceAll("_", " "));
   const unitLabel = (unit: "metre" | "yard") => unit === "metre" ? copy.metre : copy.yard;
   const { data, ready } = useAppStore();
-  const { org } = useSubscription();
+  const { org, can } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
+  // Reported: no way at all to send a walk-in customer's quote (or the
+  // finished sale) over WhatsApp from this screen -- not even a wa.me
+  // deep link, unlike pharmacy's Sales page. Same pattern established
+  // there: a phone typed in here is used only for this send, never
+  // persisted onto the Sale record (walk-ins have no customer account to
+  // attach it to either way).
+  const whatsappApiConfigured = useWhatsAppApiConfigured();
+  const canApiWhatsApp = whatsappApiConfigured === true && can("bulk_messaging") && sectorAllowsApiWhatsApp(org.sector);
+  const [sendingQuoteApi, setSendingQuoteApi] = useState(false);
+  const [quoteApiFeedback, setQuoteApiFeedback] = useState<{ ok: boolean; message: string } | null>(null);
   const [rolls, setRolls] = useState<TextileRollRecord[]>([]);
   const [reservations, setReservations] = useState<TextileReservation[]>([]);
   const [loadingRolls, setLoadingRolls] = useState(true);
@@ -133,6 +148,7 @@ export function TextileSalesPage() {
   const [saving, setSaving] = useState(false);
   const [customerId, setCustomerId] = useState("");
   const [walkInName, setWalkInName] = useState("");
+  const [walkInPhone, setWalkInPhone] = useState("");
   const [channel, setChannel] = useState<TextileSaleChannel>("retail");
   const [productId, setProductId] = useState("");
   const [rollId, setRollId] = useState("");
@@ -260,6 +276,40 @@ export function TextileSalesPage() {
 
   if (!ready || !data || loadingRolls) return <AppShell><ProMain><ProLoadingState label={copy.loading} /></ProMain></AppShell>;
 
+  const selectedCustomer = customerId ? data.customers.find((c) => c.id === customerId) : undefined;
+  const buyerName = selectedCustomer?.name ?? walkInName.trim();
+  // Same recipient resolution as pharmacy's Sales page: a saved
+  // customer's phone if one is picked, otherwise whatever was typed into
+  // the walk-in phone field above -- most Textile counter sales are
+  // walk-ins with no account, so this is the only number either the
+  // deep link or the API send will ever have.
+  const recipientPhone = selectedCustomer?.phone ?? (walkInPhone.trim() || undefined);
+  const quoteText = buildQuoteTextFromLines(
+    cart.map((line) => ({ productName: line.productName, qty: line.quantity, unitPrice: line.unitPrice })),
+    total,
+    data.business,
+    { customerName: buyerName || undefined, discount: discountValue, t },
+  );
+  const quoteWaUrl = whatsappShareUrl(quoteText, recipientPhone);
+
+  const handleSendQuoteApi = async () => {
+    if (sendingQuoteApi || !isValidSlMobile(recipientPhone)) return;
+    setSendingQuoteApi(true);
+    setQuoteApiFeedback(null);
+    const result = await sendApiWhatsApp({
+      phone: recipientPhone!,
+      message: quoteText,
+      templateId: "sales_quote",
+      contextType: "custom",
+      recipientName: buyerName || undefined,
+    });
+    setSendingQuoteApi(false);
+    setQuoteApiFeedback({
+      ok: result.ok,
+      message: result.ok ? t("msg.api_sent_ok") : (result.error ?? t("msg.sent_fail")),
+    });
+  };
+
   const chequeUsed = payment === "cheque" || (split && secondaryPayment === "cheque");
   return <AppShell><ProMain>
     <ProPageHeader eyebrow={copy.eyebrow} title={copy.title} description={copy.description} actions={<><ProBadge tone="emerald">{copy.atomic}</ProBadge><ProButton href="/stock/rolls" variant="secondary">{copy.rolls}</ProButton></>} />
@@ -294,6 +344,15 @@ export function TextileSalesPage() {
             {selectedRoll && <div className="md:col-span-2 rounded-xl border border-teal-100 bg-teal-50/70 px-4 py-3 text-sm text-teal-950"><span className="font-semibold">{copy.rolls} {selectedRoll.rollNo}</span> · {available.toFixed(3)} {selectedRoll.lengthUnit} {copy.available}{selectedRoll.dyeLot ? ` · ${copy.dye} ${selectedRoll.dyeLot}` : ""}{selectedRoll.shade ? ` · ${copy.shade} ${selectedRoll.shade}` : ""}{selectedRoll.rackLocation ? ` · ${selectedRoll.rackLocation}` : ""}</div>}
             <label className={field}>{copy.customer}<select className={input} value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">{copy.walkInCustomer}</option>{data.customers.map((c) => <option key={c.id} value={c.id}>{c.name}{c.contactType === "company" ? ` · ${copy.company}` : ""}</option>)}</select></label>
             {!customerId && <label className={field}>{copy.walkInName}<input className={input} value={walkInName} onChange={(e) => setWalkInName(e.target.value)} /></label>}
+            {!customerId && (
+              <label className={field}>
+                {t("sales.walkin_phone")}
+                <input type="tel" inputMode="tel" placeholder="07X XXX XXXX" className={input} value={walkInPhone} onChange={(e) => setWalkInPhone(e.target.value)} />
+                {walkInPhone.trim() !== "" && !isValidSlMobile(walkInPhone) && (
+                  <span className="mt-1 block text-xs font-semibold text-amber-600">{t("msg.phone_invalid")}</span>
+                )}
+              </label>
+            )}
             <label className={field}>{fullRoll ? copy.fullQty : copy.measuredQty}<input disabled={fullRoll} type="number" min="0.001" max={available || undefined} step="0.001" className={input} value={fullRoll ? available.toFixed(3) : quantity} onChange={(e) => setQuantity(e.target.value)} /></label>
             {canOverride && <label className={field}>{copy.managerPrice}<input type="number" min="0" step="0.01" className={input} value={manualPrice} onChange={(e) => setManualPrice(e.target.value)} placeholder={priceResolution ? String(priceResolution.price) : ""} /></label>}
             <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-semibold text-slate-500">{copy.appliedPrice}</p><p className="mt-1 text-xl font-bold text-slate-950">{formatLkr(priceResolution?.price ?? 0)}</p><p className="text-xs text-teal-700">{priceSourceLabel(priceResolution?.source)}</p></div>
@@ -313,6 +372,43 @@ export function TextileSalesPage() {
           {split && <><label className={field}>{copy.secondPayment}<select className={input} value={secondaryPayment} onChange={(e) => setSecondaryPayment(e.target.value as CheckoutTenderKind)}>{["cash","card","bank_transfer","cheque","credit"].map((p) => <option key={p} value={p}>{tenderLabel(p)}</option>)}</select></label><label className={field}>{copy.secondAmount}<input type="number" min="0.01" max={total} step="0.01" className={input} value={secondaryAmount} onChange={(e) => setSecondaryAmount(e.target.value)} /></label></>}
           {chequeUsed && <div className="space-y-3 rounded-xl bg-slate-50 p-4"><label className={field}>{copy.chequeNo}<input className={input} value={chequeNo} onChange={(e) => setChequeNo(e.target.value)} /></label><label className={field}>{copy.bank}<select className={input} value={chequeBank} onChange={(e) => setChequeBank(e.target.value)}>{LK_BANKS.map((bank) => <option key={bank}>{bank}</option>)}</select></label><label className={field}>{copy.chequeDate}<input type="date" className={input} value={chequeDate} onChange={(e) => setChequeDate(e.target.value)} /></label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={postDated} onChange={(e) => setPostDated(e.target.checked)} /> {copy.postDated}</label></div>}
           <div className="rounded-2xl bg-slate-950 p-5 text-white"><p className="text-xs uppercase tracking-wider text-slate-400">{copy.amountDue}</p><p className="mt-1 text-3xl font-bold">{formatLkr(total)}</p></div>
+          {cart.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <a
+                  href={quoteWaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+                >
+                  {t("bills.quote_whatsapp")}
+                </a>
+                {canApiWhatsApp && (
+                  <button
+                    type="button"
+                    disabled={sendingQuoteApi || !isValidSlMobile(recipientPhone)}
+                    title={!isValidSlMobile(recipientPhone) ? t("msg.phone_invalid") : undefined}
+                    onClick={() => void handleSendQuoteApi()}
+                    className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg border border-teal-300 bg-teal-50 px-4 text-sm font-bold text-teal-800 hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    🚀 {sendingQuoteApi ? t("msg.sending") : t("msg.send_api_whatsapp")}
+                  </button>
+                )}
+              </div>
+              {quoteApiFeedback && (
+                quoteApiFeedback.ok ? (
+                  <p className="text-center text-xs font-semibold text-emerald-700">{quoteApiFeedback.message}</p>
+                ) : (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">
+                    <p className="font-semibold">{quoteApiFeedback.message}</p>
+                    <Link href="/settings/notifications" className="mt-1 inline-block font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-900">
+                      {t("msg.configure_whatsapp_link")}
+                    </Link>
+                  </div>
+                )
+              )}
+            </div>
+          )}
           <button type="button" title={!canWrite ? disabledHint ?? undefined : undefined} disabled={!canWrite || saving || cart.length === 0 || total <= 0} className={`${primary} w-full`} onClick={() => void checkout()}>{saving ? copy.finalizing : copy.finalize}</button>
           <p className="text-xs leading-5 text-slate-500">{copy.atomicHint}</p>
         </div>
