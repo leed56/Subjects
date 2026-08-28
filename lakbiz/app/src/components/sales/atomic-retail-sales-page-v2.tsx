@@ -119,6 +119,7 @@ export function AtomicRetailSalesPageV2() {
   const [secondaryAmount, setSecondaryAmount] = useState<number | "">("");
   const [customerId, setCustomerId] = useState("");
   const [walkInName, setWalkInName] = useState("");
+  const [walkInPhone, setWalkInPhone] = useState("");
   const [chequeNo, setChequeNo] = useState("");
   const [chequeBank, setChequeBank] = useState(LK_BANKS[0]);
   const [chequeDate, setChequeDate] = useState(new Date().toISOString().slice(0, 10));
@@ -205,6 +206,12 @@ export function AtomicRetailSalesPageV2() {
     ? data.customers.find((customer) => customer.id === customerId)
     : undefined;
   const buyerName = selectedCustomer?.name ?? walkInName.trim();
+  // WhatsApp recipient for the quote: a saved customer's phone, or (since
+  // most sales here are walk-ins with no account) whatever the cashier
+  // typed into the walk-in phone field below — same number either way,
+  // so the deep link and the API auto-send both target the actual buyer
+  // instead of only ever working when a saved customer is picked.
+  const recipientPhone = selectedCustomer?.phone ?? (walkInPhone.trim() || undefined);
   const quoteText = buildQuoteTextFromLines(
     lines.map((line) => ({
       productName: line.product.name,
@@ -215,14 +222,14 @@ export function AtomicRetailSalesPageV2() {
     data.business,
     { customerName: buyerName || undefined, discount: discountClamped, t },
   );
-  const quoteWaUrl = whatsappShareUrl(quoteText, selectedCustomer?.phone);
+  const quoteWaUrl = whatsappShareUrl(quoteText, recipientPhone);
 
   const handleSendQuoteApi = async () => {
-    if (sendingQuoteApi || !isValidSlMobile(selectedCustomer?.phone)) return;
+    if (sendingQuoteApi || !isValidSlMobile(recipientPhone)) return;
     setSendingQuoteApi(true);
     setQuoteApiFeedback(null);
     const result = await sendApiWhatsApp({
-      phone: selectedCustomer!.phone!,
+      phone: recipientPhone!,
       message: quoteText,
       templateId: "sales_quote",
       contextType: "custom",
@@ -293,6 +300,7 @@ export function AtomicRetailSalesPageV2() {
     setPendingSaleId(null);
     const customer = data.customers.find((row) => row.id === id);
     setWalkInName(customer?.name ?? "");
+    setWalkInPhone(customer?.phone ?? "");
   };
 
   const buildAtomicLines = (): AtomicSaleLine[] => lines.map((line, index) => {
@@ -751,14 +759,30 @@ export function AtomicRetailSalesPageV2() {
                   </label>
 
                   {!customerId && (
-                    <label className="block text-sm font-bold text-slate-700">
-                      {t("sales.walkin_name")}
-                      <input
-                        value={walkInName}
-                        onChange={(event) => { setWalkInName(event.target.value); setPendingSaleId(null); }}
-                        className="mt-1.5 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-teal-300"
-                      />
-                    </label>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <label className="block text-sm font-bold text-slate-700">
+                        {t("sales.walkin_name")}
+                        <input
+                          value={walkInName}
+                          onChange={(event) => { setWalkInName(event.target.value); setPendingSaleId(null); }}
+                          className="mt-1.5 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-teal-300"
+                        />
+                      </label>
+                      <label className="block text-sm font-bold text-slate-700">
+                        {t("sales.walkin_phone")}
+                        <input
+                          type="tel"
+                          inputMode="tel"
+                          placeholder="07X XXX XXXX"
+                          value={walkInPhone}
+                          onChange={(event) => { setWalkInPhone(event.target.value); setPendingSaleId(null); }}
+                          className="mt-1.5 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-teal-300"
+                        />
+                        {walkInPhone.trim() !== "" && !isValidSlMobile(walkInPhone) && (
+                          <span className="mt-1 block text-xs font-semibold text-amber-600">{t("msg.phone_invalid")}</span>
+                        )}
+                      </label>
+                    </div>
                   )}
 
                   <div>
@@ -926,8 +950,8 @@ export function AtomicRetailSalesPageV2() {
                         {canApiWhatsApp && (
                           <button
                             type="button"
-                            disabled={sendingQuoteApi || !isValidSlMobile(selectedCustomer?.phone)}
-                            title={!isValidSlMobile(selectedCustomer?.phone) ? t("msg.phone_invalid") : undefined}
+                            disabled={sendingQuoteApi || !isValidSlMobile(recipientPhone)}
+                            title={!isValidSlMobile(recipientPhone) ? t("msg.phone_invalid") : undefined}
                             onClick={() => void handleSendQuoteApi()}
                             className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg border border-teal-300 bg-teal-50 px-4 text-sm font-bold text-teal-800 hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-40"
                           >
