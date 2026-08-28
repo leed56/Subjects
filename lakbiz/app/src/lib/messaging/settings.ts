@@ -33,10 +33,15 @@ export function parseNotificationSettings(raw: unknown): NotificationSettings {
   const row = raw as Record<string, unknown>;
   return {
     ...defaults,
+    // "api_whatsapp" (Auto WhatsApp) was missing from this allowlist --
+    // never rejected outright, just silently dropped back to the
+    // "whatsapp" default on every cloud round trip, so it could never
+    // actually stick as anyone's chosen default channel.
     defaultChannel:
       row.defaultChannel === "sms" ||
       row.defaultChannel === "api_sms" ||
-      row.defaultChannel === "whatsapp"
+      row.defaultChannel === "whatsapp" ||
+      row.defaultChannel === "api_whatsapp"
         ? row.defaultChannel
         : defaults.defaultChannel,
     preferredLanguage:

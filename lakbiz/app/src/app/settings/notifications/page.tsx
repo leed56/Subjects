@@ -17,7 +17,8 @@ import {
 } from "@/lib/messaging";
 import { formatSlPhoneDisplay, isValidSlMobile } from "@/lib/messaging";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
-import { useSmsApiConfigured } from "@/lib/messaging/use-sms-api-configured";
+import { useSmsApiConfigured, useWhatsAppApiConfigured } from "@/lib/messaging/use-sms-api-configured";
+import { sectorAllowsApiWhatsApp } from "@/lib/messaging/wasender-sectors";
 import {
   fetchOrgNotificationSettings,
   saveOrgNotificationSettings,
@@ -50,6 +51,15 @@ export default function NotificationsSettingsPage() {
   const apiEnabled = smsApiConfigured === true;
   const canApiSms = can("bulk_messaging");
   const smsInputsDisabled = mounted && smsApiConfigured !== true;
+  // "Auto WhatsApp" (api_whatsapp) was added as a real channel everywhere
+  // else -- message-composer.tsx's CHANNELS list, dispatchMessage -- but
+  // this dropdown was never updated to offer it, so nobody could ever set
+  // it as their default: every composer kept opening on manual "WhatsApp"
+  // (a wa.me deep link) even for an org with the real API fully
+  // configured and enabled, forcing an extra manual tab-click every time.
+  const whatsappApiConfigured = useWhatsAppApiConfigured();
+  const whatsappApiEnabled = whatsappApiConfigured === true;
+  const canApiWhatsApp = can("bulk_messaging") && sectorAllowsApiWhatsApp(org.sector);
 
   useEffect(() => {
     setMounted(true);
@@ -203,6 +213,9 @@ export default function NotificationsSettingsPage() {
                 <option value="sms">{t("msg.sms")}</option>
                 {apiEnabled && canApiSms && (
                   <option value="api_sms">{t("msg.api_sms")}</option>
+                )}
+                {whatsappApiEnabled && canApiWhatsApp && (
+                  <option value="api_whatsapp">{t("msg.api_whatsapp")}</option>
                 )}
               </select>
             </label>

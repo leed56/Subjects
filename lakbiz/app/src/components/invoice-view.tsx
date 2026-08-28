@@ -2,7 +2,7 @@
 
 import type { Sale } from "@/lib/store/types";
 import type { BusinessInfo } from "@/lib/invoice";
-import { buildInvoiceText, buildQuoteText, taxInvoiceAmounts, whatsappShareUrl } from "@/lib/invoice";
+import { taxInvoiceAmounts } from "@/lib/invoice";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { amountInWordsLkr, formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -27,10 +27,6 @@ export function InvoiceView({
 }: InvoiceViewProps) {
   const { t } = useLocale();
   const billNo = sale.billNo ?? sale.id.slice(0, 8).toUpperCase();
-  const invoiceText = buildInvoiceText(sale, business, t);
-  const quoteText = buildQuoteText(sale, business, t);
-  const waUrl = whatsappShareUrl(invoiceText, customerPhone ?? business.phone);
-  const quoteWaUrl = whatsappShareUrl(quoteText, customerPhone ?? business.phone);
 
   const amounts = taxInvoiceAmounts(sale, business);
   const isTaxInvoice = amounts.isTaxInvoice;
@@ -42,6 +38,13 @@ export function InvoiceView({
   return (
     <div>
       {showActions && (
+        // Two intents (receipt, quote), one WhatsApp entry point each --
+        // not the four buttons this used to render. The two raw wa.me
+        // deep links here duplicated exactly what the two MessageSendButtons
+        // below already do on their own "WhatsApp" channel, minus the
+        // templates, language toggle, and (once WasenderAPI is enabled for
+        // this sector) the real Auto WhatsApp send that only the composer
+        // can reach. See message-composer.tsx's channel picker.
         <div className="no-print mb-6 flex flex-wrap gap-3">
           <button
             onClick={() => window.print()}
@@ -49,22 +52,6 @@ export function InvoiceView({
           >
             {t("bills.print")}
           </button>
-          <a
-            href={waUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-          >
-            {t("bills.whatsapp")}
-          </a>
-          <a
-            href={quoteWaUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-lg border border-green-600 bg-white px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
-          >
-            {t("bills.quote_whatsapp")}
-          </a>
           <MessageSendButton
             phone={customerPhone}
             recipientName={sale.customerName ?? t("common.customer")}
