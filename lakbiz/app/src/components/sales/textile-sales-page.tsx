@@ -180,7 +180,7 @@ export function TextileSalesPage() {
     if (!org.id) return;
     let cancelled = false;
     setLoadingRolls(true);
-    void Promise.all([fetchTextileRolls(org.id, false), fetchTextileReservations(org.id, true)]).then(([result, reservationResult]) => {
+    void Promise.all([fetchTextileRolls(org.id, false, { sellableOnly: true }), fetchTextileReservations(org.id, true)]).then(([result, reservationResult]) => {
       if (cancelled) return;
       setLoadingRolls(false);
       if (result.error) setMessage(result.error);

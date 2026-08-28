@@ -116,14 +116,35 @@ function rollFromRow(
 export async function fetchTextileRolls(
   organizationId: string,
   includeCosts: boolean,
+  options?: {
+    /**
+     * Reported: the Sales page ("web page is loading late") fetched
+     * every roll this org has ever received -- unopened through
+     * exhausted/returned/quarantined years back, select("*") with no
+     * status filter at all -- purely to compute a client-side sellable
+     * subset (custody available, not exhausted/quarantined/returned,
+     * remaining balance left) that's typically a small fraction of the
+     * full ledger. Every other caller (Fabric Rolls ledger, Trade
+     * Control, Cutting Desk) genuinely needs the full history, so this
+     * had to stay opt-in rather than becoming the default. Scoping the
+     * terminal-status/custody part of that filter server-side (the
+     * remaining-balance check still needs the roll's own numbers, so it
+     * stays client-side same as before) cuts the Sales page's fetch down
+     * to only rolls that could possibly still be sold.
+     */
+    sellableOnly?: boolean;
+  },
 ): Promise<{ data: TextileRollRecord[]; error: string | null }> {
   const supabase = createBrowserClient();
   if (!supabase) return { data: [], error: "Supabase not configured" };
-  const { data, error } = await supabase
+  let query = supabase
     .from("textile_rolls")
     .select("*")
-    .eq("organization_id", organizationId)
-    .order("created_at", { ascending: false });
+    .eq("organization_id", organizationId);
+  if (options?.sellableOnly) {
+    query = query.in("status", ["unopened", "opened", "reserved"]).eq("custody_status", "available");
+  }
+  const { data, error } = await query.order("created_at", { ascending: false });
   if (error) return { data: [], error: error.message };
   const rows = (data ?? []) as Record<string, unknown>[];
   if (!includeCosts || rows.length === 0) {
