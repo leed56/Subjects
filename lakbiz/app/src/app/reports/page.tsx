@@ -143,9 +143,12 @@ export default function ReportsPage() {
     (sum, adjustment) => sum + (adjustment.reversedProfit ?? 0),
     0,
   );
-  const totalRevenue = grossRevenue - returnRevenueReversal;
-  const totalProfit = grossProfit - returnProfitReversal;
-  const profitMarginPct = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+  // Sales-only revenue/profit — combined with AC Jobs further down (once
+  // costedJobs exists) into the actual headline totalRevenue/totalProfit.
+  // Kept as their own names because avgSale below is deliberately a sales
+  // (invoice) statistic only, not a blended sales+jobs one.
+  const salesRevenue = grossRevenue - returnRevenueReversal;
+  const salesProfit = grossProfit - returnProfitReversal;
 
   // Average sale stays an invoice statistic. Applying later credit notes to an
   // average invoice would change the meaning of the metric and produce a value
@@ -218,6 +221,17 @@ export default function ReportsPage() {
     .filter((c) => isLowMarginJob(c.profit))
     .sort((a, b) => a.profit.grossMarginPct! - b.profit.grossMarginPct!)
     .slice(0, 10);
+
+  // Headline Revenue/Profit fold in AC Jobs (showAcJobs is a capability
+  // gate, not sector-specific — totalQuoted/totalJobMargin are already 0
+  // for any org without the module, so this is a no-op for them). Before
+  // this, these headline cards only ever summed product Sales, so a
+  // service-heavy day/period on a Jobs-driven business (e.g. HVAC) could
+  // read as near-zero here despite real completed jobs — correct numbers
+  // were only visible on the separate Jobs tab below.
+  const totalRevenue = salesRevenue + totalQuoted;
+  const totalProfit = salesProfit + totalJobMargin;
+  const profitMarginPct = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
   const periodLabel = t(
     period === "7d" ? "reports.period_7d"

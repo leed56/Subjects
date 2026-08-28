@@ -233,6 +233,32 @@ export default function DashboardPage() {
     .filter((c) => isLowMarginJob(c.profit))
     .sort((a, b) => (a.profit.grossMarginPct ?? 0) - (b.profit.grossMarginPct ?? 0));
 
+  // Today's Jobs — same "quoted revenue, real cost via
+  // computeJobProfitability" basis as monthCosted above, just scoped to
+  // today instead of this month, so the headline Today's Sales/Profit
+  // cards below can fold in AC Jobs revenue for any org with the module
+  // (showAcJobs is a capability gate, not a sector one — this isn't
+  // HVAC-only). Jobs are as much a shop's revenue as product Sales;
+  // these headline cards previously only ever summed data.sales, so a
+  // service-heavy day could show as near-zero here even with real jobs
+  // completed — the correct numbers were several clicks away on /jobs,
+  // /job-costing or the sector command-center card, never at a glance.
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayJobs =
+    showAcJobs && canSeeFinancials
+      ? data.acJobs.filter((j) => j.date.startsWith(todayKey) && j.status !== "cancelled")
+      : [];
+  const todayJobsCosted = jobLinkedExpenseTotals
+    ? todayJobs.map((j) => computeJobProfitability(j, jobItemsByJob.get(j.id) ?? [], jobLinkedExpenseTotals.get(j.id) ?? []))
+    : [];
+  const todayJobsRevenue = todayJobs.reduce((sum, j) => sum + j.quotedAmount, 0);
+  const todayJobsProfit = todayJobsCosted.reduce((sum, p) => sum + p.grossProfit, 0);
+  // Both fall back to the sales-only figures automatically: todayJobs is
+  // already [] whenever showAcJobs/canSeeFinancials is false, so these
+  // combined totals equal the plain sales totals for every non-Jobs org.
+  const combinedTodayRevenue = stats.todaySales + todayJobsRevenue;
+  const combinedTodayProfit = stats.todayProfit + todayJobsProfit;
+
   const handleReset = async () => {
     if (resetting || isReadOnly) return;
     setResetting(true);
@@ -405,7 +431,7 @@ export default function DashboardPage() {
   const incomeTax = canSeeFinancials
     ? getIncomeTaxYearSummary(data, new Date(), 0, jobLinkedExpenseTotals ?? new Map())
     : null;
-  const marginPct = stats.todaySales > 0 ? Math.round((stats.todayProfit / stats.todaySales) * 100) : 0;
+  const marginPct = combinedTodayRevenue > 0 ? Math.round((combinedTodayProfit / combinedTodayRevenue) * 100) : 0;
   const trend = getRevenueTrend(data.sales, trendPeriod, locale, new Date());
   const trendMax = Math.max(1, ...trend.map((p) => Math.max(p.revenue, p.profit)));
   const trendRevenueTotal = trend.reduce((s, p) => s + p.revenue, 0);
@@ -701,12 +727,20 @@ export default function DashboardPage() {
               </div>
             ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard label={t("dash.today_sales")} value={formatLkr(stats.todaySales)} hint={`${stats.saleCount} ${t("dash.sales_today")}`} />
+              <MetricCard
+                label={showAcJobs && canSeeFinancials ? t("dash.today_revenue") : t("dash.today_sales")}
+                value={formatLkr(combinedTodayRevenue)}
+                hint={
+                  showAcJobs && canSeeFinancials
+                    ? t("dash.sales_jobs_hint").replace("{sales}", String(stats.saleCount)).replace("{jobs}", String(todayJobs.length))
+                    : `${stats.saleCount} ${t("dash.sales_today")}`
+                }
+              />
               {canSeeFinancials ? (
                 <MetricCard
                   label={t("dash.today_profit")}
-                  value={formatLkr(stats.todayProfit)}
-                  hint={stats.todaySales > 0 ? t("dash.kpi_margin").replace("{pct}", String(marginPct)) : "—"}
+                  value={formatLkr(combinedTodayProfit)}
+                  hint={combinedTodayRevenue > 0 ? t("dash.kpi_margin").replace("{pct}", String(marginPct)) : "—"}
                   tone="positive"
                 />
               ) : (
