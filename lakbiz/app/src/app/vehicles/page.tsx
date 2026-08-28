@@ -21,6 +21,10 @@ import type { PaymentMethod } from "@/lib/types";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { sendApiWhatsApp } from "@/lib/messaging";
+import { isValidSlMobile } from "@/lib/messaging/phone";
+import { useWhatsAppApiConfigured } from "@/lib/messaging/use-sms-api-configured";
+import { sectorAllowsApiWhatsApp } from "@/lib/messaging/wasender-sectors";
 import {
   agingLabel,
   CAR_MAKES,
@@ -41,7 +45,9 @@ export default function VehiclesPage() {
   } = useAppStore();
   const { t } = useLocale();
   const { canWrite, disabledHint } = useWriteAccess();
-  const { canSeeFinancials } = useSubscription();
+  const { canSeeFinancials, org } = useSubscription();
+  const whatsappApiConfigured = useWhatsAppApiConfigured();
+  const canApiWhatsApp = whatsappApiConfigured === true && sectorAllowsApiWhatsApp(org.sector);
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<VehicleRecord | null>(null);
@@ -75,9 +81,25 @@ export default function VehiclesPage() {
   const [sellPrice, setSellPrice] = useState(0);
   const [sellCustomerId, setSellCustomerId] = useState("");
   const [sellCustomerName, setSellCustomerName] = useState("");
+  const [sellCustomerPhone, setSellCustomerPhone] = useState("");
+  const [sendWhatsAppReceipt, setSendWhatsAppReceipt] = useState(true);
   const [sellPayment, setSellPayment] = useState<PaymentMethod>("cash");
   const [sellBankAccountId, setSellBankAccountId] = useState("");
   const [financePartner, setFinancePartner] = useState(FINANCE_PARTNERS[0]);
+
+  // The Sell dialog is reused across every vehicle card -- opening it for
+  // vehicle B without clearing what was typed for vehicle A (customer,
+  // phone, payment method, finance partner) would silently carry that
+  // buyer's details onto a completely different sale. Reset explicitly
+  // whenever a sale dialog opens, completes, or is cancelled.
+  const resetSellForm = () => {
+    setSellCustomerId("");
+    setSellCustomerName("");
+    setSellCustomerPhone("");
+    setSendWhatsAppReceipt(true);
+    setSellPayment("cash");
+    setFinancePartner(FINANCE_PARTNERS[0]);
+  };
 
   if (!ready || !data) {
     return (
@@ -392,6 +414,7 @@ export default function VehiclesPage() {
                     }
                   }}
                   onSell={() => {
+                    resetSellForm();
                     setSellId(v.id);
                     setSellPrice(v.askPrice);
                     setSellBankAccountId(data.bankAccounts[0]?.id ?? "");
@@ -434,15 +457,33 @@ export default function VehiclesPage() {
                   </h3>
                   <p className="mt-1 text-sm font-semibold text-slate-500">{sellVehicleRecord.stockId} · {sellVehicleRecord.chassisNo}</p>
                 </div>
-                <button type="button" aria-label={t("common.close")} onClick={() => setSellId(null)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-lg text-slate-600 hover:bg-slate-200">×</button>
+                <button type="button" aria-label={t("common.close")} onClick={() => { setSellId(null); resetSellForm(); }} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-lg text-slate-600 hover:bg-slate-200">×</button>
               </div>
               <div className="mt-5 space-y-3">
                 <input type="number" placeholder={t("veh.sell_price")} value={sellPrice || ""} onChange={(e) => setSellPrice(Number(e.target.value))} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                <select value={sellCustomerId} onChange={(e) => setSellCustomerId(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                <select
+                  value={sellCustomerId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setSellCustomerId(id);
+                    const picked = data.customers.find((c) => c.id === id);
+                    setSellCustomerPhone(picked?.phone ?? "");
+                  }}
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                >
                   <option value="">{t("jobs.customer_opt")}</option>
                   {data.customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 {!sellCustomerId && <input placeholder={t("veh.buyer_name")} value={sellCustomerName} onChange={(e) => setSellCustomerName(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />}
+                {canApiWhatsApp && (
+                  <input placeholder="Buyer WhatsApp number (07XXXXXXXX)" value={sellCustomerPhone} onChange={(e) => setSellCustomerPhone(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                )}
+                {canApiWhatsApp && isValidSlMobile(sellCustomerPhone) && (
+                  <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <input type="checkbox" checked={sendWhatsAppReceipt} onChange={(e) => setSendWhatsAppReceipt(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-300" />
+                    Send WhatsApp sale confirmation to buyer
+                  </label>
+                )}
                 <select value={sellPayment} onChange={(e) => setSellPayment(e.target.value as PaymentMethod)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
                   {PAYMENT_OPTIONS.map((m) => <option key={m} value={m}>{paymentLabel(t, m)}</option>)}
                 </select>
@@ -505,7 +546,25 @@ export default function VehiclesPage() {
                       return;
                     }
                     setMessage(t("veh.sold_msg"));
+                    if (canApiWhatsApp && sendWhatsAppReceipt && isValidSlMobile(sellCustomerPhone) && sellVehicleRecord) {
+                      const buyerName = sellCustomerName || data.customers.find((c) => c.id === sellCustomerId)?.name;
+                      const receiptText = `Thank you for purchasing the ${sellVehicleRecord.make} ${sellVehicleRecord.model} ${sellVehicleRecord.year} (${sellVehicleRecord.stockId}) for LKR ${sellPrice.toLocaleString()}. We appreciate your business!`;
+                      void sendApiWhatsApp({
+                        phone: sellCustomerPhone,
+                        message: receiptText,
+                        templateId: "custom",
+                        contextType: "vehicle_sale",
+                        contextId: sellVehicleRecord.id,
+                        recipientName: buyerName,
+                      }).then((sendResult) => {
+                        if (!sendResult.ok) {
+                          setMessage(`${t("veh.sold_msg")} — WhatsApp receipt failed: ${sendResult.error ?? "unknown error"}`);
+                          setTimeout(() => setMessage(""), 5000);
+                        }
+                      });
+                    }
                     setSellId(null);
+                    resetSellForm();
                     setTimeout(() => setMessage(""), 3000);
                   }}
                   disabled={savingSale}
@@ -513,7 +572,7 @@ export default function VehiclesPage() {
                 >
                   {savingSale ? t("common.saving") : t("veh.confirm_sale")}
                 </button>
-                <button onClick={() => setSellId(null)} disabled={savingSale} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                <button onClick={() => { setSellId(null); resetSellForm(); }} disabled={savingSale} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
                   {t("common.cancel")}
                 </button>
               </div>

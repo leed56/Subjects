@@ -12,7 +12,7 @@ import type { SectorId } from "@/lib/types";
 // the server gate (api/messages/send-whatsapp/route.ts) read this list, so
 // they can never drift out of sync the way two hardcoded `=== "pharmacy"`
 // checks eventually would.
-const API_WHATSAPP_SECTORS: readonly SectorId[] = ["pharmacy", "ac_hvac", "textile"];
+const API_WHATSAPP_SECTORS: readonly SectorId[] = ["pharmacy", "ac_hvac", "textile", "car_sales"];
 
 export function sectorAllowsApiWhatsApp(
   sector: SectorId | string | null | undefined,
