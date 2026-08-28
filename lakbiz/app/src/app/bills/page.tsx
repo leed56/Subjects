@@ -18,7 +18,6 @@ import {
 import { BillsIcon, CostingIcon, ReportsIcon, CustomersIcon, FilterIcon, SearchIcon } from "@/components/ui/icons";
 import { ActionMenu, Pagination } from "@/components/ui/primitives";
 import { formatLkr } from "@/lib/format";
-import { buildInvoiceText, buildQuoteText, whatsappShareUrl } from "@/lib/invoice";
 import { exportSalesCsv, printSalesReport } from "@/lib/export";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
@@ -240,14 +239,6 @@ export default function BillsPage() {
                     {pageBills.map((s) => {
                       const isVehicle = vehicleSaleIds.has(s.id);
                       const phone = customerPhoneForSale(s, data.customers);
-                      const invoiceWa = whatsappShareUrl(
-                        buildInvoiceText(s, data.business, t),
-                        phone,
-                      );
-                      const quoteWa = whatsappShareUrl(
-                        buildQuoteText(s, data.business, t),
-                        phone,
-                      );
                       return (
                       <tr key={s.id} className="border-b last:border-0">
                         <td className="px-4 py-3">
@@ -259,31 +250,37 @@ export default function BillsPage() {
                         <td className="px-4 py-3 font-mono font-bold text-slate-950">{formatLkr(s.total)}</td>
                         <td className="px-4 py-3"><ProBadge tone="slate">{paymentLabel(t, s.paymentMethod)}</ProBadge></td>
                         <td className="px-4 py-3 text-right">
+                          {/* Was three separate WhatsApp entry points -- a raw
+                              "WA" deep link with the full receipt text, a
+                              second raw deep link with the quote text, and
+                              this same Message button, all doing overlapping
+                              jobs. The two deep links could never reach a
+                              phone the caller didn't already have (no way to
+                              add one for a walk-in with no saved number,
+                              unlike Message's own editable phone field) and
+                              never got the Auto WhatsApp option once
+                              configured. Down to two Message buttons -- one
+                              per intent (receipt, quote) -- same pattern
+                              already established on the invoice detail page
+                              itself (invoice-view.tsx). */}
                           <div className="flex flex-wrap items-center justify-end gap-2">
                             <Link href={`/bills/${s.id}`} className="font-bold text-teal-700 hover:underline">{t("common.view_print")}</Link>
-                            <a
-                              href={invoiceWa}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="rounded-lg bg-green-600 px-2 py-1 text-xs font-bold text-white hover:bg-green-700"
-                            >
-                              {t("bills.wa_short")}
-                            </a>
-                            <a
-                              href={quoteWa}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="rounded-lg border border-green-600 px-2 py-1 text-xs font-bold text-green-700 hover:bg-green-50"
-                            >
-                              {t("bills.quote_whatsapp")}
-                            </a>
                             <MessageSendButton
                               phone={phone}
                               recipientName={s.customerName ?? t("common.customer")}
                               context={{ type: "sale", sale: s, business: data.business }}
                               defaultTemplate="bill_receipt"
                               contextId={s.id}
-                              variant="icon"
+                              variant="compact"
+                            />
+                            <MessageSendButton
+                              phone={phone}
+                              recipientName={s.customerName ?? t("common.customer")}
+                              context={{ type: "sale", sale: s, business: data.business }}
+                              defaultTemplate="sales_quote"
+                              contextId={s.id}
+                              variant="compact"
+                              label={t("bills.quote_whatsapp")}
                             />
                           </div>
                         </td>
