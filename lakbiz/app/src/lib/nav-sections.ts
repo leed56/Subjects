@@ -13,6 +13,7 @@ export type NavItem = {
   /** Direct labels are useful for new vertical workspaces without forcing a giant translation-file edit. */
   labelEn?: string;
   labelSi?: string;
+  labelTa?: string;
   /** Feature gate key, if this route is plan/addon-gated (see ROUTE_FEATURES). */
   feature?: FeatureKey;
   /** Show this navigation item only for these provisioned business sectors. */
@@ -30,7 +31,17 @@ export type NavSection = {
 export const NAV_SECTIONS: NavSection[] = [
   {
     labelKey: null,
-    items: [{ href: "/dashboard", labelKey: "nav.dashboard" }],
+    items: [
+      { href: "/dashboard", labelKey: "nav.dashboard" },
+      {
+        href: "/pulse",
+        labelEn: "Business Pulse",
+        labelSi: "ව්‍යාපාර ස්පන්දනය",
+        labelTa: "வணிக துடிப்பு",
+        sectorOnly: ["textile", "pharmacy"],
+        roleOnly: ["owner"],
+      },
+    ],
   },
   {
     labelKey: "nav.section.sales",
@@ -44,6 +55,24 @@ export const NAV_SECTIONS: NavSection[] = [
     labelKey: "nav.section.inventory",
     items: [
       { href: "/stock", labelKey: "nav.stock" },
+      {
+        href: "/stock/rolls",
+        labelEn: "Fabric rolls",
+        labelSi: "රෙදි roll තොගය",
+        sectorOnly: ["textile"],
+      },
+      {
+        href: "/stock/cutting",
+        labelEn: "Cutting & reservations",
+        labelSi: "කැපීම් සහ වෙන්කිරීම්",
+        sectorOnly: ["textile"],
+      },
+      {
+        href: "/stock/dispatch",
+        labelEn: "Warehouse & dispatch",
+        labelSi: "ගබඩා සහ බෙදාහැරීම්",
+        sectorOnly: ["textile"],
+      },
       {
         href: "/stock/advanced",
         labelEn: "Inventory control",
@@ -98,6 +127,20 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       { href: "/job-costing", labelKey: "costing.title", feature: "ac_jobs" },
       { href: "/reports", labelKey: "reports.title" },
+      {
+        href: "/textile/trade-control",
+        labelEn: "Textile trade control",
+        labelSi: "රෙදි වෙළඳ පාලනය",
+        sectorOnly: ["textile"],
+        roleOnly: ["owner", "manager"],
+      },
+      {
+        href: "/textile/owner-intelligence",
+        labelEn: "Textile owner intelligence",
+        labelSi: "රෙදි හිමිකරු විශ්ලේෂණ",
+        sectorOnly: ["textile"],
+        roleOnly: ["owner"],
+      },
     ],
   },
 ];

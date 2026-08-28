@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ProductForm } from "@/components/product-form";
 import { StockCommandHeader } from "@/components/stock/stock-command-header";
 import { ExportActions } from "@/components/export/export-actions";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
-import { EmptyState, StatusBadge, SearchInput, FilterBar, ActionMenu } from "@/components/ui/primitives";
+import { EmptyState, StatusBadge, SearchInput, FilterBar, ActionMenu, Pagination } from "@/components/ui/primitives";
 import { Drawer, Dialog, ConfirmDialog } from "@/components/ui/overlay";
 import { FormField, TextInput } from "@/components/ui/form";
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
@@ -28,38 +29,6 @@ import type { Product, ProductCondition } from "@/lib/types";
 type ConditionFilter = "all" | ProductCondition;
 
 const STOCK_PAGE_SIZE = 50;
-
-function StockPagination({
-  page,
-  totalPages,
-  start,
-  end,
-  total,
-  onPageChange,
-}: {
-  page: number;
-  totalPages: number;
-  start: number;
-  end: number;
-  total: number;
-  onPageChange: (page: number) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-sm text-slate-600 shadow-[0_6px_20px_rgba(15,23,42,0.035)]">
-      <p>
-        <span className="font-semibold text-slate-900">{start}–{end}</span> of {total.toLocaleString()} items
-        <span className="ml-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">· {STOCK_PAGE_SIZE} per page</span>
-      </p>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <button type="button" disabled={page <= 1} onClick={() => onPageChange(1)} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">First</button>
-        <button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))} className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">←</button>
-        <span className="min-w-[92px] text-center text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Page {page} / {totalPages}</span>
-        <button type="button" aria-label="Next page" disabled={page >= totalPages} onClick={() => onPageChange(Math.min(totalPages, page + 1))} className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">→</button>
-        <button type="button" disabled={page >= totalPages} onClick={() => onPageChange(totalPages)} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">Last</button>
-      </div>
-    </div>
-  );
-}
 
 export default function StockPage() {
   const {
@@ -109,7 +78,15 @@ export default function StockPage() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
-  const [search, setSearch] = useState("");
+  // The pharmacy/grocery dashboard's "Low stock" KPI card and Replenishment
+  // Queue rows link here with ?filter=low-stock and ?q=<product name>
+  // respectively — before this, both links landed on an unfiltered list
+  // (the dashboard promised a filtered detail view; this page never read
+  // either param, so a "clickable" KPI card wasn't actually clickable in
+  // any meaningful sense). Seeded once at mount, same pattern as
+  // stock/rolls/page.tsx's `?receive=1`.
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
   // Discontinued items default to hidden — matches getLowStockProducts/the
   // sale picker, which already ignore inactive items — with an explicit
@@ -117,13 +94,22 @@ export default function StockPage() {
   const [showInactive, setShowInactive] = useState(false);
   // HVAC platform Phase 12 — a real filtered view of exactly what needs
   // reordering, not just the metric-card count that existed before.
-  const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+  const [showLowStockOnly, setShowLowStockOnly] = useState(() => searchParams.get("filter") === "low-stock");
+  // Round 2 Section 8 — the product form has never required a non-zero
+  // price (only the name field is `required`; buy/sell price both default
+  // to and accept 0), so a Rs. 0 item isn't necessarily a demo-seed
+  // artifact — the same gap exists for real data entry today, most easily
+  // hit by a role that never sees the buy-price field at all (see
+  // `canSeeFinancials` below) leaving it at its 0 default. This filter is
+  // the data-quality view requested: a zero sell price (or, for financial
+  // roles, a zero buy price) silently breaks margin math on that item.
+  const [showZeroPriceOnly, setShowZeroPriceOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [page, setPage] = useState(1);
 
   useEffect(() => {
     setPage(1);
-  }, [search, conditionFilter, showInactive, showLowStockOnly, categoryFilter]);
+  }, [search, conditionFilter, showInactive, showLowStockOnly, showZeroPriceOnly, categoryFilter]);
 
   useEffect(() => {
     if (!conditionFilterRelevant && conditionFilter !== "all") setConditionFilter("all");
@@ -155,7 +141,11 @@ export default function StockPage() {
   const byCategory = categoryFilter === "all" ? byActive : byActive.filter((p) => p.category === categoryFilter);
   const lowStock = getLowStockProducts(data.products);
   const lowStockIds = new Set(lowStock.map((p) => p.id));
-  const products = showLowStockOnly ? byCategory.filter((p) => lowStockIds.has(p.id)) : byCategory;
+  const isZeroPriced = (p: Product) => p.sellPrice <= 0 || (canSeeFinancials && p.buyPrice <= 0);
+  const zeroPriced = data.products.filter((p) => p.active && isZeroPriced(p));
+  const zeroPricedIds = new Set(zeroPriced.map((p) => p.id));
+  const byLowStock = showLowStockOnly ? byCategory.filter((p) => lowStockIds.has(p.id)) : byCategory;
+  const products = showZeroPriceOnly ? byLowStock.filter((p) => zeroPricedIds.has(p.id)) : byLowStock;
   const totalPages = Math.max(1, Math.ceil(products.length / STOCK_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * STOCK_PAGE_SIZE;
@@ -369,7 +359,16 @@ export default function StockPage() {
             header: t("stock.buy_price"),
             align: "right" as const,
             hideOnMobile: true,
-            render: (p: Product) => formatLkr(p.buyPrice),
+            render: (p: Product) => (
+              <div className="text-right">
+                <span>{formatLkr(p.buyPrice)}</span>
+                {p.buyPrice <= 0 && (
+                  <div className="mt-0.5">
+                    <StatusBadge tone="danger">{t("stock.zero_price_badge")}</StatusBadge>
+                  </div>
+                )}
+              </div>
+            ),
           },
         ]
       : []),
@@ -377,7 +376,16 @@ export default function StockPage() {
       key: "sell",
       header: t("stock.sell_price"),
       align: "right",
-      render: (p) => <span className="font-mono font-semibold text-teal-700">{formatLkr(p.sellPrice)}</span>,
+      render: (p) => (
+        <div className="text-right">
+          <span className="font-mono font-semibold text-teal-700">{formatLkr(p.sellPrice)}</span>
+          {p.sellPrice <= 0 && (
+            <div className="mt-0.5">
+              <StatusBadge tone="danger">{t("stock.zero_price_badge")}</StatusBadge>
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       key: "actions",
@@ -504,6 +512,17 @@ export default function StockPage() {
               {t("stock.filter_inactive")} <span className="opacity-70">({inactiveCount})</span>
             </button>
           )}
+          {canSeeFinancials && zeroPriced.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowZeroPriceOnly((v) => !v)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                showZeroPriceOnly ? "bg-rose-600 text-white" : "border border-rose-200 bg-rose-50 text-rose-800 hover:border-rose-300"
+              }`}
+            >
+              {t("stock.zero_price_filter")} <span className="opacity-70">({zeroPriced.length})</span>
+            </button>
+          )}
         </FilterBar>
 
         {data.products.length === 0 ? (
@@ -520,24 +539,26 @@ export default function StockPage() {
         ) : (
           <>
             <div className="mb-3">
-              <StockPagination
+              <Pagination
                 page={currentPage}
                 totalPages={totalPages}
                 start={pageStart + 1}
                 end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
                 total={products.length}
+                pageSize={STOCK_PAGE_SIZE}
                 onPageChange={setPage}
               />
             </div>
             <DataTable columns={columns} rows={pageProducts} emptyState={<EmptyState title={t("sales.no_match")} description={t("stock.search_no_match_desc")} />} />
             {products.length > STOCK_PAGE_SIZE && (
               <div className="mt-3">
-                <StockPagination
+                <Pagination
                   page={currentPage}
                   totalPages={totalPages}
                   start={pageStart + 1}
                   end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
                   total={products.length}
+                  pageSize={STOCK_PAGE_SIZE}
                   onPageChange={setPage}
                 />
               </div>

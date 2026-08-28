@@ -23,7 +23,7 @@ export function FormField({
       </span>
       {children}
       {error ? (
-        <span className="mt-1.5 block text-xs font-medium text-rose-600">{error}</span>
+        <span role="alert" className="mt-1.5 block text-xs font-medium text-rose-600">{error}</span>
       ) : hint ? (
         <span className="mt-1.5 block text-xs leading-5 text-slate-500">{hint}</span>
       ) : null}

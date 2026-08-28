@@ -4,6 +4,7 @@ import type { AppData } from "@/lib/store/types";
 import {
   buildRetailDashboardIntelligence,
   isPharmacyMedicine,
+  resolvePeriodRange,
   type RetailLotSnapshot,
 } from "./retail-intelligence";
 
@@ -98,6 +99,18 @@ describe("retail dashboard intelligence", () => {
     expect(result.lowStockCount).toBe(2);
   });
 
+  it("computes today's sales trend against yesterday's actual recorded total, never a guess", () => {
+    // Fixture: sale-1 is today (2026-08-23, total 200), sale-2 is
+    // yesterday (2026-08-22, total 250) — a real 20% drop.
+    const result = buildRetailDashboardIntelligence(data(products), "pharmacy", false, [], new Date("2026-08-23T12:00:00Z"));
+    expect(result.todaySalesChangePct).toBeCloseTo(-20, 5);
+  });
+
+  it("reports no trend (never a fabricated 0% or infinite jump) when yesterday had no sales", () => {
+    const result = buildRetailDashboardIntelligence(data(products), "pharmacy", false, [], new Date("2026-08-25T12:00:00Z"));
+    expect(result.todaySalesChangePct).toBeNull();
+  });
+
   it("exposes owner financial metrics only when explicitly allowed", () => {
     const result = buildRetailDashboardIntelligence(data(products), "pharmacy", true, [], new Date("2026-08-23T12:00:00Z"));
     expect(result.inventoryCostValue).toBeGreaterThan(0);
@@ -125,5 +138,97 @@ describe("retail dashboard intelligence", () => {
     expect(result.topMovers[0]?.productId).toBe("med");
     expect(result.topMovers[0]?.qty).toBe(3);
     expect(result.categoryMix.length).toBeGreaterThan(0);
+  });
+
+  it("resolves each named period to real day-key bounds plus an equal-length prior period", () => {
+    const reference = new Date("2026-08-23T12:00:00Z");
+
+    const sevenDay = resolvePeriodRange("7d", reference);
+    expect(sevenDay.startKey).toBe("2026-08-17");
+    expect(sevenDay.endKey).toBe("2026-08-23");
+    expect(sevenDay.priorStartKey).toBe("2026-08-10");
+    expect(sevenDay.priorEndKey).toBe("2026-08-16");
+
+    const thisMonth = resolvePeriodRange("this_month", reference);
+    expect(thisMonth.startKey).toBe("2026-08-01");
+    expect(thisMonth.endKey).toBe("2026-08-23");
+    // Month-over-month: same day-count starting from the 1st of July.
+    expect(thisMonth.priorStartKey).toBe("2026-07-01");
+    expect(thisMonth.priorEndKey).toBe("2026-07-23");
+
+    const lastMonth = resolvePeriodRange("last_month", reference);
+    expect(lastMonth.startKey).toBe("2026-07-01");
+    expect(lastMonth.endKey).toBe("2026-07-31");
+  });
+
+  // Round 2 Section 6: a rolling-window trend badge ("Last 30 days")
+  // and a calendar-month trend badge ("This month") compare against
+  // different baselines even though both render as "▲N%" — each preset
+  // must carry an explicit, distinct comparisonLabel so the two can't be
+  // read as the same measurement.
+  it("gives every period preset an explicit, distinct comparison basis", () => {
+    const reference = new Date("2026-08-23T12:00:00Z");
+    expect(resolvePeriodRange("7d", reference).comparisonLabel).toBe("vs prior 7 days");
+    expect(resolvePeriodRange("30d", reference).comparisonLabel).toBe("vs prior 30 days");
+    expect(resolvePeriodRange("this_week", reference).comparisonLabel).toBe("vs last week");
+    expect(resolvePeriodRange("this_month", reference).comparisonLabel).toBe("vs same days last month");
+    expect(resolvePeriodRange("last_month", reference).comparisonLabel).toBe("vs month before");
+  });
+
+  it("switches periodSales/periodLabel with the selected DashboardPeriod, defaulting to 30d for existing callers", () => {
+    const reference = new Date("2026-08-23T12:00:00Z");
+    const result30d = buildRetailDashboardIntelligence(data(products), "pharmacy", false, [], reference);
+    expect(result30d.periodLabel).toBe("Last 30 days");
+
+    const result7d = buildRetailDashboardIntelligence(data(products), "pharmacy", false, [], reference, "7d");
+    expect(result7d.periodLabel).toBe("Last 7 days");
+    // Both of the fixture's sales (08-22, 08-23) fall inside a 7-day
+    // window just as much as a 30-day one — same real total either way.
+    expect(result7d.periodSales).toBe(result30d.periodSales);
+    // No recorded sales in the preceding 7-day window (08-10..08-16) —
+    // periodChangePct must be null, not a fabricated 0% or ∞.
+    expect(result7d.periodChangePct).toBeNull();
+  });
+
+  it("computes periodChangePct from real recorded sales in the prior period, never a guess", () => {
+    const priorPeriodSale: AppData["sales"][number] = {
+      id: "sale-prior",
+      billNo: "INV-0",
+      date: "2026-08-14T08:00:00.000Z", // inside the 7d preset's prior window
+      lines: [{ productId: products[0].id, productName: products[0].name, qty: 1, unitPrice: products[0].sellPrice, buyPrice: products[0].buyPrice }],
+      total: 100,
+      profit: 50,
+      paymentMethod: "cash",
+      creditAmount: 0,
+    };
+    const withPriorSale: AppData = { ...data(products), sales: [...data(products).sales, priorPeriodSale] };
+    const result = buildRetailDashboardIntelligence(withPriorSale, "pharmacy", false, [], new Date("2026-08-23T12:00:00Z"), "7d");
+    // periodSales (450) vs prior period total (100): +350%.
+    expect(result.periodChangePct).toBeCloseTo(350, 5);
+  });
+
+  it("never renders a product's free-text pack size where a unit belongs (Replenishment Queue bug)", () => {
+    // packSize is a descriptive field ("100 tablets", or shorthand like
+    // "100C") — not a unit noun. A product missing an explicit `unit` used
+    // to fall back to packSize here, producing "0 100C" next to a
+    // reorder-queue quantity with no separator or label.
+    const noUnitProduct = product({
+      id: "capsule-only-packsize",
+      name: "CEPHALEXIN CAP 250MG BP (NOVALEXIN)",
+      category: "Medicines",
+      stockQty: 0,
+      reorderLevel: 10,
+      customFields: { packSize: "100C", productKind: "medicine" },
+    });
+    const result = buildRetailDashboardIntelligence(
+      data([noUnitProduct, products[1]]),
+      "pharmacy",
+      false,
+      [],
+      new Date("2026-08-23T12:00:00Z"),
+    );
+    const row = result.reorderQueue.find((item) => item.productId === "capsule-only-packsize");
+    expect(row?.unit).toBe("units");
+    expect(row?.unit).not.toContain("100C");
   });
 });

@@ -6,6 +6,7 @@ export interface PlanDefinition {
   id: PlanId;
   nameEn: string;
   nameSi: string;
+  nameTa: string;
   priceMonthlyLkr: number;
   priceAnnualLkr: number;
   maxUsers: number;
@@ -20,6 +21,7 @@ export const PLANS: PlanDefinition[] = [
     id: "starter",
     nameEn: "Starter",
     nameSi: "ආරම්භක",
+    nameTa: "தொடக்கம்",
     priceMonthlyLkr: 1490,
     priceAnnualLkr: 14900,
     maxUsers: 1,
@@ -43,6 +45,7 @@ export const PLANS: PlanDefinition[] = [
     id: "business",
     nameEn: "Business",
     nameSi: "ව්‍යාපාර",
+    nameTa: "வணிகம்",
     priceMonthlyLkr: 2990,
     priceAnnualLkr: 29900,
     maxUsers: 3,
@@ -67,6 +70,7 @@ export const PLANS: PlanDefinition[] = [
     id: "pro",
     nameEn: "Pro",
     nameSi: "ප්‍රො",
+    nameTa: "புரோ",
     priceMonthlyLkr: 4990,
     priceAnnualLkr: 49900,
     maxUsers: 10,

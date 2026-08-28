@@ -39,6 +39,19 @@ export const DashboardIcon = (p: IconProps) =>
     p,
   );
 
+/** Literal house shape — used for the "Home" tab in Business Pulse's
+ * mobile bottom bar, where a house reads more immediately as "home" than
+ * DashboardIcon's tile grid (which the rest of the app already uses for
+ * /dashboard specifically). */
+export const HomeIcon = (p: IconProps) =>
+  base(
+    <>
+      <path d="M4 11.5 12 4l8 7.5" />
+      <path d="M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9" />
+    </>,
+    p,
+  );
+
 export const SalesIcon = (p: IconProps) =>
   base(
     <>

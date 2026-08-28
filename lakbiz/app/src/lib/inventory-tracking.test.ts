@@ -40,4 +40,12 @@ describe("sector inventory tracking", () => {
     expect(cars.defaultMode).toBe("simple");
     expect(cars.allowedModes).toEqual(["simple"]);
   });
+
+  it("keeps generic allocation off because textile uses the dedicated roll ledger", () => {
+    const textile = inventoryTrackingPreset("textile");
+    expect(textile.defaultMode).toBe("simple");
+    expect(textile.allowedModes).toEqual(["simple"]);
+    expect(textile.variantAxes).toEqual([]);
+    expect(textile.fefo).toBe(false);
+  });
 });

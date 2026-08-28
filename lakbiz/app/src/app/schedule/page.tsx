@@ -14,7 +14,7 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { ACJob } from "@/lib/store/types";
-import { jobStatusClass, jobStatusLabel } from "@/lib/ac-jobs";
+import { jobStatusClass, jobStatusLabel, type ACJobStatus } from "@/lib/ac-jobs";
 import { jobTypeLabel } from "@/lib/ac-job-types";
 
 /** Monday-based week start, module-level so it isn't recomputed inline
@@ -39,7 +39,24 @@ function toIsoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-const UNSCHEDULED_STATUSES = new Set(["quote", "deposit_received"]);
+// Reported/found in the HVAC screen sweep: this used to be an allowlist
+// of exactly two statuses ("quote", "deposit_received"). Status and
+// scheduledDate are two independent fields on the New/Edit Job form --
+// nothing stops a job from reaching "scheduled"/"installed"/
+// "service_due" with scheduledDate left blank (e.g. a same-day job
+// where staff set status without ever touching the date field, or a
+// service_due job whose next visit genuinely hasn't been booked yet --
+// arguably the single most important case to keep visible here). Any
+// such job was invisible on this entire page: not in a day column
+// (jobsByDay only matches an exact scheduledDate) and not in the
+// Unscheduled bucket (its status wasn't one of the two allowed). Now
+// expressed as an exclusion instead of an allowlist -- any active,
+// non-terminal job with no date -- so a future status can't silently
+// fall through the same gap again. "completed" is excluded on purpose:
+// a finished job doesn't need scheduling attention.
+function needsScheduling(status: ACJobStatus): boolean {
+  return status !== "cancelled" && status !== "completed";
+}
 
 export default function SchedulePage() {
   const { t, locale } = useLocale();
@@ -104,7 +121,7 @@ export default function SchedulePage() {
   });
 
   const unscheduled = localData.acJobs
-    .filter((j) => !j.scheduledDate && UNSCHEDULED_STATUSES.has(j.status))
+    .filter((j) => !j.scheduledDate && needsScheduling(j.status))
     .filter(matchesAssignee);
 
   const weekTotal = jobsByDay.reduce((sum, d) => sum + d.jobs.length, 0);
@@ -265,7 +282,7 @@ export default function SchedulePage() {
                 <CheckIcon className="h-4 w-4 shrink-0" />
                 <span>
                   {t("schedule.rescheduled_to")}{" "}
-                  <strong>{justRescheduled.scheduledDate ? new Date(justRescheduled.scheduledDate).toLocaleDateString("en-LK") : t("schedule.no_date")}</strong>
+                  <strong>{justRescheduled.scheduledDate ? new Date(justRescheduled.scheduledDate).toLocaleDateString(locale === "si" ? "si-LK" : "en-LK") : t("schedule.no_date")}</strong>
                 </span>
               </div>
               <div>

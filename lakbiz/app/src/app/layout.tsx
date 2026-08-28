@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Noto_Sans_Sinhala } from "next/font/google";
+import { Geist, Geist_Mono, Noto_Sans_Sinhala, Noto_Sans_Tamil } from "next/font/google";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import { AuthProvider } from "@/components/auth-provider";
 import { PlatformAdminRedirect } from "@/components/platform-admin-redirect";
@@ -27,6 +27,12 @@ const geistMono = Geist_Mono({
 const notoSinhala = Noto_Sans_Sinhala({
   variable: "--font-sinhala",
   subsets: ["sinhala"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const notoTamil = Noto_Sans_Tamil({
+  variable: "--font-tamil",
+  subsets: ["tamil"],
   weight: ["400", "500", "600", "700"],
 });
 
@@ -63,7 +69,7 @@ export default function RootLayout({
   return (
     <html
       lang="si"
-      className={`${geistSans.variable} ${geistMono.variable} ${notoSinhala.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${notoSinhala.variable} ${notoTamil.variable} h-full antialiased`}
     >
       <body
         className="min-h-full flex flex-col font-sinhala"

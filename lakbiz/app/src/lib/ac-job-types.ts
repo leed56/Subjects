@@ -50,7 +50,7 @@ export const AC_JOB_TYPES: {
   },
 ];
 
-export function jobTypeLabel(type: ACJobType, locale: "si" | "en" = "en"): string {
+export function jobTypeLabel(type: ACJobType, locale: "si" | "en" | "ta" = "en"): string {
   const row = AC_JOB_TYPES.find((t) => t.value === type);
   if (!row) return type;
   return locale === "si" ? row.labelSi : row.labelEn;

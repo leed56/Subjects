@@ -1,0 +1,4 @@
+export type TextileAgeBand="0-30"|"31-60"|"61-90"|"91-180"|"180+";
+export function textileAgeBand(receivedAt:string,today:string):TextileAgeBand{const days=Math.floor((new Date(`${today}T00:00:00Z`).getTime()-new Date(`${receivedAt.slice(0,10)}T00:00:00Z`).getTime())/86_400_000);if(days<=30)return"0-30";if(days<=60)return"31-60";if(days<=90)return"61-90";if(days<=180)return"91-180";return"180+";}
+export function marginPercent(revenue:number,cost:number):number|null{if(revenue<=0)return null;return Math.round(((revenue-cost)/revenue)*10_000)/100;}
+export function auditRiskScore(input:{ageDays:number;remainingRatio:number;isRemnant:boolean;measurementVariance:number;wasteRatio:number}):number{return Math.min(100,Math.round(Math.min(input.ageDays/365,1)*30+Math.min(input.remainingRatio,1)*15+(input.isRemnant?15:0)+Math.min(input.measurementVariance,1)*20+Math.min(input.wasteRatio*5,1)*20));}

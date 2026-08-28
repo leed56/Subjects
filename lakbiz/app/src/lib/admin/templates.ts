@@ -66,6 +66,13 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     defaultPlanId: "business",
   },
   {
+    id: "textile",
+    nameEn: "Textile Wholesale & Retail",
+    nameSi: "රෙදි තොග සහ සිල්ලර වෙළඳාම",
+    sectorId: "textile",
+    defaultPlanId: "business",
+  },
+  {
     id: "ac_hvac",
     nameEn: "Air Conditioning & HVAC",
     nameSi: "වායු සමනය සහ HVAC",

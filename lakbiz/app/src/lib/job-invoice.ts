@@ -83,7 +83,7 @@ export function taxInvoiceAmountsForJob(job: ACJob, business: BusinessInfo, invo
 export function buildJobInvoiceText(
   job: ACJob,
   business: BusinessInfo,
-  locale: "si" | "en",
+  locale: "si" | "en" | "ta",
   t?: (key: string) => string,
   items?: InvoiceLineItem[],
 ): string {
@@ -148,7 +148,7 @@ export function buildJobInvoiceText(
 export function jobInvoiceWhatsappUrl(
   job: ACJob,
   business: BusinessInfo,
-  locale: "si" | "en",
+  locale: "si" | "en" | "ta",
   t?: (key: string) => string,
   phone?: string,
   items?: InvoiceLineItem[],

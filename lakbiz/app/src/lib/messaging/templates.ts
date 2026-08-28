@@ -39,6 +39,23 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     si: `ආයුබෝවන් {{customerName}}, *{{shopName}}* වෙත *{{amount}}* ගෙවීම ලැබුණා. ස්තූතියි!\n\nඉතිරි ශේෂය: {{creditBalance}}\n{{shopPhone}}`,
   },
   {
+    // Special-cased in compose.ts (composeFromContext), same pattern as
+    // "sale" + "bill_receipt" -- the body below is a plain-token fallback,
+    // never actually shown once an ac_job context is wired up, because
+    // composeFromContext swaps in the real itemized invoice text
+    // (buildJobInvoiceText) instead. Kept here so this id still has a
+    // valid MessageTemplate shape for the picker card/type system, the
+    // same as bill_receipt's own body is unreachable dead text for its
+    // one caller.
+    id: "job_invoice",
+    icon: "🧾",
+    labelEn: "Invoice",
+    labelSi: "ඉන්වොයිසිය",
+    category: "jobs",
+    en: `Hi {{customerName}}, your invoice from *{{shopName}}*.\n\nJob: {{jobNo}}\nTotal: *{{quotedAmount}}*\nDeposit: {{depositAmount}}\nBalance: *{{balance}}*\n\n{{shopPhone}}\nThank you!`,
+    si: `ආයුබෝවන් {{customerName}}, *{{shopName}}* ඉන්වොයිසිය.\n\nJob: {{jobNo}}\nමුළු මුදල: *{{quotedAmount}}*\nමුද්දර: {{depositAmount}}\nඉතිරි: *{{balance}}*\n\n{{shopPhone}}\nස්තූතියි!`,
+  },
+  {
     id: "job_quote",
     icon: "📋",
     labelEn: "AC quote",

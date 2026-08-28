@@ -3,8 +3,8 @@
 import type { FormEvent } from "react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BulkWhatsAppComposer } from "@/components/messaging/bulk-whatsapp-composer";
-import { ExportActions } from "@/components/export/export-actions";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { ContactTypeBadge } from "@/components/contact-type-badge";
 import { AppShell } from "@/components/shell/app-shell";
@@ -36,6 +36,7 @@ type ContactFilter = "all" | ContactType;
 type ProfileTab = "overview" | "invoices" | "payments" | "ledger" | "equipment" | "messages";
 
 export default function CustomersPage() {
+  const router = useRouter();
   const {
     data,
     ready,
@@ -75,6 +76,8 @@ export default function CustomersPage() {
   const [payCustomerId, setPayCustomerId] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState<PaymentMethod>("cash");
+  const [payBankAccountId, setPayBankAccountId] = useState("");
+  const [payNote, setPayNote] = useState("");
   const [savingPayment, setSavingPayment] = useState(false);
 
   // Wholesale pricing (company B2B — unchanged from prior implementation)
@@ -83,8 +86,16 @@ export default function CustomersPage() {
   const [savingPriceProductId, setSavingPriceProductId] = useState<string | null>(null);
 
   const [typeFilter, setTypeFilter] = useState<ContactFilter>("all");
-  const [search, setSearch] = useState("");
+  // Global search (Cmd/Ctrl+K) links a customer result here with ?q=<name>
+  // — same seeded-once-at-mount pattern as /stock's own ?q= handling.
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [bulkWaOpen, setBulkWaOpen] = useState(false);
+
+  useEffect(() => {
+    if (!payCustomerId || payBankAccountId || !data?.bankAccounts[0]) return;
+    setPayBankAccountId(data.bankAccounts[0].id);
+  }, [data?.bankAccounts, payBankAccountId, payCustomerId]);
 
   if (!ready || !data) {
     return (
@@ -199,6 +210,13 @@ export default function CustomersPage() {
 
   const payCustomer = payCustomerId ? data.customers.find((c) => c.id === payCustomerId) : null;
   const payAmountNumber = Number(payAmount) || 0;
+  const hasCreditActivity = totalCredit > 0 || overLimitCount > 0 || recentPaymentsTotal > 0;
+
+  const exportVisibleCustomers = () =>
+    exportCustomersCsv(data.business, customers, {
+      labels: customerExportLabels,
+      typeLabel: (type) => t(contactTypeI18nKey(type)),
+    });
 
   const columns: DataTableColumn<Customer>[] = [
     {
@@ -250,7 +268,12 @@ export default function CustomersPage() {
       header: t("common.actions"),
       align: "right",
       render: (c) => (
-        <div className="flex items-center justify-end gap-1.5">
+        // whitespace-nowrap + shrink-0 on every button here: this row can
+        // hold 2-3 buttons plus the Actions menu in a right-aligned,
+        // width-constrained cell, and without them a crowded row squeezes
+        // a button below its own label width, wrapping the text mid-word
+        // ("Message" -> "Messa/ge") instead of just letting the row scroll.
+        <div className="flex items-center justify-end gap-1.5 overflow-x-auto">
           {c.phone && (
             <MessageSendButton
               phone={c.phone}
@@ -266,7 +289,7 @@ export default function CustomersPage() {
                 setPayCustomerId(c.id);
                 setPayAmount(String(c.creditBalance));
               }}
-              className="rounded-lg bg-teal-50 px-2.5 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-100"
+              className="shrink-0 whitespace-nowrap rounded-lg bg-teal-50 px-2.5 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-100"
             >
               {t("cust.record_payment")}
             </button>
@@ -303,85 +326,37 @@ export default function CustomersPage() {
       <ProMain>
         <PageHeader
           title={t("cust.title")}
-          description={`${data.customers.length} ${t("cust.customers_count")} · ${t("cust.total_owed")} ${formatLkr(totalCredit)}`}
+          description={`${data.customers.length} ${t("cust.customers_count")}`}
           actions={
             <>
-              {canExport && (
-                <ExportActions
-                  compact
-                  disabled={customers.length === 0}
-                  onExportCsv={() =>
-                    exportCustomersCsv(data.business, customers, {
-                      labels: customerExportLabels,
-                      typeLabel: (type) => t(contactTypeI18nKey(type)),
-                    })
-                  }
-                />
-              )}
-              {canBulkMessaging ? (
-                <button
-                  type="button"
-                  onClick={() => setBulkWaOpen(true)}
-                  className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  {t("msg.bulk_messages")}
-                </button>
-              ) : (
-                <Link
-                  href="/settings/plans"
-                  title={t("msg.bulk_plan_hint")}
-                  className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3.5 text-sm font-medium text-slate-400"
-                >
-                  {t("msg.bulk_messages")}
-                </Link>
-              )}
               <button
                 type="button"
                 onClick={openCreate}
                 disabled={!canWrite}
                 title={!canWrite ? disabledHint ?? undefined : undefined}
-                className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <PlusIcon className="h-4 w-4" />
                 {t("cust.add")}
               </button>
+              {data.customers.length > 0 && (
+                <ActionMenu
+                  label={t("common.actions")}
+                  items={[
+                    ...(canBulkMessaging
+                      ? [{ label: t("msg.bulk_messages"), onSelect: () => setBulkWaOpen(true) }]
+                      : [{ label: `${t("msg.bulk_messages")} · ${t("nav.plans")}`, onSelect: () => router.push("/settings/plans") }]),
+                    ...(canExport
+                      ? [{ label: t("export.csv"), onSelect: exportVisibleCustomers, disabled: customers.length === 0 }]
+                      : []),
+                  ]}
+                />
+              )}
             </>
-          }
-          metrics={
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard label={t("nav.customers")} value={String(data.customers.length)} hint={t("cust.saved_profiles")} icon={<CustomersIcon className="h-4 w-4" />} />
-              <MetricCard label={t("cust.credit_owed")} value={formatLkr(totalCredit)} hint={`${payingCustomers} customers with credit`} tone="warning" />
-              <MetricCard label={t("cust.over_limit")} value={String(overLimitCount)} hint={overLimitCount ? t("cust.needs_attention") : t("cust.within_limits")} tone={overLimitCount ? "danger" : "default"} />
-              <MetricCard label={t("cust.recent_payments")} value={formatLkr(recentPaymentsTotal)} hint={t("cust.latest_records")} tone="positive" />
-            </div>
           }
         />
 
         <WriteDisabledHint className="mb-4" />
-
-        <FilterBar>
-          <SearchInput value={search} onChange={setSearch} placeholder={t("cust.search_placeholder")} className="min-w-[220px] flex-1" />
-          <div className="flex gap-1.5">
-            {(
-              [
-                { id: "all" as const, label: t("cust.filter_all"), count: data.customers.length },
-                { id: "individual" as const, label: t("cust.type_individual"), count: individualCount },
-                { id: "company" as const, label: t("cust.type_company"), count: companyCount },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setTypeFilter(tab.id)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                  typeFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
-                }`}
-              >
-                {tab.label} <span className="opacity-70">({tab.count})</span>
-              </button>
-            ))}
-          </div>
-        </FilterBar>
 
         {data.customers.length === 0 ? (
           <EmptyState
@@ -389,17 +364,72 @@ export default function CustomersPage() {
             title={t("cust.no_customers")}
             description={t("cust.credit_hint")}
             action={
-              <button type="button" onClick={openCreate} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+              <button type="button" onClick={openCreate} className="min-h-11 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700">
                 {t("cust.add")}
               </button>
             }
           />
         ) : (
-          <DataTable
-            columns={columns}
-            rows={customers}
-            emptyState={<EmptyState title={t("sales.no_match")} description={t("cust.search_no_match_desc")} />}
-          />
+          <>
+            <FilterBar>
+              <SearchInput value={search} onChange={setSearch} placeholder={t("cust.search_placeholder")} className="min-w-[220px] flex-1" />
+              <div className="grid w-full grid-cols-3 gap-1.5 sm:flex sm:w-auto">
+                {(
+                  [
+                    { id: "all" as const, label: t("cust.filter_all"), count: data.customers.length },
+                    { id: "individual" as const, label: t("cust.type_individual"), count: individualCount },
+                    { id: "company" as const, label: t("cust.type_company"), count: companyCount },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setTypeFilter(tab.id)}
+                    aria-pressed={typeFilter === tab.id}
+                    className={`min-h-11 rounded-lg px-2 py-2 text-sm font-medium transition sm:px-3 ${
+                      typeFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
+                    }`}
+                  >
+                    {tab.label} <span className="opacity-70">({tab.count})</span>
+                  </button>
+                ))}
+              </div>
+            </FilterBar>
+
+            <DataTable
+              columns={columns}
+              rows={customers}
+              emptyState={
+                <EmptyState
+                  size="compact"
+                  title={t("sales.no_match")}
+                  description={t("cust.search_no_match_desc")}
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearch("");
+                        setTypeFilter("all");
+                      }}
+                      className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      {t("common.clear")}
+                    </button>
+                  }
+                />
+              }
+            />
+
+            {hasCreditActivity && (
+              <section className="mt-5" aria-label={t("cust.credit_owed")}>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <MetricCard label={t("cust.credit_owed")} value={formatLkr(totalCredit)} hint={`${payingCustomers} customer${payingCustomers === 1 ? "" : "s"} with credit`} tone="warning" />
+                  <MetricCard label={t("cust.over_limit")} value={String(overLimitCount)} hint={overLimitCount ? t("cust.needs_attention") : t("cust.within_limits")} tone={overLimitCount ? "danger" : "default"} />
+                  <MetricCard className="col-span-2 sm:col-span-1" label={t("cust.recent_payments")} value={formatLkr(recentPaymentsTotal)} hint={t("cust.latest_records")} tone="positive" />
+                </div>
+              </section>
+            )}
+          </>
         )}
 
         <BulkWhatsAppComposer open={bulkWaOpen} onClose={() => setBulkWaOpen(false)} recipients={bulkRecipients} business={data.business} />
@@ -502,18 +532,32 @@ export default function CustomersPage() {
               </button>
               <button
                 type="button"
-                disabled={savingPayment || payAmountNumber <= 0}
+                disabled={
+                  savingPayment ||
+                  payAmountNumber <= 0 ||
+                  (payCustomer != null && payAmountNumber > payCustomer.creditBalance) ||
+                  ((payMethod === "bank_transfer" || payMethod === "card") && !payBankAccountId)
+                }
                 onClick={() =>
                   void (async () => {
-                    if (!payCustomerId || savingPayment || payAmountNumber <= 0) return;
+                    if (!payCustomerId || !payCustomer || savingPayment || payAmountNumber <= 0) return;
+                    if (payAmountNumber > payCustomer.creditBalance) {
+                      toast({ tone: "error", title: t("common.save_failed"), description: t("cust.payment_exceeds_balance") });
+                      return;
+                    }
+                    if ((payMethod === "bank_transfer" || payMethod === "card") && !payBankAccountId) {
+                      toast({ tone: "error", title: t("common.save_failed"), description: t("cust.select_bank_account") });
+                      return;
+                    }
                     setSavingPayment(true);
-                    const result = await recordCustomerPaymentToCloud(payCustomerId, payAmountNumber, payMethod);
+                    const result = await recordCustomerPaymentToCloud(payCustomerId, payAmountNumber, payMethod, payNote, payBankAccountId || undefined);
                     setSavingPayment(false);
                     if (!result.ok) {
                       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
                       return;
                     }
                     setPayCustomerId(null);
+                    setPayNote("");
                     toast({ tone: "success", title: t("cust.payment_saved") });
                   })()
                 }
@@ -528,12 +572,36 @@ export default function CustomersPage() {
             <FormField label={t("bills.amount")} required>
               <MoneyInput value={payAmount} onChange={setPayAmount} />
             </FormField>
+            {payCustomer && payAmountNumber > payCustomer.creditBalance && (
+              <p className="-mt-2 text-sm font-medium text-rose-600">{t("cust.payment_exceeds_balance")}</p>
+            )}
             <FormField label={t("common.payment")}>
               <SelectInput
                 value={payMethod}
                 onChange={(v) => setPayMethod(v as PaymentMethod)}
                 options={PAYMENT_OPTIONS.filter((m) => m !== "credit").map((m) => ({ value: m, label: paymentLabel(t, m) }))}
               />
+            </FormField>
+            {(payMethod === "bank_transfer" || payMethod === "card") && (
+              <FormField label={t("cust.receiving_account")} required>
+                {data.bankAccounts.length > 0 ? (
+                  <SelectInput
+                    value={payBankAccountId}
+                    onChange={setPayBankAccountId}
+                    options={[
+                      { value: "", label: t("cust.select_bank_account") },
+                      ...data.bankAccounts.map((account) => ({ value: account.id, label: `${account.bankName} · ${account.accountNumber}` })),
+                    ]}
+                  />
+                ) : (
+                  <Link href="/banking" className="block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 underline">
+                    {t("cust.add_bank_account")}
+                  </Link>
+                )}
+              </FormField>
+            )}
+            <FormField label={t("cust.payment_note")}>
+              <TextInput value={payNote} onChange={(event) => setPayNote(event.target.value)} />
             </FormField>
           </div>
         </Dialog>

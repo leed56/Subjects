@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { LOCALE_NAMES, nextLocale } from "@/lib/i18n/translations";
 
 export function MarketingHeader() {
   const { locale, setLocale, t } = useLocale();
@@ -81,14 +82,14 @@ export function MarketingHeader() {
           <div className="flex items-center gap-2 sm:gap-3">
             <button
               type="button"
-              onClick={() => setLocale(locale === "si" ? "en" : "si")}
+              onClick={() => setLocale(nextLocale(locale))}
               className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                 scrolled
                   ? "border border-slate-200 text-slate-600 hover:bg-slate-50"
                   : "border border-white/20 text-white/90 hover:bg-white/10"
               }`}
             >
-              {t("nav.lang")}
+              {LOCALE_NAMES[nextLocale(locale)]}
             </button>
             <Link
               href="/login"

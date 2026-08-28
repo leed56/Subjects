@@ -1,4 +1,4 @@
-import type { AppData } from "@/lib/store/types";
+import type { AppData, Sale, Purchase } from "@/lib/store/types";
 import type { BusinessInfo } from "@/lib/invoice";
 
 /** Sri Lanka standard VAT rate (2026) */
@@ -34,6 +34,38 @@ export function splitInclusiveTotal(inclusiveTotal: number): {
 export function calcInputVat(subtotal: number): number {
   if (subtotal <= 0) return 0;
   return Math.round(subtotal * VAT_RATE);
+}
+
+/**
+ * The output VAT to report for a sale. `actions.ts` stores a literal
+ * `outputVat: 0` (not null) for any sale recorded while the business
+ * wasn't VAT-registered at the time — a real, correct value in that
+ * moment. But once the business *is* VAT-registered, the VAT Return page
+ * reads that same stored field directly (both the Output VAT / Input VAT
+ * totals and each invoice's own line-item amount), so those old zeros
+ * read as "this invoice legitimately owes no VAT" forever, even for a
+ * quarter the shop is actively filing for. This app has no VAT-exemption
+ * concept (one flat VAT_RATE applied uniformly), so a stored zero next
+ * to a positive total can only mean "never computed" — recomputing from
+ * the sale's own total is what makes the return reflect real money
+ * instead of silently reporting zero. A stored *positive* value is
+ * always trusted as-is (it may reflect a rate in effect at sale time
+ * that has since changed).
+ */
+export function resolveSaleOutputVat(sale: Pick<Sale, "outputVat" | "total">): number {
+  if (sale.outputVat) return sale.outputVat;
+  if (sale.total <= 0) return 0;
+  return splitInclusiveTotal(sale.total).vat;
+}
+
+/** Same reasoning as resolveSaleOutputVat, for a purchase's input VAT —
+ * see actions.ts's recordPurchase, which stores a literal `inputVat: 0`
+ * for any purchase entered while VAT wasn't registered. */
+export function resolvePurchaseInputVat(purchase: Pick<Purchase, "inputVat" | "subtotal" | "total">): number {
+  if (purchase.inputVat) return purchase.inputVat;
+  const subtotal = purchase.subtotal ?? purchase.total;
+  if (subtotal <= 0) return 0;
+  return calcInputVat(subtotal);
 }
 
 export function isVatEnabled(business: BusinessInfo): boolean {
@@ -148,20 +180,14 @@ export function getVatQuarterSummary(
     isDateInQuarter(adjustment.issuedAt, bounds),
   );
 
-  const outputVatBeforeReturns = quarterSales.reduce((sum, s) => {
-    if (s.outputVat != null) return sum + s.outputVat;
-    return sum + splitInclusiveTotal(s.total).vat;
-  }, 0);
+  const outputVatBeforeReturns = quarterSales.reduce((sum, s) => sum + resolveSaleOutputVat(s), 0);
   const returnVatReversal = quarterCreditNotes.reduce(
     (sum, adjustment) => sum + Math.max(0, adjustment.outputVatReversal),
     0,
   );
   const outputVat = outputVatBeforeReturns - returnVatReversal;
 
-  const inputVat = quarterPurchases.reduce((sum, p) => {
-    if (p.inputVat != null) return sum + p.inputVat;
-    return sum + calcInputVat(p.subtotal ?? p.total);
-  }, 0);
+  const inputVat = quarterPurchases.reduce((sum, p) => sum + resolvePurchaseInputVat(p), 0);
 
   return {
     bounds,

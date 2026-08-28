@@ -1,7 +1,43 @@
 import type { Product } from "@/lib/types";
 import type { AppData, Sale, StockLog } from "@/lib/store/types";
+import { NEAR_EXPIRY_DAYS } from "./pharmacy-config";
 
 export type RetailSector = "pharmacy" | "grocery";
+
+/** Sales Performance / Owner Financial Snapshot used to be hardcoded to a
+ * rolling 30-day window with no way to change it — this is the real
+ * period selector behind that control. "custom" carries its own
+ * start/end; the named presets are resolved against `referenceDate` in
+ * resolvePeriodRange() below. Week-over-week/month-over-month/
+ * year-over-year all fall out of the same mechanism: each preset also
+ * resolves the *immediately preceding* period of equal length, and
+ * periodChangePct compares actual recorded totals between the two —
+ * never an assumed or interpolated number. */
+export type DashboardPeriod =
+  | "7d"
+  | "30d"
+  | "this_week"
+  | "this_month"
+  | "last_month"
+  | { custom: { start: string; end: string } };
+
+export type ResolvedPeriodRange = {
+  /** Inclusive day-string bounds (YYYY-MM-DD), matching Sale.date's own
+   * format so range filtering stays a plain string comparison. */
+  startKey: string;
+  endKey: string;
+  priorStartKey: string;
+  priorEndKey: string;
+  label: string;
+  /** What periodChangePct is actually comparing against. Every preset
+   * compares to "the immediately preceding period of equal length" under
+   * the hood, but that basis differs in kind — a rolling window (30d)
+   * compares to the 30 days before it, while "this_month" compares to the
+   * same number of days into last calendar month. Surfacing this next to
+   * the trend badge is what distinguishes it from a *different* screen's
+   * "vs last month" figure, which may be comparing on a different basis. */
+  comparisonLabel: string;
+};
 
 export type RetailLotSnapshot = {
   id: string;
@@ -9,7 +45,12 @@ export type RetailLotSnapshot = {
   batchNo: string;
   expiryDate: string | null;
   qtyOnHand: number;
-  status: "available" | "quarantine" | "expired" | "depleted" | "returned" | "recalled";
+  // "disposed"/"supplier_returned" are terminal post-disposition states
+  // (see 20260825000001_blocked_lot_disposition.sql) — qtyOnHand is always
+  // 0 by the time a lot reaches either, so they never affect
+  // available/near-expiry/blocked counts; listed here only so the type
+  // doesn't lie about what the DB can actually return.
+  status: "available" | "quarantine" | "expired" | "depleted" | "returned" | "recalled" | "disposed" | "supplier_returned";
 };
 
 export type RetailTrendPoint = {
@@ -66,11 +107,32 @@ export type RetailDashboardIntelligence = {
   inventoryCostValue: number | null;
   todaySales: number;
   todayTransactions: number;
+  /** vs. the same total computed for yesterday, from the same `data.sales`
+   * — null only when yesterday had zero recorded sales (nothing to divide
+   * by), never fabricated. Active SKUs and Low Stock have no equivalent:
+   * neither Product nor StockLog carries the history needed to know what
+   * either count was N days ago without guessing. */
+  todaySalesChangePct: number | null;
   averageBasket: number;
   periodSales: number;
   periodTransactions: number;
   periodProfit: number | null;
   grossMarginPct: number | null;
+  /** Label for whatever range periodSales/periodProfit/topMovers/etc. were
+   * actually computed over — was a hardcoded "30-day sales" string before;
+   * now reflects the real selected DashboardPeriod. */
+  periodLabel: string;
+  /** periodSales vs. the immediately preceding period of equal length
+   * (the "this_week"/"this_month" presets are how week-over-week and
+   * month-over-month land here) — real data, same null-when-no-baseline
+   * rule as todaySalesChangePct. */
+  periodChangePct: number | null;
+  /** What periodChangePct is compared against, in words — see
+   * ResolvedPeriodRange.comparisonLabel. Render this next to the trend
+   * badge so "▲500%" always says what it's measured against, since that
+   * basis differs by preset (rolling window vs. calendar month) and can't
+   * be assumed from periodLabel alone. */
+  periodComparisonLabel: string;
   medicineCount: number;
   nonMedicineCount: number;
   nearExpiryCount: number;
@@ -98,8 +160,98 @@ function parseTime(value: string): number {
   return Number.isFinite(time) ? time : 0;
 }
 
+/** `unit` (e.g. "tablets", "ml", "strips") is the only field that belongs
+ * next to a quantity. `packSize` is a separate, free-text *descriptive*
+ * field ("10 tablets", "100 ml", or shorthand like "100C") — see
+ * sector-fields.ts. Falling back to it here used to render nonsense like
+ * "0 100C" (stock qty + a pack-size code with no separator or label) in
+ * the Replenishment Queue; a bare generic unit is honest where "unit" is
+ * genuinely unset, packSize never is. */
 function productUnit(product: Product): string {
-  return String(product.customFields.unit ?? product.customFields.packSize ?? "pcs");
+  return String(product.customFields.unit ?? "units");
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setUTCDate(result.getUTCDate() + days);
+  return result;
+}
+
+/** Monday-start week, so "this_week" reads as a normal business week. */
+function startOfWeek(date: Date): Date {
+  const day = date.getUTCDay();
+  const diff = day === 0 ? 6 : day - 1;
+  return addDays(date, -diff);
+}
+
+function startOfMonth(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+/** Resolves a DashboardPeriod into concrete day-key bounds plus the
+ * immediately preceding period of equal length — the mechanism behind
+ * every "vs previous period" comparison this module computes. Never
+ * looks past `data.sales` itself: a period with no prior activity just
+ * yields a `null` comparison upstream, not an invented one. */
+export function resolvePeriodRange(period: DashboardPeriod, referenceDate: Date): ResolvedPeriodRange {
+  if (typeof period === "object") {
+    const { start, end } = period.custom;
+    const startDate = new Date(`${start}T00:00:00Z`);
+    const endDate = new Date(`${end}T00:00:00Z`);
+    const lengthDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / DAY_MS) + 1);
+    const priorEnd = addDays(startDate, -1);
+    const priorStart = addDays(priorEnd, -(lengthDays - 1));
+    return {
+      startKey: start,
+      endKey: end,
+      priorStartKey: dayKey(priorStart),
+      priorEndKey: dayKey(priorEnd),
+      label: start === end ? start : `${start} – ${end}`,
+      comparisonLabel: "vs prior period",
+    };
+  }
+
+  if (period === "7d") {
+    const end = referenceDate;
+    const start = addDays(end, -6);
+    const priorEnd = addDays(start, -1);
+    const priorStart = addDays(priorEnd, -6);
+    return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "Last 7 days", comparisonLabel: "vs prior 7 days" };
+  }
+  if (period === "this_week") {
+    const start = startOfWeek(referenceDate);
+    const end = referenceDate;
+    const priorEnd = addDays(start, -1);
+    const priorStart = addDays(priorEnd, -6);
+    return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "This week", comparisonLabel: "vs last week" };
+  }
+  if (period === "this_month") {
+    const start = startOfMonth(referenceDate);
+    const end = referenceDate;
+    // Normalize `end` to midnight before diffing — referenceDate carries
+    // whatever time-of-day the caller passed (real callers use "now"),
+    // and that fractional day was rounding daysSoFar up by one.
+    const endAtMidnight = new Date(`${dayKey(end)}T00:00:00Z`);
+    const daysSoFar = Math.round((endAtMidnight.getTime() - start.getTime()) / DAY_MS) + 1;
+    const priorMonthStart = startOfMonth(addDays(start, -1));
+    const priorStart = priorMonthStart;
+    const priorEnd = addDays(priorMonthStart, daysSoFar - 1);
+    return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "This month", comparisonLabel: "vs same days last month" };
+  }
+  if (period === "last_month") {
+    const thisMonthStart = startOfMonth(referenceDate);
+    const lastMonthStart = startOfMonth(addDays(thisMonthStart, -1));
+    const lastMonthEnd = addDays(thisMonthStart, -1);
+    const priorMonthStart = startOfMonth(addDays(lastMonthStart, -1));
+    const priorMonthEnd = addDays(lastMonthStart, -1);
+    return { startKey: dayKey(lastMonthStart), endKey: dayKey(lastMonthEnd), priorStartKey: dayKey(priorMonthStart), priorEndKey: dayKey(priorMonthEnd), label: "Last month", comparisonLabel: "vs month before" };
+  }
+  // "30d" — the original default window, kept as the fallback.
+  const end = referenceDate;
+  const start = addDays(end, -29);
+  const priorEnd = addDays(start, -1);
+  const priorStart = addDays(priorEnd, -29);
+  return { startKey: dayKey(start), endKey: dayKey(end), priorStartKey: dayKey(priorStart), priorEndKey: dayKey(priorEnd), label: "Last 30 days", comparisonLabel: "vs prior 30 days" };
 }
 
 export function isPharmacyMedicine(product: Product): boolean {
@@ -108,15 +260,6 @@ export function isPharmacyMedicine(product: Product): boolean {
   const category = product.category.toLowerCase();
   if (category.includes("medicine")) return true;
   return Boolean(product.customFields.genericName || product.customFields.dosageForm || product.customFields.strength);
-}
-
-function salesWithinDays(sales: Sale[], referenceDate: Date, days: number): Sale[] {
-  const end = referenceDate.getTime() + DAY_MS;
-  const start = referenceDate.getTime() - (days - 1) * DAY_MS;
-  return sales.filter((sale) => {
-    const time = parseTime(sale.date);
-    return time >= start && time < end;
-  });
 }
 
 function buildTrend(sales: Sale[], canSeeFinancials: boolean, referenceDate: Date): RetailTrendPoint[] {
@@ -236,7 +379,7 @@ function buildExpiryMetrics(
 ): Pick<RetailDashboardIntelligence, "nearExpiryCount" | "expiredLotCount" | "quarantineLotCount" | "fefoProductCount" | "availableLotCount" | "expiryQueue"> {
   const productById = new Map(products.map((product) => [product.id, product]));
   const today = new Date(dayKey(referenceDate)).getTime();
-  const nearCutoff = today + 90 * DAY_MS;
+  const nearCutoff = today + NEAR_EXPIRY_DAYS * DAY_MS;
   const availableByProduct = new Map<string, number>();
   let nearExpiryCount = 0;
   let expiredLotCount = 0;
@@ -326,6 +469,7 @@ export function buildRetailDashboardIntelligence(
   canSeeFinancials: boolean,
   lots: RetailLotSnapshot[] = [],
   referenceDate = new Date(),
+  period: DashboardPeriod = "30d",
 ): RetailDashboardIntelligence {
   const products = data.products;
   const activeProducts = products.filter((product) => product.active);
@@ -333,11 +477,29 @@ export function buildRetailDashboardIntelligence(
   const outOfStock = activeProducts.filter((product) => product.stockQty <= 0);
   const today = dayKey(referenceDate);
   const todaySalesRows = data.sales.filter((sale) => sale.date.startsWith(today));
-  const recentSales = salesWithinDays(data.sales, referenceDate, 30);
+  const range = resolvePeriodRange(period, referenceDate);
+  const recentSales = data.sales.filter((sale) => {
+    const key = sale.date.slice(0, 10);
+    return key >= range.startKey && key <= range.endKey;
+  });
+  const priorPeriodSalesTotal = data.sales
+    .filter((sale) => {
+      const key = sale.date.slice(0, 10);
+      return key >= range.priorStartKey && key <= range.priorEndKey;
+    })
+    .reduce((sum, sale) => sum + sale.total, 0);
   const rankingSales = recentSales.length ? recentSales : data.sales;
   const todaySales = todaySalesRows.reduce((sum, sale) => sum + sale.total, 0);
+  const yesterday = new Date(referenceDate);
+  yesterday.setUTCDate(referenceDate.getUTCDate() - 1);
+  const yesterdayKey = dayKey(yesterday);
+  const yesterdaySales = data.sales
+    .filter((sale) => sale.date.startsWith(yesterdayKey))
+    .reduce((sum, sale) => sum + sale.total, 0);
+  const todaySalesChangePct = yesterdaySales > 0 ? ((todaySales - yesterdaySales) / yesterdaySales) * 100 : null;
   const periodSales = recentSales.reduce((sum, sale) => sum + sale.total, 0);
   const periodProfit = canSeeFinancials ? recentSales.reduce((sum, sale) => sum + sale.profit, 0) : null;
+  const periodChangePct = priorPeriodSalesTotal > 0 ? ((periodSales - priorPeriodSalesTotal) / priorPeriodSalesTotal) * 100 : null;
   const averageBase = todaySalesRows.length ? todaySalesRows : recentSales;
   const averageTotal = averageBase.reduce((sum, sale) => sum + sale.total, 0);
   const medicines = sector === "pharmacy" ? activeProducts.filter(isPharmacyMedicine).length : 0;
@@ -352,9 +514,13 @@ export function buildRetailDashboardIntelligence(
       ? activeProducts.reduce((sum, product) => sum + product.stockQty * product.buyPrice, 0)
       : null,
     todaySales,
+    todaySalesChangePct,
     todayTransactions: todaySalesRows.length,
     averageBasket: averageBase.length ? averageTotal / averageBase.length : 0,
     periodSales,
+    periodLabel: range.label,
+    periodChangePct,
+    periodComparisonLabel: range.comparisonLabel,
     periodTransactions: recentSales.length,
     periodProfit,
     grossMarginPct: canSeeFinancials && periodSales > 0 && periodProfit != null ? (periodProfit / periodSales) * 100 : null,

@@ -124,6 +124,7 @@ function asSectorId(value: string | null | undefined): SectorId {
     "electricals",
     "spare_parts",
     "footwear",
+    "textile",
     "ac_hvac",
     "car_sales",
   ];
@@ -1297,6 +1298,12 @@ export async function syncSaleSnapshot(
   );
   if (linesErr) return linesErr;
 
+  const bankTransaction = data.bankTransactions.find((row) => row.id === saleId);
+  if (bankTransaction) {
+    const bankErr = await syncBankTransactionSnapshot(organizationId, data, saleId);
+    if (bankErr) return bankErr;
+  }
+
   const billTag = sale.id.slice(0, 8);
   const saleLogs = data.stockLogs.filter(
     (log) => log.type === "sale" && log.note?.includes(billTag),
@@ -1631,6 +1638,12 @@ export async function syncCustomerPaymentSnapshot(
 
   const custErr = await syncCustomersSnapshot(organizationId, data.customers);
   if (custErr) return custErr;
+
+  const bankTransaction = data.bankTransactions.find((row) => row.id === paymentId);
+  if (bankTransaction) {
+    const bankErr = await syncBankTransactionSnapshot(organizationId, data, paymentId);
+    if (bankErr) return bankErr;
+  }
 
   return upsertOrgRows("customer_payments", [
     customerPaymentRow(organizationId, payment),
@@ -2057,7 +2070,7 @@ export async function deleteVehicleFromCloud(
   return error?.message ?? null;
 }
 
-/** Upsert a sold vehicle and any customer credit balance change to Supabase. */
+/** Upsert a sold vehicle, its invoice sale and any customer balance change. */
 export async function syncVehicleSaleSnapshot(
   organizationId: string,
   data: AppData,
@@ -2065,6 +2078,26 @@ export async function syncVehicleSaleSnapshot(
 ): Promise<string | null> {
   const vehicle = data.vehicles.find((row) => row.id === vehicleId);
   if (!vehicle) return "Vehicle not found locally";
+
+  const sale = data.sales.find((row) => row.id === vehicleId);
+  if (!sale) return "Vehicle invoice not found locally";
+
+  // syncSaleSnapshot is safe to retry because both the sale and vehicle use a
+  // stable id and sale lines are replaced rather than appended.
+  const saleErr = await syncSaleSnapshot(organizationId, data, sale.id);
+  if (saleErr) return saleErr;
+
+  const bankTransaction = data.bankTransactions.find(
+    (row) => row.id === vehicleId,
+  );
+  if (bankTransaction) {
+    const bankErr = await syncBankTransactionSnapshot(
+      organizationId,
+      data,
+      bankTransaction.id,
+    );
+    if (bankErr) return bankErr;
+  }
 
   if (vehicle.paymentMethod === "credit" && vehicle.customerId) {
     const custErr = await syncCustomersSnapshot(organizationId, data.customers);

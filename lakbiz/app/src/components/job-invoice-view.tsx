@@ -2,7 +2,7 @@
 
 import type { ACJob } from "@/lib/store/types";
 import type { BusinessInfo } from "@/lib/invoice";
-import { invoiceableLinesTotal, jobInvoiceWhatsappUrl, taxInvoiceAmountsForJob, type InvoiceLineItem } from "@/lib/job-invoice";
+import { invoiceableLinesTotal, taxInvoiceAmountsForJob, type InvoiceLineItem } from "@/lib/job-invoice";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { amountInWordsLkr, formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -33,7 +33,6 @@ export function JobInvoiceView({ job, business, customerAddress, showActions = t
   const invoiceableItems = (items ?? []).filter((i) => i.invoiceable && i.customerPrice != null);
   const hasItemizedLines = invoiceableItems.length > 0;
   const invoiceTotal = hasItemizedLines ? invoiceableLinesTotal(invoiceableItems) : job.quotedAmount;
-  const waUrl = jobInvoiceWhatsappUrl(job, business, locale, t, undefined, items);
   const amounts = taxInvoiceAmountsForJob(job, business, hasItemizedLines ? invoiceTotal : undefined);
   const isTaxInvoice = amounts.isTaxInvoice;
   const balance = invoiceTotal - job.depositAmount;
@@ -43,6 +42,23 @@ export function JobInvoiceView({ job, business, customerAddress, showActions = t
   return (
     <div>
       {showActions && (
+        // One WhatsApp entry point, not two. This used to also render a
+        // raw wa.me deep-link button next to Message -- the same message,
+        // just skipping the composer's own WhatsApp tab, templates, and
+        // (once WasenderAPI is enabled for this sector) the real Auto
+        // WhatsApp send. Two buttons for one action was confusing on its
+        // own, and left the deep-link one permanently stuck manual since
+        // it could never reach the API path at all. Message now covers
+        // both -- see message-composer.tsx's channel picker.
+        //
+        // Reported live right after that change: clicking Message from
+        // this exact screen defaulted to the "Job completed" status
+        // template, not the invoice -- there was no template that sent
+        // the actual bill at all. defaultTemplate is now "job_invoice"
+        // (composeFromContext swaps in the real itemized text, same
+        // pattern as sale/bill_receipt), and `items` is passed through so
+        // it itemizes correctly for jobs with priced parts instead of
+        // always falling back to the flat quotedAmount.
         <div className="no-print mb-6 flex flex-wrap gap-3">
           <button
             onClick={() => window.print()}
@@ -50,19 +66,11 @@ export function JobInvoiceView({ job, business, customerAddress, showActions = t
           >
             {t("bills.print")}
           </button>
-          <a
-            href={waUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-          >
-            {t("bills.whatsapp")}
-          </a>
           <MessageSendButton
             phone={job.phone}
             recipientName={job.customerName}
-            context={{ type: "ac_job", job, business }}
-            defaultTemplate="job_completed"
+            context={{ type: "ac_job", job, business, items }}
+            defaultTemplate="job_invoice"
             contextId={job.id}
             variant="compact"
           />

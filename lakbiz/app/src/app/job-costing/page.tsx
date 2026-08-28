@@ -111,8 +111,18 @@ export default function JobCostingPage() {
     }));
 
   const sorted = [...costed].sort((a, b) => {
-    if (sortKey === "margin") return a.profit.grossProfit - b.profit.grossProfit;
-    if (sortKey === "marginPct") return (a.profit.grossMarginPct ?? 0) - (b.profit.grossMarginPct ?? 0);
+    // Jobs with no cost data recorded no longer show a margin number at
+    // all (see the "margin" column's render above) -- sink them to the
+    // end of a margin-based sort instead of ranking them by a
+    // grossProfit/0% fallback that isn't displayed anymore and would
+    // otherwise place "phantom 100%" jobs at the top.
+    if (sortKey === "margin" || sortKey === "marginPct") {
+      if (a.profit.hasCostData !== b.profit.hasCostData) return a.profit.hasCostData ? -1 : 1;
+      if (!a.profit.hasCostData) return 0;
+      return sortKey === "margin"
+        ? a.profit.grossProfit - b.profit.grossProfit
+        : (a.profit.grossMarginPct ?? 0) - (b.profit.grossMarginPct ?? 0);
+    }
     if (sortKey === "quoted") return b.job.quotedAmount - a.job.quotedAmount;
     return b.job.date.localeCompare(a.job.date);
   });
@@ -120,11 +130,27 @@ export default function JobCostingPage() {
   const totalQuoted = costed.reduce((s, c) => s + c.job.quotedAmount, 0);
   const totalCost = costed.reduce((s, c) => s + c.profit.totalCost, 0);
   const totalMargin = totalQuoted - totalCost;
-  const avgMarginPct = totalQuoted > 0 ? (totalMargin / totalQuoted) * 100 : null;
   const totalMaterial = costed.reduce((s, c) => s + c.profit.materialCost, 0);
   const totalLabor = costed.reduce((s, c) => s + c.profit.laborCost, 0);
   const totalOther = costed.reduce((s, c) => s + c.profit.otherCost, 0);
   const unrecordedCount = costed.filter((c) => (jobItemsByJob.get(c.job.id) ?? []).length === 0).length;
+
+  // Reported bug: a job with no cost data recorded (no job_items, no
+  // linked Expenses) has totalCost = 0 by construction, so it always
+  // computed as a 100% margin -- read as a real, positive business
+  // result rather than what it actually is: nobody has entered costs
+  // yet. Avg Margin % is now based only on cost-assessable jobs
+  // (hasCostData), with a count of how many were excluded shown in the
+  // hint below, so a shop full of not-yet-costed jobs can't inflate
+  // this into a false "we're highly profitable" reading. Total Margin
+  // stays the full-set currency sum (still an accurate "at least this
+  // much recorded" figure, not a ratio implying overall profitability),
+  // with the same exclusion count noted alongside it.
+  const costedWithData = costed.filter((c) => c.profit.hasCostData);
+  const jobsMissingCostData = costed.length - costedWithData.length;
+  const totalQuotedAssessable = costedWithData.reduce((s, c) => s + c.job.quotedAmount, 0);
+  const totalMarginAssessable = costedWithData.reduce((s, c) => s + c.profit.grossProfit, 0);
+  const avgMarginPct = totalQuotedAssessable > 0 ? (totalMarginAssessable / totalQuotedAssessable) * 100 : null;
 
   // Part 23 — "most profitable"/"lowest margin" as bounded, real lists
   // over the currently-filtered set (respects every filter above), not a
@@ -201,19 +227,28 @@ export default function JobCostingPage() {
       key: "margin",
       header: t("costing.margin"),
       align: "right",
-      render: (c) => (
-        <div>
-          <p className={`font-semibold ${marginTone(c.profit.grossProfit)}`}>{formatLkr(c.profit.grossProfit)}</p>
-          {c.profit.grossMarginPct !== null && (
-            <p className={`text-xs ${marginTone(c.profit.grossProfit)}`}>{c.profit.grossMarginPct.toFixed(1)}%</p>
-          )}
-          {isLowMarginJob(c.profit) && (
-            <span className="mt-1 inline-flex rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-700">
-              {t("costing.low_margin")}
-            </span>
-          )}
-        </div>
-      ),
+      render: (c) =>
+        // Reported bug: a job with no job_items/expenses/subcontractCost
+        // recorded has grossProfit === its full quoted amount (cost is 0
+        // by construction), which used to render here looking like a
+        // real, large profit -- not "nobody has entered costs yet." Show
+        // a real placeholder instead of that number for the whole row
+        // until hasCostData is true.
+        c.profit.hasCostData ? (
+          <div>
+            <p className={`font-semibold ${marginTone(c.profit.grossProfit)}`}>{formatLkr(c.profit.grossProfit)}</p>
+            {c.profit.grossMarginPct !== null && (
+              <p className={`text-xs ${marginTone(c.profit.grossProfit)}`}>{c.profit.grossMarginPct.toFixed(1)}%</p>
+            )}
+            {isLowMarginJob(c.profit) && (
+              <span className="mt-1 inline-flex rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-700">
+                {t("costing.low_margin")}
+              </span>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs font-medium text-slate-400">{t("costing.no_cost_data_hint")}</p>
+        ),
     },
   ];
 
@@ -231,8 +266,24 @@ export default function JobCostingPage() {
                 value={formatLkr(totalCost)}
                 hint={`${t("jobs.economics_material")} ${formatLkr(totalMaterial)} · ${t("jobs.economics_labor")} ${formatLkr(totalLabor)} · ${t("jobs.economics_other")} ${formatLkr(totalOther)}`}
               />
-              <MetricCard label={t("costing.total_margin")} value={formatLkr(totalMargin)} tone={totalMargin < 0 ? "danger" : "positive"} />
-              <MetricCard label={t("costing.avg_margin_pct")} value={avgMarginPct !== null ? `${avgMarginPct.toFixed(1)}%` : "—"} tone={avgMarginPct !== null && avgMarginPct < 0 ? "danger" : "default"} />
+              <MetricCard
+                label={t("costing.total_margin")}
+                value={formatLkr(totalMargin)}
+                hint={jobsMissingCostData > 0 ? t("costing.jobs_uncosted_hint").replace("{count}", String(jobsMissingCostData)) : undefined}
+                tone={totalMargin < 0 ? "danger" : "positive"}
+              />
+              <MetricCard
+                label={t("costing.avg_margin_pct")}
+                value={avgMarginPct !== null ? `${avgMarginPct.toFixed(1)}%` : "—"}
+                hint={
+                  avgMarginPct === null
+                    ? t("costing.no_cost_data_hint")
+                    : jobsMissingCostData > 0
+                      ? t("costing.jobs_uncosted_hint").replace("{count}", String(jobsMissingCostData))
+                      : undefined
+                }
+                tone={avgMarginPct !== null && avgMarginPct < 0 ? "danger" : "default"}
+              />
             </div>
           }
         />

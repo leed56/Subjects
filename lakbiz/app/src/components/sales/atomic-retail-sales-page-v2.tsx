@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
+import { setBottomBarOccupied } from "@/components/shell/bottom-bar-overlay";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { AdvancedSaleSelector, type AdvancedSaleLineState } from "@/components/sales/advanced-sale-selector";
 import {
@@ -22,6 +23,10 @@ import { customerPrimaryLabel } from "@/lib/contact-type";
 import { effectiveUnitPrice } from "@/lib/company-pricing";
 import { formatLkr } from "@/lib/format";
 import { buildQuoteTextFromLines, whatsappShareUrl } from "@/lib/invoice";
+import { sendApiWhatsApp } from "@/lib/messaging";
+import { useWhatsAppApiConfigured } from "@/lib/messaging/use-sms-api-configured";
+import { sectorAllowsApiWhatsApp } from "@/lib/messaging/wasender-sectors";
+import { isValidSlMobile } from "@/lib/messaging/phone";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { buildSaleInventoryAllocationLine } from "@/lib/inventory-sale-allocation";
@@ -83,12 +88,33 @@ function boolField(value: unknown): boolean {
 export function AtomicRetailSalesPageV2() {
   const { data, ready } = useAppStore();
   const { t, locale } = useLocale();
-  const { org, canSeeFinancials } = useSubscription();
+  const { org, canSeeFinancials, can } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
   const si = locale === "si";
   const fastRetail = FAST_RETAIL_SECTORS.has(org.sector);
   const advancedRetail = ADVANCED_RETAIL_SECTORS.has(org.sector);
   const conditionRelevant = !fastRetail;
+
+  // The quote share button here was a plain wa.me deep link only — always
+  // opens WhatsApp with the text pre-filled, but never actually sends.
+  // canApiWhatsApp mirrors message-composer.tsx's exact gate (same sector
+  // allowlist + bulk_messaging plan check) so this button only offers real
+  // API sending where it's actually wired up server-side. In practice this
+  // page only renders for pharmacy/grocery/advanced-retail sectors, so
+  // today that's just pharmacy — see wasender-sectors.ts.
+  const whatsappApiConfigured = useWhatsAppApiConfigured();
+  const canApiWhatsApp = whatsappApiConfigured === true && can("bulk_messaging") && sectorAllowsApiWhatsApp(org.sector);
+  const [sendingQuoteApi, setSendingQuoteApi] = useState(false);
+  // Reported: a failed send (e.g. a rejected/invalid provider API key)
+  // rendered as raw unstyled text -- "invalid API key" straight from
+  // WasenderAPI's own response, no icon/border/action, reading like a
+  // debug string that leaked into production. The button above only
+  // ever shows once canApiWhatsApp is already true (config+plan+sector
+  // all pre-checked client-side), so any error that reaches this state
+  // is realistically always a provider/config-level failure, not a
+  // validation one -- worth a real actionable warning box every time,
+  // not just a generic error string.
+  const [quoteApiFeedback, setQuoteApiFeedback] = useState<{ ok: boolean; message: string } | null>(null);
 
   const [cart, setCart] = useState<Record<string, number>>({});
   const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
@@ -105,6 +131,7 @@ export function AtomicRetailSalesPageV2() {
   const [secondaryAmount, setSecondaryAmount] = useState<number | "">("");
   const [customerId, setCustomerId] = useState("");
   const [walkInName, setWalkInName] = useState("");
+  const [walkInPhone, setWalkInPhone] = useState("");
   const [chequeNo, setChequeNo] = useState("");
   const [chequeBank, setChequeBank] = useState(LK_BANKS[0]);
   const [chequeDate, setChequeDate] = useState(new Date().toISOString().slice(0, 10));
@@ -150,6 +177,14 @@ export function AtomicRetailSalesPageV2() {
       });
   }, [cart, priceOverrides, data, customerId]);
 
+  // Tell the shared mobile bottom nav to step aside only while our own
+  // fixed settlement bar is actually showing (lines non-empty) — see
+  // bottom-bar-overlay.ts.
+  useEffect(() => {
+    setBottomBarOccupied(lines.length > 0);
+    return () => setBottomBarOccupied(false);
+  }, [lines.length]);
+
   const gross = lines.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
   const discountClamped = Math.min(Math.max(0, discount), gross);
   const netTotal = gross - discountClamped;
@@ -183,6 +218,12 @@ export function AtomicRetailSalesPageV2() {
     ? data.customers.find((customer) => customer.id === customerId)
     : undefined;
   const buyerName = selectedCustomer?.name ?? walkInName.trim();
+  // WhatsApp recipient for the quote: a saved customer's phone, or (since
+  // most sales here are walk-ins with no account) whatever the cashier
+  // typed into the walk-in phone field below — same number either way,
+  // so the deep link and the API auto-send both target the actual buyer
+  // instead of only ever working when a saved customer is picked.
+  const recipientPhone = selectedCustomer?.phone ?? (walkInPhone.trim() || undefined);
   const quoteText = buildQuoteTextFromLines(
     lines.map((line) => ({
       productName: line.product.name,
@@ -193,7 +234,25 @@ export function AtomicRetailSalesPageV2() {
     data.business,
     { customerName: buyerName || undefined, discount: discountClamped, t },
   );
-  const quoteWaUrl = whatsappShareUrl(quoteText, selectedCustomer?.phone);
+  const quoteWaUrl = whatsappShareUrl(quoteText, recipientPhone);
+
+  const handleSendQuoteApi = async () => {
+    if (sendingQuoteApi || !isValidSlMobile(recipientPhone)) return;
+    setSendingQuoteApi(true);
+    setQuoteApiFeedback(null);
+    const result = await sendApiWhatsApp({
+      phone: recipientPhone!,
+      message: quoteText,
+      templateId: "sales_quote",
+      contextType: "custom",
+      recipientName: buyerName || undefined,
+    });
+    setSendingQuoteApi(false);
+    setQuoteApiFeedback({
+      ok: result.ok,
+      message: result.ok ? t("msg.api_sent_ok") : (result.error ?? t("msg.sent_fail")),
+    });
+  };
 
   const inStock = data.products.filter((product) => product.active && product.stockQty > 0);
   const query = search.trim().toLowerCase();
@@ -256,6 +315,7 @@ export function AtomicRetailSalesPageV2() {
     setPendingSaleId(null);
     const customer = data.customers.find((row) => row.id === id);
     setWalkInName(customer?.name ?? "");
+    setWalkInPhone(customer?.phone ?? "");
   };
 
   const buildAtomicLines = (): AtomicSaleLine[] => lines.map((line, index) => {
@@ -714,14 +774,30 @@ export function AtomicRetailSalesPageV2() {
                   </label>
 
                   {!customerId && (
-                    <label className="block text-sm font-bold text-slate-700">
-                      {t("sales.walkin_name")}
-                      <input
-                        value={walkInName}
-                        onChange={(event) => { setWalkInName(event.target.value); setPendingSaleId(null); }}
-                        className="mt-1.5 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-teal-300"
-                      />
-                    </label>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <label className="block text-sm font-bold text-slate-700">
+                        {t("sales.walkin_name")}
+                        <input
+                          value={walkInName}
+                          onChange={(event) => { setWalkInName(event.target.value); setPendingSaleId(null); }}
+                          className="mt-1.5 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-teal-300"
+                        />
+                      </label>
+                      <label className="block text-sm font-bold text-slate-700">
+                        {t("sales.walkin_phone")}
+                        <input
+                          type="tel"
+                          inputMode="tel"
+                          placeholder="07X XXX XXXX"
+                          value={walkInPhone}
+                          onChange={(event) => { setWalkInPhone(event.target.value); setPendingSaleId(null); }}
+                          className="mt-1.5 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-teal-300"
+                        />
+                        {walkInPhone.trim() !== "" && !isValidSlMobile(walkInPhone) && (
+                          <span className="mt-1 block text-xs font-semibold text-amber-600">{t("msg.phone_invalid")}</span>
+                        )}
+                      </label>
+                    </div>
                   )}
 
                   <div>
@@ -870,14 +946,50 @@ export function AtomicRetailSalesPageV2() {
                   )}
 
                   {lines.length > 0 && (
-                    <a
-                      href={quoteWaUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex min-h-11 w-full items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
-                    >
-                      {t("bills.quote_whatsapp")}
-                    </a>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <a
+                          href={quoteWaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 px-4 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+                        >
+                          {t("bills.quote_whatsapp")}
+                        </a>
+                        {/* Was always just this one deep link — opens
+                            WhatsApp with the quote pre-filled, but someone
+                            still has to press Send by hand. When the real
+                            WhatsApp API is available for this org, offer an
+                            actual auto-send too instead of only the manual
+                            open-and-send flow. */}
+                        {canApiWhatsApp && (
+                          <button
+                            type="button"
+                            disabled={sendingQuoteApi || !isValidSlMobile(recipientPhone)}
+                            title={!isValidSlMobile(recipientPhone) ? t("msg.phone_invalid") : undefined}
+                            onClick={() => void handleSendQuoteApi()}
+                            className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg border border-teal-300 bg-teal-50 px-4 text-sm font-bold text-teal-800 hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            🚀 {sendingQuoteApi ? t("msg.sending") : t("msg.send_api_whatsapp")}
+                          </button>
+                        )}
+                      </div>
+                      {quoteApiFeedback && (
+                        quoteApiFeedback.ok ? (
+                          <p className="text-center text-xs font-semibold text-emerald-700">{quoteApiFeedback.message}</p>
+                        ) : (
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">
+                            <p className="font-semibold">{quoteApiFeedback.message}</p>
+                            <Link
+                              href="/settings/notifications"
+                              className="mt-1 inline-block font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-900"
+                            >
+                              {t("msg.configure_whatsapp_link")}
+                            </Link>
+                          </div>
+                        )
+                      )}
+                    </div>
                   )}
 
                   <button

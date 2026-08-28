@@ -8,6 +8,9 @@ export type InventoryTrackingMode =
   | "variant_serial"
   | "variant_lot";
 
+// Textile physical identity is owned by the dedicated roll ledger. Generic
+// variant/lot allocation must remain off or it would compete with roll checkout.
+
 export type InventoryTrackingPreset = {
   defaultMode: InventoryTrackingMode;
   allowedModes: InventoryTrackingMode[];
@@ -80,6 +83,14 @@ const PRESETS: Record<SectorId, InventoryTrackingPreset> = {
     reasonEn: "Each size/colour combination must have its own stock quantity and barcode/SKU where used.",
     reasonSi: "එක් එක් ප්‍රමාණ/වර්ණ සංයෝජනයට වෙනම තොග ප්‍රමාණයක් සහ අවශ්‍ය නම් barcode/SKU තිබිය යුතුය.",
   },
+  textile: {
+    defaultMode: "simple",
+    allowedModes: ["simple"],
+    variantAxes: [],
+    fefo: false,
+    reasonEn: "Fabric identity, dye lots and measured availability are controlled by the dedicated physical-roll ledger, not generic lot allocation.",
+    reasonSi: "රෙදි identity, dye lot සහ මිනුම් තොගය generic lot allocation මගින් නොව dedicated roll ledger මගින් පාලනය වේ.",
+  },
   ac_hvac: {
     defaultMode: "simple",
     allowedModes: ["simple", "serial", "variant", "variant_serial"],
@@ -106,7 +117,7 @@ export function defaultInventoryTrackingMode(sectorId: SectorId): InventoryTrack
   return inventoryTrackingPreset(sectorId).defaultMode;
 }
 
-export function inventoryModeLabel(mode: InventoryTrackingMode, locale: "en" | "si" = "en"): string {
+export function inventoryModeLabel(mode: InventoryTrackingMode, locale: "en" | "si" | "ta" = "en"): string {
   const labels: Record<InventoryTrackingMode, [string, string]> = {
     simple: ["Simple quantity", "සරල තොග ප්‍රමාණය"],
     lot: ["Batch / expiry lots", "බැච් / කල් ඉකුත් තොග"],

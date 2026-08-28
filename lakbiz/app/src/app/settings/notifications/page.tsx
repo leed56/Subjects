@@ -1,8 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
+import { SettingsNav } from "@/components/settings/settings-nav";
+import { PageHeader } from "@/components/ui/primitives";
+import { ProMain } from "@/components/ui/pro-shell";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import {
   defaultNotificationSettings,
@@ -13,9 +15,10 @@ import {
   type NotificationLogEntry,
   type NotificationSettings,
 } from "@/lib/messaging";
-import { formatSlPhoneDisplay } from "@/lib/messaging";
+import { formatSlPhoneDisplay, isValidSlMobile } from "@/lib/messaging";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
-import { useSmsApiConfigured } from "@/lib/messaging/use-sms-api-configured";
+import { useSmsApiConfigured, useWhatsAppApiConfigured } from "@/lib/messaging/use-sms-api-configured";
+import { sectorAllowsApiWhatsApp } from "@/lib/messaging/wasender-sectors";
 import {
   fetchOrgNotificationSettings,
   saveOrgNotificationSettings,
@@ -33,12 +36,30 @@ export default function NotificationsSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
+  // Owner/technician phone previously had a placeholder but zero
+  // validation — anything typed persisted on blur, so a malformed number
+  // silently broke SMS delivery with no indication why. Blocking (not
+  // just warning) here: unlike VAT/BR/TIN, the LK mobile pattern isn't
+  // uncertain, and reusing the app's own isValidSlMobile (already the
+  // real send-eligibility check in message-composer.tsx) means this
+  // can't reject a number the send path would have accepted anyway.
+  const [ownerPhoneError, setOwnerPhoneError] = useState(false);
+  const [technicianPhoneError, setTechnicianPhoneError] = useState(false);
   const [batchResult, setBatchResult] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const smsApiConfigured = useSmsApiConfigured();
   const apiEnabled = smsApiConfigured === true;
   const canApiSms = can("bulk_messaging");
   const smsInputsDisabled = mounted && smsApiConfigured !== true;
+  // "Auto WhatsApp" (api_whatsapp) was added as a real channel everywhere
+  // else -- message-composer.tsx's CHANNELS list, dispatchMessage -- but
+  // this dropdown was never updated to offer it, so nobody could ever set
+  // it as their default: every composer kept opening on manual "WhatsApp"
+  // (a wa.me deep link) even for an org with the real API fully
+  // configured and enabled, forcing an extra manual tab-click every time.
+  const whatsappApiConfigured = useWhatsAppApiConfigured();
+  const whatsappApiEnabled = whatsappApiConfigured === true;
+  const canApiWhatsApp = can("bulk_messaging") && sectorAllowsApiWhatsApp(org.sector);
 
   useEffect(() => {
     setMounted(true);
@@ -130,7 +151,9 @@ export default function NotificationsSettingsPage() {
       if (matched === 0 && (data.sent ?? 0) === 0) {
         const remindDays =
           settings.serviceDueRemindDays.length > 0
-            ? settings.serviceDueRemindDays.join(", ")
+            ? settings.serviceDueRemindDays
+                .map((day) => (day === 0 ? t("msg.remind_day_of") : t("msg.remind_days_before").replace("{{days}}", String(day))))
+                .join(", ")
             : "—";
         message += `. ${t("msg.send_service_due_none").replace("{{days}}", remindDays)}`;
       }
@@ -149,19 +172,11 @@ export default function NotificationsSettingsPage() {
 
   return (
     <AppShell>
-      <main className="mx-auto max-w-3xl px-4 py-10">
-        <div className="mb-6">
-          <Link
-            href="/settings/plans"
-            className="text-sm text-teal-700 hover:underline"
-          >
-            ← {t("nav.plans")}
-          </Link>
-          <h1 className="mt-2 text-2xl font-bold text-slate-900">
-            {t("msg.settings_title")}
-          </h1>
-          <p className="text-slate-600">{t("msg.settings_subtitle")}</p>
-        </div>
+      <ProMain>
+        <PageHeader title={t("msg.settings_title")} description={t("msg.settings_subtitle")} />
+        <SettingsNav />
+
+        <div className="mx-auto max-w-4xl">
 
         {saving && (
           <div className="mb-4 rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">
@@ -179,7 +194,7 @@ export default function NotificationsSettingsPage() {
           </div>
         )}
 
-        <section className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="mb-6 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
           <h2 className="font-semibold text-slate-900">{t("msg.prefs_title")}</h2>
           <div className="mt-4 space-y-4">
             <label className="block text-sm">
@@ -198,6 +213,9 @@ export default function NotificationsSettingsPage() {
                 <option value="sms">{t("msg.sms")}</option>
                 {apiEnabled && canApiSms && (
                   <option value="api_sms">{t("msg.api_sms")}</option>
+                )}
+                {whatsappApiEnabled && canApiWhatsApp && (
+                  <option value="api_whatsapp">{t("msg.api_whatsapp")}</option>
                 )}
               </select>
             </label>
@@ -236,7 +254,7 @@ export default function NotificationsSettingsPage() {
           </div>
         </section>
 
-        <section className="mb-8 rounded-2xl border border-cyan-200 bg-gradient-to-br from-cyan-50/80 to-white p-6 shadow-sm">
+        <section className="mb-6 rounded-2xl border border-teal-200/80 bg-gradient-to-br from-teal-50/70 via-white to-white p-6 shadow-[0_8px_30px_rgba(15,118,110,0.07)]">
           <h2 className="font-semibold text-slate-900">
             {t("msg.auto_service_due_title")}
           </h2>
@@ -331,10 +349,45 @@ export default function NotificationsSettingsPage() {
                   {t("msg.remind_add_day")}
                 </button>
               </div>
+              {/* Custom-added days (anything outside the 14/7/2/0 preset
+                  chips above) had no chip of their own to toggle off with —
+                  once added via "Add" there was no way to remove one short
+                  of clearing the whole list. Rendering them here as their
+                  own removable chips, right next to the raw list they used
+                  to be dumped into unformatted ("Active reminders: 3, 0" —
+                  settings.serviceDueRemindDays.join(", ") with no label),
+                  fixes both: the value is now a real label, not a bare
+                  array, and every entry has an actual remove control. */}
+              {settings.serviceDueRemindDays.some((d) => ![14, 7, 2, 0].includes(d)) && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-slate-500">{t("msg.remind_custom_active")}:</span>
+                  {settings.serviceDueRemindDays
+                    .filter((d) => ![14, 7, 2, 0].includes(d))
+                    .map((day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() =>
+                          persist({
+                            ...settings,
+                            serviceDueRemindDays: settings.serviceDueRemindDays.filter((d) => d !== day),
+                          })
+                        }
+                        title={t("msg.remind_remove_day")}
+                        className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-800 hover:border-cyan-300 hover:bg-cyan-100"
+                      >
+                        {t("msg.remind_days_before").replace("{{days}}", String(day))}
+                        <span aria-hidden="true">×</span>
+                      </button>
+                    ))}
+                </div>
+              )}
               {settings.serviceDueRemindDays.length > 0 && (
                 <p className="mt-2 text-xs text-slate-500">
                   {t("msg.remind_active")}:{" "}
-                  {settings.serviceDueRemindDays.join(", ")}
+                  {settings.serviceDueRemindDays
+                    .map((day) => (day === 0 ? t("msg.remind_day_of") : t("msg.remind_days_before").replace("{{days}}", String(day))))
+                    .join(", ")}
                 </p>
               )}
             </div>
@@ -381,40 +434,56 @@ export default function NotificationsSettingsPage() {
                 <input
                   type="tel"
                   value={settings.ownerPhone}
-                  onChange={(e) =>
-                    setSettings((s) => ({ ...s, ownerPhone: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    if (ownerPhoneError) setOwnerPhoneError(false);
+                    setSettings((s) => ({ ...s, ownerPhone: e.target.value }));
+                  }}
                   onBlur={(e) => {
-                    const ownerPhone = e.target.value;
+                    const ownerPhone = e.target.value.trim();
+                    if (ownerPhone !== "" && !isValidSlMobile(ownerPhone)) {
+                      setOwnerPhoneError(true);
+                      return;
+                    }
+                    setOwnerPhoneError(false);
                     setSettings((s) => {
                       const next = { ...s, ownerPhone };
                       void persist(next);
                       return next;
                     });
                   }}
-                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                  aria-invalid={ownerPhoneError}
+                  className={`mt-1 w-full rounded-lg border px-3 py-2 ${ownerPhoneError ? "border-rose-300 focus:border-rose-400" : ""}`}
                   placeholder="07XXXXXXXX"
                 />
+                {ownerPhoneError && <span className="mt-1 block text-xs font-semibold text-rose-600">{t("msg.phone_format_hint")}</span>}
               </label>
               <label className="block text-sm">
                 {t("msg.technician_phone")}
                 <input
                   type="tel"
                   value={settings.technicianPhone}
-                  onChange={(e) =>
-                    setSettings((s) => ({ ...s, technicianPhone: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    if (technicianPhoneError) setTechnicianPhoneError(false);
+                    setSettings((s) => ({ ...s, technicianPhone: e.target.value }));
+                  }}
                   onBlur={(e) => {
-                    const technicianPhone = e.target.value;
+                    const technicianPhone = e.target.value.trim();
+                    if (technicianPhone !== "" && !isValidSlMobile(technicianPhone)) {
+                      setTechnicianPhoneError(true);
+                      return;
+                    }
+                    setTechnicianPhoneError(false);
                     setSettings((s) => {
                       const next = { ...s, technicianPhone };
                       void persist(next);
                       return next;
                     });
                   }}
-                  className="mt-1 w-full rounded-lg border px-3 py-2"
+                  aria-invalid={technicianPhoneError}
+                  className={`mt-1 w-full rounded-lg border px-3 py-2 ${technicianPhoneError ? "border-rose-300 focus:border-rose-400" : ""}`}
                   placeholder="07XXXXXXXX"
                 />
+                {technicianPhoneError && <span className="mt-1 block text-xs font-semibold text-rose-600">{t("msg.phone_format_hint")}</span>}
               </label>
             </div>
 
@@ -483,7 +552,7 @@ export default function NotificationsSettingsPage() {
           </div>
         </section>
 
-        <section className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="mb-6 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
           <h2 className="font-semibold text-slate-900">{t("msg.api_title")}</h2>
           <p className="mt-2 text-sm text-slate-600">{t("msg.api_desc")}</p>
           <p
@@ -513,7 +582,7 @@ export default function NotificationsSettingsPage() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
           <h2 className="font-semibold text-slate-900">{t("msg.log_title")}</h2>
           {log.length === 0 ? (
             <p className="mt-3 text-sm text-slate-500">{t("msg.log_empty")}</p>
@@ -544,7 +613,8 @@ export default function NotificationsSettingsPage() {
             </ul>
           )}
         </section>
-      </main>
+        </div>
+      </ProMain>
     </AppShell>
   );
 }

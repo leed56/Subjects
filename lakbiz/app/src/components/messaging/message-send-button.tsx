@@ -54,12 +54,18 @@ export function MessageSendButton({
     if (open) setEverOpened(true);
   }, [open]);
 
+  // shrink-0 + whitespace-nowrap: this button sits in tight, right-aligned
+  // action-column flex rows (Customers table etc.) alongside other buttons.
+  // Without them, a crowded row can compress this one below its own text
+  // width and the label ("Message") wraps mid-word ("Messa/ge") instead of
+  // the row just overflowing/scrolling — same fix for both text-bearing
+  // variants; "icon" has no label text to wrap.
   const baseClass =
     variant === "primary"
-      ? "rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-green-700 hover:to-emerald-700"
+      ? "shrink-0 whitespace-nowrap rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-green-700 hover:to-emerald-700"
       : variant === "icon"
-        ? "flex h-9 w-9 items-center justify-center rounded-full bg-green-100 text-green-800 hover:bg-green-200"
-        : "inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-800 hover:bg-green-100";
+        ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-800 hover:bg-green-200"
+        : "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-medium text-green-800 hover:bg-green-100";
 
   return (
     <>

@@ -11,6 +11,7 @@ import { AcAlertsBell } from "@/components/ac-alerts-bell";
 import { useAuth } from "@/components/auth-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { LOCALE_NAMES, nextLocale } from "@/lib/i18n/translations";
 import { ROUTE_FEATURES } from "@/lib/subscription/can";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { CloseIcon } from "@/components/ui/icons";
@@ -109,11 +110,11 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
           <div className="hidden items-center gap-2 md:flex">
             <button
               type="button"
-              onClick={() => setLocale(locale === "si" ? "en" : "si")}
+              onClick={() => setLocale(nextLocale(locale))}
               className="rounded-full border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
               aria-label="Toggle language"
             >
-              {t("nav.lang")}
+              {LOCALE_NAMES[nextLocale(locale)]}
             </button>
             <AcAlertsBell />
             <Link
@@ -179,10 +180,10 @@ export function SiteHeader({ sticky = true }: { sticky?: boolean }) {
             <AcAlertsBell />
             <button
               type="button"
-              onClick={() => setLocale(locale === "si" ? "en" : "si")}
+              onClick={() => setLocale(nextLocale(locale))}
               className="rounded-full border border-slate-300 px-2.5 py-1 text-[10px] font-semibold text-slate-600"
             >
-              {t("nav.lang")}
+              {LOCALE_NAMES[nextLocale(locale)]}
             </button>
             <button
               type="button"

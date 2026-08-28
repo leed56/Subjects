@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
+import { setBottomBarOccupied } from "@/components/shell/bottom-bar-overlay";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { AdvancedSaleSelector, type AdvancedSaleLineState } from "@/components/sales/advanced-sale-selector";
 import {
@@ -61,6 +62,7 @@ export default function SalesPage() {
   const [discount, setDiscount] = useState(0);
   const [cashReceived, setCashReceived] = useState<number | "">("");
   const [payment, setPayment] = useState<PaymentMethod>("cash");
+  const [bankAccountId, setBankAccountId] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [walkInName, setWalkInName] = useState("");
   const [buyerPhone, setBuyerPhone] = useState("");
@@ -90,6 +92,14 @@ export default function SalesPage() {
         return { product: p, qty, unitPrice };
       });
   }, [cart, priceOverrides, data, customerId]);
+
+  // Tell the shared mobile bottom nav to step aside only while our own
+  // fixed settlement bar is actually showing (lines non-empty) — see
+  // bottom-bar-overlay.ts.
+  useEffect(() => {
+    setBottomBarOccupied(lines.length > 0);
+    return () => setBottomBarOccupied(false);
+  }, [lines.length]);
 
   const gross = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
   const discountClamped = Math.min(Math.max(0, discount), gross);
@@ -227,6 +237,10 @@ export default function SalesPage() {
       setMessage(t("sales.cheque_need"));
       return;
     }
+    if ((payment === "bank_transfer" || payment === "card") && !bankAccountId) {
+      setMessage(t("cust.select_bank_account"));
+      return;
+    }
 
     if (showAcBuyerPanel) {
       const needsName =
@@ -282,6 +296,7 @@ export default function SalesPage() {
         chequeBank: payment === "cheque" ? chequeBank : undefined,
         chequeDate: payment === "cheque" ? chequeDate : undefined,
         postDated: payment === "cheque" ? postDated : undefined,
+        bankAccountId: bankAccountId || undefined,
       },
     );
 
@@ -753,7 +768,12 @@ export default function SalesPage() {
                         <button
                           key={m}
                           type="button"
-                          onClick={() => setPayment(m)}
+                          onClick={() => {
+                            setPayment(m);
+                            if ((m === "bank_transfer" || m === "card") && !bankAccountId) {
+                              setBankAccountId(data.bankAccounts[0]?.id ?? "");
+                            }
+                          }}
                           className={`rounded-2xl border px-3 py-3 text-sm font-bold transition ${
                             payment === m
                               ? "border-teal-200 bg-teal-50 text-teal-800 ring-4 ring-teal-100"
@@ -792,6 +812,23 @@ export default function SalesPage() {
                     <p className="rounded-2xl border border-amber-100 bg-amber-50 p-3 text-xs font-bold text-amber-800">
                       <Link href="/customers" className="underline">{t("cust.add")}</Link> {t("sales.add_customer_first")}
                     </p>
+                  )}
+
+                  {(payment === "bank_transfer" || payment === "card") && (
+                    data.bankAccounts.length > 0 ? (
+                      <label className="block text-sm font-bold text-slate-700">
+                        {t("cust.receiving_account")}
+                        <select value={bankAccountId} onChange={(event) => setBankAccountId(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                          {data.bankAccounts.map((account) => (
+                            <option key={account.id} value={account.id}>{account.bankName} · {account.accountNumber}</option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : (
+                      <Link href="/banking" className="block rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-900 underline">
+                        {t("cust.add_bank_account")}
+                      </Link>
+                    )
                   )}
 
                   {payment === "cheque" && (
@@ -834,7 +871,7 @@ export default function SalesPage() {
                   )}
 
                   <button
-                    disabled={lines.length === 0 || !canWrite || saving || advancedInventoryBlocked}
+                    disabled={lines.length === 0 || !canWrite || saving || advancedInventoryBlocked || ((payment === "bank_transfer" || payment === "card") && !bankAccountId)}
                     title={!canWrite ? (disabledHint ?? undefined) : advancedInventoryBlocked ? (si ? "Batch / variant / IMEI තේරීම සම්පූර්ණ කරන්න" : "Complete inventory identity selection") : undefined}
                     onClick={() => void handleSale()}
                     className="w-full rounded-2xl bg-teal-600 py-4 text-sm font-bold text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"

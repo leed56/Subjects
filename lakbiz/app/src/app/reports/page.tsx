@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
-import { PageHeader, MetricCard, EmptyState, SectionHeader } from "@/components/ui/primitives";
+import { PageHeader, MetricCard, EmptyState, SectionHeader, Tabs } from "@/components/ui/primitives";
 import { SelectInput } from "@/components/ui/form";
 import { ExportActions } from "@/components/export/export-actions";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -21,6 +21,7 @@ import {
 import { exportReportsCsv, printReportsSummary, type ReportsExportData } from "@/lib/export";
 
 type Period = "7d" | "30d" | "month" | "all";
+type ReportView = "overview" | "sales" | "jobs";
 
 /** Module-level so "today" isn't computed inline during render. */
 function periodStartIso(period: Period, now: Date): string | null {
@@ -32,7 +33,7 @@ function periodStartIso(period: Period, now: Date): string | null {
   return start.toISOString().slice(0, 10);
 }
 
-function dayLabel(iso: string, locale: "si" | "en"): string {
+function dayLabel(iso: string, locale: "si" | "en" | "ta"): string {
   return new Date(iso).toLocaleDateString(locale === "si" ? "si-LK" : "en-LK", { day: "numeric", month: "short" });
 }
 
@@ -42,6 +43,7 @@ export default function ReportsPage() {
   const { data: localData, ready: localReady } = useAppStore();
 
   const [period, setPeriod] = useState<Period>("30d");
+  const [activeView, setActiveView] = useState<ReportView>("overview");
 
   // `canSeeFinancials` is the same owner-only capability enforced by the DB.
   // Do not reintroduce the historical owner-or-manager shortcut here.
@@ -141,8 +143,12 @@ export default function ReportsPage() {
     (sum, adjustment) => sum + (adjustment.reversedProfit ?? 0),
     0,
   );
-  const totalRevenue = grossRevenue - returnRevenueReversal;
-  const totalProfit = grossProfit - returnProfitReversal;
+  // Sales-only revenue/profit — combined with AC Jobs further down (once
+  // costedJobs exists) into the actual headline totalRevenue/totalProfit.
+  // Kept as their own names because avgSale below is deliberately a sales
+  // (invoice) statistic only, not a blended sales+jobs one.
+  const salesRevenue = grossRevenue - returnRevenueReversal;
+  const salesProfit = grossProfit - returnProfitReversal;
 
   // Average sale stays an invoice statistic. Applying later credit notes to an
   // average invoice would change the meaning of the metric and produce a value
@@ -215,6 +221,17 @@ export default function ReportsPage() {
     .filter((c) => isLowMarginJob(c.profit))
     .sort((a, b) => a.profit.grossMarginPct! - b.profit.grossMarginPct!)
     .slice(0, 10);
+
+  // Headline Revenue/Profit fold in AC Jobs (showAcJobs is a capability
+  // gate, not sector-specific — totalQuoted/totalJobMargin are already 0
+  // for any org without the module, so this is a no-op for them). Before
+  // this, these headline cards only ever summed product Sales, so a
+  // service-heavy day/period on a Jobs-driven business (e.g. HVAC) could
+  // read as near-zero here despite real completed jobs — correct numbers
+  // were only visible on the separate Jobs tab below.
+  const totalRevenue = salesRevenue + totalQuoted;
+  const totalProfit = salesProfit + totalJobMargin;
+  const profitMarginPct = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
   const periodLabel = t(
     period === "7d" ? "reports.period_7d"
@@ -305,7 +322,7 @@ export default function ReportsPage() {
           metrics={
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard label={t("reports.total_revenue")} value={formatLkr(totalRevenue)} />
-              <MetricCard label={t("reports.total_profit")} value={formatLkr(totalProfit)} tone={totalProfit < 0 ? "danger" : "positive"} />
+              <MetricCard label={t("reports.total_profit")} value={formatLkr(totalProfit)} hint={`${profitMarginPct.toFixed(1)}% ${t("reports.margin_pct")}`} tone={totalProfit < 0 ? "danger" : "positive"} />
               <MetricCard label={t("reports.sales_count")} value={String(sales.length)} />
               <MetricCard label={t("reports.avg_sale")} value={formatLkr(avgSale)} />
             </div>
@@ -325,7 +342,19 @@ export default function ReportsPage() {
           </div>
         )}
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="mb-5">
+          <Tabs
+            value={activeView}
+            onChange={(value) => setActiveView(value as ReportView)}
+            tabs={[
+              { value: "overview", label: t("reports.tab_overview") },
+              { value: "sales", label: t("reports.tab_sales") },
+              ...(showAcJobs ? [{ value: "jobs", label: t("reports.tab_jobs") }] : []),
+            ]}
+          />
+        </div>
+
+        {activeView === "overview" && <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
           <SectionHeader title={t("reports.trend_title")} />
           {periodReturns.length > 0 && (
             <p className="mb-3 text-[11px] font-medium leading-5 text-slate-500">
@@ -335,23 +364,34 @@ export default function ReportsPage() {
           {trendValues.every((v) => v === 0) ? (
             <EmptyState title={t("reports.no_sales")} description={t("reports.no_sales_hint")} />
           ) : (
-            <div className="flex h-40 items-end gap-1.5">
+            <div className="flex h-48 items-end gap-1.5 overflow-x-auto pb-1">
               {trendDays.map((iso, i) => (
-                <div key={iso} className="flex flex-1 flex-col items-center gap-1.5">
-                  <div
-                    title={`${dayLabel(iso, locale)}: ${formatLkr(trendValues[i])}`}
-                    className={`w-full rounded-t ${trendValues[i] > 0 ? "bg-teal-500" : "bg-slate-100"}`}
-                    style={{ height: `${Math.max(2, (trendValues[i] / trendMax) * 100)}%` }}
-                  />
+                <div key={iso} className="flex min-w-8 flex-1 flex-col items-center gap-1.5">
+                  {/* This inner div is the percentage-height basis for the bar
+                      below. A percentage height only resolves against a
+                      parent with a *definite* height — this flex item had
+                      none (its height was content-auto, only bottom-aligned
+                      via the grandparent's `items-end`), so every bar's
+                      `height: N%` was resolving to 0 regardless of the real
+                      value: axis labels rendered (they size from their own
+                      text), bars never did. `h-40` gives it a real height to
+                      be a percentage of. */}
+                  <div className="flex h-40 w-full items-end">
+                    <div
+                      title={`${dayLabel(iso, locale)}: ${formatLkr(trendValues[i])}`}
+                      className={`w-full rounded-t ${trendValues[i] > 0 ? "bg-teal-500" : "bg-slate-100"}`}
+                      style={{ height: `${Math.max(2, (trendValues[i] / trendMax) * 100)}%` }}
+                    />
+                  </div>
                   <span className="text-[10px] text-slate-400">{dayLabel(iso, locale)}</span>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </div>}
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
+        {activeView === "sales" && <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
             <SectionHeader title={t("reports.top_products")} />
             {periodReturns.length > 0 && (
               <p className="mb-2 text-[11px] font-medium leading-5 text-slate-500">Gross invoiced activity; return credit notes are not guessed against product rankings.</p>
@@ -373,7 +413,7 @@ export default function ReportsPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
             <SectionHeader title={t("reports.top_customers")} />
             {periodReturns.length > 0 && (
               <p className="mb-2 text-[11px] font-medium leading-5 text-slate-500">Gross invoiced activity; aggregate credit notes are not assigned to a customer ranking without explicit return-line attribution.</p>
@@ -394,10 +434,10 @@ export default function ReportsPage() {
               </ul>
             )}
           </div>
-        </div>
+        </div>}
 
-        {showAcJobs && (
-          <div className="mt-4">
+        {showAcJobs && activeView === "jobs" && (
+          <div>
             <SectionHeader title={t("reports.ac_jobs_title")} />
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <MetricCard label={t("costing.total_quoted")} value={formatLkr(totalQuoted)} />
@@ -409,7 +449,7 @@ export default function ReportsPage() {
               />
             </div>
 
-            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-5">
+            <div className="mt-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
               <SectionHeader title={t("reports.jobs_needing_attention")} />
               {costedJobs.length === 0 ? (
                 <EmptyState title={t("reports.no_ac_jobs")} description={t("reports.no_ac_jobs_hint")} />
