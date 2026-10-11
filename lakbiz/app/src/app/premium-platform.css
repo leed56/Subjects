@@ -2314,3 +2314,9 @@
     height: 29px;
   }
 }
+.erp-demo .reference-table td:not(:first-child) {
+  white-space: nowrap;
+}
+.erp-demo .reference-table th {
+  white-space: nowrap;
+}
