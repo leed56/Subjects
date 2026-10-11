@@ -36,3 +36,6 @@ The dashboard (`/dashboard`), stock catalogue (`/stock`) and atomic retail POS (
 Existing data sources, owner-only cost visibility, stock filters, quantity controls, prescription/FEFO checks, payment handling and checkout commands remain the source of behavior. The imagery does not claim to depict a specific SKU. The special textile checkout and full authenticated owner mobile layout still require their own convergence work; the general inventory catalogue does not yet reproduce the demo shipment/landed-cost panels.
 
 Validation: TypeScript, changed-file ESLint and all 259 tests pass. Authenticated browser verification is pending account access; the user previously declined login handoff. This is a route integration increment, not a claim that every reference composition or production workflow is complete.
+
+
+The actual pharmacy/textile Owner Pulse now shares light surfaces, readable dark text, photographic sector title banners and a wider 650px mobile canvas. Its real alerts, period switch, financial calculations, action links and five-tab navigation are retained. Existing explicitly labelled sample states for organizations without transactions are unchanged. Other sectors still have the existing unsupported-sector state; this revision does not claim to implement their production analytics.

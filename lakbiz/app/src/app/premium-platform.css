@@ -2371,3 +2371,6 @@
   .live-industry-header-images { width: 60%; opacity: .12; }
   .live-pos-product-image.reference-product-photo { height: 96px; }
 }
+
+.live-pulse-heading { overflow: visible; }
+.live-pulse-heading > .live-industry-header-images { overflow: hidden; border-radius: 16px; }
