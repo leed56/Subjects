@@ -32,6 +32,7 @@ export async function fetchRetailDashboardLots(
       .from("inventory_lots")
       .select("id,product_id,batch_no,expiry_date,qty_on_hand,status")
       .eq("organization_id", organizationId)
+      .order("id", { ascending: true })
       .range(from, to),
   );
 

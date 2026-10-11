@@ -43,6 +43,14 @@ const PRESETS: Record<SectorId, InventoryTrackingPreset> = {
     reasonEn: "Medicines require batch identity and expiry-aware FEFO stock selection.",
     reasonSi: "ඖෂධ සඳහා batch හඳුනාගැනීම සහ කල් ඉකුත් දිනය අනුව FEFO තොග තේරීම අවශ්‍ය වේ.",
   },
+  cosmetics: {
+    defaultMode: "lot",
+    allowedModes: ["simple", "lot", "variant", "variant_lot"],
+    variantAxes: ["shade", "pack"],
+    fefo: true,
+    reasonEn: "Expiry-sensitive beauty products use batch/FEFO stock; shade and pack combinations can use variant lots. Non-expiring accessories can use simple or variant stock.",
+    reasonSi: "කල් ඉකුත් වන රූපලාවණ්‍ය භාණ්ඩ සඳහා බැච් සහ FEFO තොග භාවිතා කරන්න. වර්ණ සහ පැකේජ සඳහා variant lots ද, උපාංග සඳහා සරල තොග ද භාවිතා කළ හැක.",
+  },
   electronics: {
     defaultMode: "serial",
     allowedModes: ["simple", "serial", "variant", "variant_serial"],

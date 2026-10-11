@@ -15,6 +15,7 @@ import type { SectorId } from "@/lib/types";
 const SECTOR_ICON_BY_ID: Record<SectorId, (props: IconProps) => React.ReactElement> = {
   grocery: CartIcon,
   pharmacy: StockIcon,
+  cosmetics: ShopIcon,
   electronics: DeviceIcon,
   mobile_shop: DeviceIcon,
   electricals: BoltIcon,

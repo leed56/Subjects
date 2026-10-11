@@ -73,6 +73,7 @@ const PAGE_COPY = {
     industriesDesc:
       "Your shop gets the fields, reports and workflows that match how your sector actually operates.",
     industryDescriptions: {
+      cosmetics: "Beauty retail, shade and pack variants, batch expiry and controlled returns.",
       grocery: "Fast billing, weighted items, expiry tracking and credit customers.",
       electronics: "Serial and IMEI tracking, warranty, brand and model control.",
       electricals: "Meters, project billing and contractor-oriented pricing workflows.",
@@ -161,6 +162,7 @@ const PAGE_COPY = {
     industriesDesc:
       "ඔබේ ව්‍යාපාර වර්ගයට අවශ්‍ය තොරතුරු, වාර්තා සහ ක්‍රියාපටිපාටි අනුව LakBiz සකස් වේ.",
     industryDescriptions: {
+      cosmetics: "රූපලාවණ්‍ය අලෙවිය, වර්ණ සහ පැකේජ ප්‍රභේද, බැච් කල් ඉකුත්වීම සහ ආපසු භාරගැනීම්.",
       grocery: "වේගවත් බිල්පත්, බර අනුව භාණ්ඩ, කල් ඉකුත්වීම් සහ ණය ගනුදෙනුකරුවන්.",
       electronics: "Serial/IMEI අංක, වගකීම් කාලය, brand සහ model පාලනය.",
       electricals: "මීටර් අනුව විකිණීම, ව්‍යාපෘති බිල්පත් සහ කොන්ත්‍රාත් මිලකරණය.",
@@ -249,6 +251,7 @@ const PAGE_COPY = {
     industriesDesc:
       "உங்கள் தொழில் உண்மையில் எப்படி இயங்குகிறதோ அதற்கேற்ப புலங்கள், அறிக்கைகள் மற்றும் பணிமுறைகளை உங்கள் கடை பெறுகிறது.",
     industryDescriptions: {
+      cosmetics: "அழகுசாதன விற்பனை, நிறம் மற்றும் பேக் வகைகள், தொகுதி காலாவதி மற்றும் கட்டுப்படுத்தப்பட்ட திரும்பப் பெறுதல்.",
       grocery: "வேகமான பில்லிங், எடை அடிப்படையிலான பொருட்கள், காலாவதி கண்காணிப்பு மற்றும் கடன் வாடிக்கையாளர்கள்.",
       electronics: "சீரியல் மற்றும் IMEI கண்காணிப்பு, உத்தரவாதம், பிராண்ட் மற்றும் மாடல் கட்டுப்பாடு.",
       electricals: "மீட்டர்கள், திட்ட பில்லிங் மற்றும் ஒப்பந்தக்காரர் சார்ந்த விலை பணிமுறைகள்.",

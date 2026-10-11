@@ -1,6 +1,7 @@
 export type SectorId =
   | "grocery"
   | "pharmacy"
+  | "cosmetics"
   | "electronics"
   | "mobile_shop"
   | "electricals"

@@ -5,6 +5,7 @@ import { useAppStore } from "@/lib/store/use-app-store";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { buildRetailDashboardIntelligence, type RetailLotSnapshot } from "@/lib/dashboard/retail-intelligence";
 import { fetchRetailDashboardLots } from "@/lib/supabase/retail-dashboard-client";
+import { batchHealth } from "./batch-health";
 
 /**
  * Persistent, header-level alert count — badge for the Sidebar/MobileNav
@@ -32,7 +33,7 @@ export function useCriticalAlertCount(): number {
   const [lots, setLots] = useState<RetailLotSnapshot[]>([]);
 
   useEffect(() => {
-    if (org.sector !== "pharmacy" || !org.isAuthenticated || !org.id) {
+    if ((org.sector !== "pharmacy" && org.sector !== "cosmetics") || !org.isAuthenticated || !org.id) {
       setLots([]);
       return;
     }
@@ -46,6 +47,14 @@ export function useCriticalAlertCount(): number {
   }, [org.sector, org.isAuthenticated, org.id]);
 
   if (!ready || !data) return 0;
+
+  if (org.sector === "cosmetics") {
+    const health = batchHealth(lots, new Date());
+    const lowStock = data.products.filter((product) =>
+      product.active && product.sectorId === "cosmetics" && product.stockQty <= (product.reorderLevel ?? 5),
+    ).length;
+    return health.expired.length + health.blocked.length + lowStock;
+  }
 
   if (org.sector === "pharmacy") {
     const intel = buildRetailDashboardIntelligence(data, "pharmacy", false, lots);

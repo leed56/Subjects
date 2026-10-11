@@ -14,6 +14,9 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { ProductInput } from "@/lib/store/types";
 
 function unitsForSector(sectorId: SectorId): string[] {
+  if (sectorId === "cosmetics") {
+    return ["pcs", "bottle", "tube", "jar", "palette", "pack", "set", "box", "ml", "g"];
+  }
   if (sectorId === "pharmacy") {
     return ["pcs", "tablet", "capsule", "strip", "box", "bottle", "tube", "vial", "ampoule", "pack", "ml"];
   }
@@ -107,7 +110,7 @@ export function ProductForm({
     [lockedSectorId, form.sectorId, form.unit],
   );
   const effectiveSectorId = lockedSectorId ?? form.sectorId;
-  const conditionRelevant = effectiveSectorId !== "pharmacy" && effectiveSectorId !== "grocery";
+  const conditionRelevant = effectiveSectorId !== "pharmacy" && effectiveSectorId !== "grocery" && effectiveSectorId !== "cosmetics";
 
   useEffect(() => {
     if (initial) return;
@@ -161,7 +164,7 @@ export function ProductForm({
         : defaultCategoryForSector(sectorId),
       // Condition is meaningful for resale/asset sectors, not normal pharmacy
       // or grocery catalogue items. Keep the persisted invariant as `new`.
-      condition: sectorId === "pharmacy" || sectorId === "grocery" ? "new" : rest.condition,
+      condition: sectorId === "pharmacy" || sectorId === "grocery" || sectorId === "cosmetics" ? "new" : rest.condition,
       customFields: sectorCustom,
     });
     if (!initial) setForm(emptyForm(shopSectorId));

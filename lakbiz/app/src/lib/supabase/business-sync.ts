@@ -119,6 +119,7 @@ function asSectorId(value: string | null | undefined): SectorId {
   const allowed: SectorId[] = [
     "grocery",
     "pharmacy",
+    "cosmetics",
     "electronics",
     "mobile_shop",
     "electricals",

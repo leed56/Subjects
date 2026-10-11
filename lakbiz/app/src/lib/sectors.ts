@@ -23,6 +23,15 @@ export const sectors: SectorTemplate[] = [
     reports: ["Expiry risk", "Near-expiry stock", "Low stock & reorder", "Sales by medicine/category", "Batch reference"],
   },
   {
+    id: "cosmetics",
+    nameEn: "Cosmetics & Beauty",
+    nameSi: "රූපලාවණ්‍ය සහ සුවඳ විලවුන්",
+    nameTa: "அழகுசாதனங்கள் & அழகு பராமரிப்பு",
+    description: "Beauty retail with shade and pack variants, batch traceability, expiry control and customer returns.",
+    extraFields: ["brand", "manufacturer", "shade", "packSize", "volumeMl", "batchNo", "expiryDate", "countryOfOrigin", "periodAfterOpeningMonths", "barcode"],
+    reports: ["Batch & expiry control", "Low stock & reorder", "Sales history", "Returns control"],
+  },
+  {
     id: "electronics",
     nameEn: "Electronics",
     nameSi: "ඉලෙක්ට්‍රොනික උපකරණ",
@@ -97,7 +106,7 @@ export const sectors: SectorTemplate[] = [
 ];
 
 const SECTOR_IDS: SectorId[] = [
-  "grocery", "pharmacy", "electronics", "mobile_shop", "electricals", "spare_parts", "footwear", "textile", "ac_hvac", "car_sales",
+  "grocery", "pharmacy", "cosmetics", "electronics", "mobile_shop", "electricals", "spare_parts", "footwear", "textile", "ac_hvac", "car_sales",
 ];
 
 export function parseSectorId(value: string | null | undefined): SectorId {
@@ -113,6 +122,7 @@ export function defaultCategoryForSector(sectorId: SectorId): string {
   const map: Record<SectorId, string> = {
     grocery: "Grocery",
     pharmacy: "Medicines",
+    cosmetics: "Skincare",
     electronics: "Electronics",
     mobile_shop: "Mobile Phones",
     electricals: "Electricals",

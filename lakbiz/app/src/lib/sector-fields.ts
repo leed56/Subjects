@@ -17,6 +17,8 @@ export type SectorFieldDef = {
  * pharmacy, phone shop, footwear shop or HVAC company a relevant data model.
  */
 const FIELD_DEFS: Record<string, SectorFieldDef> = {
+  volumeMl: { key: "volumeMl", type: "number", labelEn: "Volume (ml)", labelSi: "පරිමාව (ml)" },
+  periodAfterOpeningMonths: { key: "periodAfterOpeningMonths", type: "number", labelEn: "Period after opening (months, label reference)", labelSi: "විවෘත කළ පසු භාවිත කාලය (මාස, ලේබලයේ සඳහන්)" },
   weightKg: { key: "weightKg", type: "number", labelEn: "Weight (kg)", labelSi: "බර (kg)" },
   expiryDate: { key: "expiryDate", type: "date", labelEn: "Expiry date", labelSi: "කල් ඉකුත් දිනය" },
   barcode: { key: "barcode", type: "text", labelEn: "Barcode", labelSi: "බාර්කෝඩ්" },

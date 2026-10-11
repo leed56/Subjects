@@ -31,6 +31,13 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     defaultPlanId: "business",
   },
   {
+    id: "cosmetics",
+    nameEn: "Cosmetics & Beauty",
+    nameSi: "රූපලාවණ්‍ය සහ සුවඳ විලවුන්",
+    sectorId: "cosmetics",
+    defaultPlanId: "business",
+  },
+  {
     id: "electronics",
     nameEn: "Electronics",
     nameSi: "ඉලෙක්ට්‍රොනික උපකරණ",

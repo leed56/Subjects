@@ -2,6 +2,7 @@
 
 import { createBrowserClient } from "@/lib/supabase/client";
 import type { SectorId } from "@/lib/types";
+import { fetchRetailDashboardLots } from "./retail-dashboard-client";
 
 export type SectorLotSnapshot = {
   productId: string;
@@ -129,27 +130,16 @@ export async function fetchSectorOperationalSnapshot(
   const supabase = createBrowserClient();
   if (!supabase) return { ...empty, schemaReady: false, error: "Supabase not configured" };
 
-  if (sector === "pharmacy") {
-    const result = await supabase
-      .from("inventory_lots")
-      .select("product_id, batch_no, expiry_date, qty_on_hand, status")
-      .eq("organization_id", organizationId)
-      .gt("qty_on_hand", 0)
-      .order("expiry_date", { ascending: true, nullsFirst: false });
+  if (sector === "pharmacy" || sector === "cosmetics") {
+    const result = await fetchRetailDashboardLots(organizationId);
     if (result.error) {
-      return schemaUnavailable(result.error.message)
+      return schemaUnavailable(result.error)
         ? { ...empty, schemaReady: false }
-        : { ...empty, error: result.error.message };
+        : { ...empty, error: result.error };
     }
     return {
       ...empty,
-      lots: (result.data ?? []).map((row) => ({
-        productId: String(row.product_id),
-        batchNo: String(row.batch_no ?? ""),
-        expiryDate: row.expiry_date ? String(row.expiry_date) : null,
-        qtyOnHand: Number(row.qty_on_hand ?? 0),
-        status: String(row.status) as SectorLotSnapshot["status"],
-      })),
+      lots: result.data,
     };
   }
 
