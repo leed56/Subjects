@@ -7,6 +7,46 @@ import type { PlanFeatures } from "@/lib/subscription/types";
  * is the actual security boundary.
  */
 const SECTOR_FEATURES: Record<SectorId, PlanFeatures> = {
+  hardware: {
+    sales: true,
+    stock: true,
+    bills: true,
+    customers: true,
+    suppliers: true,
+    banking: true,
+    ac_jobs: false,
+    vehicles: false,
+    export: true,
+    offline: false,
+    bulk_messaging: true,
+  },
+  stationery: {
+    sales: true,
+    stock: true,
+    bills: true,
+    customers: true,
+    suppliers: true,
+    banking: true,
+    ac_jobs: false,
+    vehicles: false,
+    export: true,
+    offline: false,
+    bulk_messaging: true,
+  },
+  wholesale: {
+    sales: true,
+    stock: true,
+    bills: true,
+    customers: true,
+    suppliers: true,
+    banking: true,
+    ac_jobs: false,
+    vehicles: false,
+    export: true,
+    offline: false,
+    bulk_messaging: true,
+  },
+
   grocery: {
     sales: true,
     stock: true,

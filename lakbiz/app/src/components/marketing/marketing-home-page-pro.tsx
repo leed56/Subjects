@@ -432,9 +432,9 @@ export function MarketingHomePage() {
             <Link href="/login" className="hidden min-h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 sm:inline-flex">
               {c.nav.signIn}
             </Link>
-            <a href="mailto:hello@lakbiz.app" className="inline-flex min-h-10 items-center justify-center rounded-xl bg-teal-600 px-4 text-xs font-bold text-white shadow-[0_8px_22px_rgba(13,148,136,0.2)] transition hover:bg-teal-700 sm:px-5 sm:text-sm">
+            <Link href="/demo" className="inline-flex min-h-10 items-center justify-center rounded-xl bg-teal-600 px-4 text-xs font-bold text-white shadow-[0_8px_22px_rgba(13,148,136,0.2)] transition hover:bg-teal-700 sm:px-5 sm:text-sm">
               {c.nav.demo}
-            </a>
+            </Link>
           </div>
         </div>
       </header>
@@ -462,9 +462,9 @@ export function MarketingHomePage() {
                 </p>
 
                 <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start">
-                  <a href="mailto:hello@lakbiz.app" className="inline-flex min-h-12 items-center justify-center rounded-xl bg-teal-600 px-7 text-sm font-bold text-white shadow-[0_14px_34px_rgba(13,148,136,0.22)] transition hover:bg-teal-700">
+                  <Link href="/demo" className="inline-flex min-h-12 items-center justify-center rounded-xl bg-teal-600 px-7 text-sm font-bold text-white shadow-[0_14px_34px_rgba(13,148,136,0.22)] transition hover:bg-teal-700">
                     {c.primaryCta}<span className="ml-2">→</span>
-                  </a>
+                  </Link>
                   <Link href="/login" className="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-200 bg-white px-7 text-sm font-bold text-slate-800 shadow-[0_6px_20px_rgba(15,23,42,0.05)] transition hover:border-slate-300 hover:bg-slate-50">
                     {c.secondaryCta}
                   </Link>

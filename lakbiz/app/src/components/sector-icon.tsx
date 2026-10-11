@@ -13,6 +13,9 @@ import type { SectorId } from "@/lib/types";
 
 /** One professional SVG vocabulary for sector identity — no emoji drift. */
 const SECTOR_ICON_BY_ID: Record<SectorId, (props: IconProps) => React.ReactElement> = {
+  hardware: JobsIcon,
+  stationery: ShopIcon,
+  wholesale: StockIcon,
   grocery: CartIcon,
   pharmacy: StockIcon,
   cosmetics: ShopIcon,

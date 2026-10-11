@@ -23,7 +23,7 @@ type ProPageHeaderProps = {
 
 export function ProPageHeader({ eyebrow, title, description, actions }: ProPageHeaderProps) {
   return (
-    <div className="mb-6 sm:mb-8">
+    <div data-ui="pro-page-header" className="mb-6 sm:mb-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0">
           {eyebrow && (

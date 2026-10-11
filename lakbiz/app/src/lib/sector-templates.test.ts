@@ -23,6 +23,9 @@ const EXPECTED_SECTORS: SectorId[] = [
   "textile",
   "ac_hvac",
   "car_sales",
+  "hardware",
+  "stationery",
+  "wholesale",
 ];
 
 describe("business sector templates", () => {

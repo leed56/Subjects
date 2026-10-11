@@ -55,6 +55,9 @@ async function fetchOrgRole(
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
+  // Public synthetic demos are isolated from live authentication and tenant data.
+  const path = request.nextUrl.pathname;
+  if (path === "/demo" || path.startsWith("/demo/")) return supabaseResponse;
 
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||

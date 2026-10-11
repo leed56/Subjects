@@ -17,6 +17,46 @@ export type SectorDashboardPreset = {
 };
 
 const PRESETS: Record<SectorId, SectorDashboardPreset> = {
+  hardware: {
+    titleEn: "Hardware & Building Supplies operations",
+    titleSi: "වෙළඳසැල් මෙහෙයුම්",
+    subtitleEn: "Counter sales, stock, customer credit and daily cash movement at a glance.",
+    subtitleSi: "අලෙවිය, තොගය, පාරිභෝගික ණය සහ දෛනික මුදල් ගමනාගමනය එකම තැනකින්.",
+    onboardingTitleEn: "Set up your counter for the first sale",
+    onboardingTitleSi: "පළමු අලෙවිය සඳහා ඔබේ වෙළඳසැල සූදානම් කරන්න",
+    onboardingDescriptionEn: "Start with products and opening stock, then add regular credit customers and begin billing.",
+    onboardingDescriptionSi: "භාණ්ඩ සහ ආරම්භක තොගය එක් කර, ණය පාරිභෝගිකයින් සකසා බිල් කිරීම ආරම්භ කරන්න.",
+    onboardingStepsEn: ["Add products, barcodes and opening stock", "Add regular customers and credit limits", "Create the first sale"],
+    onboardingStepsSi: ["භාණ්ඩ, බාර්කෝඩ් සහ ආරම්භක තොගය එක් කරන්න", "නිතිපතා පාරිභෝගිකයින් සහ ණය සීමා එක් කරන්න", "පළමු අලෙවිය සාදන්න"],
+    primaryAction: { href: "/sales", labelEn: "New sale", labelSi: "නව අලෙවිය" },
+  },
+  stationery: {
+    titleEn: "Stationery & Books operations",
+    titleSi: "වෙළඳසැල් මෙහෙයුම්",
+    subtitleEn: "Counter sales, stock, customer credit and daily cash movement at a glance.",
+    subtitleSi: "අලෙවිය, තොගය, පාරිභෝගික ණය සහ දෛනික මුදල් ගමනාගමනය එකම තැනකින්.",
+    onboardingTitleEn: "Set up your counter for the first sale",
+    onboardingTitleSi: "පළමු අලෙවිය සඳහා ඔබේ වෙළඳසැල සූදානම් කරන්න",
+    onboardingDescriptionEn: "Start with products and opening stock, then add regular credit customers and begin billing.",
+    onboardingDescriptionSi: "භාණ්ඩ සහ ආරම්භක තොගය එක් කර, ණය පාරිභෝගිකයින් සකසා බිල් කිරීම ආරම්භ කරන්න.",
+    onboardingStepsEn: ["Add products, barcodes and opening stock", "Add regular customers and credit limits", "Create the first sale"],
+    onboardingStepsSi: ["භාණ්ඩ, බාර්කෝඩ් සහ ආරම්භක තොගය එක් කරන්න", "නිතිපතා පාරිභෝගිකයින් සහ ණය සීමා එක් කරන්න", "පළමු අලෙවිය සාදන්න"],
+    primaryAction: { href: "/sales", labelEn: "New sale", labelSi: "නව අලෙවිය" },
+  },
+  wholesale: {
+    titleEn: "Wholesale & Distribution operations",
+    titleSi: "වෙළඳසැල් මෙහෙයුම්",
+    subtitleEn: "Counter sales, stock, customer credit and daily cash movement at a glance.",
+    subtitleSi: "අලෙවිය, තොගය, පාරිභෝගික ණය සහ දෛනික මුදල් ගමනාගමනය එකම තැනකින්.",
+    onboardingTitleEn: "Set up your counter for the first sale",
+    onboardingTitleSi: "පළමු අලෙවිය සඳහා ඔබේ වෙළඳසැල සූදානම් කරන්න",
+    onboardingDescriptionEn: "Start with products and opening stock, then add regular credit customers and begin billing.",
+    onboardingDescriptionSi: "භාණ්ඩ සහ ආරම්භක තොගය එක් කර, ණය පාරිභෝගිකයින් සකසා බිල් කිරීම ආරම්භ කරන්න.",
+    onboardingStepsEn: ["Add products, barcodes and opening stock", "Add regular customers and credit limits", "Create the first sale"],
+    onboardingStepsSi: ["භාණ්ඩ, බාර්කෝඩ් සහ ආරම්භක තොගය එක් කරන්න", "නිතිපතා පාරිභෝගිකයින් සහ ණය සීමා එක් කරන්න", "පළමු අලෙවිය සාදන්න"],
+    primaryAction: { href: "/sales", labelEn: "New sale", labelSi: "නව අලෙවිය" },
+  },
+
   grocery: {
     titleEn: "Shop operations",
     titleSi: "වෙළඳසැල් මෙහෙයුම්",

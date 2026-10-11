@@ -1,18 +1,13 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_Sinhala, Noto_Sans_Tamil } from "next/font/google";
-import { LocaleProvider } from "@/lib/i18n/locale-provider";
-import { AuthProvider } from "@/components/auth-provider";
-import { PlatformAdminRedirect } from "@/components/platform-admin-redirect";
-import { ShopRouteGuard } from "@/components/shop-route-guard";
-import { AppStoreProvider } from "@/lib/store/app-store-provider";
-import { SubscriptionProvider } from "@/lib/subscription/subscription-provider";
-import { ToastProvider } from "@/components/ui/toast";
+import { RuntimeProviders } from "@/components/runtime-providers";
 import "./globals.css";
 import "./premium-ops.css";
 import "./premium-ops-final.css";
 import "./premium-ops-realistic.css";
 import "./premium-job-detail.css";
 import "./atomic-pos-layout.css";
+import "./premium-platform.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -76,17 +71,7 @@ export default function RootLayout({
         data-lakbiz-build-sha={process.env.VERCEL_GIT_COMMIT_SHA ?? ""}
         data-lakbiz-supabase-host={publicSupabaseHost()}
       >
-        <LocaleProvider>
-          <AuthProvider>
-            <SubscriptionProvider>
-              <ToastProvider>
-                <PlatformAdminRedirect />
-                <ShopRouteGuard />
-                <AppStoreProvider>{children}</AppStoreProvider>
-              </ToastProvider>
-            </SubscriptionProvider>
-          </AuthProvider>
-        </LocaleProvider>
+        <RuntimeProviders>{children}</RuntimeProviders>
       </body>
     </html>
   );

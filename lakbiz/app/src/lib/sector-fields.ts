@@ -17,6 +17,10 @@ export type SectorFieldDef = {
  * pharmacy, phone shop, footwear shop or HVAC company a relevant data model.
  */
 const FIELD_DEFS: Record<string, SectorFieldDef> = {
+  isbn: { key: "isbn", type: "text", labelEn: "ISBN", labelSi: "ISBN" },
+  author: { key: "author", type: "text", labelEn: "Author", labelSi: "කර්තෘ" },
+  publisher: { key: "publisher", type: "text", labelEn: "Publisher", labelSi: "ප්‍රකාශක" },
+  paperSize: { key: "paperSize", type: "text", labelEn: "Paper size", labelSi: "කඩදාසි ප්‍රමාණය" },
   volumeMl: { key: "volumeMl", type: "number", labelEn: "Volume (ml)", labelSi: "පරිමාව (ml)" },
   periodAfterOpeningMonths: { key: "periodAfterOpeningMonths", type: "number", labelEn: "Period after opening (months, label reference)", labelSi: "විවෘත කළ පසු භාවිත කාලය (මාස, ලේබලයේ සඳහන්)" },
   weightKg: { key: "weightKg", type: "number", labelEn: "Weight (kg)", labelSi: "බර (kg)" },

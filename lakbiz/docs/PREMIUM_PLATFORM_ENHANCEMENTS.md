@@ -43,3 +43,9 @@ Further work for the original complete-platform goal:
 6. Validate the currently applicable Sri Lankan tax-invoice requirements against official guidance before making compliance claims.
 
 This is the cosmetics-template and batch-health increment, not a claim that the entire original upgrade is finished.
+
+## Expanded full-platform design and client showcase
+
+The next increment recovers the complete earlier proposal, adds hardware/stationery/wholesale configuration, and ships an isolated public showcase for all 14 industries and 17 workspaces each. See `ERP_PLATFORM_BLUEPRINT.md`, `PREMIUM_UI_PAGE_SPEC.md`, `ERP_CAPABILITY_AUDIT.md` and `CLIENT_DEMO_GUIDE.md`.
+
+The showcase includes a tested local transaction engine and public sample logins. Root providers and middleware bypass live auth/sync on `/demo` only. This is a full interactive UI/design suite; it does not silently claim that new general imports, warehouses, accounting, loyalty and release management have been integrated into live Supabase workflows. Their production adapters remain in the full-scope audit.

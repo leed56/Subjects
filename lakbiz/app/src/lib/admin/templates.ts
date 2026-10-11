@@ -93,6 +93,27 @@ export const BUSINESS_TEMPLATES: BusinessTemplate[] = [
     sectorId: "car_sales",
     defaultPlanId: "pro",
   },
+  {
+    id: "hardware",
+    nameEn: "Hardware & Building Supplies",
+    nameSi: "දෘඩාංග සහ ගොඩනැගිලි සැපයුම්",
+    sectorId: "hardware",
+    defaultPlanId: "business",
+  },
+  {
+    id: "stationery",
+    nameEn: "Stationery & Books",
+    nameSi: "ලිපිද්‍රව්‍ය සහ පොත්",
+    sectorId: "stationery",
+    defaultPlanId: "business",
+  },
+  {
+    id: "wholesale",
+    nameEn: "Wholesale & Distribution",
+    nameSi: "තොග වෙළඳාම සහ බෙදාහැරීම",
+    sectorId: "wholesale",
+    defaultPlanId: "business",
+  },
 ];
 
 export function getTemplate(id: string): BusinessTemplate | undefined {
