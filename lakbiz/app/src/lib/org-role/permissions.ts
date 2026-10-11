@@ -22,6 +22,7 @@ export type ShopNavHref =
   | "/vehicles"
   | "/bills"
   | "/customers"
+  | "/accounting"
   | "/banking"
   | "/assets"
   | "/teams"

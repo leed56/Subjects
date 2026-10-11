@@ -36,3 +36,8 @@ Unit tests check every industry seed, credentials, independent sample keys, role
 The sample suite is not a production financial/accounting service. Mock quantities are aggregate example data; serial, IMEI, VIN and roll metadata are illustrative. Specialist production allocation engines remain authoritative. New templates do not rewrite existing product profiles or stock. General imports, warehouses, loyalty, ledger and release management still need production database adapters before being advertised as live features.
 
 No live database migration was applied as part of the design-suite change. No existing shop data was replaced with mock data. All further production integration is part of the full platform goal rather than a silently dropped requirement.
+
+
+## Phase 2 implementation increment
+
+The owner-only general ledger schema, exact-input posting adapter and `/accounting` workspace are implemented on the enhancement branch. They have not been activated in live Supabase. See [PHASE_2_ACCOUNTING_FOUNDATION.md](PHASE_2_ACCOUNTING_FOUNDATION.md) for constraints, reproducible verification, release status and the remaining stock/source-posting/reconciliation work. This adds a real persistence contract rather than changing the demo finance engine.
