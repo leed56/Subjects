@@ -109,3 +109,45 @@ export async function postGeneralLedgerJournal(
   if (error) fail(error);
   return String(data);
 }
+
+export type LedgerDetailLine = {
+  id: string;
+  account_id: string;
+  line_no: number;
+  debitMinor: number;
+  creditMinor: number;
+  journal: JournalBatch;
+};
+export async function fetchLedgerDetail(
+  orgId: string,
+  selection: { batchId: string } | { accountId: string },
+  page: number,
+): Promise<LedgerDetailLine[]> {
+  if (!Number.isSafeInteger(page) || page < 0)
+    throw new Error("Invalid ledger page.");
+  let query = requireClient()
+    .from("journal_lines")
+    .select(
+      "id,account_id,line_no,debit_minor,credit_minor,journal:journal_batches!inner(id,journal_date,memo,source_key,created_at)",
+    )
+    .eq("organization_id", orgId)
+    .eq("journal.organization_id", orgId)
+    .eq("journal.status", "posted");
+  query =
+    "batchId" in selection
+      ? query.eq("batch_id", selection.batchId)
+      : query.eq("account_id", selection.accountId);
+  const { data, error } = await query
+    .order("batch_id")
+    .order("line_no")
+    .range(page * 50, page * 50 + 49);
+  if (error) fail(error);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    account_id: row.account_id,
+    line_no: row.line_no,
+    debitMinor: minor(row.debit_minor),
+    creditMinor: minor(row.credit_minor),
+    journal: row.journal as unknown as JournalBatch,
+  }));
+}

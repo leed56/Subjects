@@ -34,8 +34,12 @@ TypeScript tests verify exact monetary input, balanced entry validation and owne
 - Inventory cost layers or carrying value, residual-cent handling and financial/subledger reconciliation.
 - Closed accounting periods, controlled reversal workflows and a durable draft/retry lifecycle across browser reloads.
 - Multi-currency documents and FX settlement; this foundation deliberately supports LKR only.
-- Journal line drill-down, account maintenance, period-based statements and report exports.
+- Account maintenance, period-based statements and report exports.
 - Complete localized form/error copy; the workspace heading and scope explanation support Sinhala/Tamil, but some new labels remain English.
 - Authenticated browser and multi-session production-equivalent certification before activation.
 
 Manual journals do not change customer balances, supplier balances, physical stock or existing banking records. Until automatic source adapters and reconciliation are delivered, this ledger must not be presented as a complete representation of the business's existing accounts.
+
+## Entry tracing
+
+Trial-balance account names open paginated posted transaction history. Recent journal references open their line details. Both show journal date, description, reference, account and exact debit/credit amounts, 50 entries per page ordered by journal reference and line number. They use the normal browser client and existing owner RLS, explicitly filter both lines and parent journals by organization, and include posted journals only. Pagination does not represent an opening or running balance. No migration changes or live activation are included.

@@ -17,6 +17,8 @@ import {
   type LedgerSnapshot,
 } from "@/lib/supabase/general-ledger-client";
 
+import { LedgerDetail } from "@/components/accounting/ledger-detail";
+
 type DraftLine = { accountCode: string; debit: string; credit: string };
 const blankLines = (): DraftLine[] => [
   { accountCode: "1000", debit: "", credit: "" },
@@ -38,6 +40,9 @@ function AccountingWorkspace() {
     error?: string;
     unavailable?: boolean;
   } | null>(null);
+  const [selection, setSelection] = useState<
+    { batchId: string } | { accountId: string } | null
+  >(null);
   const [revision, setRevision] = useState(0),
     [busy, setBusy] = useState(false),
     [locked, setLocked] = useState(false),
@@ -235,7 +240,17 @@ function AccountingWorkspace() {
                         {
                           key: "code",
                           header: "Account",
-                          render: (row) => `${row.code} · ${row.name}`,
+                          render: (row) => (
+                            <button
+                              type="button"
+                              className="text-left font-medium text-blue-700 hover:underline"
+                              onClick={() =>
+                                setSelection({ accountId: row.id })
+                              }
+                            >
+                              {row.code} · {row.name}
+                            </button>
+                          ),
                         },
                         {
                           key: "debit",
@@ -252,6 +267,15 @@ function AccountingWorkspace() {
                       ]}
                     />
                   </ProCard>
+                  {selection && org.id && (
+                    <LedgerDetail
+                      key={JSON.stringify(selection)}
+                      orgId={org.id}
+                      selection={selection}
+                      accounts={data.accounts}
+                      onClose={() => setSelection(null)}
+                    />
+                  )}
                   <ProCard
                     title={copy(
                       "Post a journal",
@@ -396,7 +420,13 @@ function AccountingWorkspace() {
                           key: "id",
                           header: "Reference",
                           render: (row) => (
-                            <span className="font-mono text-xs">{row.id}</span>
+                            <button
+                              type="button"
+                              className="font-mono text-xs text-blue-700 hover:underline"
+                              onClick={() => setSelection({ batchId: row.id })}
+                            >
+                              {row.id}
+                            </button>
                           ),
                         },
                       ]}
