@@ -45,6 +45,7 @@ import {
   BranchPerformance,
   ProductAlerts,
   ImportSummary,
+  WarehouseStock,
 } from "./reference-visuals";
 import { ArrowMark } from "./demo-marks";
 import type { DemoAction } from "./demo-action-drawer";
@@ -454,7 +455,15 @@ function Inventory({ data, template, role, search, open }: Props) {
             {
               key: "expiry",
               header: "Expiry date",
-              render: (p) => (p.expiry ? demoDate(p.expiry) : "—"),
+              render: (p) =>
+                p.expiry
+                  ? new Date(p.expiry).toLocaleDateString("en-LK", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                      timeZone: "Asia/Colombo",
+                    })
+                  : "—",
             },
             ...(role === "owner"
               ? [
@@ -479,7 +488,7 @@ function Inventory({ data, template, role, search, open }: Props) {
         />
       </DemoSection>
       <DemoSection className="mt-5" title="Warehouse Stock by Location">
-        <BranchPerformance data={data} owner={role === "owner"} />
+        <WarehouseStock data={data} owner={role === "owner"} />
       </DemoSection>
       {role !== "cashier" && (
         <DemoSection className="mt-5" title="Inventory Actions">

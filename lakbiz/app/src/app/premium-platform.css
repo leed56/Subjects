@@ -2291,3 +2291,26 @@
 .demo-hero-summary {
   border-color: #d6e5f0;
 }
+.demo-nav-active:hover {
+  background: linear-gradient(105deg, #0879e6, #14bec4);
+  color: white;
+}
+.demo-pos-search > label:last-child {
+  width: 100px;
+  flex-shrink: 0;
+}
+@media (min-width: 1251px) {
+  .reference-overview-stats {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .reference-overview-stats .demo-metric {
+    padding: 15px 12px;
+  }
+  .reference-overview-stats .demo-metric-value {
+    font-size: 17px;
+  }
+  .reference-overview-stats .demo-icon-chip {
+    width: 29px;
+    height: 29px;
+  }
+}

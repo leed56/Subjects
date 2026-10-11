@@ -353,3 +353,57 @@ export function ImportSummary({
     </div>
   );
 }
+
+export function WarehouseStock({
+  data,
+  owner,
+}: {
+  data: DemoState;
+  owner: boolean;
+}) {
+  return (
+    <div className="reference-table-scroll">
+      <table className="reference-table">
+        <thead>
+          <tr>
+            <th>Location</th>
+            <th>Product lines</th>
+            <th>Quantity</th>
+            {owner && <th>Stock value</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {data.warehouses.map((w) => (
+            <tr key={w.id}>
+              <td>
+                <strong>{w.name}</strong>
+                <small>{w.city}</small>
+              </td>
+              <td>
+                {
+                  data.products.filter((p) => (p.quantities[w.id] ?? 0) > 0)
+                    .length
+                }
+              </td>
+              <td>
+                {data.products
+                  .reduce((n, p) => n + (p.quantities[w.id] ?? 0), 0)
+                  .toLocaleString("en-LK", { maximumFractionDigits: 3 })}
+              </td>
+              {owner && (
+                <td>
+                  {money(
+                    data.products.reduce(
+                      (n, p) => n + (p.quantities[w.id] ?? 0) * p.cost,
+                      0,
+                    ),
+                  )}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
