@@ -10,7 +10,7 @@ Accounts initialize idempotently to 14 LKR accounts. Posting validates integer m
 
 ## Release status
 
-Implemented and tested in isolation; not yet applied to the live Supabase project. The UI reports that the database update is unavailable when the migration is absent. Existing products, stock, sales, returns, subscriptions and financial calculations are unchanged.
+The foundation migration was applied to the connected Supabase project on 11 October 2026 after explicit user approval, recorded by Supabase as `20261011094954_general_ledger_foundation`. Table RLS, seven owner policies, anonymous-denied permissions and SECURITY INVOKER RPCs were verified. Tables were empty after migration; accounts and balances were not automatically initialized. Existing products, stock, sales, returns, subscriptions and financial calculations are unchanged. Full authenticated accounting browser certification remains pending.
 
 ## Verification
 
@@ -36,10 +36,14 @@ TypeScript tests verify exact monetary input, balanced entry validation and owne
 - Multi-currency documents and FX settlement; this foundation deliberately supports LKR only.
 - Account maintenance, period-based statements and report exports.
 - Complete localized form/error copy; the workspace heading and scope explanation support Sinhala/Tamil, but some new labels remain English.
-- Authenticated browser and multi-session production-equivalent certification before activation.
+- Authenticated accounting browser and multi-session production-equivalent certification.
 
 Manual journals do not change customer balances, supplier balances, physical stock or existing banking records. Until automatic source adapters and reconciliation are delivered, this ledger must not be presented as a complete representation of the business's existing accounts.
 
 ## Entry tracing
 
 Trial-balance account names open paginated posted transaction history. Recent journal references open their line details. Both show journal date, description, reference, account and exact debit/credit amounts, 50 entries per page ordered by journal reference and line number. They use the normal browser client and existing owner RLS, explicitly filter both lines and parent journals by organization, and include posted journals only. Pagination does not represent an opening or running balance. No migration changes or live activation are included.
+
+## Date filters and exports
+
+Entry tracing supports optional inclusive start/end journal dates, validated before querying, with a reset to page one on application. The displayed applied range is distinct from edited form values. Refresh/retry reloads the same query and stale responses are ignored. CSV exports contain only the currently loaded page (up to 50 entries), with page/range/currency metadata; they are not complete statements. Unicode, quoted and multiline descriptions are preserved, formula-like text is neutralized, and amounts are exported from integer minor units without decimal rounding. No new database migration is required. Full period statements and automatic source integration remain pending.

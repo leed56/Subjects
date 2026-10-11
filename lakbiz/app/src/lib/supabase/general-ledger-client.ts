@@ -1,5 +1,9 @@
 "use client";
 import { createBrowserClient } from "./client";
+import {
+  validateLedgerDateRange,
+  type LedgerDateRange,
+} from "../ledger-report";
 import type {
   JournalInputLine,
   LedgerAccount,
@@ -122,9 +126,15 @@ export async function fetchLedgerDetail(
   orgId: string,
   selection: { batchId: string } | { accountId: string },
   page: number,
+  dates: LedgerDateRange = { from: "", to: "" },
 ): Promise<LedgerDetailLine[]> {
-  if (!Number.isSafeInteger(page) || page < 0)
+  if (
+    !Number.isSafeInteger(page) ||
+    page < 0 ||
+    !Number.isSafeInteger(page * 50 + 49)
+  )
     throw new Error("Invalid ledger page.");
+  validateLedgerDateRange(dates);
   let query = requireClient()
     .from("journal_lines")
     .select(
@@ -137,6 +147,8 @@ export async function fetchLedgerDetail(
     "batchId" in selection
       ? query.eq("batch_id", selection.batchId)
       : query.eq("account_id", selection.accountId);
+  if (dates.from) query = query.gte("journal.journal_date", dates.from);
+  if (dates.to) query = query.lte("journal.journal_date", dates.to);
   const { data, error } = await query
     .order("batch_id")
     .order("line_no")
