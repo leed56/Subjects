@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { fetchPublicText } from "./demo-catalog/public-fetch.mjs";
 import {
   classifyRetailProduct,
   extractSpcBrand,
@@ -117,23 +118,19 @@ async function fetchText(url, { required = false } = {}) {
     console.warn(`SKIP ${message}`);
     return null;
   }
-  await throttle();
-  const response = await fetch(url, {
-    headers: { "user-agent": USER_AGENT, accept: "text/html,application/xhtml+xml" },
-    redirect: "follow",
-  });
-  if (response.status === 429) {
-    const retryAfter = Math.min(30, Number(response.headers.get("retry-after") || "3"));
-    await sleep(retryAfter * 1000);
-    return fetchText(url, { required });
-  }
-  if (!response.ok) {
-    const message = `${response.status} ${response.statusText}: ${url}`;
-    if (required) throw new Error(message);
-    console.warn(`SKIP ${message}`);
+  try {
+    return await fetchPublicText(url, {
+      headers: { "user-agent": USER_AGENT, accept: "text/html,application/xhtml+xml" },
+      beforeAttempt: throttle,
+      wait: sleep,
+      onRetry: ({ attempt, maxAttempts, delay, error }) =>
+        console.warn(`RETRY ${attempt + 1}/${maxAttempts} in ${delay}ms: ${error.message}`),
+    });
+  } catch (error) {
+    if (required) throw error;
+    console.warn(`SKIP ${error.message}: ${url}`);
     return null;
   }
-  return response.text();
 }
 
 function sourceKey(row) {
