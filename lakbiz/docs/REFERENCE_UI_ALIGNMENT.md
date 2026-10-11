@@ -39,3 +39,12 @@ Validation: TypeScript, changed-file ESLint and all 259 tests pass. Authenticate
 
 
 The actual pharmacy/textile Owner Pulse now shares light surfaces, readable dark text, photographic sector title banners and a wider 650px mobile canvas. Its real alerts, period switch, financial calculations, action links and five-tab navigation are retained. Existing explicitly labelled sample states for organizations without transactions are unchanged. Other sectors still have the existing unsupported-sector state; this revision does not claim to implement their production analytics.
+
+
+## Cosmetics product imagery correction
+
+Eight cosmetics sample SKUs now map to distinct photographs in `lakbiz/app/public/images/cosmetics-products-atlas-v2.webp`: COS-0001 serum, COS-0002 lipstick, COS-0003 sunscreen, COS-0004 cream, COS-0005 foundation, COS-0006 perfume, COS-0007 brushes and COS-0008 hair mask. The shared ProductPhoto component applies this mapping across POS, inventory, overview and Owner Pulse. Existing prices, inventory, sale history and client-local mock records are preserved. Photography is generated illustrative sample packaging, not a real brand catalogue.
+
+Asset generated using the built-in image-generation tool; encoded as WebP without compositional editing. Final generation prompt:
+
+Use case: product-mockup. Asset type: a single photographic sprite sheet for an ERP cosmetics demo catalogue. Generate exactly 8 equally sized square cells, 4 columns by 2 rows, perfectly aligned edge to edge, no gutters, no text, no borders. Each cell has a clean pale white-blue studio background and one centered product with ample margins, fully visible, premium realistic product photography. Exact order left to right: TOP ROW: 1 amber glass skincare serum dropper bottle 30ml; 2 opened rosewood pink lipstick in elegant black case; 3 white sunscreen squeeze tube with yellow cap; 4 white moisturizer cream jar with teal lid. BOTTOM ROW: 5 beige liquid foundation glass pump bottle; 6 elegant clear perfume bottle with pale gold liquid and gold spray cap; 7 a set of makeup brushes with soft black bristles and rose gold handles; 8 green restorative hair mask tub with botanical detail. Products must be visually distinct and recognizable. No brand logos, letters, captions or watermark. Sheet aspect ratio 2:1, each cell square.

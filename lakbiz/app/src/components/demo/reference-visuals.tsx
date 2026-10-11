@@ -23,6 +23,11 @@ const CELLS: Record<SectorId, number> = {
   wholesale: 13,
 };
 
+const COSMETICS_PHOTOS: Record<string, number> = {
+  "COS-0001": 0, "COS-0002": 1, "COS-0003": 2, "COS-0004": 3,
+  "COS-0005": 4, "COS-0006": 5, "COS-0007": 6, "COS-0008": 7,
+};
+
 /** One local photographic atlas avoids external image hosts and keeps all demos reliable. */
 export function ProductPhoto({
   industry,
@@ -33,7 +38,10 @@ export function ProductPhoto({
   product?: DemoProduct;
   className?: string;
 }) {
-  const cell = CELLS[industry];
+  const cosmeticsCell = industry === "cosmetics" && product
+    ? COSMETICS_PHOTOS[product.sku]
+    : undefined;
+  const cell = cosmeticsCell ?? CELLS[industry];
   return (
     <span
       role="img"
@@ -44,7 +52,13 @@ export function ProductPhoto({
       }
       className={`reference-product-photo ${className}`}
       style={{
-        backgroundPosition: `${((cell % 4) * 100) / 3}% ${(Math.floor(cell / 4) * 100) / 3}%`,
+        ...(cosmeticsCell !== undefined ? {
+          backgroundImage: 'url("/images/cosmetics-products-atlas-v2.webp")',
+          backgroundSize: "400% 200%",
+          backgroundPosition: `${((cell % 4) * 100) / 3}% ${Math.floor(cell / 4) * 100}%`,
+        } : {
+          backgroundPosition: `${((cell % 4) * 100) / 3}% ${(Math.floor(cell / 4) * 100) / 3}%`,
+        }),
       }}
     />
   );
