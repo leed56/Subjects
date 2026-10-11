@@ -309,7 +309,7 @@ export default function DashboardPage() {
     return (
       <AppShell>
         <ProMain>
-          <PageHeader
+          <PageHeader sector={org.sector}
             title={t("dash.tech_title")}
             description={`${dateHeading(locale)} · ${t("dash.tech_subtitle")}`}
           />
@@ -376,7 +376,7 @@ export default function DashboardPage() {
     return (
       <AppShell>
         <ProMain>
-          <PageHeader title={`${dashboardPreset.title} · ${shopName}`} description={dashboardPreset.subtitle} />
+          <PageHeader sector={org.sector} title={`${dashboardPreset.title} · ${shopName}`} description={dashboardPreset.subtitle} />
           <OfflineSyncNotice />
           <EmptyState
             title={dashboardPreset.onboardingTitle}
@@ -412,7 +412,7 @@ export default function DashboardPage() {
     return (
       <AppShell>
         <ProMain>
-          <PageHeader
+          <PageHeader sector={org.sector}
             title={`${dashboardPreset.title} · ${shopName}`}
             description={`${dashboardPreset.subtitle} · ${org.isAuthenticated ? t("dash.cloud_synced") : t("common.saved_browser")}`}
           />
@@ -630,7 +630,7 @@ export default function DashboardPage() {
   return (
     <AppShell>
       <ProMain>
-        <PageHeader
+        <PageHeader sector={org.sector}
           title={`${dashboardPreset.title} · ${shopName}`}
           description={`${dashboardPreset.subtitle} · ${dateHeading(locale)}${org.isAuthenticated ? ` · ${t("dash.cloud_synced")}` : ` · ${t("common.saved_browser")}`}${isReadOnly ? ` · ${t("sub.read_only")}` : ""}`}
           actions={

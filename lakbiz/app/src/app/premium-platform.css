@@ -2320,3 +2320,54 @@
 .erp-demo .reference-table th {
   white-space: nowrap;
 }
+
+/* Authenticated routes use the same visual language with authoritative data. */
+.live-industry-header {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 22px;
+  border: 1px solid #e3edf7;
+  border-radius: 16px;
+  background: linear-gradient(110deg, #eaf4ff, #f8fcff 65%, #e7f8f6);
+}
+.live-industry-header > div:not(.live-industry-header-images) {
+  position: relative;
+  z-index: 1;
+}
+.live-industry-header-images {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: flex;
+  width: 42%;
+  opacity: .22;
+  pointer-events: none;
+  mask-image: linear-gradient(90deg, transparent, black 45%);
+}
+.live-industry-header-images .reference-product-photo {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border-radius: 0;
+}
+.live-industry-header h1, .live-industry-header p {
+  position: relative;
+}
+.live-pos-product-image.reference-product-photo {
+  display: block;
+  width: 100%;
+  height: 128px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  background-color: #f3f8fc;
+}
+[data-ui="pro-page-header"]:has(.live-industry-header) {
+  padding: 0;
+  background: none;
+  border: none;
+}
+@media (max-width: 640px) {
+  .live-industry-header { padding: 16px; }
+  .live-industry-header-images { width: 60%; opacity: .12; }
+  .live-pos-product-image.reference-product-photo { height: 96px; }
+}

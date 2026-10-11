@@ -1,5 +1,6 @@
 "use client";
 
+import { IndustryImage } from "@/components/ui/industry-imagery";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
@@ -385,17 +386,17 @@ export function AtomicRetailSalesPage() {
   return (
     <AppShell>
       <ProMain>
-        <ProPageHeader
+        <ProPageHeader sector={org.sector}
           eyebrow={org.sector === "pharmacy" ? (si ? "ආරක්ෂිත Pharmacy POS" : "Protected Pharmacy POS") : t("sales.pos_eyebrow")}
           title={t("sales.title")}
           description={
             org.sector === "pharmacy"
-              ? (si ? "Prescription, FEFO batch සහ ගෙවීම එකම checkout transaction එකක පාලනය කරයි." : "Prescription checks, FEFO batch allocation and payment commit in one checkout transaction.")
-              : (si ? "ගෙවීම සහ තොගය එකම checkout transaction එකක සුරකියි." : "Payment and stock commit together in one checkout transaction.")
+              ? (si ? "Prescription, FEFO batch සහ ගෙවීම එකම checkout transaction එකක පාලනය කරයි." : "Check prescriptions, select available batches and take payment.")
+              : (si ? "ගෙවීම සහ තොගය එකම checkout transaction එකක සුරකියි." : "Find products, build a bill and choose how your customer pays.")
           }
           actions={
             <>
-              <ProBadge tone="emerald">{si ? "Atomic checkout" : "Atomic checkout"}</ProBadge>
+              <ProBadge tone="emerald">{si ? "ගෙවීමට සූදානම්" : "Ready for checkout"}</ProBadge>
               <ProButton href="/stock" variant="secondary">{t("sales.add_stock_link")}</ProButton>
               {lastBillId && <ProButton href={`/bills/${lastBillId}`} variant="dark">{t("sales.view_bill")}</ProButton>}
             </>
@@ -450,7 +451,7 @@ export function AtomicRetailSalesPage() {
             </ProCard>
           </section>
         ) : (
-          <section className="mt-6 grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
+          <section className="mt-6 grid gap-6 xl:grid-cols-2">
             <div className="space-y-4">
               <ProCard
                 title={t("sales.products_title")}
@@ -527,7 +528,7 @@ export function AtomicRetailSalesPage() {
               {filtered.length === 0 ? (
                 <ProCard><ProEmptyState title={t("sales.no_match")} description={t("sales.search_no_match_desc")} /></ProCard>
               ) : (
-                <div className={fastRetail ? "grid gap-2 md:grid-cols-2 2xl:grid-cols-3" : "grid gap-3 md:grid-cols-2"}>
+                <div className={fastRetail ? "grid gap-3 sm:grid-cols-2 2xl:grid-cols-3" : "grid gap-3 sm:grid-cols-2"}>
                   {visibleProducts.map((product) => {
                     const qty = cart[product.id] ?? 0;
                     const selected = qty > 0;
@@ -538,6 +539,7 @@ export function AtomicRetailSalesPage() {
                         key={product.id}
                         className={`rounded-xl border bg-white p-4 transition ${selected ? "border-teal-300 ring-2 ring-teal-100" : "border-slate-200 hover:border-teal-200"}`}
                       >
+                        <IndustryImage sector={org.sector} className="live-pos-product-image" />
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">

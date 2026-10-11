@@ -1,3 +1,5 @@
+import { IndustryHeaderImages } from "@/components/ui/industry-imagery";
+import type { SectorId } from "@/lib/types";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { InboxIcon } from "@/components/ui/icons";
@@ -15,32 +17,36 @@ export function ProMain({ children }: { children: ReactNode }) {
 }
 
 type ProPageHeaderProps = {
+  sector?: SectorId;
   eyebrow?: string;
   title: string;
   description?: ReactNode;
   actions?: ReactNode;
 };
 
-export function ProPageHeader({ eyebrow, title, description, actions }: ProPageHeaderProps) {
+export function ProPageHeader({ sector, eyebrow, title, description, actions }: ProPageHeaderProps) {
   return (
     <div data-ui="pro-page-header" className="mb-6 sm:mb-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <div className="min-w-0">
-          {eyebrow && (
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700">
-              {eyebrow}
-            </p>
-          )}
-          <h1 className="mt-1.5 text-2xl font-bold tracking-[-0.035em] text-slate-950 sm:text-[2rem]">
-            {title}
-          </h1>
-          {description && (
-            <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
-              {description}
-            </div>
-          )}
+      <div className={sector ? "live-industry-header" : ""}>
+        {sector && <IndustryHeaderImages sector={sector} />}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="min-w-0">
+            {eyebrow && (
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-700">
+                {eyebrow}
+              </p>
+            )}
+            <h1 className="mt-1.5 text-2xl font-bold tracking-[-0.035em] text-slate-950 sm:text-[2rem]">
+              {title}
+            </h1>
+            {description && (
+              <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+                {description}
+              </div>
+            )}
+          </div>
+          {actions && <div className="flex shrink-0 flex-wrap gap-2.5">{actions}</div>}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap gap-2.5">{actions}</div>}
       </div>
     </div>
   );

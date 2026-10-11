@@ -1,25 +1,32 @@
 "use client";
 
+import { IndustryHeaderImages } from "@/components/ui/industry-imagery";
+import type { SectorId } from "@/lib/types";
+
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDownIcon, MoreIcon, SearchIcon, FilterIcon } from "@/components/ui/icons";
 
 type PageHeaderProps = {
+  sector?: SectorId;
   title: string;
   description?: string;
   actions?: ReactNode;
   metrics?: ReactNode;
 };
 
-export function PageHeader({ title, description, actions, metrics }: PageHeaderProps) {
+export function PageHeader({ sector, title, description, actions, metrics }: PageHeaderProps) {
   return (
     <div data-ui="page-header" className="mb-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-[-0.025em] text-slate-950 sm:text-3xl">{title}</h1>
-          {description && <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p>}
+      <div className={sector ? "live-industry-header" : ""}>
+        {sector && <IndustryHeaderImages sector={sector} />}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-[-0.025em] text-slate-950 sm:text-3xl">{title}</h1>
+            {description && <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p>}
+          </div>
+          {actions && <div className="flex shrink-0 flex-wrap gap-2.5">{actions}</div>}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap gap-2.5">{actions}</div>}
       </div>
       {metrics && <div className="mt-5">{metrics}</div>}
     </div>

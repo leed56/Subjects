@@ -27,3 +27,12 @@ Prompt: photographic 4x4 contact sheet of grocery basket; pharmaceutical carton/
 ## Validation
 
 The existing 14-industry × 17-workspace render suite checks all layouts; the command engine remains unchanged. Lint, TypeScript, 259 tests and the clean 321-route build passed. Deployed browser inspection verified the light overview, photographed POS grid, shipment/landed-cost stock composition and Owner Pulse. The final refinements additionally passed all 238 page renders and a fresh build. No Supabase migration or real business transaction is introduced by visual alignment.
+
+
+## Authenticated route integration — 11 October 2026
+
+The dashboard (`/dashboard`), stock catalogue (`/stock`) and atomic retail POS (`/sales`, for sectors using that checkout) now use the reference light visual language in their actual application components. Shared page headers accept an optional sector and render a local photographic strip without importing demo state or data. Stock command metrics and category controls use white surfaces and restrained blue/teal accents. Retail POS balances catalogue and checkout columns and adds explicitly illustrative industry tiles to catalogue cards.
+
+Existing data sources, owner-only cost visibility, stock filters, quantity controls, prescription/FEFO checks, payment handling and checkout commands remain the source of behavior. The imagery does not claim to depict a specific SKU. The special textile checkout and full authenticated owner mobile layout still require their own convergence work; the general inventory catalogue does not yet reproduce the demo shipment/landed-cost panels.
+
+Validation: TypeScript, changed-file ESLint and all 259 tests pass. Authenticated browser verification is pending account access; the user previously declined login handoff. This is a route integration increment, not a claim that every reference composition or production workflow is complete.
