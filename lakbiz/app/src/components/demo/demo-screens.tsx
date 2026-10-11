@@ -1180,7 +1180,7 @@ function Finance({ data, open }: Props) {
                 {j.lines.map((l, i) => (
                   <div
                     key={i}
-                    className="grid grid-cols-[1fr_auto_auto] gap-5 rounded-lg bg-slate-50 px-3 py-2.5 text-xs"
+                    className="demo-journal-line grid grid-cols-[1fr_auto_auto] gap-5 rounded-lg bg-slate-50 px-3 py-2.5 text-xs"
                   >
                     <span className="text-slate-500">{l.account}</span>
                     <span className="w-28 text-right tabular-nums">

@@ -374,4 +374,6 @@ describe("ERP transaction invariants", () => {
     );
     expect(s.sales[0].rewardDiscount).toBe(discount);
   });
+  it("accepts three-decimal measured quantities despite binary float representation",()=>{const s=createDemoState("textile",now),n=executeDemoCommand(s,{type:"transfer",productId:"p-1",quantity:1.001,from:"central",to:"main"},"manager",now,"measured");expect(n.products[0].quantities.main).toBeCloseTo(s.products[0].quantities.main+1.001,3);});
+
 });

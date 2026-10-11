@@ -1177,3 +1177,5 @@
     width: 100%;
   }
 }
+
+@media(max-width:540px){.demo-journal-line{grid-template-columns:minmax(0,1fr) 70px 70px;gap:8px;font-size:10px}.demo-journal-line>span{width:auto}}

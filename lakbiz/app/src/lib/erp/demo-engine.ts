@@ -146,7 +146,7 @@ export function executeDemoCommand(
       !Number.isFinite(n) ||
       n <= 0 ||
       n > 1e6 ||
-      Math.round(n * 1000) !== n * 1000
+      Math.abs(Math.round(n * 1000) - n * 1000) > 0.000001
     )
       throw new Error("Enter a positive quantity with at most three decimals.");
   }
@@ -547,7 +547,9 @@ export function executeDemoCommand(
     amount(command.pointValue);
     if (command.loyaltySpend <= 0)
       throw new Error("Loyalty spend threshold must be positive.");
-    next.settings = { ...next.settings, ...command, name: command.name.trim() };
+    const { type: commandType, ...settings } = command;
+    void commandType;
+    next.settings = { ...next.settings, ...settings, name: command.name.trim() };
   }
   next.revision++;
   next.audit.unshift({
