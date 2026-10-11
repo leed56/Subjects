@@ -18,6 +18,7 @@ import {
 } from "@/lib/supabase/general-ledger-client";
 
 import { LedgerDetail } from "@/components/accounting/ledger-detail";
+import { LedgerStatements } from "@/components/accounting/ledger-statements";
 
 type DraftLine = { accountCode: string; debit: string; credit: string };
 const blankLines = (): DraftLine[] => [
@@ -227,6 +228,19 @@ function AccountingWorkspace() {
                 </ProCard>
               ) : (
                 <>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setRevision((value) => value + 1)}
+                    >
+                      Refresh ledger reports
+                    </Button>
+                  </div>
+                  <LedgerStatements
+                    trial={data.trial}
+                    onAccount={(accountId) => setSelection({ accountId })}
+                  />
                   <ProCard
                     title={copy(
                       "Trial balance · LKR",
