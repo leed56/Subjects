@@ -25,7 +25,7 @@ The original four-surface architecture and entire suggested page list are now do
 | BI/reports | Existing report and specialized owner intelligence | Connected sample chart/ranking/CSV | General location/industry reports and reconciled projections |
 | Subscriptions/entitlements | Existing plans, addons, statuses, read-only guards | Sample subscription configuration | End-to-end activation/expiry/webhook/offline certification |
 | Template Studio | No full release-control UI observed | Contract inspector and real static config checks | Immutable release records, migration runs, cohorts and rollback |
-| Client demo per industry | No complete isolated multi-industry showcase | 14 public demo identities, 17 pages each, mock data, reset and session isolation | None for core sample presentation; live deployment verification required |
+| Client demo per industry | No complete isolated multi-industry showcase | 14 public demo identities, 17 pages each, mock data, reset and session isolation | Deployed client catalogue, sample entry and checkout verified; production capabilities remain separate |
 
 ## Verified by this change
 

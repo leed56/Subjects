@@ -1,3 +1,5 @@
+> Visual direction update: the user’s four RetailPro screenshots supersede the first navy design. See [REFERENCE_UI_ALIGNMENT.md](REFERENCE_UI_ALIGNMENT.md) for the current light sidebar, blue/teal controls, photographic banners, compact cards, operating tables and Owner Mobile composition.
+
 # Premium UI coverage and interaction specification
 
 The original requested page list is fully represented in the client showcase. Additional pages turn operational exceptions into first-class workspaces. The design system is navy, pearl and emerald, with subtle industry accents, compact operational typography, consistent metric cards, accessible drawers, responsive tables and a mobile navigation drawer.

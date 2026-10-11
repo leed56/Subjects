@@ -168,7 +168,32 @@ export function RevenueChart({
             strokeDasharray="4 6"
           />
         ))}
-        <path d={area} fill="url(#demo-chart-fill)" />
+        {coords.map(([x, y], i) => (
+          <g key={`bar-${i}`}>
+            <rect
+              x={x - Math.min(step * 0.27, 16)}
+              y={y}
+              width={Math.min(step * 0.54, 32)}
+              height={height - pad - y}
+              rx="2"
+              fill="#8adfd5"
+              opacity=".85"
+            >
+              <title>
+                {points[i].label}: {money(points[i].value)}
+              </title>
+            </rect>
+            <rect
+              x={x - Math.min(step * 0.27, 16)}
+              y={y + (height - pad - y) * 0.6}
+              width={Math.min(step * 0.54, 32)}
+              height={(height - pad - y) * 0.4}
+              fill="#1196f3"
+              opacity=".9"
+            />
+          </g>
+        ))}
+        <path d={area} fill="url(#demo-chart-fill)" opacity=".2" />
         <path
           d={line}
           stroke="var(--demo-accent)"

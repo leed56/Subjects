@@ -7,9 +7,12 @@ import {
   StockIcon,
   SalesIcon,
   BankingIcon,
-  CustomersIcon,
   ShieldIcon,
   PlusIcon,
+  AlertTriangleIcon,
+  ReportsIcon,
+  SettingsIcon,
+  DashboardIcon,
   ChevronRightIcon,
 } from "@/components/ui/icons";
 import {
@@ -36,6 +39,13 @@ import {
   demoDate,
   initials,
 } from "./demo-ui";
+import {
+  ProductPhoto,
+  ReferenceBanner,
+  BranchPerformance,
+  ProductAlerts,
+  ImportSummary,
+} from "./reference-visuals";
 import { ArrowMark } from "./demo-marks";
 import type { DemoAction } from "./demo-action-drawer";
 type Props = {
@@ -118,124 +128,76 @@ function Overview({ data, template, role, open }: Props) {
   const t = totals(data),
     owner = role === "owner",
     active = data.sales.filter((s) => !s.returned);
-  const today = businessDate(
-      new Date(data.sales[0]?.date ?? data.journals[0].date),
-    ),
-    near = data.products.filter(
-      (p) =>
-        p.expiry &&
-        p.expiry <=
-          new Date(new Date(today).getTime() + 30 * 86400000)
-            .toISOString()
-            .slice(0, 10),
-    );
+  const ranked = data.products
+    .map((p) => ({
+      ...p,
+      revenue: active.reduce(
+        (n, s) =>
+          n +
+          s.lines
+            .filter((l) => l.productId === p.id)
+            .reduce((m, l) => m + Math.round(l.unitAmount * l.quantity), 0),
+        0,
+      ),
+    }))
+    .sort((a, b) => b.revenue - a.revenue);
   return (
     <>
-      <section className="demo-overview-hero">
-        <div>
-          <span className="demo-pill demo-pill-good">
-            Your business, connected
-          </span>
-          <h2 className="mt-5 max-w-xl text-3xl font-semibold leading-tight tracking-[-.035em] sm:text-4xl">
-            A clear view.
-            <br />A confident next move.
-          </h2>
-          <p className="mt-4 max-w-lg text-sm leading-6 text-slate-400">
-            {template.company} · {template.promise}
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Link href={`${template.demoPath}/pos`} className="demo-primary">
-              Start a sale
-              <ArrowMark />
-            </Link>
-            <Link
-              href={`${template.demoPath}/inventory`}
-              className="demo-dark-secondary"
-            >
-              Explore inventory
-            </Link>
-          </div>
-        </div>
-        <div className="demo-hero-summary">
-          <p className="demo-overline text-slate-500">
-            Net sales · sample period
-          </p>
-          <p className="mt-4 text-4xl font-semibold tracking-[-.04em] text-white">
-            {money(t.revenue)}
-          </p>
-          <p className="mt-3 text-xs text-slate-400">
-            {active.length} completed sales · 3 locations
-          </p>
-          <div className="mt-6 flex gap-6 border-t border-white/10 pt-5">
-            <div>
-              <p className="text-xl font-semibold text-white">
-                {data.products.length}
-              </p>
-              <p className="mt-1 text-[10px] text-slate-500">Product lines</p>
-            </div>
-            <div>
-              <p className="text-xl font-semibold text-white">
-                {data.customers.length}
-              </p>
-              <p className="mt-1 text-[10px] text-slate-500">Relationships</p>
-            </div>
-            <div>
-              <p className="text-xl font-semibold text-white">
-                {data.shipments.filter((s) => s.status !== "received").length}
-              </p>
-              <p className="mt-1 text-[10px] text-slate-500">
-                Inbound shipments
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-      <Stats>
+      <div className="demo-stats-grid reference-overview-stats mb-5">
         <DemoMetric
-          label="Sales"
+          label="Sales · sample period"
           value={money(t.revenue)}
-          hint="Net of full sample returns"
+          hint={`${active.length} completed transactions`}
           icon={<SalesIcon className={iconClass} />}
-          accent
         />
         <DemoMetric
-          label={owner ? "Gross profit" : "Completed sales"}
-          value={owner ? money(t.profit) : String(active.length)}
+          label={owner ? "Gross profit" : "Customers"}
+          value={owner ? money(t.profit) : String(data.customers.length)}
           hint={
             owner
-              ? "Excluding output VAT; historical COGS"
-              : "Across all sample locations"
+              ? "After sample VAT and historical cost"
+              : "Individuals and trade accounts"
           }
           icon={<BankingIcon className={iconClass} />}
         />
         <DemoMetric
-          label={owner ? "Customer receivables" : "Customers"}
-          value={owner ? money(t.receivables) : String(data.customers.length)}
-          hint={
-            owner
-              ? "Balances from the connected credit ledger"
-              : "Individuals and trade accounts"
-          }
-          icon={<CustomersIcon className={iconClass} />}
-        />
-        <DemoMetric
-          label="Stock availability"
+          label={owner ? "Stock value" : "Available stock"}
           value={
-            String(
-              data.products.filter((p) => !p.blocked && totalStock(p) > 0)
-                .length,
-            ) +
-            " / " +
-            data.products.length
+            owner
+              ? money(t.stockValue)
+              : String(data.products.reduce((n, p) => n + totalStock(p), 0))
           }
-          hint="Sellable product lines"
+          hint="Across all locations"
           icon={<StockIcon className={iconClass} />}
         />
-      </Stats>
-      <div className="demo-two-column">
+        <DemoMetric
+          label={owner ? "Sample output VAT" : "Locations"}
+          value={owner ? money(t.tax) : String(data.warehouses.length)}
+          hint={
+            owner
+              ? "From active sample invoices"
+              : "One connected stock network"
+          }
+          icon={<ReportsIcon className={iconClass} />}
+        />
+        <DemoMetric
+          label="Inspection holds"
+          value={String(data.products.filter((p) => p.blocked).length)}
+          hint="Products blocked from checkout"
+          icon={<AlertTriangleIcon className={iconClass} />}
+        />
+        <DemoMetric
+          label="Low stock alerts"
+          value={String(
+            data.products.filter((p) => totalStock(p) <= p.reorder).length,
+          )}
+          hint="Below reorder threshold"
+          icon={<StockIcon className={iconClass} />}
+        />
+      </div>
+      <div className="reference-overview-grid">
         <DemoSection
-          title="The rhythm of your business"
-          eyebrow="Sales performance"
+          title="Sales Trend"
           action={
             <Link
               href={`${template.demoPath}/reports`}
@@ -245,117 +207,110 @@ function Overview({ data, template, role, open }: Props) {
             </Link>
           }
         >
-          <div className="mb-4 flex gap-7">
-            <div>
-              <p className="text-xs text-slate-400">Net revenue</p>
-              <p className="mt-2 text-2xl font-semibold tracking-tight">
-                {money(t.revenue)}
-              </p>
-            </div>
-            {owner && (
-              <div>
-                <p className="text-xs text-slate-400">Gross margin</p>
-                <p className="mt-2 text-2xl font-semibold tracking-tight">
-                  {t.revenue
-                    ? ((t.profit / (t.revenue - t.tax)) * 100).toFixed(1)
-                    : "0.0"}
-                  %
-                </p>
-              </div>
-            )}
-          </div>
           <RevenueChart points={trend(data)} />
+          <div className="reference-chart-legend">
+            <span>
+              <i />
+              Sales
+            </span>
+            <span>
+              <i />
+              Daily sales bars
+            </span>
+            <span>
+              <i />
+              Sales trend line
+            </span>
+          </div>
         </DemoSection>
         <DemoSection
-          title="Needs a little attention"
-          eyebrow="Operating signals"
+          title="Top Selling Products"
+          action={
+            <Link
+              href={`${template.demoPath}/inventory`}
+              className="demo-text-link"
+            >
+              View all →
+            </Link>
+          }
         >
-          <div className="space-y-3">
-            {[
-              {
-                title: "Stock under inspection",
-                n: data.products.filter((p) => p.blocked).length,
-                text: "Held identities stay out of checkout",
-                href: "inventory",
-              },
-              {
-                title: "Upcoming expiry",
-                n: near.length,
-                text: "Review batches in the next 30 days",
-                href: "inventory",
-              },
-              {
-                title: "Orders waiting for receipt",
-                n: data.purchases.filter((p) => p.status === "ordered").length,
-                text: "Receive when goods arrive",
-                href: "purchases",
-              },
-            ]
-              .filter((a) => a.href !== "purchases" || owner)
-              .map((a) => (
-                <Link
-                  key={a.title}
-                  href={`${template.demoPath}/${a.href}`}
-                  className="demo-attention-row"
-                >
-                  <span className="demo-attention-count">{a.n}</span>
-                  <span className="flex-1">
-                    <span className="block text-sm font-medium">{a.title}</span>
-                    <span className="mt-1 block text-xs text-slate-400">
-                      {a.text}
-                    </span>
-                  </span>
-                  <ChevronRightIcon className="h-4 w-4 text-slate-400" />
-                </Link>
-              ))}
+          <div className="reference-top-products">
+            {ranked.slice(0, 5).map((p, i) => (
+              <button
+                type="button"
+                key={p.id}
+                onClick={() => open({ type: "product", id: p.id })}
+              >
+                <span className="reference-rank">{i + 1}</span>
+                <ProductPhoto industry={template.id} product={p} />
+                <span>
+                  <strong>{p.name}</strong>
+                  <small>
+                    {p.category} · {p.unit}
+                  </small>
+                </span>
+                <strong>{money(p.revenue)}</strong>
+              </button>
+            ))}
           </div>
         </DemoSection>
-      </div>
-      <div className="demo-two-column mt-6">
-        <DemoSection title="Latest activity" eyebrow="Connected operations">
-          <div className="divide-y divide-slate-100">
-            {data.audit.slice(0, 5).map((a) => (
-              <div key={a.id} className="flex items-center gap-3 py-3">
-                <span className="demo-icon-chip">
-                  <StockIcon className="h-4 w-4" />
+        <DemoSection
+          title="Branch Performance"
+          action={
+            <Link
+              href={`${template.demoPath}/inventory`}
+              className="demo-text-link"
+            >
+              View stock →
+            </Link>
+          }
+        >
+          <BranchPerformance data={data} owner={owner} />
+        </DemoSection>
+        <DemoSection
+          title="Near Expiry Items"
+          action={
+            <Link
+              href={`${template.demoPath}/inventory`}
+              className="demo-text-link"
+            >
+              View all →
+            </Link>
+          }
+        >
+          <ProductAlerts data={data} template={template} open={open} />
+        </DemoSection>
+        <DemoSection title="Recent Activity">
+          <div className="reference-activity">
+            {data.audit.slice(0, 5).map((a, i) => (
+              <div key={a.id}>
+                <span
+                  className={`reference-activity-icon reference-tone-${i % 4}`}
+                >
+                  <StockIcon className={iconClass} />
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium capitalize">
-                    {a.action}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {demoDate(a.date)} · {a.actor}
-                  </p>
-                </div>
+                <span>
+                  <strong>{a.action.replaceAll("_", " ")}</strong>
+                  <small>
+                    {demoDate(a.date)} · {a.actor} · {a.reference}
+                  </small>
+                </span>
                 <DemoPill>Recorded</DemoPill>
               </div>
             ))}
           </div>
         </DemoSection>
-        <DemoSection
-          title="Built around your industry"
-          eyebrow={template.nameEn}
-        >
-          <div className="flex items-start gap-4">
-            <div className="demo-industry-icon">
-              <SectorIcon sectorId={template.id} className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold">{template.promise}</p>
-              <ul className="mt-4 space-y-3 text-sm text-slate-500">
-                {template.highlights.map((h) => (
-                  <li key={h}>{h}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => open({ type: "product", id: data.products[0].id })}
-            className="demo-text-link mt-6"
-          >
-            Explore a sample product →
-          </button>
+        <DemoSection title="Stock Inspection Alerts">
+          <ProductAlerts
+            data={data}
+            template={template}
+            mode="held"
+            open={open}
+          />
+          <p className="mt-4 text-xs text-slate-500">
+            Held stock stays outside the sales floor until inspection is
+            resolved.
+          </p>
         </DemoSection>
       </div>
     </>
@@ -407,7 +362,13 @@ function Inventory({ data, template, role, search, open }: Props) {
           }
         />
       </Stats>
-      <div className="demo-toolbar">
+      <ImportSummary
+        data={data}
+        template={template}
+        owner={role === "owner"}
+        open={open}
+      />
+      <div className="demo-toolbar mt-5">
         <div className="demo-tabs">
           {["all", "low", "held"].map((v) => (
             <button
@@ -432,82 +393,124 @@ function Inventory({ data, template, role, search, open }: Props) {
           Location stock →
         </Link>
       </div>
-      <DataTable
-        rows={products}
-        onRowClick={(p) => open({ type: "product", id: p.id })}
-        emptyState={
-          <DemoEmpty
-            title="No matching products"
-            description="Try another search or stock filter."
-          />
-        }
-        columns={[
-          {
-            key: "name",
-            header: "Product",
-            render: (p) => (
-              <div className="flex items-center gap-3">
-                <span className="demo-product-thumb">
-                  <SectorIcon sectorId={template.id} className="h-5 w-5" />
-                </span>
-                <span>
-                  <span className="block font-semibold text-slate-800">
-                    {p.name}
+      <DemoSection title="Batch-wise Inventory & Expiry">
+        <DataTable
+          rows={products}
+          onRowClick={(p) => open({ type: "product", id: p.id })}
+          emptyState={
+            <DemoEmpty
+              title="No matching products"
+              description="Try another search or stock filter."
+            />
+          }
+          columns={[
+            {
+              key: "name",
+              header: "Product",
+              render: (p) => (
+                <div className="flex items-center gap-3">
+                  <ProductPhoto
+                    industry={template.id}
+                    product={p}
+                    className="demo-product-thumb"
+                  />
+                  <span>
+                    <span className="block font-semibold text-slate-800">
+                      {p.name}
+                    </span>
+                    <span className="mt-1 block text-xs text-slate-400">
+                      {p.sku} · {p.category}
+                    </span>
                   </span>
-                  <span className="mt-1 block text-xs text-slate-400">
-                    {p.sku} · {p.category}
+                </div>
+              ),
+            },
+            {
+              key: "identity",
+              header: "Identity",
+              render: (p) => (
+                <span className="font-mono text-xs">{p.identity}</span>
+              ),
+            },
+            {
+              key: "qty",
+              header: "Available stock",
+              align: "right",
+              render: (p) => (
+                <span className="font-semibold tabular-nums">
+                  {totalStock(p)}{" "}
+                  <span className="text-xs font-normal text-slate-400">
+                    {p.unit}
                   </span>
                 </span>
-              </div>
-            ),
-          },
-          {
-            key: "identity",
-            header: "Identity",
-            render: (p) => (
-              <span className="font-mono text-xs">{p.identity}</span>
-            ),
-          },
-          {
-            key: "qty",
-            header: "Available stock",
-            align: "right",
-            render: (p) => (
-              <span className="font-semibold tabular-nums">
-                {totalStock(p)}{" "}
-                <span className="text-xs font-normal text-slate-400">
-                  {p.unit}
-                </span>
+              ),
+            },
+            {
+              key: "price",
+              header: "Retail price",
+              align: "right",
+              render: (p) => money(p.price),
+            },
+            {
+              key: "expiry",
+              header: "Expiry date",
+              render: (p) => (p.expiry ? demoDate(p.expiry) : "—"),
+            },
+            ...(role === "owner"
+              ? [
+                  {
+                    key: "cost",
+                    header: "Unit cost",
+                    align: "right" as const,
+                    render: (p: DemoProduct) => money(p.cost),
+                  },
+                ]
+              : []),
+            {
+              key: "state",
+              header: "Status",
+              render: (p) => (
+                <DemoPill tone={p.blocked ? "warn" : "good"}>
+                  {p.blocked ? "Inspection hold" : "Available"}
+                </DemoPill>
+              ),
+            },
+          ]}
+        />
+      </DemoSection>
+      <DemoSection className="mt-5" title="Warehouse Stock by Location">
+        <BranchPerformance data={data} owner={role === "owner"} />
+      </DemoSection>
+      {role !== "cashier" && (
+        <DemoSection className="mt-5" title="Inventory Actions">
+          <div className="reference-actions">
+            <button type="button" onClick={() => open({ type: "transfer" })}>
+              <StockIcon className="h-6 w-6" />
+              <span>
+                <strong>Transfer Stock</strong>
+                <small>Move stock between locations</small>
               </span>
-            ),
-          },
-          {
-            key: "price",
-            header: "Retail price",
-            align: "right",
-            render: (p) => money(p.price),
-          },
-          ...(role === "owner"
-            ? [
-                {
-                  key: "cost",
-                  header: "Unit cost",
-                  align: "right" as const,
-                  render: (p: DemoProduct) => money(p.cost),
-                },
-              ]
-            : []),
-          {
-            key: "state",
-            header: "Status",
-            render: (p) => (
-              <DemoPill tone={p.blocked ? "warn" : "good"}>
-                {p.blocked ? "Inspection hold" : "Available"}
-              </DemoPill>
-            ),
-          },
-        ]}
-      />
+              <ArrowMark />
+            </button>
+            <button type="button" onClick={() => open({ type: "write_off" })}>
+              <AlertTriangleIcon className="h-6 w-6" />
+              <span>
+                <strong>Damage Write-off</strong>
+                <small>Record reasoned stock losses</small>
+              </span>
+              <ArrowMark />
+            </button>
+            <Link href={`${template.demoPath}/returns`}>
+              <SalesIcon className="h-6 w-6" />
+              <span>
+                <strong>Returns & Inspection</strong>
+                <small>Resolve a sale and its stock</small>
+              </span>
+              <ArrowMark />
+            </Link>
+          </div>
+        </DemoSection>
+      )}
       <DemoSection
         className="mt-6"
         title="Your product vocabulary"
@@ -1676,76 +1679,162 @@ function Reports({ data, template }: Props) {
   );
 }
 
-function Pulse({ data, template }: Props) {
+function Pulse({ data, template, open }: Props) {
   const t = totals(data);
   return (
     <div className="demo-phone">
-      <header className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] tracking-[.18em] text-slate-500">
-            OWNER PULSE
-          </p>
-          <p className="mt-2 text-sm font-semibold text-white">
-            {data.settings.name}
-          </p>
+      <header className="reference-mobile-header">
+        <div className="flex items-center gap-3">
+          <span className="reference-mobile-logo">L</span>
+          <span>
+            <strong>LakBiz</strong>
+            <small>Owner App</small>
+          </span>
         </div>
         <span className="demo-avatar">DO</span>
       </header>
-      <div className="demo-phone-hero">
-        <p className="text-xs text-slate-400">The big picture</p>
-        <h2 className="mt-3 text-4xl font-semibold tracking-[-.04em] text-white">
-          {money(t.revenue)}
-        </h2>
-        <p className="mt-3 text-xs text-teal-300">Net sales · sample period</p>
-        <div className="mt-7">
-          <RevenueChart points={trend(data)} />
-        </div>
+      <div className="reference-mobile-branch">
+        <StockIcon className="h-5 w-5" />
+        <span>
+          <strong>{data.warehouses[0].name}</strong>
+          <small>All sample locations · Sri Lanka</small>
+        </span>
+        <span className="demo-pill demo-pill-good">
+          {data.warehouses.length} locations
+        </span>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          ["Gross profit", money(t.profit)],
-          ["Receivables", money(t.receivables)],
-          ["Supplier balances", money(t.payables)],
-          [
-            "Inbound shipments",
-            String(
-              data.shipments.filter((s) => s.status !== "received").length,
-            ),
-          ],
-        ].map(([l, v]) => (
-          <div key={l} className="demo-phone-stat">
-            <p className="text-[10px] text-slate-500">{l}</p>
-            <p className="mt-2 text-lg font-semibold tracking-tight text-white">
-              {v}
-            </p>
+      <ReferenceBanner
+        template={template}
+        title="Good morning, Owner"
+        description="Here’s your business overview today."
+      />
+      <div className="reference-mobile-metrics">
+        <DemoMetric
+          label="Sales"
+          value={money(t.revenue)}
+          hint="Sample period"
+          icon={<SalesIcon className={iconClass} />}
+        />
+        <DemoMetric
+          label="Gross profit"
+          value={money(t.profit)}
+          hint="After sample VAT"
+          icon={<BankingIcon className={iconClass} />}
+        />
+        <DemoMetric
+          label="Stock value"
+          value={money(t.stockValue)}
+          hint="All locations"
+          icon={<StockIcon className={iconClass} />}
+        />
+        <DemoMetric
+          label="Output VAT"
+          value={money(t.tax)}
+          hint="Active invoices"
+          icon={<ReportsIcon className={iconClass} />}
+        />
+        <DemoMetric
+          label="Inspection holds"
+          value={String(data.products.filter((p) => p.blocked).length)}
+          hint="Awaiting inspection"
+          icon={<AlertTriangleIcon className={iconClass} />}
+        />
+      </div>
+      <DemoSection title="Sales Trend" className="mt-4">
+        <RevenueChart points={trend(data)} />
+      </DemoSection>
+      <div className="reference-mobile-grid mt-4">
+        <DemoSection title="Branch Performance">
+          <div className="reference-mobile-list">
+            {data.warehouses.map((w, i) => (
+              <Link key={w.id} href={`${template.demoPath}/warehouses`}>
+                <span className="reference-rank">{i + 1}</span>
+                <span>
+                  <strong>{w.name}</strong>
+                  <small>
+                    {money(
+                      data.sales
+                        .filter((s) => s.warehouseId === w.id && !s.returned)
+                        .reduce((n, s) => n + s.total, 0),
+                    )}
+                  </small>
+                </span>
+                <ChevronRightIcon className="h-4 w-4" />
+              </Link>
+            ))}
           </div>
-        ))}
+        </DemoSection>
+        <DemoSection title="Low Stock Alerts">
+          <ProductAlerts
+            data={data}
+            template={template}
+            mode="low"
+            open={open}
+          />
+        </DemoSection>
+        <DemoSection title="Near Expiry Items">
+          <ProductAlerts data={data} template={template} open={open} />
+        </DemoSection>
+        <DemoSection title="Recent Activity">
+          <div className="reference-mobile-list">
+            {data.audit.slice(0, 3).map((a) => (
+              <div key={a.id}>
+                <span>
+                  <strong>{a.action.replaceAll("_", " ")}</strong>
+                  <small>
+                    {demoDate(a.date)} · {a.actor}
+                  </small>
+                </span>
+                <DemoPill>Recorded</DemoPill>
+              </div>
+            ))}
+          </div>
+        </DemoSection>
       </div>
-      <div className="mt-7">
-        <p className="text-xs font-semibold text-slate-300">
-          A decision worth your attention
-        </p>
-        <Link
-          href={`${template.demoPath}/inventory`}
-          className="mt-3 flex items-center justify-between rounded-2xl border border-amber-400/15 bg-amber-400/5 p-4"
-        >
-          <span className="text-xs leading-6 text-slate-400">
-            {data.products.filter((p) => p.blocked).length} sample product under
-            inspection.
-            <br />
-            Keep held stock out of the sales floor.
-          </span>
-          <ArrowMark />
-        </Link>
-      </div>
+      <DemoSection title="Quick Actions" className="mt-4">
+        <div className="reference-actions">
+          <button type="button" onClick={() => open({ type: "write_off" })}>
+            <AlertTriangleIcon className="h-5 w-5" />
+            <span>
+              <strong>Record damage</strong>
+            </span>
+          </button>
+          <Link href={`${template.demoPath}/reports`}>
+            <ReportsIcon className="h-5 w-5" />
+            <span>
+              <strong>View reports</strong>
+            </span>
+          </Link>
+          <button type="button" onClick={() => open({ type: "purchase" })}>
+            <StockIcon className="h-5 w-5" />
+            <span>
+              <strong>Reorder stock</strong>
+            </span>
+          </button>
+        </div>
+      </DemoSection>
       <nav aria-label="Owner shortcuts" className="demo-phone-nav">
-        <Link href={`${template.demoPath}/overview`}>Overview</Link>
-        <Link href={`${template.demoPath}/reports`}>Insights</Link>
-        <Link href={`${template.demoPath}/finance`}>Finance</Link>
+        {[
+          { id: "pulse", label: "Home", Icon: DashboardIcon },
+          { id: "reports", label: "Sales", Icon: ReportsIcon },
+          { id: "inventory", label: "Inventory", Icon: StockIcon },
+          { id: "damage", label: "Alerts", Icon: AlertTriangleIcon },
+          { id: "settings", label: "Account", Icon: SettingsIcon },
+        ].map(({ id, label, Icon }) => (
+          <Link
+            href={`${template.demoPath}/${id}`}
+            key={id}
+            aria-current={id === "pulse" ? "page" : undefined}
+          >
+            <Icon className="h-5 w-5" />
+            {label}
+          </Link>
+        ))}
       </nav>
     </div>
   );
 }
+
 function Settings({ data, template, open }: Props) {
   return (
     <div className="demo-two-column">
@@ -2210,7 +2299,7 @@ function DemoPos({ data, template, run, open }: Props) {
           ))}
         </div>
         <div className="demo-product-grid">
-          {products.map((p, i) => {
+          {products.map((p) => {
             const available = p.quantities[warehouse] ?? 0;
             return (
               <button
@@ -2222,12 +2311,8 @@ function DemoPos({ data, template, run, open }: Props) {
                   setCart({ ...cart, [p.id]: (cart[p.id] ?? 0) + qty })
                 }
               >
-                <div
-                  className={`demo-product-visual demo-product-visual-${i % 4}`}
-                >
-                  <SectorIcon sectorId={template.id} className="h-12 w-12" />
-                  <span>{p.category}</span>
-                  <span className="demo-product-plus">+</span>
+                <div className="demo-product-visual">
+                  <ProductPhoto industry={template.id} product={p} />
                 </div>
                 <div className="p-4">
                   <p className="min-h-10 text-sm font-semibold leading-5">
@@ -2240,10 +2325,15 @@ function DemoPos({ data, template, run, open }: Props) {
                     <span className="text-base font-semibold tracking-tight">
                       {money(p.price)}
                     </span>
-                    <span className="text-[10px] text-slate-400">
-                      {p.blocked ? "Inspection hold" : `${available} ${p.unit}`}
+                    <span className="reference-stock-label">
+                      {p.blocked
+                        ? "Inspection hold"
+                        : `In stock · ${available} ${p.unit}`}
                     </span>
                   </div>
+                  <span className="reference-add-product">
+                    <PlusIcon className="h-4 w-4" /> Add to sale
+                  </span>
                 </div>
               </button>
             );
@@ -2261,7 +2351,7 @@ function DemoPos({ data, template, run, open }: Props) {
           <div>
             <p className="demo-overline">Current sale</p>
             <h2 className="mt-2 text-lg font-semibold tracking-tight">
-              A thoughtful checkout.
+              Current Transaction
             </h2>
           </div>
           <span className="demo-pill demo-pill-quiet">
@@ -2301,15 +2391,25 @@ function DemoPos({ data, template, run, open }: Props) {
           </select>
         </label>
         <div className="demo-basket-lines">
+          <div className="reference-cart-head">
+            <span>Product / identity</span>
+            <span>Qty · Unit price · Total</span>
+          </div>
           {lines.length ? (
             lines.map((l) => (
               <div className="demo-basket-line" key={l.product.id}>
-                <div>
+                <ProductPhoto
+                  industry={template.id}
+                  product={l.product}
+                  className="reference-cart-photo"
+                />
+                <div className="flex-1">
                   <p className="text-xs font-semibold leading-5">
                     {l.product.name}
                   </p>
                   <p className="mt-1 text-[10px] text-slate-400">
-                    {money(l.product.price)} / {l.product.unit}
+                    {l.product.identity} · {money(l.product.price)} /{" "}
+                    {l.product.unit}
                   </p>
                   <div className="mt-2 flex items-center gap-3">
                     <label>

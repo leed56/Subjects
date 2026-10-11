@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   WORKSPACES,
+  INDUSTRY_TEMPLATES,
   DEMO_PASSWORD,
   validateDemoLogin,
   demoCanUse,
@@ -25,10 +26,13 @@ import {
   SearchIcon,
   SignOutIcon,
   ShieldIcon,
+  BellIcon,
+  ShopIcon,
 } from "@/components/ui/icons";
 import { SectorIcon } from "@/components/sector-icon";
 import { BrandMark, ArrowMark } from "./demo-marks";
 import { DEMO_ICONS, DemoEmpty } from "./demo-ui";
+import { ReferenceBanner } from "./reference-visuals";
 import { DemoScreens } from "./demo-screens";
 import { DemoActionDrawer, type DemoAction } from "./demo-action-drawer";
 
@@ -264,7 +268,7 @@ export function DemoWorkspace({
         <Link href="/demo" className="demo-brand">
           <BrandMark />
           <span>
-            <span className="block text-xl font-semibold tracking-tight text-white">
+            <span className="block text-xl font-semibold tracking-tight text-slate-900">
               LakBiz
             </span>
             <span className="mt-1 block text-[10px] tracking-[.16em] text-slate-500">
@@ -277,7 +281,7 @@ export function DemoWorkspace({
             <SectorIcon sectorId={template.id} className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-xs font-semibold text-slate-200">
+            <p className="truncate text-xs font-semibold text-slate-800">
               {data.settings.name}
             </p>
             <p className="mt-1 text-[10px] text-slate-500">{template.nameEn}</p>
@@ -311,6 +315,30 @@ export function DemoWorkspace({
             );
           })}
         </nav>
+        <div className="reference-industry-switcher">
+          <p>Business type</p>
+          {INDUSTRY_TEMPLATES.filter((t) =>
+            [template.id, "pharmacy", "cosmetics", "textile"].includes(t.id),
+          ).map((t) => (
+            <Link
+              key={t.id}
+              href={t.demoPath}
+              aria-current={t.id === template.id ? "true" : undefined}
+            >
+              <SectorIcon sectorId={t.id} className="h-5 w-5" />
+              <span>
+                <strong>{t.nameEn}</strong>
+                <small>{t.company}</small>
+              </span>
+              {t.id === template.id && (
+                <span className="reference-selected-check">✓</span>
+              )}
+            </Link>
+          ))}
+          <Link href="/demo" className="reference-all-industries">
+            All 14 industries →
+          </Link>
+        </div>
         <div className="demo-sidebar-bottom">
           <span className="demo-pill demo-pill-good">
             Public sample workspace
@@ -348,11 +376,16 @@ export function DemoWorkspace({
             >
               <MenuIcon className="h-5 w-5" />
             </button>
-            <span className="text-xs text-slate-400">Workspace</span>
-            <span className="text-xs text-slate-300">/</span>
-            <span className="text-xs font-semibold text-slate-700">
-              {page.label}
-            </span>
+            <label className="reference-global-search">
+              <SearchIcon className="h-4 w-4" />
+              <span className="sr-only">Find workspace or product</span>
+              <input
+                type="search"
+                placeholder="Search workspaces, products or records…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </label>
           </div>
           <div className="flex items-center gap-3">
             <Link
@@ -379,6 +412,24 @@ export function DemoWorkspace({
                 <option value="cashier">Cashier view</option>
               </select>
             </label>
+            <Link
+              href={`${template.demoPath}/inventory`}
+              className="reference-header-branch"
+            >
+              <ShopIcon className="h-5 w-5" />
+              <span>
+                <strong>Main branch</strong>
+                <small>{data.warehouses[0].city} · Sri Lanka</small>
+              </span>
+            </Link>
+            <Link
+              href={`${template.demoPath}/inventory`}
+              aria-label="View stock inspection alerts"
+              className="reference-alert-bell"
+            >
+              <BellIcon className="h-5 w-5" />
+              <span>{data.products.filter((p) => p.blocked).length}</span>
+            </Link>
             <span className="demo-avatar">DO</span>
           </div>
         </header>
@@ -400,31 +451,49 @@ export function DemoWorkspace({
           tabIndex={-1}
           className={`demo-main ${workspace === "pulse" ? "demo-pulse-main" : ""}`}
         >
-          <div className="demo-page-heading">
-            <div>
-              <p className="demo-overline">
-                {template.nameEn}{" "}
-                <span className="mx-1.5 text-slate-300">/</span> {page.group}
-              </p>
-              <h1>{page.label}</h1>
-              <p>{page.description}</p>
+          {workspace !== "pulse" && (
+            <ReferenceBanner
+              template={template}
+              title={
+                workspace === "overview"
+                  ? "Good morning, Owner"
+                  : workspace === "inventory"
+                    ? "Inventory & Imports"
+                    : page.label
+              }
+              description={
+                workspace === "overview"
+                  ? "Here’s what’s happening across your stores today."
+                  : page.description
+              }
+              imports={workspace === "inventory" || workspace === "imports"}
+            />
+          )}
+          {search.trim() && (
+            <div className="reference-search-results mb-5">
+              <span className="text-xs text-slate-500">
+                Matching workspaces
+              </span>
+              {navItems
+                .filter((w) =>
+                  `${w.label} ${w.description}`
+                    .toLowerCase()
+                    .includes(search.toLowerCase()),
+                )
+                .map((w) => (
+                  <Link
+                    key={w.id}
+                    href={`${template.demoPath}/${w.id}`}
+                    onClick={() => setSearch("")}
+                  >
+                    {w.label} →
+                  </Link>
+                ))}
+              <button type="button" onClick={() => setSearch("")}>
+                Clear search
+              </button>
             </div>
-            {["inventory", "customers", "purchases", "staff"].includes(
-              workspace,
-            ) && (
-              <label className="relative block w-full sm:w-64">
-                <SearchIcon className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
-                <span className="sr-only">Search {page.label}</span>
-                <input
-                  type="search"
-                  className="demo-input pl-10"
-                  placeholder={`Search ${page.label.toLowerCase()}…`}
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </label>
-            )}
-          </div>
+          )}
           {notice && (
             <div role="status" className="demo-notice mb-6">
               {notice}
