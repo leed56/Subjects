@@ -85,6 +85,7 @@ jobs:
             grocery: catalog.grocery.length,
             groceryCategoryPaths: groceryCategories.size,
             sourceCounts: catalog.sourceCounts,
+            quarantineSummary: catalog.quarantineSummary,
             factualSpcCosts,
             syntheticCosts,
             regulatoryConservativeMatches: regulatory,
@@ -118,9 +119,12 @@ jobs:
         run: node scripts/import-demo-businesses.mjs --catalog=/tmp/lakbiz-sri-lanka-demo-catalog.json
 
       - name: Upload normalized catalog artifact
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: lakbiz-sri-lanka-demo-catalog
-          path: /tmp/lakbiz-sri-lanka-demo-catalog.json
-          if-no-files-found: error
+          path: |
+            /tmp/lakbiz-sri-lanka-demo-catalog.json
+            /tmp/lakbiz-sri-lanka-demo-catalog.json.quarantine.json
+          if-no-files-found: warn
           retention-days: 7

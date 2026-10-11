@@ -10,7 +10,8 @@ class PublicFetchError extends Error {
 }
 
 function retryDelay(error, attempt, now) {
-  const fallback = Math.min(30000, 1000 * 2 ** (attempt - 1));
+  const base = error instanceof PublicFetchError && error.status === 429 ? 5000 : 1000;
+  const fallback = Math.min(30000, base * 2 ** (attempt - 1));
   if (!(error instanceof PublicFetchError) || !error.retryAfter) return fallback;
   const seconds = Number(error.retryAfter);
   const delay = Number.isFinite(seconds)

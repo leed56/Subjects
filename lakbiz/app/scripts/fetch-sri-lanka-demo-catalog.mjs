@@ -2,6 +2,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fetchPublicText } from "./demo-catalog/public-fetch.mjs";
+import { partitionCatalogNames } from "./demo-catalog/name-quarantine.mjs";
 import {
   classifyRetailProduct,
   extractSpcBrand,
@@ -276,9 +277,13 @@ async function main() {
 
   // Keep source acquisition serialized so the shared delay is a real global
   // rate limit rather than three concurrent fetch loops racing each other.
-  const spc = await fetchSpc();
-  const spar = await fetchSpar(maxGrocery);
-  const healthguard = await fetchHealthguard(maxPharmacyRetail);
+  const spcAcquired = partitionCatalogNames(await fetchSpc(), retrievedAt);
+  const sparAcquired = partitionCatalogNames(await fetchSpar(maxGrocery), retrievedAt);
+  const healthguardAcquired = partitionCatalogNames(await fetchHealthguard(maxPharmacyRetail), retrievedAt);
+  const spc = spcAcquired.complete, spar = sparAcquired.complete, healthguard = healthguardAcquired.complete;
+  const quarantined = [...spcAcquired.quarantined, ...sparAcquired.quarantined, ...healthguardAcquired.quarantined];
+  const quarantinePath = `${outputPath}.quarantine.json`;
+  console.log(`QUARANTINE: ${quarantined.length} unresolved source identities excluded from client catalog; report ${quarantinePath}`);
   const sparPharmacy = pharmacyRowsFromSpar(spar, maxSparPharmacy);
   console.log(`SPAR2U modern-pharmacy fallback: ${sparPharmacy.length} factual retail items`);
 
@@ -295,6 +300,7 @@ async function main() {
       retailerData: "Only public factual names/prices/identifiers are retained. Product descriptions and images are not copied.",
       taxonomy: "Retail taxonomy is normalized for LakBiz and is marked with taxonomyMethod; it is not represented as a regulator-supplied classification.",
       healthguardIdentity: "When Healthguard product-card URLs are not present in server markup, listing-name hashes are used only as deterministic source identifiers; the source URL remains the public category page.",
+      incompleteNames: "Unresolved truncated or blank source identities are excluded from both industry payloads and recorded in the separate quarantine report. Coverage checks use accepted complete rows only.",
     },
     sourceCounts: {
       spc: spc.length,
@@ -302,11 +308,17 @@ async function main() {
       spar2u: spar.length,
       spar2u_pharmacy: sparPharmacy.length,
     },
+    quarantineSummary: {
+      total: quarantined.length,
+      unresolvedTruncatedNames: quarantined.filter(row => row.reason === "unresolved_truncated_name").length,
+      blankNames: quarantined.filter(row => row.reason === "blank_name").length,
+    },
     pharmacy,
     grocery,
   };
 
   await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(quarantinePath, `${JSON.stringify({ generatedAt: retrievedAt, rows: quarantined }, null, 2)}\n`, "utf8");
   await writeFile(outputPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
   console.log(`WROTE pharmacy=${pharmacy.length}, grocery=${grocery.length}`);
   console.log("No database changes were made by this acquisition script.");

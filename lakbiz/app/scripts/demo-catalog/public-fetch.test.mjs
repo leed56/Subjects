@@ -50,6 +50,12 @@ describe("bounded public catalog recovery", () => {
     await fetchPublicText(url, { ...options, now: () => Date.parse("2026-10-11T12:00:00Z") });
     expect(options.wait).toHaveBeenCalledWith(10000);
   });
+  it("uses a longer cooldown for rate limiting without Retry-After", async () => {
+    const options = fixture();
+    options.fetchImpl.mockImplementation(async () => new Response("Limited", { status: 429 }));
+    await expect(fetchPublicText(url, options)).rejects.toThrow("429");
+    expect(options.wait.mock.calls).toEqual([[5000], [10000]]);
+  });
   it("recovers a network failure and passes a timeout signal", async () => {
     const options = fixture();
     options.fetchImpl.mockRejectedValueOnce(new TypeError("fetch failed")).mockResolvedValueOnce(success());
