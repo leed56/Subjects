@@ -19,6 +19,7 @@ import {
 
 import { LedgerDetail } from "@/components/accounting/ledger-detail";
 import { LedgerStatements } from "@/components/accounting/ledger-statements";
+import { SalesLedgerBridge } from "@/components/accounting/sales-ledger-bridge";
 
 type DraftLine = { accountCode: string; debit: string; credit: string };
 const blankLines = (): DraftLine[] => [
@@ -198,9 +199,9 @@ function AccountingWorkspace() {
             <div className="space-y-5">
               <div className="rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-900">
                 {copy(
-                  "This ledger records explicit journal entries. Existing sales, purchases and stock are not automatically posted yet. A journal does not change physical stock or customer balances.",
-                  "මෙම ලෙජරය ජර්නල් සටහන් සඳහාය. පවතින අලෙවි සහ මිලදී ගැනීම් තවම ස්වයංක්‍රීයව ඇතුළත් නොවේ. සටහනකින් භෞතික තොග හෝ පාරිභෝගික ශේෂ වෙනස් නොවේ.",
-                  "இந்தப் பேரேடு நேரடி பதிவுகளுக்கானது. தற்போதைய விற்பனை, கொள்முதல் இன்னும் தானாகப் பதிவாகாது. பதிவு சரக்கு அல்லது வாடிக்கையாளர் இருப்பை மாற்றாது.",
+                  "Manual journals are available. New-sale revenue/VAT posting is a separate owner opt-in below. Historical sales, purchases and stock are not imported. A journal does not change physical stock or customer balances.",
+                  "ජර්නල් සටහන් ඇතුළත් කළ හැක. නව අලෙවි ආදායම්/VAT සටහන් සඳහා හිමිකරු පහතින් සක්‍රීය කළ යුතුය. පැරණි අලෙවි, මිලදී ගැනීම් හෝ තොග ආනයනය නොවේ. සටහනකින් තොග හෝ පාරිභෝගික ශේෂ වෙනස් නොවේ.",
+                  "நேரடி பதிவுகள் கிடைக்கும். புதிய விற்பனை வருவாய்/VAT பதிவை உரிமையாளர் கீழே செயல்படுத்த வேண்டும். பழைய விற்பனை, கொள்முதல், சரக்கு இறக்குமதி செய்யப்படாது. பதிவு சரக்கு அல்லது வாடிக்கையாளர் இருப்பை மாற்றாது.",
                 )}
               </div>
               {notice && (
@@ -241,6 +242,7 @@ function AccountingWorkspace() {
                     trial={data.trial}
                     onAccount={(accountId) => setSelection({ accountId })}
                   />
+                  {org.id ? <SalesLedgerBridge key={org.id} orgId={org.id} writable={writable} onJournal={(batchId) => setSelection({ batchId })} /> : null}
                   <ProCard
                     title={copy(
                       "Trial balance · LKR",

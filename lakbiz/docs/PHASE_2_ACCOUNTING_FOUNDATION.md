@@ -29,6 +29,8 @@ TypeScript tests verify exact monetary input, balanced entry validation and owne
 
 ## Still pending in Phase 2
 
+The new opt-in sale revenue/VAT adapter and its pending migration are tracked separately in [PHASE_2_SALES_LEDGER_BRIDGE.md](./PHASE_2_SALES_LEDGER_BRIDGE.md). The foundation alone does not activate that adapter.
+
 - General location and reservation authority with explicit migration from existing quantities.
 - Transactional purchasing/receipts and automatic source postings for sales, returns, imports, expenses and settlements.
 - Inventory cost layers or carrying value, residual-cent handling and financial/subledger reconciliation.
