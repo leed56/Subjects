@@ -57,8 +57,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm install --no-save --no-package-lock playwright@1.55.0
-          npx playwright install --with-deps chromium
+          qa_tools="${RUNNER_TEMP}/lakbiz-ui-qa-tools"
+          mkdir -p "$qa_tools"
+          npm install --prefix "$qa_tools" --no-save --no-package-lock playwright@1.55.0
+          ln -s "$qa_tools/node_modules/playwright" node_modules/playwright
+          "$qa_tools/node_modules/.bin/playwright" install --with-deps chromium
 
       - name: Verify secure browser-QA capability
         shell: bash
