@@ -25,6 +25,7 @@ import {
   StatusBadge,
   ActionMenu,
 } from "@/components/ui/primitives";
+import { SalesIcon, ReportsIcon, BankingIcon, JobsIcon, StockIcon } from "@/components/ui/icons";
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/ui/overlay";
 import { CallLink, NavigateLink } from "@/components/ui/field-links";
@@ -87,7 +88,7 @@ const ghostLink = "text-xs font-semibold text-teal-700 hover:underline";
  * container, replacing the old dashboard's mix of flat cards and the
  * oversized black/indigo MeterCards. */
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-xl border border-slate-200 bg-white p-4 sm:p-5 ${className}`}>{children}</div>;
+  return <div data-ui="dashboard-panel" className={`workspace-panel ${className}`}>{children}</div>;
 }
 
 /** A single compact, actionable "Needs Attention" row — never a whole card
@@ -714,7 +715,7 @@ export default function DashboardPage() {
               // real, correctly-computed zeros — meaningless clutter on a
               // dashboard that just finished setup. Show what's actually
               // true instead: operational roll inventory.
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <MetricCard label={tt(locale, "සක්‍රීය Rolls", "Active rolls", "செயலில் உள்ள Rolls")} value={textileRollSummary ? String(textileRollSummary.activeRolls) : "—"} hint={tt(locale, "විකිණීමට ඇති Rolls", "Available rolls", "கிடைக்கும் Rolls")} />
                 <MetricCard label={tt(locale, "මීටර් ශේෂය", "Metre balance", "மீட்டர் இருப்பு")} value={textileRollSummary ? textileRollSummary.metres.toFixed(3) : "—"} hint={tt(locale, "ඉතිරි මීටර්", "Remaining metres", "மீதமுள்ள மீட்டர்கள்")} />
                 <MetricCard label={tt(locale, "යාර්ඩ් ශේෂය", "Yard balance", "யார்டு இருப்பு")} value={textileRollSummary ? textileRollSummary.yards.toFixed(3) : "—"} hint={tt(locale, "ඉතිරි යාර්ඩ්", "Remaining yards", "மீதமுள்ள யார்டுகள்")} />
@@ -726,8 +727,9 @@ export default function DashboardPage() {
                 />
               </div>
             ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
               <MetricCard
+                icon={<SalesIcon />}
                 label={showAcJobs && canSeeFinancials ? t("dash.today_revenue") : t("dash.today_sales")}
                 value={formatLkr(combinedTodayRevenue)}
                 hint={
@@ -738,10 +740,11 @@ export default function DashboardPage() {
               />
               {canSeeFinancials ? (
                 <MetricCard
+                  icon={<ReportsIcon />}
                   label={t("dash.today_profit")}
                   value={formatLkr(combinedTodayProfit)}
                   hint={combinedTodayRevenue > 0 ? t("dash.kpi_margin").replace("{pct}", String(marginPct)) : "—"}
-                  tone="positive"
+                  tone={combinedTodayProfit < 0 ? "danger" : "positive"}
                 />
               ) : (
                 // Non-financial roles (data_entry/cashier) don't get bank
@@ -750,6 +753,7 @@ export default function DashboardPage() {
                 // real operational number every role can already see on
                 // /stock, so it fills this slot instead.
                 <MetricCard
+                  icon={<StockIcon />}
                   label={t("dash.low_stock")}
                   value={String(stats.lowStockCount)}
                   hint={t("nav.stock")}
@@ -757,12 +761,14 @@ export default function DashboardPage() {
                 />
               )}
               <MetricCard
+                icon={<BankingIcon />}
                 label={t("dash.kpi_payments_received")}
                 value={formatLkr(stats.paymentsReceivedToday)}
                 hint={t("dash.kpi_payments_count").replace("{count}", String(stats.paymentsReceivedCount))}
               />
               {canSeeJobs && (
                 <MetricCard
+                  icon={<JobsIcon />}
                   label={t("dash.kpi_jobs_today")}
                   value={String(stats.todayJobsCount)}
                   hint={t("dash.kpi_jobs_breakdown").replace("{completed}", String(stats.todayJobsCompletedCount)).replace("{remaining}", String(stats.todayJobsRemainingCount))}

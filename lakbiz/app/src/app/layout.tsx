@@ -8,6 +8,7 @@ import "./premium-ops-realistic.css";
 import "./premium-job-detail.css";
 import "./atomic-pos-layout.css";
 import "./premium-platform.css";
+import "./workspace-surfaces.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

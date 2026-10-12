@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Shared building blocks for Business Pulse — the owner-only, dark,
+ * Shared building blocks for Business Pulse — the owner-only, light,
  * phone-locked "what's going on with the business" view. Originally built
  * textile-only (see textile-business-pulse.tsx); extracted here once a
  * second sector (pharmacy) needed the exact same shell, hero, highlights
@@ -10,6 +10,7 @@
  * re-implementing the shell/sparkline/attention-list/highlights chrome.
  */
 import Link from "next/link";
+import { WorkspaceMetric } from "@/components/ui/workspace-surfaces";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { BellIcon, ChevronDownIcon, SignOutIcon, CheckIcon } from "@/components/ui/icons";
@@ -113,24 +114,10 @@ function smoothPath(points: { x: number; y: number }[]): string {
 }
 
 export type StatTone = "default" | "positive" | "warning" | "danger";
-const STAT_VALUE_TONE: Record<StatTone, string> = {
-  default: "text-slate-950",
-  positive: "text-emerald-700",
-  warning: "text-amber-700",
-  danger: "text-rose-700",
-};
-
-/** One card in the horizontally-scrolling stat row. Deliberately no
- * sparkline here — a fabricated trend line would misrepresent a series
- * that isn't cheaply available for most of these stats. */
-export function StatCard({ label, value, hint, tone = "default" }: { label: string; value: string; hint: string; tone?: StatTone }) {
-  return (
-    <div className="w-[13.5rem] shrink-0 snap-start rounded-2xl border border-slate-200 bg-white p-4">
-      <p className="text-xs font-semibold text-slate-500">{label}</p>
-      <p className={`mt-1.5 text-2xl font-bold tracking-[-0.02em] ${STAT_VALUE_TONE[tone]}`}>{value}</p>
-      <p className={`mt-1 text-xs font-medium ${tone === "danger" ? "text-rose-700" : "text-slate-9500"}`}>{hint}</p>
-    </div>
-  );
+/** Values and hints still come from the sector's real calculations. */
+export function StatCard({ tone = "default", ...props }: { label: string; value: string; hint: string; tone?: StatTone }) {
+  const mappedTone = { default: "blue", positive: "emerald", warning: "amber", danger: "rose" } as const;
+  return <WorkspaceMetric {...props} tone={mappedTone[tone]} ui="pulse-stat-card" className="w-[13.5rem] shrink-0 snap-start" />;
 }
 
 /** One plain-language sentence summarizing the month, the way a person
