@@ -105,3 +105,19 @@ jobs:
             ${{ runner.temp }}/lakbiz-industry-banners/results.json
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Stock screen state and navigation fixtures
+        run: node scripts/qa-stock-states.mjs
+        env:
+          LAKBIZ_UI_QA_DIR: ${{ runner.temp }}/lakbiz-stock-states
+
+      - name: Upload stock screen fixture screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lakbiz-stock-state-fixtures
+          path: |
+            ${{ runner.temp }}/lakbiz-stock-states/*.png
+            ${{ runner.temp }}/lakbiz-stock-states/results.json
+          if-no-files-found: warn
+          retention-days: 7

@@ -31,6 +31,26 @@ type ConditionFilter = "all" | ProductCondition;
 const STOCK_PAGE_SIZE = 50;
 
 export default function StockPage() {
+  const { org } = useSubscription();
+  const searchParams = useSearchParams();
+  // Navigation supplies a fresh view; shop/role changes also discard local
+  // filters and open drafts rather than carrying them into another workspace.
+  const workspaceKey = JSON.stringify([
+    org.id, org.isAuthenticated, org.sector, org.role, searchParams.toString(),
+  ]);
+  return (
+    <StockWorkspace
+      key={workspaceKey}
+      initialSearch={searchParams.get("q") ?? ""}
+      initialLowStock={searchParams.get("filter") === "low-stock"}
+    />
+  );
+}
+
+function StockWorkspace({ initialSearch, initialLowStock }: {
+  initialSearch: string;
+  initialLowStock: boolean;
+}) {
   const {
     data,
     ready,
@@ -80,15 +100,7 @@ export default function StockPage() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
-  // The pharmacy/grocery dashboard's "Low stock" KPI card and Replenishment
-  // Queue rows link here with ?filter=low-stock and ?q=<product name>
-  // respectively — before this, both links landed on an unfiltered list
-  // (the dashboard promised a filtered detail view; this page never read
-  // either param, so a "clickable" KPI card wasn't actually clickable in
-  // any meaningful sense). Seeded once at mount, same pattern as
-  // stock/rolls/page.tsx's `?receive=1`.
-  const searchParams = useSearchParams();
-  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
+  const [search, setSearch] = useState(initialSearch);
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
   // Discontinued items default to hidden — matches getLowStockProducts/the
   // sale picker, which already ignore inactive items — with an explicit
@@ -96,7 +108,7 @@ export default function StockPage() {
   const [showInactive, setShowInactive] = useState(false);
   // HVAC platform Phase 12 — a real filtered view of exactly what needs
   // reordering, not just the metric-card count that existed before.
-  const [showLowStockOnly, setShowLowStockOnly] = useState(() => searchParams.get("filter") === "low-stock");
+  const [showLowStockOnly, setShowLowStockOnly] = useState(initialLowStock);
   // Round 2 Section 8 — the product form has never required a non-zero
   // price (only the name field is `required`; buy/sell price both default
   // to and accept 0), so a Rs. 0 item isn't necessarily a demo-seed
