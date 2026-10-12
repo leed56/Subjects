@@ -1,5 +1,6 @@
 "use client";
 
+import { WorkspaceMetric } from "@/components/ui/workspace-surfaces";
 import { IndustryHeaderImages } from "@/components/ui/industry-imagery";
 import type { ReactNode } from "react";
 import { AlertTriangleIcon, CheckIcon, StockIcon } from "@/components/ui/icons";
@@ -64,7 +65,7 @@ export function StockCommandHeader({
         </div>
 
         </div>
-        <div className="relative mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className={`relative mt-6 grid grid-cols-2 gap-3 ${canSeeFinancials ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}>
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex items-center justify-between gap-3"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Active catalogue</p><StockIcon className="h-4 w-4 text-slate-500" /></div>
             <p className="mt-3 text-2xl font-semibold tracking-[-0.04em] tabular-nums">{itemCount.toLocaleString()}</p>
@@ -81,17 +82,20 @@ export function StockCommandHeader({
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${health}%` }} /></div>
           </div>
           {canSeeFinancials && (
-            <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Cost value · owner</p>
-              <p className="mt-3 truncate text-xl font-semibold tracking-[-0.035em] tabular-nums text-teal-700">{formatLkr(costValue)}</p>
-              <p className="mt-1 text-xs text-slate-500">Internal buy-cost basis</p>
-            </div>
+            <WorkspaceMetric
+              label="Cost value · owner"
+              value={formatLkr(costValue)}
+              hint="Internal buy-cost basis"
+              tone="teal"
+            />
           )}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Retail stock value</p>
-            <p className="mt-3 truncate text-xl font-semibold tracking-[-0.035em] tabular-nums">{formatLkr(sellValue)}</p>
-            <p className="mt-1 text-xs text-slate-500">At current sell prices</p>
-          </div>
+          <WorkspaceMetric
+            label="Retail stock value"
+            value={formatLkr(sellValue)}
+            hint="At current sell prices"
+            icon={<StockIcon className="h-5 w-5" />}
+            tone="slate"
+          />
         </div>
       </div>
 

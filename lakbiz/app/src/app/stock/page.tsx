@@ -34,6 +34,8 @@ export default function StockPage() {
   const {
     data,
     ready,
+    cloudSyncing,
+    cloudSyncError,
     saveProductToCloud,
     deleteProductToCloud,
     stockInToCloud,
@@ -115,7 +117,7 @@ export default function StockPage() {
     if (!conditionFilterRelevant && conditionFilter !== "all") setConditionFilter("all");
   }, [conditionFilterRelevant, conditionFilter]);
 
-  if (!ready || !data) {
+  if (!ready || !data || (cloudSyncing && data.products.length === 0)) {
     return (
       <AppShell>
         <ProMain>
@@ -124,6 +126,37 @@ export default function StockPage() {
       </AppShell>
     );
   }
+
+  if (cloudSyncError && data.products.length === 0) {
+    return (
+      <AppShell>
+        <ProMain>
+          <div role="alert">
+            <EmptyState
+              title={t("stock.load_failed")}
+              description={t("stock.load_failed_hint")}
+              action={
+                <button type="button" onClick={() => window.location.reload()} className="min-h-11 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+                  {t("resilience.retry")}
+                </button>
+              }
+            />
+          </div>
+        </ProMain>
+      </AppShell>
+    );
+  }
+
+  const clearFilters = () => {
+    setSearch("");
+    setConditionFilter("all");
+    setCategoryFilter("all");
+    setShowLowStockOnly(false);
+    setShowZeroPriceOnly(false);
+    // Include inactive products: the default active-only view can itself be empty.
+    setShowInactive(true);
+    setPage(1);
+  };
 
   const query = search.trim().toLowerCase();
   const searched = query
@@ -310,7 +343,7 @@ export default function StockPage() {
         return (
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={() => openEdit(p)} className={`font-semibold hover:text-teal-700 hover:underline ${p.active ? "text-slate-900" : "text-slate-400"}`}>
+              <button type="button" onClick={() => openEdit(p)} disabled={!canWrite} title={disabledHint ?? undefined} className={`font-semibold hover:text-teal-700 hover:underline ${p.active ? "text-slate-900" : "text-slate-400"}`}>
                 {p.name}
               </button>
               {conditionFilterRelevant && <ProductConditionBadge condition={p.condition} />}
@@ -393,25 +426,25 @@ export default function StockPage() {
       align: "right",
       render: (p) => (
         <div className="flex items-center justify-end gap-1.5">
-          <button type="button" onClick={() => openStockIn(p.id)} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200">
+          <button type="button" onClick={() => openStockIn(p.id)} disabled={!canWrite} title={disabledHint ?? undefined} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200">
             {t("stock.stock_in")}
           </button>
           <button
             type="button"
             onClick={() => openStockOut(p.id)}
-            disabled={p.stockQty <= 0}
+            disabled={!canWrite || p.stockQty <= 0}
             className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t("stock.stock_out")}
           </button>
           <ActionMenu
             items={[
-              { label: t("common.edit"), onSelect: () => openEdit(p) },
+              { label: t("common.edit"), onSelect: () => openEdit(p), disabled: !canWrite },
               ...(data.suppliers.length > 0
-                ? [{ label: t("stock.return_to_supplier"), onSelect: () => openReturn(p.id), disabled: p.stockQty <= 0 }]
+                ? [{ label: t("stock.return_to_supplier"), onSelect: () => openReturn(p.id), disabled: !canWrite || p.stockQty <= 0 }]
                 : []),
-              { label: t("stock.write_off"), onSelect: () => openWriteOff(p.id), disabled: p.stockQty <= 0 },
-              { label: t("common.delete"), tone: "danger" as const, onSelect: () => setDeleteTarget(p) },
+              { label: t("stock.write_off"), onSelect: () => openWriteOff(p.id), disabled: !canWrite || p.stockQty <= 0 },
+              { label: t("common.delete"), tone: "danger" as const, onSelect: () => setDeleteTarget(p), disabled: !canWrite },
             ]}
           />
         </div>
@@ -531,7 +564,7 @@ export default function StockPage() {
             title={t("stock.no_stock")}
             description={t("stock.no_stock_hint")}
             action={
-              <button type="button" onClick={openCreate} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+              <button type="button" onClick={openCreate} disabled={!canWrite} title={disabledHint ?? undefined} className="min-h-11 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
                 {t("stock.add_item")}
               </button>
             }
@@ -542,20 +575,30 @@ export default function StockPage() {
               <Pagination
                 page={currentPage}
                 totalPages={totalPages}
-                start={pageStart + 1}
+                start={products.length === 0 ? 0 : pageStart + 1}
                 end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
                 total={products.length}
                 pageSize={STOCK_PAGE_SIZE}
                 onPageChange={setPage}
               />
             </div>
-            <DataTable columns={columns} rows={pageProducts} emptyState={<EmptyState title={t("sales.no_match")} description={t("stock.search_no_match_desc")} />} />
+            <DataTable columns={columns} rows={pageProducts} emptyState={
+              <EmptyState
+                title={t("sales.no_match")}
+                description={t("stock.search_no_match_desc")}
+                action={
+                  <button type="button" onClick={clearFilters} className="min-h-11 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+                    {t("stock.clear_filters")}
+                  </button>
+                }
+              />
+            } />
             {products.length > STOCK_PAGE_SIZE && (
               <div className="mt-3">
                 <Pagination
                   page={currentPage}
                   totalPages={totalPages}
-                  start={pageStart + 1}
+                  start={products.length === 0 ? 0 : pageStart + 1}
                   end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
                   total={products.length}
                   pageSize={STOCK_PAGE_SIZE}
@@ -633,7 +676,7 @@ export default function StockPage() {
               </button>
               <button
                 type="button"
-                disabled={savingStockIn || stockInQtyNumber <= 0}
+                disabled={!canWrite || savingStockIn || stockInQtyNumber <= 0}
                 onClick={() => void handleStockIn()}
                 className="rounded-lg bg-teal-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
               >
@@ -670,7 +713,7 @@ export default function StockPage() {
               </button>
               <button
                 type="button"
-                disabled={savingStockOut || !stockOutProduct || stockOutQtyNumber < 1 || stockOutProduct.stockQty <= 0}
+                disabled={!canWrite || savingStockOut || !stockOutProduct || stockOutQtyNumber < 1 || stockOutProduct.stockQty <= 0}
                 onClick={() => void handleStockOut()}
                 className="rounded-lg bg-amber-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
               >
@@ -710,7 +753,7 @@ export default function StockPage() {
               </button>
               <button
                 type="button"
-                disabled={savingWriteOff || !writeOffProduct || writeOffQtyNumber < 1 || writeOffProduct.stockQty <= 0}
+                disabled={!canWrite || savingWriteOff || !writeOffProduct || writeOffQtyNumber < 1 || writeOffProduct.stockQty <= 0}
                 onClick={() => void handleWriteOff()}
                 className="rounded-lg bg-rose-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
               >
@@ -750,7 +793,7 @@ export default function StockPage() {
               </button>
               <button
                 type="button"
-                disabled={savingReturn || !returnProduct || !returnSupplierId || returnQtyNumber < 1 || returnProduct.stockQty <= 0}
+                disabled={!canWrite || savingReturn || !returnProduct || !returnSupplierId || returnQtyNumber < 1 || returnProduct.stockQty <= 0}
                 onClick={() => void handleReturn()}
                 className="rounded-lg bg-amber-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
               >
