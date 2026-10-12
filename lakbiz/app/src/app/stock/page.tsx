@@ -29,6 +29,18 @@ import type { Product, ProductCondition } from "@/lib/types";
 type ConditionFilter = "all" | ProductCondition;
 
 const STOCK_PAGE_SIZE = 50;
+// Adapter errors normally return a result; unexpected rejection must also
+// release the UI's saving state without discarding the operator's draft.
+async function runStockMutation(
+  operation: () => Promise<{ ok: boolean; error?: string }>,
+  fallback: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    return await operation();
+  } catch {
+    return { ok: false, error: fallback };
+  }
+}
 
 export default function StockPage() {
   const { org } = useSubscription();
@@ -230,9 +242,9 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
   };
 
   const confirmDelete = async () => {
-    if (!deleteTarget || deletingProductId) return;
+    if (!canWrite || !deleteTarget || deletingProductId) return;
     setDeletingProductId(deleteTarget.id);
-    const result = await deleteProductToCloud(deleteTarget.id);
+    const result = await runStockMutation(() => deleteProductToCloud(deleteTarget.id), t("common.save_failed"));
     setDeletingProductId(null);
     if (!result.ok) {
       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
@@ -251,9 +263,9 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
   };
 
   const handleStockIn = async () => {
-    if (!stockInId || savingStockIn || stockInQtyNumber <= 0) return;
+    if (!canWrite || !stockInId || savingStockIn || stockInQtyNumber <= 0) return;
     setSavingStockIn(true);
-    const result = await stockInToCloud(stockInId, stockInQtyNumber, "Purchase / GRN");
+    const result = await runStockMutation(() => stockInToCloud(stockInId, stockInQtyNumber, "Purchase / GRN"), t("common.save_failed"));
     setSavingStockIn(false);
     if (!result.ok) {
       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
@@ -270,14 +282,14 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
   };
 
   const handleStockOut = async () => {
-    if (!stockOutId || !stockOutProduct || savingStockOut || stockOutQtyNumber < 1) return;
+    if (!canWrite || !stockOutId || !stockOutProduct || savingStockOut || stockOutQtyNumber < 1) return;
     if (stockOutQtyNumber > stockOutProduct.stockQty) {
       toast({ tone: "error", title: t("stock.out_qty_exceeds") });
       return;
     }
     setSavingStockOut(true);
     const note = stockOutNote.trim() || t("stock.stock_out");
-    const result = await stockOutToCloud(stockOutId, stockOutQtyNumber, note);
+    const result = await runStockMutation(() => stockOutToCloud(stockOutId, stockOutQtyNumber, note), t("common.save_failed"));
     setSavingStockOut(false);
     if (!result.ok) {
       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
@@ -294,13 +306,13 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
   };
 
   const handleWriteOff = async () => {
-    if (!writeOffId || !writeOffProduct || savingWriteOff || writeOffQtyNumber < 1) return;
+    if (!canWrite || !writeOffId || !writeOffProduct || savingWriteOff || writeOffQtyNumber < 1) return;
     if (writeOffQtyNumber > writeOffProduct.stockQty) {
       toast({ tone: "error", title: t("stock.out_qty_exceeds") });
       return;
     }
     setSavingWriteOff(true);
-    const result = await writeOffStockToCloud(writeOffId, writeOffQtyNumber, writeOffNote.trim() || undefined);
+    const result = await runStockMutation(() => writeOffStockToCloud(writeOffId, writeOffQtyNumber, writeOffNote.trim() || undefined), t("common.save_failed"));
     setSavingWriteOff(false);
     if (!result.ok) {
       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
@@ -318,13 +330,13 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
   };
 
   const handleReturn = async () => {
-    if (!returnId || !returnProduct || !returnSupplierId || savingReturn || returnQtyNumber < 1) return;
+    if (!canWrite || !returnId || !returnProduct || !returnSupplierId || savingReturn || returnQtyNumber < 1) return;
     if (returnQtyNumber > returnProduct.stockQty) {
       toast({ tone: "error", title: t("stock.out_qty_exceeds") });
       return;
     }
     setSavingReturn(true);
-    const result = await returnStockToSupplierToCloud(returnId, returnQtyNumber, returnSupplierId, returnNote.trim() || undefined);
+    const result = await runStockMutation(() => returnStockToSupplierToCloud(returnId, returnQtyNumber, returnSupplierId, returnNote.trim() || undefined), t("common.save_failed"));
     setSavingReturn(false);
     if (!result.ok) {
       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
@@ -624,7 +636,7 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
         {/* Create / edit drawer — always opens immediately. */}
         <Drawer
           open={formOpen}
-          onClose={() => setFormOpen(false)}
+          onClose={() => { if (!saving) setFormOpen(false); }}
           size="lg"
           title={editing ? editing.name : t("stock.add_item")}
           description={editing ? t("stock.edit_inventory_eyebrow") : t("stock.create_inventory_eyebrow")}
@@ -635,10 +647,11 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
               lockedSectorId={org.isAuthenticated ? org.sector : undefined}
               defaultSectorId={org.sector}
               submitLabel={saving ? t("common.saving") : t("common.update")}
-              onCancel={() => setFormOpen(false)}
+              onCancel={() => { if (!saving) setFormOpen(false); }}
               onSubmit={async (input) => {
+                if (!canWrite || saving) return;
                 setSaving(true);
-                const result = await saveProductToCloud(input, editing.id);
+                const result = await runStockMutation(() => saveProductToCloud(input, editing.id), t("common.save_failed"));
                 setSaving(false);
                 if (!result.ok) {
                   toast({ tone: "error", title: t("common.save_failed"), description: result.error });
@@ -653,8 +666,9 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
               lockedSectorId={org.isAuthenticated ? org.sector : undefined}
               defaultSectorId={org.sector}
               submitLabel={saving ? t("common.saving") : undefined}
-              onCancel={() => setFormOpen(false)}
+              onCancel={() => { if (!saving) setFormOpen(false); }}
               onSubmit={async (input) => {
+                if (!canWrite || saving) return;
                 const plan = getPlan(subscription.planId);
                 const atCap = plan.maxProducts != null && data.products.length >= plan.maxProducts;
                 if (atCap) {
@@ -662,7 +676,7 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
                   return;
                 }
                 setSaving(true);
-                const result = await saveProductToCloud(input);
+                const result = await runStockMutation(() => saveProductToCloud(input), t("common.save_failed"));
                 setSaving(false);
                 if (!result.ok) {
                   toast({ tone: "error", title: t("common.save_failed"), description: result.error });
@@ -678,12 +692,12 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
         {/* Stock in */}
         <Dialog
           open={!!stockInId && !!stockInProduct}
-          onClose={() => setStockInId(null)}
+          onClose={() => { if (!savingStockIn) setStockInId(null); }}
           title={t("stock.stock_in")}
           description={stockInProduct?.name}
           footer={
             <>
-              <button type="button" onClick={() => setStockInId(null)} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => setStockInId(null)} disabled={savingStockIn} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 {t("common.cancel")}
               </button>
               <button
@@ -715,12 +729,12 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
         {/* Stock out */}
         <Dialog
           open={!!stockOutId && !!stockOutProduct}
-          onClose={() => setStockOutId(null)}
+          onClose={() => { if (!savingStockOut) setStockOutId(null); }}
           title={t("stock.stock_out")}
           description={stockOutProduct?.name}
           footer={
             <>
-              <button type="button" onClick={() => setStockOutId(null)} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => setStockOutId(null)} disabled={savingStockOut} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 {t("common.cancel")}
               </button>
               <button
@@ -755,12 +769,12 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
         {/* Write off (HVAC platform Phase 3) */}
         <Dialog
           open={!!writeOffId && !!writeOffProduct}
-          onClose={() => setWriteOffId(null)}
+          onClose={() => { if (!savingWriteOff) setWriteOffId(null); }}
           title={t("stock.write_off")}
           description={writeOffProduct?.name}
           footer={
             <>
-              <button type="button" onClick={() => setWriteOffId(null)} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => setWriteOffId(null)} disabled={savingWriteOff} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 {t("common.cancel")}
               </button>
               <button
@@ -795,12 +809,12 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
         {/* Return to supplier (HVAC platform Phase 3) */}
         <Dialog
           open={!!returnId && !!returnProduct}
-          onClose={() => setReturnId(null)}
+          onClose={() => { if (!savingReturn) setReturnId(null); }}
           title={t("stock.return_to_supplier")}
           description={returnProduct?.name}
           footer={
             <>
-              <button type="button" onClick={() => setReturnId(null)} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => setReturnId(null)} disabled={savingReturn} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 {t("common.cancel")}
               </button>
               <button
@@ -853,7 +867,7 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
           cancelLabel={t("common.cancel")}
           loading={!!deletingProductId}
           onConfirm={() => void confirmDelete()}
-          onClose={() => setDeleteTarget(null)}
+          onClose={() => { if (!deletingProductId) setDeleteTarget(null); }}
         />
       </ProMain>
     </AppShell>

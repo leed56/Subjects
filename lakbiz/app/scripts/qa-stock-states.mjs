@@ -23,9 +23,9 @@ const stubs={
  '@/components/write-disabled-hint':`${f} export function WriteDisabledHint(){return f.readOnly?<p>Read only</p>:null}`,
  '@/lib/subscription/use-can-write':`${f} export function useWriteAccess(){return {canWrite:!f.readOnly,disabledHint:f.readOnly?'Read only':null}}`,
  '@/lib/subscription/subscription-provider':`${reactive} export function useSubscription(){const f=useFixture();return {org:{id:f.orgId||'shop-a',role:f.readOnly?'cashier':'owner',sector:'grocery',name:'QA shop',isAuthenticated:true},subscription:{planId:'starter'},canSeeFinancials:!f.readOnly,can:()=>false}}`,
- '@/lib/store/use-app-store':`${f} export function useAppStore(){return {data:f.data,ready:f.ready,cloudSyncing:f.syncing,cloudSyncError:f.error}}`,
+ '@/lib/store/use-app-store':`${f} const mutate=async()=>{f.mutationCalls=(f.mutationCalls||0)+1;if(f.rejectMutation)throw new Error('Synthetic rejected mutation');return {ok:true}};export function useAppStore(){return {data:f.data,ready:f.ready,cloudSyncing:f.syncing,cloudSyncError:f.error,saveProductToCloud:mutate,deleteProductToCloud:mutate,stockInToCloud:mutate,stockOutToCloud:mutate,writeOffStockToCloud:mutate,returnStockToSupplierToCloud:mutate}}`,
  '@/lib/i18n/locale-provider':`import {translate} from ${JSON.stringify(root+'/src/lib/i18n/translations.ts')};${f}export function useLocale(){return {locale:f.locale,t:k=>translate(f.locale,k)}}`,
- '@/components/ui/toast':'export function useToast(){return {toast:()=>{throw new Error("Unexpected mutation")}}}',
+ '@/components/ui/toast':`${f} export function useToast(){return {toast:value=>{f.toasts??=[];f.toasts.push(value)}}}`,
 };
 const bundle=await build({stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import StockPage from ${JSON.stringify(root+'/src/app/stock/page.tsx')};createRoot(document.getElementById('app')).render(<StockPage/>);`,resolveDir:root,loader:'tsx'},bundle:true,platform:'browser',format:'iife',write:false,jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'isolated',setup(b){b.onResolve({filter:/.*/},a=>{if(Object.hasOwn(stubs,a.path))return {path:a.path,namespace:'fixture'};if(a.path.startsWith('@/')){const p=root+'/src/'+a.path.slice(2);return {path:[p,p+'.tsx',p+'.ts'].find(x=>fs.existsSync(x)&&fs.statSync(x).isFile())}}});b.onLoad({filter:/.*/,namespace:'fixture'},a=>({contents:stubs[a.path],loader:'jsx',resolveDir:root}));}}]});
 const layout=fs.readFileSync(root+'/.next/server/app/login.html','utf8');
@@ -78,6 +78,14 @@ try{
  await navigate('');await search.fill('absent');await page.locator('[data-ui="empty-state"]').waitFor();
  await page.evaluate(()=>{window.fixture.orgId='shop-b';window.fixtureVersion++;window.dispatchEvent(new Event('fixturechange'))});await page.waitForFunction(()=>document.querySelector('input').value==='');assert(await visibleProducts().count()===2,'Shop change kept search');passed++;
  await search.fill('absent');await page.evaluate(()=>{window.fixture.readOnly=true;window.fixtureVersion++;window.dispatchEvent(new Event('fixturechange'))});await page.waitForFunction(()=>document.querySelector('input').value==='');assert(await page.locator('[data-ui="metric-card"]').count()===1,'Role reset exposed costs');passed++;
+ await page.evaluate(()=>{window.fixture.readOnly=false;window.fixture.rejectMutation=true;window.fixtureVersion++;window.dispatchEvent(new Event('fixturechange'))});
+ await page.getByRole('button',{name:'Stock in'}).first().click();
+ const stockInDialog=page.getByRole('dialog');await stockInDialog.waitFor();
+ const submitStockIn=stockInDialog.getByRole('button',{name:'Add stock'});await submitStockIn.click();
+ await page.waitForFunction(()=>window.fixture.mutationCalls===1&&window.fixture.toasts?.length===1);
+ assert(await stockInDialog.isVisible(),'Rejected stock mutation closed the draft');
+ assert(await submitStockIn.isEnabled(),'Rejected stock mutation left the action busy');
+ assert(await stockInDialog.getByRole('spinbutton').inputValue()==='1','Rejected stock mutation discarded quantity');passed++;
  assert(errors.length===0,errors.join('\n'));await page.close();
  fs.writeFileSync(path.join(out, "results.json"), JSON.stringify({ passed, languages: ["en", "si", "ta"], widths: [360, 390, 768, 1440], isolatedAdapters: true }, null, 2));
  console.log(`${passed} stock state/role/width/language checks passed; screenshots: ${out}`);
