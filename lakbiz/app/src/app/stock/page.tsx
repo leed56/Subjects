@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ProductForm } from "@/components/product-form";
 import { StockCommandHeader } from "@/components/stock/stock-command-header";
@@ -35,9 +35,14 @@ type StockView = {
   lowStock: boolean;
   inactive: boolean;
   zeroPrice: boolean;
+  page: number;
 };
 
 const STOCK_PAGE_SIZE = 50;
+function stockPageParam(value: string | null): number {
+  const page = Number(value);
+  return Number.isInteger(page) && page > 1 ? page : 1;
+}
 // Adapter errors normally return a result; unexpected rejection must also
 // release the UI's saving state without discarding the operator's draft.
 async function runStockMutation(
@@ -73,6 +78,8 @@ export default function StockPage() {
     else params.delete("inactive");
     if (view.zeroPrice) params.set("zero-price", "1");
     else params.delete("zero-price");
+    if (view.page > 1) params.set("page", String(view.page));
+    else params.delete("page");
     const nextQuery = params.toString();
     if (nextQuery === query) return;
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
@@ -91,6 +98,7 @@ export default function StockPage() {
       initialCategory={searchParams.get("category") ?? "all"}
       initialInactive={searchParams.get("inactive") === "1"}
       initialZeroPrice={searchParams.get("zero-price") === "1"}
+      initialPage={stockPageParam(searchParams.get("page"))}
       onViewChange={replaceStockView}
     />
   );
@@ -103,6 +111,7 @@ function StockWorkspace({
   initialCategory,
   initialInactive,
   initialZeroPrice,
+  initialPage,
   onViewChange,
 }: {
   initialSearch: string;
@@ -111,6 +120,7 @@ function StockWorkspace({
   initialCategory: string;
   initialInactive: boolean;
   initialZeroPrice: boolean;
+  initialPage: number;
   onViewChange: (view: StockView) => void;
 }) {
   const {
@@ -129,6 +139,7 @@ function StockWorkspace({
   const { canWrite, disabledHint } = useWriteAccess();
   const { t } = useLocale();
   const { toast } = useToast();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const conditionFilterRelevant = org.sector !== "pharmacy" && org.sector !== "grocery";
 
   // Create/edit drawer — form only exists in the DOM while open.
@@ -181,7 +192,7 @@ function StockWorkspace({
   // roles, a zero buy price) silently breaks margin math on that item.
   const [showZeroPriceOnly, setShowZeroPriceOnly] = useState(initialZeroPrice && canSeeFinancials);
   const [categoryFilter, setCategoryFilter] = useState(initialCategory);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(initialPage);
 
   useEffect(() => {
     setSearch(initialSearch);
@@ -190,7 +201,8 @@ function StockWorkspace({
     setCategoryFilter(initialCategory);
     setShowInactive(initialInactive);
     setShowZeroPriceOnly(initialZeroPrice && canSeeFinancials);
-  }, [canSeeFinancials, initialCategory, initialCondition, initialInactive, initialLowStock, initialSearch, initialZeroPrice]);
+    setPage(initialPage);
+  }, [canSeeFinancials, initialCategory, initialCondition, initialInactive, initialLowStock, initialPage, initialSearch, initialZeroPrice]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -201,14 +213,29 @@ function StockWorkspace({
         lowStock: showLowStockOnly,
         inactive: showInactive,
         zeroPrice: showZeroPriceOnly,
+        page,
       });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [categoryFilter, conditionFilter, onViewChange, search, showInactive, showLowStockOnly, showZeroPriceOnly]);
+  }, [categoryFilter, conditionFilter, onViewChange, page, search, showInactive, showLowStockOnly, showZeroPriceOnly]);
 
   useEffect(() => {
-    setPage(1);
-  }, [search, conditionFilter, showInactive, showLowStockOnly, showZeroPriceOnly, categoryFilter]);
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isEditing = target?.matches("input, textarea, select, [contenteditable='true']");
+      if (event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey && !isEditing) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      } else if (event.key === "Escape" && target === searchInputRef.current) {
+        event.preventDefault();
+        setSearch("");
+        setPage(1);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   useEffect(() => {
     if (!conditionFilterRelevant && conditionFilter !== "all") setConditionFilter("all");
@@ -267,6 +294,7 @@ function StockWorkspace({
         (p) =>
           p.name.toLowerCase().includes(query) ||
           (p.sku ?? "").toLowerCase().includes(query) ||
+          String(p.customFields.barcode ?? "").toLowerCase().includes(query) ||
           p.category.toLowerCase().includes(query),
       )
     : data.products;
@@ -588,7 +616,7 @@ function StockWorkspace({
           filteredCount={products.length}
           categories={categoryCounts}
           selectedCategory={categoryFilter}
-          onCategoryChange={setCategoryFilter}
+          onCategoryChange={(category) => { setCategoryFilter(category); setPage(1); }}
           actions={
             <>
               {canExport && (
@@ -621,7 +649,7 @@ function StockWorkspace({
         <WriteDisabledHint className="mb-4" />
 
         <FilterBar>
-          <SearchInput value={search} onChange={setSearch} placeholder={t("stock.search_placeholder")} className="min-w-[220px] flex-1" />
+          <SearchInput inputRef={searchInputRef} keyShortcuts="/ Escape" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("stock.search_placeholder")} className="min-w-[220px] flex-1" />
           {conditionFilterRelevant && (
             <div className="flex gap-1.5">
               {(
@@ -634,7 +662,7 @@ function StockWorkspace({
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setConditionFilter(tab.id)}
+                  onClick={() => { setConditionFilter(tab.id); setPage(1); }}
                   className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                     conditionFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
                   }`}
@@ -647,7 +675,7 @@ function StockWorkspace({
           {lowStock.length > 0 && (
             <button
               type="button"
-              onClick={() => setShowLowStockOnly((v) => !v)}
+              onClick={() => { setShowLowStockOnly((v) => !v); setPage(1); }}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                 showLowStockOnly ? "bg-amber-600 text-white" : "border border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300"
               }`}
@@ -658,7 +686,7 @@ function StockWorkspace({
           {inactiveCount > 0 && (
             <button
               type="button"
-              onClick={() => setShowInactive((v) => !v)}
+              onClick={() => { setShowInactive((v) => !v); setPage(1); }}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                 showInactive ? "bg-slate-700 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
               }`}
@@ -669,7 +697,7 @@ function StockWorkspace({
           {canSeeFinancials && zeroPriced.length > 0 && (
             <button
               type="button"
-              onClick={() => setShowZeroPriceOnly((v) => !v)}
+              onClick={() => { setShowZeroPriceOnly((v) => !v); setPage(1); }}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                 showZeroPriceOnly ? "bg-rose-600 text-white" : "border border-rose-200 bg-rose-50 text-rose-800 hover:border-rose-300"
               }`}

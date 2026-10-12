@@ -4,7 +4,7 @@ import { WorkspaceMetric, WorkspacePanel } from "@/components/ui/workspace-surfa
 import { IndustryHeaderImages } from "@/components/ui/industry-imagery";
 import type { SectorId } from "@/lib/types";
 
-import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type Ref } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDownIcon, MoreIcon, SearchIcon, FilterIcon } from "@/components/ui/icons";
 
@@ -202,17 +202,23 @@ export function SearchInput({
   onChange,
   placeholder = "Search…",
   className = "",
+  inputRef,
+  keyShortcuts,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  inputRef?: Ref<HTMLInputElement>;
+  keyShortcuts?: string;
 }) {
   return (
     <div className={`relative ${className}`}>
       <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
       <input
+        ref={inputRef}
         type="search"
+        aria-keyshortcuts={keyShortcuts}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}

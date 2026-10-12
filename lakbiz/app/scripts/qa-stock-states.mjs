@@ -31,7 +31,7 @@ const bundle=await build({stdin:{contents:`import React from 'react';import {cre
 const layout=fs.readFileSync(root+'/.next/server/app/login.html','utf8');
 const css=[...layout.matchAll(/<link[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map(m=>fs.readFileSync(path.join(root,'.next',m[1].replace(/^\/_next\//,'')),'utf8')).join('\n');
 const fontClasses=layout.match(/<html[^>]*class="([^"]*)"/)?.[1]??'';
-const product={id:'p1',name:'QA product',sku:'QA-1',category:'Food',active:true,condition:'new',stockQty:999999,sellPrice:123456.78,buyPrice:98765.43,customFields:{},reorderLevel:2};
+const product={id:'p1',name:'QA product',sku:'QA-1',category:'Food',active:true,condition:'new',stockQty:999999,sellPrice:123456.78,buyPrice:98765.43,customFields:{barcode:'QA-BARCODE'},reorderLevel:2};
 const base={business:{name:'QA shop',currency:'LKR'},products:[product],suppliers:[],purchaseOrders:[],purchases:[],sales:[],customers:[],stockMovements:[]};
 let fixture;
 const server=createServer((req,res)=>{if(req.url.startsWith('/images/')){res.end(fs.readFileSync(root+'/public'+req.url));return;}res.setHeader('Content-Type','text/html');res.end(`<html class="${fontClasses}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style><div id="app"></div><script>window.fixture=${JSON.stringify(fixture)}</script><script>${bundle.outputFiles[0].text.replace(/<\/script/g,'<\\/script')}</script></html>`)});
@@ -103,6 +103,11 @@ try{
  assert(await page.getByRole('button',{name:/^Used \(/}).getAttribute('class').then(c=>c.includes('bg-teal-600')),'Condition URL did not restore selected state');
  assert(await page.getByRole('button',{name:/^Unpriced /}).getAttribute('class').then(c=>c.includes('bg-teal-500')),'Category URL did not restore selected state');passed++;
  await page.getByRole('button',{name:/^Inactive \(/}).click();await page.getByRole('button',{name:/^Needs pricing \(/}).click();await page.waitForFunction(()=>{const p=new URLSearchParams(location.search);return !p.has('inactive')&&!p.has('zero-price')});passed++;
+ await navigate('');await page.evaluate(()=>{const p=window.fixture.data.products[0];window.fixture.data={...window.fixture.data,products:Array.from({length:51},(_,i)=>({...p,id:`page-${i+1}`,name:`Page product ${i+1}`,sku:`PAGE-${i+1}`,customFields:{barcode:`BAR-${i+1}`}}))};window.fixtureVersion++;window.dispatchEvent(new Event('fixturechange'))});
+ await page.keyboard.press('/');assert(await search.evaluate(el=>el===document.activeElement),'Slash shortcut did not focus stock search');await search.fill('BAR-51');await page.getByRole('button',{name:'Page product 51',exact:true}).waitFor();passed++;
+ await page.keyboard.press('Escape');await page.waitForFunction(()=>document.querySelector('input').value===''&&!new URLSearchParams(location.search).has('q'));assert(await search.evaluate(el=>el===document.activeElement),'Escape moved scanner focus');passed++;
+ await page.getByRole('button',{name:'Next page'}).first().click();await page.waitForFunction(()=>new URLSearchParams(location.search).get('page')==='2');assert(await page.getByText('Page 2 / 2').first().isVisible(),'Pagination URL did not restore page');passed++;
+ await navigate('');await page.getByText('Page 1 / 2').first().waitFor();await navigate('page=2');await page.getByText('Page 2 / 2').first().waitFor();passed++;
  assert(errors.length===0,errors.join('\n'));await page.close();
  fs.writeFileSync(path.join(out, "results.json"), JSON.stringify({ passed, languages: ["en", "si", "ta"], widths: [360, 390, 768, 1440], isolatedAdapters: true }, null, 2));
  console.log(`${passed} stock state/role/width/language checks passed; screenshots: ${out}`);
