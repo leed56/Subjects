@@ -28,7 +28,14 @@ import { stockQuantityStep, validateStockQuantity, type StockQuantityError } fro
 import type { Product, ProductCondition } from "@/lib/types";
 
 type ConditionFilter = "all" | ProductCondition;
-type StockView = { search: string; lowStock: boolean };
+type StockView = {
+  search: string;
+  condition: ConditionFilter;
+  category: string;
+  lowStock: boolean;
+  inactive: boolean;
+  zeroPrice: boolean;
+};
 
 const STOCK_PAGE_SIZE = 50;
 // Adapter errors normally return a result; unexpected rejection must also
@@ -50,12 +57,22 @@ export default function StockPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const query = searchParams.toString();
+  const condition = searchParams.get("condition");
+  const initialCondition: ConditionFilter = condition === "new" || condition === "used" ? condition : "all";
   const replaceStockView = useCallback((view: StockView) => {
     const params = new URLSearchParams(query);
     if (view.search.trim()) params.set("q", view.search);
     else params.delete("q");
     if (view.lowStock) params.set("filter", "low-stock");
     else params.delete("filter");
+    if (view.condition !== "all") params.set("condition", view.condition);
+    else params.delete("condition");
+    if (view.category !== "all") params.set("category", view.category);
+    else params.delete("category");
+    if (view.inactive) params.set("inactive", "1");
+    else params.delete("inactive");
+    if (view.zeroPrice) params.set("zero-price", "1");
+    else params.delete("zero-price");
     const nextQuery = params.toString();
     if (nextQuery === query) return;
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
@@ -70,14 +87,30 @@ export default function StockPage() {
       key={workspaceKey}
       initialSearch={searchParams.get("q") ?? ""}
       initialLowStock={searchParams.get("filter") === "low-stock"}
+      initialCondition={initialCondition}
+      initialCategory={searchParams.get("category") ?? "all"}
+      initialInactive={searchParams.get("inactive") === "1"}
+      initialZeroPrice={searchParams.get("zero-price") === "1"}
       onViewChange={replaceStockView}
     />
   );
 }
 
-function StockWorkspace({ initialSearch, initialLowStock, onViewChange }: {
+function StockWorkspace({
+  initialSearch,
+  initialLowStock,
+  initialCondition,
+  initialCategory,
+  initialInactive,
+  initialZeroPrice,
+  onViewChange,
+}: {
   initialSearch: string;
   initialLowStock: boolean;
+  initialCondition: ConditionFilter;
+  initialCategory: string;
+  initialInactive: boolean;
+  initialZeroPrice: boolean;
   onViewChange: (view: StockView) => void;
 }) {
   const {
@@ -130,11 +163,11 @@ function StockWorkspace({ initialSearch, initialLowStock, onViewChange }: {
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
   const [search, setSearch] = useState(initialSearch);
-  const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
+  const [conditionFilter, setConditionFilter] = useState<ConditionFilter>(initialCondition);
   // Discontinued items default to hidden — matches getLowStockProducts/the
   // sale picker, which already ignore inactive items — with an explicit
   // toggle to review/reactivate them instead of losing them silently.
-  const [showInactive, setShowInactive] = useState(false);
+  const [showInactive, setShowInactive] = useState(initialInactive);
   // HVAC platform Phase 12 — a real filtered view of exactly what needs
   // reordering, not just the metric-card count that existed before.
   const [showLowStockOnly, setShowLowStockOnly] = useState(initialLowStock);
@@ -146,21 +179,32 @@ function StockWorkspace({ initialSearch, initialLowStock, onViewChange }: {
   // `canSeeFinancials` below) leaving it at its 0 default. This filter is
   // the data-quality view requested: a zero sell price (or, for financial
   // roles, a zero buy price) silently breaks margin math on that item.
-  const [showZeroPriceOnly, setShowZeroPriceOnly] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [showZeroPriceOnly, setShowZeroPriceOnly] = useState(initialZeroPrice && canSeeFinancials);
+  const [categoryFilter, setCategoryFilter] = useState(initialCategory);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
     setSearch(initialSearch);
     setShowLowStockOnly(initialLowStock);
-  }, [initialLowStock, initialSearch]);
+    setConditionFilter(initialCondition);
+    setCategoryFilter(initialCategory);
+    setShowInactive(initialInactive);
+    setShowZeroPriceOnly(initialZeroPrice && canSeeFinancials);
+  }, [canSeeFinancials, initialCategory, initialCondition, initialInactive, initialLowStock, initialSearch, initialZeroPrice]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      onViewChange({ search, lowStock: showLowStockOnly });
+      onViewChange({
+        search,
+        condition: conditionFilter,
+        category: categoryFilter,
+        lowStock: showLowStockOnly,
+        inactive: showInactive,
+        zeroPrice: showZeroPriceOnly,
+      });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [onViewChange, search, showLowStockOnly]);
+  }, [categoryFilter, conditionFilter, onViewChange, search, showInactive, showLowStockOnly, showZeroPriceOnly]);
 
   useEffect(() => {
     setPage(1);
@@ -169,6 +213,12 @@ function StockWorkspace({ initialSearch, initialLowStock, onViewChange }: {
   useEffect(() => {
     if (!conditionFilterRelevant && conditionFilter !== "all") setConditionFilter("all");
   }, [conditionFilterRelevant, conditionFilter]);
+
+  useEffect(() => {
+    if (categoryFilter !== "all" && data && !data.products.some((product) => product.category === categoryFilter)) {
+      setCategoryFilter("all");
+    }
+  }, [categoryFilter, data]);
 
   if (!ready || !data || (cloudSyncing && data.products.length === 0)) {
     return (

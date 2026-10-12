@@ -22,7 +22,7 @@ const stubs={
  '@/components/product-form':'export function ProductForm(){return <div>Product form fixture</div>}',
  '@/components/write-disabled-hint':`${f} export function WriteDisabledHint(){return f.readOnly?<p>Read only</p>:null}`,
  '@/lib/subscription/use-can-write':`${f} export function useWriteAccess(){return {canWrite:!f.readOnly,disabledHint:f.readOnly?'Read only':null}}`,
- '@/lib/subscription/subscription-provider':`${reactive} export function useSubscription(){const f=useFixture();return {org:{id:f.orgId||'shop-a',role:f.readOnly?'cashier':'owner',sector:'grocery',name:'QA shop',isAuthenticated:true},subscription:{planId:'starter'},canSeeFinancials:!f.readOnly,can:()=>false}}`,
+ '@/lib/subscription/subscription-provider':`${reactive} export function useSubscription(){const f=useFixture();return {org:{id:f.orgId||'shop-a',role:f.readOnly?'cashier':'owner',sector:f.sector||'grocery',name:'QA shop',isAuthenticated:true},subscription:{planId:'starter'},canSeeFinancials:!f.readOnly,can:()=>false}}`,
  '@/lib/store/use-app-store':`${f} const mutate=async()=>{f.mutationCalls=(f.mutationCalls||0)+1;if(f.rejectMutation)throw new Error('Synthetic rejected mutation');return {ok:true}};export function useAppStore(){return {data:f.data,ready:f.ready,cloudSyncing:f.syncing,cloudSyncError:f.error,saveProductToCloud:mutate,deleteProductToCloud:mutate,stockInToCloud:mutate,stockOutToCloud:mutate,writeOffStockToCloud:mutate,returnStockToSupplierToCloud:mutate}}`,
  '@/lib/i18n/locale-provider':`import {translate} from ${JSON.stringify(root+'/src/lib/i18n/translations.ts')};${f}export function useLocale(){return {locale:f.locale,t:k=>translate(f.locale,k)}}`,
  '@/components/ui/toast':`${f} export function useToast(){return {toast:value=>{f.toasts??=[];f.toasts.push(value)}}}`,
@@ -97,6 +97,12 @@ try{
  const stockOutDialog=page.getByRole('dialog');await stockOutDialog.getByRole('spinbutton').fill('1000000');
  assert(await stockOutDialog.getByRole('button',{name:'Remove stock'}).isDisabled(),'Over-available quantity was enabled');
  assert(await stockOutDialog.getByRole('alert').isVisible(),'Over-available quantity had no inline error');passed++;
+ await stockOutDialog.getByRole('button',{name:'Cancel'}).click();
+ await page.evaluate(()=>{const p=window.fixture.data.products[0];window.fixture.sector='electronics';window.fixture.data={...window.fixture.data,products:[p,{...p,id:'p3',name:'Inactive product',active:false},{...p,id:'p4',name:'Needs pricing product',category:'Unpriced',sellPrice:0,buyPrice:0}]};window.fixtureVersion++;window.dispatchEvent(new Event('fixturechange'))});
+ await navigate('condition=used&category=Unpriced&inactive=1&zero-price=1');await page.waitForFunction(()=>new URLSearchParams(location.search).get('condition')==='used');
+ assert(await page.getByRole('button',{name:/^Used \(/}).getAttribute('class').then(c=>c.includes('bg-teal-600')),'Condition URL did not restore selected state');
+ assert(await page.getByRole('button',{name:/^Unpriced /}).getAttribute('class').then(c=>c.includes('bg-teal-500')),'Category URL did not restore selected state');passed++;
+ await page.getByRole('button',{name:/^Inactive \(/}).click();await page.getByRole('button',{name:/^Needs pricing \(/}).click();await page.waitForFunction(()=>{const p=new URLSearchParams(location.search);return !p.has('inactive')&&!p.has('zero-price')});passed++;
  assert(errors.length===0,errors.join('\n'));await page.close();
  fs.writeFileSync(path.join(out, "results.json"), JSON.stringify({ passed, languages: ["en", "si", "ta"], widths: [360, 390, 768, 1440], isolatedAdapters: true }, null, 2));
  console.log(`${passed} stock state/role/width/language checks passed; screenshots: ${out}`);
