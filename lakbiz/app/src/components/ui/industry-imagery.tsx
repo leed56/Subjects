@@ -20,9 +20,10 @@ export function IndustryImage({ sector, className = "", decorative = false }: {
 }
 
 export function IndustryHeaderImages({ sector }: { sector: SectorId }) {
+  const contexts: SectorId[] = sector === "textile"
+    ? ["textile", "wholesale", "textile"]
+    : [sector, sector === "cosmetics" ? "pharmacy" : "cosmetics", "textile"];
   return <div className="live-industry-header-images" aria-hidden="true">
-    <IndustryImage sector={sector} decorative />
-    <IndustryImage sector={sector === "cosmetics" ? "pharmacy" : "cosmetics"} decorative />
-    <IndustryImage sector={sector === "textile" ? "wholesale" : "textile"} decorative />
+    {contexts.map((context, index) => <IndustryImage key={index} sector={context} decorative />)}
   </div>;
 }

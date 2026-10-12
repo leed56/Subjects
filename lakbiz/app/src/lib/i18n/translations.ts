@@ -3507,6 +3507,16 @@ const en: Dict = {
 // lower-frequency or role-specific screens) is tracked as follow-up work,
 // not silently claimed as done here.
 const ta: Dict = {
+  // Textile checkout and quote actions.
+  "sales.walkin_phone": "தொலைபேசி எண் (WhatsApp அனுப்ப)",
+  "bills.quote_whatsapp": "WhatsApp மூலம் விலை மதிப்பீடு",
+  "msg.phone_invalid": "சரியான இலங்கை மொபைல் எண்ணை உள்ளிடவும்.",
+  "msg.send_api_whatsapp": "இணைக்கப்பட்ட WhatsApp மூலம் அனுப்பு",
+  "msg.sending": "அனுப்பப்படுகிறது…",
+  "msg.api_sent_ok": "WhatsApp செய்தி அனுப்பப்பட்டது.",
+  "msg.sent_fail": "செய்தியை அனுப்ப முடியவில்லை.",
+  "msg.configure_whatsapp_link": "WhatsApp இணைப்பை அமைக்கவும்",
+
   // Nav
   "nav.dashboard": "முகப்புப் பலகை",
   "nav.stock": "கையிருப்பு",

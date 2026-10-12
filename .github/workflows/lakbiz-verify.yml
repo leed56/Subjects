@@ -33,6 +33,7 @@ jobs:
         working-directory: lakbiz/app
     env:
       NEXT_TELEMETRY_DISABLED: "1"
+      TZ: UTC
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,3 +62,30 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+      - name: Install isolated textile UI QA tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          textile_qa_tools="${RUNNER_TEMP}/lakbiz-textile-ui-tools"
+          mkdir -p "$textile_qa_tools"
+          npm install --prefix "$textile_qa_tools" --no-save --no-package-lock playwright@1.55.0 esbuild@0.28.2
+          ln -s "$textile_qa_tools/node_modules/playwright" node_modules/playwright
+          echo "TEXTILE_QA_ESBUILD=$textile_qa_tools/node_modules/esbuild" >> "$GITHUB_ENV"
+          "$textile_qa_tools/node_modules/.bin/playwright" install --with-deps chromium
+
+      - name: Textile checkout layout and interaction fixtures
+        run: node scripts/qa-textile-pos.mjs
+        env:
+          LAKBIZ_UI_QA_DIR: ${{ runner.temp }}/lakbiz-textile-ui
+
+      - name: Upload textile UI fixture screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lakbiz-textile-ui-fixtures
+          path: |
+            ${{ runner.temp }}/lakbiz-textile-ui/*.png
+            ${{ runner.temp }}/lakbiz-textile-ui/results.json
+          if-no-files-found: warn
+          retention-days: 7

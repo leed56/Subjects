@@ -17,7 +17,7 @@ The original four-surface architecture and entire suggested page list are now do
 | Inventory/expiry/serial/variant | Advanced inventory identities, lot/serial/variant allocation, returns | Sample location quantities and identity design; cosmetics expiry fix | Location authority/conversions across all existing identities |
 | Damage/loss | Existing write-offs and hold resolution | Connected reasoned sample loss with journal | General approval/location/valuation adapters |
 | Warehouses/branches/transfers | Specialized textile warehouse/dispatch support | General sample transfer conservation and trail | True general location partitions and in-transit state in production |
-| Accounting/COGS/profit | Owner privacy, sales/profit, banking, expenses and return adjustments | Balanced sample journal and trial balance | General ledger, cost layers/residuals, source posting and reconciliation |
+| Accounting/COGS/profit | Owner privacy, sales/profit, banking, expenses and return adjustments | Balanced sample journal and trial balance | Complete source postings, cost layers/residuals, period closing and reconciliation |
 | VAT | Existing VAT calculation and UI | Editable sample VAT with return reversal and separate import VAT | Verify current official invoice/filing requirements; production policy versioning |
 | Customers/credit | Customers, payments, per-product prices and textile credit terms | Sample credit limits and balance updates | Atomic credit reservations; ageing/collections QA |
 | Loyalty | No complete shared production point ledger observed | Earn/redeem/reverse sample engine and UI | Durable point ledger, policy snapshots, expiry and POS integration |
@@ -40,4 +40,11 @@ No live database migration was applied as part of the design-suite change. No ex
 
 ## Phase 2 implementation increment
 
-The owner-only general ledger schema, exact-input posting adapter and `/accounting` workspace are implemented on the enhancement branch. They have not been activated in live Supabase. See [PHASE_2_ACCOUNTING_FOUNDATION.md](PHASE_2_ACCOUNTING_FOUNDATION.md) for constraints, reproducible verification, release status and the remaining stock/source-posting/reconciliation work. This adds a real persistence contract rather than changing the demo finance engine.
+The owner-only general ledger schema, exact-input posting adapter and `/accounting` workspace are implemented on the enhancement branch. The foundation migration was activated in live Supabase on 11 October 2026 after explicit approval; the separately implemented opt-in sales bridge migration remains unapplied. See [PHASE_2_ACCOUNTING_FOUNDATION.md](PHASE_2_ACCOUNTING_FOUNDATION.md) for constraints, reproducible verification, release status and the remaining stock/source-posting/reconciliation work. This adds a real persistence contract rather than changing the demo finance engine.
+
+
+## Specialist textile UI increment — 12 October 2026
+
+The actual textile `/sales` lane now has a sector banner, matched-roll and separate metre/yard availability KPIs, a selectable dye/shade/rack catalogue, measured-line builder and adjacent allocation/payment sidebar. Its subtotal, discount and amount due use light surfaces and two-decimal display. The existing finalizer, reservation quantities, pricing priority and tender validation remain authoritative. Exact scanning now resolves eligible rolls across the preceding fabric filter, without selecting an empty barcode. Load failures have an explicit Retry state, and the textile route resets draft component state when organization or role changes.
+
+Local validation: 37 browser scenarios against the actual component with isolated adapters, including three languages/four viewports, mixed units, reservations, over-allocation, wholesale/customer/manual prices, split-tender payloads, cashier/read-only controls, empty/error states and long desktop checkout. The Verify workflow now runs this repeatable local fixture suite after its production build and saves screenshots. This is not authenticated end-to-end certification of textile stock or financial posting; no live sale, message or migration was performed.
