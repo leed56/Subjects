@@ -24,6 +24,7 @@ import { getPlan } from "@/lib/subscription/plans";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { stockQuantityStep, validateStockQuantity, type StockQuantityError } from "@/lib/stock-quantity";
 import type { Product, ProductCondition } from "@/lib/types";
 
 type ConditionFilter = "all" | ProductCondition;
@@ -231,6 +232,36 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
   const writeOffQtyNumber = Number(writeOffQty) || 0;
   const returnProduct = returnId ? data.products.find((p) => p.id === returnId) : null;
   const returnQtyNumber = Number(returnQty) || 0;
+  const stockInUnit = String(stockInProduct?.customFields.unit ?? "pcs");
+  const stockOutUnit = String(stockOutProduct?.customFields.unit ?? "pcs");
+  const writeOffUnit = String(writeOffProduct?.customFields.unit ?? "pcs");
+  const returnUnit = String(returnProduct?.customFields.unit ?? "pcs");
+  const stockInQtyError = stockInProduct ? validateStockQuantity(stockInQty, stockInUnit) : null;
+  const stockOutQtyError = stockOutProduct
+    ? validateStockQuantity(stockOutQty, stockOutUnit, stockOutProduct.stockQty)
+    : null;
+  const writeOffQtyError = writeOffProduct
+    ? validateStockQuantity(writeOffQty, writeOffUnit, writeOffProduct.stockQty)
+    : null;
+  const returnQtyError = returnProduct
+    ? validateStockQuantity(returnQty, returnUnit, returnProduct.stockQty)
+    : null;
+
+  const quantityErrorMessage = (
+    error: StockQuantityError | null,
+    unit: string,
+    maximum?: number,
+  ) => {
+    if (!error) return undefined;
+    if (error === "whole") return t("stock.qty_whole").replace("{unit}", unit);
+    if (error === "precision") return t("stock.qty_precision").replace("{unit}", unit);
+    if (error === "exceeds") {
+      return t("stock.qty_available")
+        .replace("{quantity}", String(maximum ?? 0))
+        .replace("{unit}", unit);
+    }
+    return t(error === "required" ? "stock.qty_required" : "stock.qty_positive");
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -263,7 +294,7 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
   };
 
   const handleStockIn = async () => {
-    if (!canWrite || !stockInId || savingStockIn || stockInQtyNumber <= 0) return;
+    if (!canWrite || !stockInId || savingStockIn || stockInQtyError) return;
     setSavingStockIn(true);
     const result = await runStockMutation(() => stockInToCloud(stockInId, stockInQtyNumber, "Purchase / GRN"), t("common.save_failed"));
     setSavingStockIn(false);
@@ -282,11 +313,7 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
   };
 
   const handleStockOut = async () => {
-    if (!canWrite || !stockOutId || !stockOutProduct || savingStockOut || stockOutQtyNumber < 1) return;
-    if (stockOutQtyNumber > stockOutProduct.stockQty) {
-      toast({ tone: "error", title: t("stock.out_qty_exceeds") });
-      return;
-    }
+    if (!canWrite || !stockOutId || !stockOutProduct || savingStockOut || stockOutQtyError) return;
     setSavingStockOut(true);
     const note = stockOutNote.trim() || t("stock.stock_out");
     const result = await runStockMutation(() => stockOutToCloud(stockOutId, stockOutQtyNumber, note), t("common.save_failed"));
@@ -306,11 +333,7 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
   };
 
   const handleWriteOff = async () => {
-    if (!canWrite || !writeOffId || !writeOffProduct || savingWriteOff || writeOffQtyNumber < 1) return;
-    if (writeOffQtyNumber > writeOffProduct.stockQty) {
-      toast({ tone: "error", title: t("stock.out_qty_exceeds") });
-      return;
-    }
+    if (!canWrite || !writeOffId || !writeOffProduct || savingWriteOff || writeOffQtyError) return;
     setSavingWriteOff(true);
     const result = await runStockMutation(() => writeOffStockToCloud(writeOffId, writeOffQtyNumber, writeOffNote.trim() || undefined), t("common.save_failed"));
     setSavingWriteOff(false);
@@ -330,11 +353,7 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
   };
 
   const handleReturn = async () => {
-    if (!canWrite || !returnId || !returnProduct || !returnSupplierId || savingReturn || returnQtyNumber < 1) return;
-    if (returnQtyNumber > returnProduct.stockQty) {
-      toast({ tone: "error", title: t("stock.out_qty_exceeds") });
-      return;
-    }
+    if (!canWrite || !returnId || !returnProduct || !returnSupplierId || savingReturn || returnQtyError) return;
     setSavingReturn(true);
     const result = await runStockMutation(() => returnStockToSupplierToCloud(returnId, returnQtyNumber, returnSupplierId, returnNote.trim() || undefined), t("common.save_failed"));
     setSavingReturn(false);
@@ -702,7 +721,7 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
               </button>
               <button
                 type="button"
-                disabled={!canWrite || savingStockIn || stockInQtyNumber <= 0}
+                disabled={!canWrite || savingStockIn || !!stockInQtyError}
                 onClick={() => void handleStockIn()}
                 className="rounded-lg bg-teal-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
               >
@@ -719,8 +738,16 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
                   {stockInProduct.stockQty} {String(stockInProduct.customFields.unit ?? "pcs")}
                 </p>
               </div>
-              <FormField label={t("stock.stock_in")} required>
-                <TextInput type="number" min={1} value={stockInQty} onChange={(e) => setStockInQty(e.target.value)} autoFocus />
+              <FormField label={t("stock.stock_in")} required error={quantityErrorMessage(stockInQtyError, stockInUnit)}>
+                <TextInput
+                  type="number"
+                  min={stockQuantityStep(stockInUnit)}
+                  step={stockQuantityStep(stockInUnit)}
+                  value={stockInQty}
+                  onChange={(e) => setStockInQty(e.target.value)}
+                  aria-invalid={!!stockInQtyError}
+                  autoFocus
+                />
               </FormField>
             </div>
           )}
@@ -739,7 +766,7 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
               </button>
               <button
                 type="button"
-                disabled={!canWrite || savingStockOut || !stockOutProduct || stockOutQtyNumber < 1 || stockOutProduct.stockQty <= 0}
+                disabled={!canWrite || savingStockOut || !stockOutProduct || !!stockOutQtyError || stockOutProduct.stockQty <= 0}
                 onClick={() => void handleStockOut()}
                 className="rounded-lg bg-amber-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
               >
@@ -756,8 +783,17 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
                   {stockOutProduct.stockQty} {String(stockOutProduct.customFields.unit ?? "pcs")}
                 </p>
               </div>
-              <FormField label={t("stock.stock_out")} required>
-                <TextInput type="number" min={1} max={stockOutProduct.stockQty} value={stockOutQty} onChange={(e) => setStockOutQty(e.target.value)} autoFocus />
+              <FormField label={t("stock.stock_out")} required error={quantityErrorMessage(stockOutQtyError, stockOutUnit, stockOutProduct.stockQty)}>
+                <TextInput
+                  type="number"
+                  min={stockQuantityStep(stockOutUnit)}
+                  max={stockOutProduct.stockQty}
+                  step={stockQuantityStep(stockOutUnit)}
+                  value={stockOutQty}
+                  onChange={(e) => setStockOutQty(e.target.value)}
+                  aria-invalid={!!stockOutQtyError}
+                  autoFocus
+                />
               </FormField>
               <FormField label={t("stock.out_note")}>
                 <TextInput value={stockOutNote} onChange={(e) => setStockOutNote(e.target.value)} placeholder={t("stock.out_note_ph")} />
@@ -779,7 +815,7 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
               </button>
               <button
                 type="button"
-                disabled={!canWrite || savingWriteOff || !writeOffProduct || writeOffQtyNumber < 1 || writeOffProduct.stockQty <= 0}
+                disabled={!canWrite || savingWriteOff || !writeOffProduct || !!writeOffQtyError || writeOffProduct.stockQty <= 0}
                 onClick={() => void handleWriteOff()}
                 className="rounded-lg bg-rose-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
               >
@@ -796,8 +832,17 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
                   {writeOffProduct.stockQty} {String(writeOffProduct.customFields.unit ?? "pcs")}
                 </p>
               </div>
-              <FormField label={t("stock.write_off")} required>
-                <TextInput type="number" min={1} max={writeOffProduct.stockQty} value={writeOffQty} onChange={(e) => setWriteOffQty(e.target.value)} autoFocus />
+              <FormField label={t("stock.write_off")} required error={quantityErrorMessage(writeOffQtyError, writeOffUnit, writeOffProduct.stockQty)}>
+                <TextInput
+                  type="number"
+                  min={stockQuantityStep(writeOffUnit)}
+                  max={writeOffProduct.stockQty}
+                  step={stockQuantityStep(writeOffUnit)}
+                  value={writeOffQty}
+                  onChange={(e) => setWriteOffQty(e.target.value)}
+                  aria-invalid={!!writeOffQtyError}
+                  autoFocus
+                />
               </FormField>
               <FormField label={t("stock.out_note")}>
                 <TextInput value={writeOffNote} onChange={(e) => setWriteOffNote(e.target.value)} placeholder={t("stock.write_off_note_ph")} />
@@ -819,7 +864,7 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
               </button>
               <button
                 type="button"
-                disabled={!canWrite || savingReturn || !returnProduct || !returnSupplierId || returnQtyNumber < 1 || returnProduct.stockQty <= 0}
+                disabled={!canWrite || savingReturn || !returnProduct || !returnSupplierId || !!returnQtyError || returnProduct.stockQty <= 0}
                 onClick={() => void handleReturn()}
                 className="rounded-lg bg-amber-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
               >
@@ -848,8 +893,16 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
                   ))}
                 </select>
               </FormField>
-              <FormField label={t("stock.return_to_supplier")} required>
-                <TextInput type="number" min={1} max={returnProduct.stockQty} value={returnQty} onChange={(e) => setReturnQty(e.target.value)} />
+              <FormField label={t("stock.return_to_supplier")} required error={quantityErrorMessage(returnQtyError, returnUnit, returnProduct.stockQty)}>
+                <TextInput
+                  type="number"
+                  min={stockQuantityStep(returnUnit)}
+                  max={returnProduct.stockQty}
+                  step={stockQuantityStep(returnUnit)}
+                  value={returnQty}
+                  onChange={(e) => setReturnQty(e.target.value)}
+                  aria-invalid={!!returnQtyError}
+                />
               </FormField>
               <FormField label={t("stock.out_note")}>
                 <TextInput value={returnNote} onChange={(e) => setReturnNote(e.target.value)} placeholder={t("stock.out_note_ph")} />

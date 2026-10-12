@@ -5,6 +5,11 @@ export const LOCALE_KEY = "lakbiz-locale";
 type Dict = Record<string, string>;
 
 const si: Dict = {
+  "stock.qty_required": "ප්‍රමාණය ඇතුළත් කරන්න",
+  "stock.qty_positive": "ශුන්‍යයට වඩා වැඩි වලංගු ප්‍රමාණයක් ඇතුළත් කරන්න",
+  "stock.qty_whole": "{unit} සඳහා පූර්ණ සංඛ්‍යාවක් ඇතුළත් කරන්න",
+  "stock.qty_precision": "{unit} සඳහා දශම ස්ථාන තුනක් දක්වා භාවිතා කරන්න",
+  "stock.qty_available": "ලබා ගත හැක්කේ {quantity} {unit} පමණි",
   "stock.load_failed": "තොග පූරණය කළ නොහැකි විය",
   "stock.load_failed_hint": "තොග දත්ත ලබාගත නොහැක. නිෂ්පාදන එකතු කිරීමට පෙර සම්බන්ධතාව පරීක්ෂා කර නැවත උත්සාහ කරන්න.",
   "stock.clear_filters": "පෙරහන් ඉවත් කරන්න",
@@ -1763,6 +1768,11 @@ const si: Dict = {
 };
 
 const en: Dict = {
+  "stock.qty_required": "Enter a quantity",
+  "stock.qty_positive": "Enter a valid quantity greater than zero",
+  "stock.qty_whole": "Enter a whole number for {unit}",
+  "stock.qty_precision": "Use no more than three decimal places for {unit}",
+  "stock.qty_available": "Only {quantity} {unit} is available",
   "stock.load_failed": "Inventory could not load",
   "stock.load_failed_hint": "Inventory is unavailable. Check your connection and retry before adding products.",
   "stock.clear_filters": "Clear filters",
@@ -3513,6 +3523,11 @@ const en: Dict = {
 // lower-frequency or role-specific screens) is tracked as follow-up work,
 // not silently claimed as done here.
 const ta: Dict = {
+  "stock.qty_required": "அளவை உள்ளிடவும்",
+  "stock.qty_positive": "பூஜ்ஜியத்தை விட அதிகமான சரியான அளவை உள்ளிடவும்",
+  "stock.qty_whole": "{unit}க்கு முழு எண்ணை உள்ளிடவும்",
+  "stock.qty_precision": "{unit}க்கு மூன்று தசம இடங்கள் வரை பயன்படுத்தவும்",
+  "stock.qty_available": "{quantity} {unit} மட்டுமே கிடைக்கிறது",
   "stock.load_failed": "சரக்கை ஏற்ற முடியவில்லை",
   "stock.load_failed_hint": "சரக்கு விவரங்கள் கிடைக்கவில்லை. பொருட்களைச் சேர்ப்பதற்கு முன் இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.",
   "stock.clear_filters": "வடிகட்டிகளை அகற்று",

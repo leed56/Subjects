@@ -86,6 +86,14 @@ try{
  assert(await stockInDialog.isVisible(),'Rejected stock mutation closed the draft');
  assert(await submitStockIn.isEnabled(),'Rejected stock mutation left the action busy');
  assert(await stockInDialog.getByRole('spinbutton').inputValue()==='1','Rejected stock mutation discarded quantity');passed++;
+ await stockInDialog.getByRole('spinbutton').fill('1.5');
+ assert(await submitStockIn.isDisabled(),'Fractional piece quantity was enabled');
+ assert(await stockInDialog.getByRole('alert').isVisible(),'Fractional piece quantity had no inline error');passed++;
+ await stockInDialog.getByRole('button',{name:'Cancel'}).click();
+ await page.getByRole('button',{name:'Stock out'}).first().click();
+ const stockOutDialog=page.getByRole('dialog');await stockOutDialog.getByRole('spinbutton').fill('1000000');
+ assert(await stockOutDialog.getByRole('button',{name:'Remove stock'}).isDisabled(),'Over-available quantity was enabled');
+ assert(await stockOutDialog.getByRole('alert').isVisible(),'Over-available quantity had no inline error');passed++;
  assert(errors.length===0,errors.join('\n'));await page.close();
  fs.writeFileSync(path.join(out, "results.json"), JSON.stringify({ passed, languages: ["en", "si", "ta"], widths: [360, 390, 768, 1440], isolatedAdapters: true }, null, 2));
  console.log(`${passed} stock state/role/width/language checks passed; screenshots: ${out}`);
