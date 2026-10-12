@@ -15,11 +15,13 @@ export function DataTable<T extends { id: string | number }>({
   rows,
   onRowClick,
   emptyState,
+  mobileRender,
 }: {
   columns: DataTableColumn<T>[];
   rows: T[];
   onRowClick?: (row: T) => void;
   emptyState?: ReactNode;
+  mobileRender?: (row: T) => ReactNode;
 }) {
   if (rows.length === 0 && emptyState) return <>{emptyState}</>;
 
@@ -98,16 +100,18 @@ export function DataTable<T extends { id: string | number }>({
             tabIndex={onRowClick ? 0 : undefined}
             className={`bg-white px-4 py-4 ${onRowClick ? "cursor-pointer active:bg-teal-50/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500" : ""}`}
           >
-            {columns
-              .filter((col) => !col.hideOnMobile)
-              .map((col, i) => (
-                <div key={col.key} className={`workspace-table-mobile-row ${i > 0 ? "mt-2.5" : ""}`}>
-                  {i > 0 && <span className="text-xs font-medium leading-5 text-slate-500">{col.header}</span>}
-                  <span className={i === 0 ? "text-sm font-semibold text-slate-950" : "text-sm text-slate-700"}>
-                    {col.render(row)}
-                  </span>
-                </div>
-              ))}
+            {mobileRender
+              ? mobileRender(row)
+              : columns
+                  .filter((col) => !col.hideOnMobile)
+                  .map((col, i) => (
+                    <div key={col.key} className={`workspace-table-mobile-row ${i > 0 ? "mt-2.5" : ""}`}>
+                      {i > 0 && <span className="text-xs font-medium leading-5 text-slate-500">{col.header}</span>}
+                      <span className={i === 0 ? "text-sm font-semibold text-slate-950" : "text-sm text-slate-700"}>
+                        {col.render(row)}
+                      </span>
+                    </div>
+                  ))}
           </div>
         ))}
       </div>

@@ -15,7 +15,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { StockIcon, PlusIcon } from "@/components/ui/icons";
 import { formatLkr } from "@/lib/format";
-import { exportStockCsv } from "@/lib/export";
+import { exportStockCsv, printHtmlReport, reportSummaryHtml, tableHtml } from "@/lib/export";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { formatProductFieldBadge } from "@/lib/sector-fields";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -483,6 +483,35 @@ function StockWorkspace({
     reorderLevel: t("stock.reorder_level"),
   };
 
+  const printStockReport = () => {
+    const headers = [stockExportLabels.name, stockExportLabels.sku, stockExportLabels.category, stockExportLabels.qty];
+    if (canSeeFinancials) headers.push(stockExportLabels.buyPrice);
+    headers.push(stockExportLabels.sellPrice, stockExportLabels.reorderLevel);
+    const rows = products.map((product) => {
+      const unit = String(product.customFields.unit ?? "pcs");
+      const row: Array<string | number> = [product.name, product.sku ?? "", product.category || "General", `${product.stockQty} ${unit}`];
+      if (canSeeFinancials) row.push(formatLkr(product.buyPrice));
+      row.push(formatLkr(product.sellPrice), product.reorderLevel ?? "—");
+      return row;
+    });
+    const visibleUnits = products.reduce((sum, product) => sum + product.stockQty, 0);
+    const visibleRetailValue = products.reduce((sum, product) => sum + product.stockQty * product.sellPrice, 0);
+    const visibleCostValue = products.reduce((sum, product) => sum + product.stockQty * product.buyPrice, 0);
+    const summary = [
+      { label: t("common.items"), value: `${products.length} / ${data.products.length}` },
+      { label: t("stock.current_qty"), value: visibleUnits.toLocaleString("en-LK") },
+      { label: t("stock.low_stock_filter"), value: products.filter((product) => lowStockIds.has(product.id)).length },
+      ...(canSeeFinancials ? [{ label: t("common.cost"), value: formatLkr(visibleCostValue) }] : []),
+      { label: t("stock.sell_price"), value: formatLkr(visibleRetailValue) },
+    ];
+    printHtmlReport({
+      title: t("export.stock_report"),
+      shopName: data.business.name || org.name || "LakBiz",
+      subtitle: `${products.length} / ${data.products.length}`,
+      bodyHtml: reportSummaryHtml(summary) + tableHtml(headers, rows, canSeeFinancials ? [3, 4, 5, 6] : [3, 4, 5]),
+    });
+  };
+
   const columns: DataTableColumn<Product>[] = [
     {
       key: "name",
@@ -623,6 +652,7 @@ function StockWorkspace({
                 <ExportActions
                   compact
                   disabled={products.length === 0}
+                  onPrintPdf={printStockReport}
                   onExportCsv={() =>
                     exportStockCsv(data.business, products, {
                       includeBuyPrice: canSeeFinancials,
@@ -731,7 +761,36 @@ function StockWorkspace({
                 onPageChange={setPage}
               />
             </div>
-            <DataTable columns={columns} rows={pageProducts} emptyState={
+            <DataTable columns={columns} rows={pageProducts} mobileRender={(product) => {
+              const unit = String(product.customFields.unit ?? "pcs");
+              const low = product.reorderLevel != null && product.stockQty <= product.reorderLevel;
+              return (
+                <article data-ui="stock-mobile-card" className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <button type="button" onClick={() => openEdit(product)} disabled={!canWrite} className="max-w-full truncate text-left text-sm font-semibold text-slate-950 disabled:text-slate-500">{product.name}</button>
+                      <p className="mt-1 truncate text-xs text-slate-500">{product.sku ? `${product.sku} · ` : ""}{product.category || "General"}</p>
+                    </div>
+                    {low ? <StatusBadge tone="warning">{t("common.low")}</StatusBadge> : <StatusBadge tone="positive">{t("stock.active_item")}</StatusBadge>}
+                  </div>
+                  <div className={`grid gap-2 ${canSeeFinancials ? "grid-cols-3" : "grid-cols-2"}`}>
+                    <div className="rounded-xl bg-slate-50 p-2.5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{t("stock.current_qty")}</p><p className="mt-1 text-sm font-semibold tabular-nums text-slate-950">{product.stockQty} {unit}</p></div>
+                    {canSeeFinancials && <div className="rounded-xl bg-slate-50 p-2.5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{t("common.cost")}</p><p className="mt-1 truncate text-xs font-semibold tabular-nums text-slate-700">{formatLkr(product.buyPrice)}</p></div>}
+                    <div className="rounded-xl bg-teal-50 p-2.5"><p className="text-[10px] font-bold uppercase tracking-wide text-teal-700">{t("stock.sell_price")}</p><p className="mt-1 truncate text-xs font-semibold tabular-nums text-teal-800">{formatLkr(product.sellPrice)}</p></div>
+                  </div>
+                  <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                    <button type="button" onClick={() => openStockIn(product.id)} disabled={!canWrite} className="min-h-10 rounded-xl bg-slate-100 px-2 text-xs font-semibold text-slate-700 disabled:opacity-40">{t("stock.stock_in")}</button>
+                    <button type="button" onClick={() => openStockOut(product.id)} disabled={!canWrite || product.stockQty <= 0} className="min-h-10 rounded-xl bg-amber-50 px-2 text-xs font-semibold text-amber-800 disabled:opacity-40">{t("stock.stock_out")}</button>
+                    <ActionMenu items={[
+                      { label: t("common.edit"), onSelect: () => openEdit(product), disabled: !canWrite },
+                      ...(data.suppliers.length > 0 ? [{ label: t("stock.return_to_supplier"), onSelect: () => openReturn(product.id), disabled: !canWrite || product.stockQty <= 0 }] : []),
+                      { label: t("stock.write_off"), onSelect: () => openWriteOff(product.id), disabled: !canWrite || product.stockQty <= 0 },
+                      { label: t("common.delete"), tone: "danger" as const, onSelect: () => setDeleteTarget(product), disabled: !canWrite },
+                    ]} />
+                  </div>
+                </article>
+              );
+            }} emptyState={
               <EmptyState
                 title={t("sales.no_match")}
                 description={t("stock.search_no_match_desc")}

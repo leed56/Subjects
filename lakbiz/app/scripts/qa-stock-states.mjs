@@ -22,7 +22,7 @@ const stubs={
  '@/components/product-form':'export function ProductForm(){return <div>Product form fixture</div>}',
  '@/components/write-disabled-hint':`${f} export function WriteDisabledHint(){return f.readOnly?<p>Read only</p>:null}`,
  '@/lib/subscription/use-can-write':`${f} export function useWriteAccess(){return {canWrite:!f.readOnly,disabledHint:f.readOnly?'Read only':null}}`,
- '@/lib/subscription/subscription-provider':`${reactive} export function useSubscription(){const f=useFixture();return {org:{id:f.orgId||'shop-a',role:f.readOnly?'cashier':'owner',sector:f.sector||'grocery',name:'QA shop',isAuthenticated:true},subscription:{planId:'starter'},canSeeFinancials:!f.readOnly,can:()=>false}}`,
+ '@/lib/subscription/subscription-provider':`${reactive} export function useSubscription(){const f=useFixture();return {org:{id:f.orgId||'shop-a',role:f.readOnly?'cashier':'owner',sector:f.sector||'grocery',name:'QA shop',isAuthenticated:true},subscription:{planId:'starter'},canSeeFinancials:!f.readOnly,can:p=>p==='export'&&!f.readOnly}}`,
  '@/lib/store/use-app-store':`${f} const mutate=async()=>{f.mutationCalls=(f.mutationCalls||0)+1;if(f.rejectMutation)throw new Error('Synthetic rejected mutation');return {ok:true}};export function useAppStore(){return {data:f.data,ready:f.ready,cloudSyncing:f.syncing,cloudSyncError:f.error,saveProductToCloud:mutate,deleteProductToCloud:mutate,stockInToCloud:mutate,stockOutToCloud:mutate,writeOffStockToCloud:mutate,returnStockToSupplierToCloud:mutate}}`,
  '@/lib/i18n/locale-provider':`import {translate} from ${JSON.stringify(root+'/src/lib/i18n/translations.ts')};${f}export function useLocale(){return {locale:f.locale,t:k=>translate(f.locale,k)}}`,
  '@/components/ui/toast':`${f} export function useToast(){return {toast:value=>{f.toasts??=[];f.toasts.push(value)}}}`,
@@ -51,6 +51,7 @@ try{
   await open({query:'q=absent&filter=low-stock'});await page.locator('[data-ui="empty-state"] button').click();await page.locator('button:visible').filter({hasText:/^QA product$/}).waitFor();
   await open({data:{...base,products:[{...product,active:false}]}});await page.locator('[data-ui="empty-state"] button').click();await page.locator('button:visible').filter({hasText:/^QA product$/}).waitFor();
   await open({});await page.locator('button:visible').filter({hasText:/^QA product$/}).waitFor();
+  if(width<768){assert(await page.locator('[data-ui="stock-mobile-card"]').count()===1,'Compact mobile stock card missing');assert(await page.locator('table:visible').count()===0,'Desktop stock table leaked into mobile view');}
   const metrics=await page.locator('[data-ui="metric-card"]').evaluateAll(nodes=>nodes.map(n=>({text:n.textContent,overflow:n.scrollWidth>n.clientWidth+1})));
   assert(metrics.length===2,'Missing currency metrics');assert(metrics.every(m=>!m.overflow),'Currency metric overflow');
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Page horizontal overflow');
@@ -64,6 +65,7 @@ try{
  await page.goto(`http://127.0.0.1:${server.address().port}/`);
  await page.waitForTimeout(300);
  if(errors.length)throw Error(errors.join('\n'));
+ const reportPromise=page.waitForEvent('popup');await page.getByRole('button',{name:'Print PDF'}).click();const report=await reportPromise;await report.locator('h1',{hasText:'Stock report'}).waitFor();assert(await report.locator('.summary-card').count()>=4,'Stock print summary missing');assert(await report.locator('tbody tr').count()===2,'Stock print did not include filtered rows');await report.close();passed++;
  const search=page.getByRole('searchbox').first();
  const visibleProducts=()=>page.locator('button:visible').filter({hasText:/^(QA product|Low stock product)$/});
  async function navigate(query){await page.evaluate(q=>{history.pushState({},'',q?'/?'+q:'/');window.dispatchEvent(new Event('fixturechange'))},query);}
