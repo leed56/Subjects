@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ProductForm } from "@/components/product-form";
 import { StockCommandHeader } from "@/components/stock/stock-command-header";
 import { ExportActions } from "@/components/export/export-actions";
@@ -28,6 +28,7 @@ import { stockQuantityStep, validateStockQuantity, type StockQuantityError } fro
 import type { Product, ProductCondition } from "@/lib/types";
 
 type ConditionFilter = "all" | ProductCondition;
+type StockView = { search: string; lowStock: boolean };
 
 const STOCK_PAGE_SIZE = 50;
 // Adapter errors normally return a result; unexpected rejection must also
@@ -45,24 +46,39 @@ async function runStockMutation(
 
 export default function StockPage() {
   const { org } = useSubscription();
+  const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  // Navigation supplies a fresh view; shop/role changes also discard local
-  // filters and open drafts rather than carrying them into another workspace.
+  const query = searchParams.toString();
+  const replaceStockView = useCallback((view: StockView) => {
+    const params = new URLSearchParams(query);
+    if (view.search.trim()) params.set("q", view.search);
+    else params.delete("q");
+    if (view.lowStock) params.set("filter", "low-stock");
+    else params.delete("filter");
+    const nextQuery = params.toString();
+    if (nextQuery === query) return;
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [pathname, query, router]);
+  // Shop/role changes discard open drafts. The URL remains the source of truth
+  // for the shareable stock view, so its filters survive refresh and navigation.
   const workspaceKey = JSON.stringify([
-    org.id, org.isAuthenticated, org.sector, org.role, searchParams.toString(),
+    org.id, org.isAuthenticated, org.sector, org.role,
   ]);
   return (
     <StockWorkspace
       key={workspaceKey}
       initialSearch={searchParams.get("q") ?? ""}
       initialLowStock={searchParams.get("filter") === "low-stock"}
+      onViewChange={replaceStockView}
     />
   );
 }
 
-function StockWorkspace({ initialSearch, initialLowStock }: {
+function StockWorkspace({ initialSearch, initialLowStock, onViewChange }: {
   initialSearch: string;
   initialLowStock: boolean;
+  onViewChange: (view: StockView) => void;
 }) {
   const {
     data,
@@ -133,6 +149,18 @@ function StockWorkspace({ initialSearch, initialLowStock }: {
   const [showZeroPriceOnly, setShowZeroPriceOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setSearch(initialSearch);
+    setShowLowStockOnly(initialLowStock);
+  }, [initialLowStock, initialSearch]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      onViewChange({ search, lowStock: showLowStockOnly });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [onViewChange, search, showLowStockOnly]);
 
   useEffect(() => {
     setPage(1);

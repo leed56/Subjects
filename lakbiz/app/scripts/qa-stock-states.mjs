@@ -16,7 +16,7 @@ fs.mkdirSync(out,{recursive:true});
 const f='const f=window.fixture;';
 const reactive=`import {useSyncExternalStore} from 'react';function subscribe(cb){window.addEventListener('fixturechange',cb);window.addEventListener('popstate',cb);return ()=>{window.removeEventListener('fixturechange',cb);window.removeEventListener('popstate',cb)}}function useFixture(){useSyncExternalStore(subscribe,()=>location.search+'|'+(window.fixtureVersion||0));return window.fixture}`;
 const stubs={
- 'next/navigation':`${reactive} export function useSearchParams(){useFixture();return new URLSearchParams(location.search)}`,
+ 'next/navigation':`${reactive} export function useSearchParams(){useFixture();return new URLSearchParams(location.search)}export function usePathname(){useFixture();return location.pathname}export function useRouter(){return {replace(href){if(href===location.pathname+location.search)return;history.replaceState({},'',href);queueMicrotask(()=>window.dispatchEvent(new Event('fixturechange')))}}}`,
  'next/link':'import React from "react"; export default function Link({children,...p}){return <a {...p}>{children}</a>}',
  '@/components/shell/app-shell':'export function AppShell({children}){return <div className="min-w-0">{children}</div>}',
  '@/components/product-form':'export function ProductForm(){return <div>Product form fixture</div>}',
@@ -68,9 +68,12 @@ try{
  const visibleProducts=()=>page.locator('button:visible').filter({hasText:/^(QA product|Low stock product)$/});
  async function navigate(query){await page.evaluate(q=>{history.pushState({},'',q?'/?'+q:'/');window.dispatchEvent(new Event('fixturechange'))},query);}
  await search.fill('QA product');assert(await search.inputValue()==='QA product','Typing lost value');
+ await page.waitForFunction(()=>new URLSearchParams(location.search).get('q')==='QA product');assert(await search.evaluate(el=>el===document.activeElement),'URL sync lost search focus');passed++;
  await page.evaluate(()=>{window.fixtureVersion=1;window.dispatchEvent(new Event('fixturechange'))});assert(await search.inputValue()==='QA product','Unrelated rerender cleared search');passed++;
  await navigate('q=Low+stock+product');await page.waitForFunction(()=>document.querySelector('input').value==='Low stock product');assert(await visibleProducts().count()===1,'Navigation kept stale search');passed++;
  await navigate('filter=low-stock');await page.waitForFunction(()=>document.querySelector('input').value==='');assert(await visibleProducts().count()===1,'Low stock route did not filter');passed++;
+ await page.getByRole('button',{name:/^Low stock \(/}).click();await page.waitForFunction(()=>!new URLSearchParams(location.search).has('filter'));assert(await visibleProducts().count()===2,'Low-stock toggle did not update URL');passed++;
+ await page.getByRole('button',{name:/^Low stock \(/}).click();await page.waitForFunction(()=>new URLSearchParams(location.search).get('filter')==='low-stock');
  await navigate('');await page.waitForTimeout(100);assert(await visibleProducts().count()===2,'All stock route kept stale low-stock filter');passed++;
  await page.evaluate(()=>history.back());await page.waitForTimeout(150);assert(await visibleProducts().count()===1,'Back did not restore low-stock route');passed++;
  await page.evaluate(()=>history.back());await page.waitForFunction(()=>document.querySelector('input').value==='Low stock product');passed++;
