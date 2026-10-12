@@ -20,10 +20,37 @@ export function IndustryImage({ sector, className = "", decorative = false }: {
 }
 
 export function IndustryHeaderImages({ sector }: { sector: SectorId }) {
-  const contexts: SectorId[] = sector === "textile"
-    ? ["textile", "wholesale", "textile"]
-    : [sector, sector === "cosmetics" ? "pharmacy" : "cosmetics", "textile"];
   return <div className="live-industry-header-images" aria-hidden="true">
-    {contexts.map((context, index) => <IndustryImage key={index} sector={context} decorative />)}
+    <IndustryBannerArtwork sector={sector} />
   </div>;
+}
+
+/** Crop the local atlas through SVG so wide banners preserve photo proportions. */
+function BannerPhoto({ cell, context }: { cell: number; context: string }) {
+  return <svg
+    className="industry-banner-photo"
+    data-image-context={context}
+    viewBox="0 0 100 100"
+    preserveAspectRatio="xMidYMid meet"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <svg
+      viewBox={`${(cell % 4) * 100} ${Math.floor(cell / 4) * 100} 100 100`}
+      width="100" height="100" overflow="hidden"
+    >
+      <image href="/images/industry-products-atlas.webp" width="400" height="400" />
+    </svg>
+  </svg>;
+}
+
+/** Normal workspaces show only their industry; imports add neutral logistics. */
+export function IndustryBannerArtwork({ sector, imports = false }: {
+  sector: SectorId; imports?: boolean;
+}) {
+  return <>
+    {imports && <BannerPhoto cell={14} context="shipping" />}
+    <BannerPhoto cell={cells[sector]} context={sector} />
+    {imports && <BannerPhoto cell={13} context="cartons" />}
+  </>;
 }

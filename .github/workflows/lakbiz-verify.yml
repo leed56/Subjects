@@ -89,3 +89,19 @@ jobs:
             ${{ runner.temp }}/lakbiz-textile-ui/results.json
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Industry banner visual fixtures
+        run: node scripts/qa-industry-banners.mjs
+        env:
+          LAKBIZ_UI_QA_DIR: ${{ runner.temp }}/lakbiz-industry-banners
+
+      - name: Upload industry banner fixture screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lakbiz-industry-banner-fixtures
+          path: |
+            ${{ runner.temp }}/lakbiz-industry-banners/*.png
+            ${{ runner.temp }}/lakbiz-industry-banners/results.json
+          if-no-files-found: warn
+          retention-days: 7

@@ -5,6 +5,7 @@ import type { DemoProduct, DemoState } from "@/lib/erp/demo-types";
 import { money, totalStock, landedCost } from "@/lib/erp/demo-engine";
 import { DemoSection, DemoPill, demoDate } from "./demo-ui";
 import type { DemoAction } from "./demo-action-drawer";
+import { IndustryBannerArtwork } from "@/components/ui/industry-imagery";
 
 const CELLS: Record<SectorId, number> = {
   grocery: 0,
@@ -82,24 +83,7 @@ export function ReferenceBanner({
         <p>{description}</p>
       </div>
       <div className="reference-banner-images" aria-hidden="true">
-        {imports ? (
-          <>
-            <span
-              className="reference-product-photo"
-              style={{ backgroundPosition: "66.6667% 100%" }}
-            />
-            <span
-              className="reference-product-photo"
-              style={{ backgroundPosition: "100% 100%" }}
-            />
-          </>
-        ) : (
-          <>
-            <ProductPhoto industry={template.id} />
-            <ProductPhoto industry="cosmetics" />
-            <ProductPhoto industry="textile" />
-          </>
-        )}
+        <IndustryBannerArtwork sector={template.id} imports={imports} />
       </div>
       <div className="reference-banner-end">
         <span>{imports ? "FROM PORT TO STORE" : template.nameEn}</span>
