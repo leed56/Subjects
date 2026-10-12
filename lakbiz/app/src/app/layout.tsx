@@ -66,10 +66,10 @@ export default function RootLayout({
   return (
     <html
       lang="si"
-      className={`${geistSans.variable} ${geistMono.variable} ${notoSinhala.variable} ${notoTamil.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${notoSinhala.variable} ${notoTamil.variable} antialiased`}
     >
       <body
-        className="min-h-full flex flex-col font-sinhala"
+        className="flex min-h-dvh flex-col font-sinhala"
         data-lakbiz-build-sha={process.env.VERCEL_GIT_COMMIT_SHA ?? ""}
         data-lakbiz-supabase-host={publicSupabaseHost()}
       >

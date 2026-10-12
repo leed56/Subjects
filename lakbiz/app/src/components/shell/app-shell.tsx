@@ -16,7 +16,7 @@ import { MobileNav } from "@/components/shell/mobile-nav";
  */
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-full bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.055),transparent_28rem),radial-gradient(circle_at_95%_12%,rgba(56,189,248,0.035),transparent_26rem),linear-gradient(180deg,#f5f8fc_0%,#edf3f8_100%)] text-slate-950">
+    <div className="flex min-h-dvh bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.055),transparent_28rem),radial-gradient(circle_at_95%_12%,rgba(56,189,248,0.035),transparent_26rem),linear-gradient(180deg,#f5f8fc_0%,#edf3f8_100%)] text-slate-950">
       {/* A prior version hid this with a CSS transform (-translate-y-full,
           revealed via focus:translate-y-0). That box was still laid out
           at top-3 before the transform, and a translateY(-100%) only

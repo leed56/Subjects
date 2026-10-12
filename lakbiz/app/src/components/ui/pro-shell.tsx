@@ -6,7 +6,7 @@ import Link from "next/link";
 import { InboxIcon } from "@/components/ui/icons";
 
 export function ProPageShell({ children }: { children: ReactNode }) {
-  return <div className="min-h-full bg-[#f3f6fa]">{children}</div>;
+  return <div className="min-h-dvh bg-[#f3f6fa]">{children}</div>;
 }
 
 export function ProMain({ children }: { children: ReactNode }) {
