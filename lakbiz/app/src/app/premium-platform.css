@@ -1212,7 +1212,7 @@
     grid-template-columns: auto minmax(0, 1fr);
     gap: 8px;
   }
-  .demo-mobile-identity {
+  .demo-topbar > div:first-child > .demo-mobile-identity {
     display: flex;
     min-width: 0;
     align-items: center;
