@@ -407,7 +407,7 @@ export default function WorkforcePage() {
           <section className="mt-6">
             <ProCard title={t("work.payouts")} eyebrow={t("work.contractors")} action={<ProBadge tone="emerald">{data.contractorPayments.length}</ProBadge>}>
               <div className="overflow-hidden rounded-2xl border border-slate-200">
-                <table className="w-full text-left text-sm">
+                <table className="mobile-card-table w-full text-left text-sm">
                   <thead className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
                     <tr>
                       <th className="px-4 py-3">{t("common.date")}</th>
@@ -419,10 +419,10 @@ export default function WorkforcePage() {
                   <tbody>
                     {data.contractorPayments.slice(0, 20).map((p) => (
                       <tr key={p.id} className="border-b last:border-0">
-                        <td className="px-4 py-3 font-semibold text-slate-600">{p.date.slice(0, 10)}</td>
-                        <td className="px-4 py-3 font-bold text-slate-950">{p.contractorName}</td>
-                        <td className="px-4 py-3 font-semibold text-slate-600">{methodLabel(p.method)}</td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600">{formatLkr(p.amount)}</td>
+                        <td data-label={t("common.date")} className="px-4 py-3 font-semibold text-slate-600">{p.date.slice(0, 10)}</td>
+                        <td data-label={t("work.contractors")} className="px-4 py-3 font-bold text-slate-950">{p.contractorName}</td>
+                        <td data-label={t("work.method")} className="px-4 py-3 font-semibold text-slate-600">{methodLabel(p.method)}</td>
+                        <td data-label={t("bank.amount")} className="px-4 py-3 text-right font-mono font-bold text-emerald-600">{formatLkr(p.amount)}</td>
                       </tr>
                     ))}
                   </tbody>
