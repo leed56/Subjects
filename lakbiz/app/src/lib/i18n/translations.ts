@@ -461,6 +461,11 @@ const si: Dict = {
   "stock.notes": "සටහන්",
   "stock.filter_active": "සක්‍රිය",
   "stock.filter_inactive": "අක්‍රිය",
+  "stock.saved_views": "සුරැකි දසුන්",
+  "stock.save_view": "දසුන සුරකින්න",
+  "stock.view_name_placeholder": "දසුනේ නම",
+  "stock.saved_view_saved": "දසුන සුරකින ලදී",
+  "stock.saved_view_applied": "සුරැකි දසුන යොදන ලදී",
   "stock.zero_price_filter": "මිල නැත",
   "stock.zero_price_badge": "මිල නැත",
   "stock.inactive_badge": "අක්‍රිය",
@@ -2218,6 +2223,11 @@ const en: Dict = {
   "stock.notes": "Notes",
   "stock.filter_active": "Active",
   "stock.filter_inactive": "Inactive",
+  "stock.saved_views": "Saved views",
+  "stock.save_view": "Save view",
+  "stock.view_name_placeholder": "View name",
+  "stock.saved_view_saved": "View saved",
+  "stock.saved_view_applied": "Saved view applied",
   "stock.zero_price_filter": "Needs pricing",
   "stock.zero_price_badge": "No price set",
   "stock.inactive_badge": "Inactive",
@@ -3750,6 +3760,13 @@ const ta: Dict = {
   "dash.tech_no_jobs": "இன்று உங்களுக்குப் பணிகள் எதுவும் ஒதுக்கப்படவில்லை",
   "dash.tech_no_jobs_desc": "வரவிருக்கும் பணிக்கு அட்டவணையைச் சரிபார்க்கவும்.",
   "dash.tech_upcoming": "இந்த வாரம் வரவிருக்கும்",
+
+  // Stock saved views
+  "stock.saved_views": "சேமித்த காட்சிகள்",
+  "stock.save_view": "காட்சியைச் சேமி",
+  "stock.view_name_placeholder": "காட்சியின் பெயர்",
+  "stock.saved_view_saved": "காட்சி சேமிக்கப்பட்டது",
+  "stock.saved_view_applied": "சேமித்த காட்சி பயன்படுத்தப்பட்டது",
 
   // Auth / session
   "auth.already_signed_in": "நீங்கள் ஏற்கனவே உள்நுழைந்துள்ளீர்கள்.",

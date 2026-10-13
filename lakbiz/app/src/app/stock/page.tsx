@@ -25,6 +25,7 @@ import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { stockQuantityStep, validateStockQuantity, type StockQuantityError } from "@/lib/stock-quantity";
+import { MAX_SAVED_STOCK_VIEWS, parseSavedStockViews, stockSavedViewsKey, type SavedStockView } from "@/lib/stock-saved-views";
 import type { Product, ProductCondition } from "@/lib/types";
 
 type ConditionFilter = "all" | ProductCondition;
@@ -193,6 +194,9 @@ function StockWorkspace({
   const [showZeroPriceOnly, setShowZeroPriceOnly] = useState(initialZeroPrice && canSeeFinancials);
   const [categoryFilter, setCategoryFilter] = useState(initialCategory);
   const [page, setPage] = useState(initialPage);
+  const [savedViews, setSavedViews] = useState<SavedStockView[]>([]);
+  const [saveViewOpen, setSaveViewOpen] = useState(false);
+  const [saveViewName, setSaveViewName] = useState("");
 
   useEffect(() => {
     setSearch(initialSearch);
@@ -247,6 +251,16 @@ function StockWorkspace({
     }
   }, [categoryFilter, data]);
 
+  useEffect(() => {
+    if (!org.id) {
+      setSavedViews([]);
+      return;
+    }
+    setSavedViews(parseSavedStockViews(window.localStorage.getItem(stockSavedViewsKey(org.id))));
+    setSaveViewOpen(false);
+    setSaveViewName("");
+  }, [org.id]);
+
   if (!ready || !data || (cloudSyncing && data.products.length === 0)) {
     return (
       <AppShell>
@@ -286,6 +300,54 @@ function StockWorkspace({
     // Include inactive products: the default active-only view can itself be empty.
     setShowInactive(true);
     setPage(1);
+  };
+
+  const persistSavedViews = (next: SavedStockView[]) => {
+    if (!org.id) return false;
+    try {
+      window.localStorage.setItem(stockSavedViewsKey(org.id), JSON.stringify(next));
+      setSavedViews(next);
+      return true;
+    } catch {
+      toast({ tone: "error", title: t("common.save_failed") });
+      return false;
+    }
+  };
+
+  const saveCurrentView = () => {
+    const name = saveViewName.trim();
+    if (!name || !org.id) return;
+    const existing = savedViews.find((view) => view.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+    const nextView: SavedStockView = {
+      id: existing?.id ?? crypto.randomUUID(),
+      name: name.slice(0, 40),
+      search,
+      condition: conditionFilter,
+      category: categoryFilter,
+      lowStock: showLowStockOnly,
+      inactive: showInactive,
+      zeroPrice: showZeroPriceOnly && canSeeFinancials,
+    };
+    const next = [...savedViews.filter((view) => view.id !== nextView.id), nextView].slice(-MAX_SAVED_STOCK_VIEWS);
+    if (!persistSavedViews(next)) return;
+    setSaveViewName("");
+    setSaveViewOpen(false);
+    toast({ tone: "success", title: t("stock.saved_view_saved"), description: nextView.name });
+  };
+
+  const applySavedView = (view: SavedStockView) => {
+    setSearch(view.search);
+    setConditionFilter(conditionFilterRelevant ? view.condition : "all");
+    setCategoryFilter(view.category);
+    setShowLowStockOnly(view.lowStock);
+    setShowInactive(view.inactive);
+    setShowZeroPriceOnly(view.zeroPrice && canSeeFinancials);
+    setPage(1);
+    toast({ tone: "success", title: t("stock.saved_view_applied"), description: view.name });
+  };
+
+  const removeSavedView = (id: string) => {
+    persistSavedViews(savedViews.filter((view) => view.id !== id));
   };
 
   const query = search.trim().toLowerCase();
@@ -735,7 +797,47 @@ function StockWorkspace({
               {t("stock.zero_price_filter")} <span className="opacity-70">({zeroPriced.length})</span>
             </button>
           )}
+          {!saveViewOpen ? (
+            <button
+              type="button"
+              onClick={() => setSaveViewOpen(true)}
+              className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-sm font-semibold text-sky-800 transition hover:border-sky-300"
+            >
+              + {t("stock.save_view")}
+            </button>
+          ) : (
+            <div className="flex min-w-[250px] flex-1 items-center gap-2 sm:max-w-md">
+              <input
+                autoFocus
+                maxLength={40}
+                value={saveViewName}
+                onChange={(event) => setSaveViewName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") { event.preventDefault(); saveCurrentView(); }
+                  if (event.key === "Escape") { event.preventDefault(); setSaveViewOpen(false); setSaveViewName(""); }
+                }}
+                placeholder={t("stock.view_name_placeholder")}
+                aria-label={t("stock.view_name_placeholder")}
+                className="min-h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+              />
+              <button type="button" disabled={!saveViewName.trim()} onClick={saveCurrentView} className="min-h-9 rounded-lg bg-sky-600 px-3 text-sm font-semibold text-white disabled:opacity-40">{t("common.save")}</button>
+              <button type="button" onClick={() => { setSaveViewOpen(false); setSaveViewName(""); }} className="min-h-9 rounded-lg px-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">{t("common.cancel")}</button>
+            </div>
+          )}
         </FilterBar>
+
+        {savedViews.length > 0 && (
+          <div className="mb-4 flex items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{t("stock.saved_views")}</span>
+            {savedViews.map((view) => (
+              <span key={view.id} className="inline-flex shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                <button type="button" onClick={() => applySavedView(view)} className="min-h-9 px-3 text-xs font-semibold text-slate-700 hover:bg-sky-50 hover:text-sky-700">{view.name}</button>
+                <button type="button" onClick={() => removeSavedView(view.id)} aria-label={`${t("common.delete")} ${view.name}`} className="min-h-9 border-l border-slate-200 px-2 text-sm text-slate-400 hover:bg-rose-50 hover:text-rose-600">×</button>
+              </span>
+            ))}
+            <span className="ml-auto shrink-0 text-[10px] text-slate-400">{savedViews.length}/{MAX_SAVED_STOCK_VIEWS}</span>
+          </div>
+        )}
 
         {data.products.length === 0 ? (
           <EmptyState
