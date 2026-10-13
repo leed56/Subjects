@@ -3551,6 +3551,10 @@ const en: Dict = {
 // lower-frequency or role-specific screens) is tracked as follow-up work,
 // not silently claimed as done here.
 const ta: Dict = {
+  "admin.validation_summary": "கடையை உருவாக்கும் முன் குறிக்கப்பட்ட விவரங்களைச் சரிசெய்யவும்.",
+  "admin.email_invalid": "செல்லுபடியான உரிமையாளர் மின்னஞ்சல் முகவரியை உள்ளிடவும்.",
+  "admin.password_short": "கடவுச்சொல் குறைந்தது 6 எழுத்துகளைக் கொண்டிருக்க வேண்டும்.",
+  "admin.trial_invalid": "சோதனைக் காலம் 0 முதல் 90 வரையிலான முழு நாட்களாக இருக்க வேண்டும்.",
   "stock.qty_required": "அளவை உள்ளிடவும்",
   "stock.qty_positive": "பூஜ்ஜியத்தை விட அதிகமான சரியான அளவை உள்ளிடவும்",
   "stock.qty_whole": "{unit}க்கு முழு எண்ணை உள்ளிடவும்",
