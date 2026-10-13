@@ -727,7 +727,7 @@ export default function DashboardPage() {
                 />
               </div>
             ) : (
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <div className={`grid grid-cols-1 gap-3 sm:grid-cols-3 ${canSeeJobs ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
               <MetricCard
                 icon={<SalesIcon />}
                 label={showAcJobs && canSeeFinancials ? t("dash.today_revenue") : t("dash.today_sales")}
@@ -917,14 +917,14 @@ export default function DashboardPage() {
               <EmptyState title={t("dash.performance_empty")} />
             ) : (
               <>
-                <div className="flex h-36 items-end gap-1.5">
+                <div className="flex h-44 items-stretch gap-2 border-b border-slate-100 pt-4">
                   {trend.map((p) => (
-                    <div key={p.key} className="flex flex-1 flex-col items-center justify-end gap-1">
-                      <div className="flex w-full flex-1 items-end justify-center gap-0.5">
+                    <div key={p.key} className="flex h-full min-w-0 flex-1 flex-col items-center gap-2">
+                      <div className="flex min-h-0 w-full flex-1 items-end justify-center gap-1">
                         <div
-                          title={`${t("dash.today_sales")}: ${formatLkr(p.revenue)}`}
-                          className={canSeeFinancials ? "w-1/2 rounded-t bg-teal-500" : "w-full rounded-t bg-teal-500"}
-                          style={{ height: `${Math.max(2, (p.revenue / trendMax) * 100)}%` }}
+                          title={`${t("dash.period_revenue")}: ${formatLkr(p.revenue)}`}
+                          className={`${canSeeFinancials ? "w-[42%]" : "w-3/5"} rounded-t-md bg-gradient-to-t from-teal-600 to-teal-400 shadow-sm transition-[height] duration-300`}
+                          style={{ height: p.revenue > 0 ? `${Math.max(8, (p.revenue / trendMax) * 100)}%` : 0 }}
                         />
                         {/* Profit bar is financial data — never rendered for
                             a role canSeeFinancials excludes (see the P1
@@ -932,8 +932,8 @@ export default function DashboardPage() {
                         {canSeeFinancials && (
                           <div
                             title={`${t("dash.gross_profit")}: ${formatLkr(p.profit)}`}
-                            className="w-1/2 rounded-t bg-emerald-300"
-                            style={{ height: `${Math.max(2, (p.profit / trendMax) * 100)}%` }}
+                            className="w-[42%] rounded-t-md bg-gradient-to-t from-emerald-400 to-emerald-200 shadow-sm transition-[height] duration-300"
+                            style={{ height: p.profit > 0 ? `${Math.max(8, (p.profit / trendMax) * 100)}%` : 0 }}
                           />
                         )}
                       </div>
@@ -942,7 +942,7 @@ export default function DashboardPage() {
                   ))}
                 </div>
                 <div className="mt-3 flex items-center gap-4 text-xs">
-                  <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-teal-500" />{t("dash.today_sales")}</span>
+                  <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-teal-500" />{t("dash.period_revenue")}</span>
                   {canSeeFinancials && (
                     <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-emerald-300" />{t("dash.gross_profit")}</span>
                   )}
@@ -953,7 +953,7 @@ export default function DashboardPage() {
                     revenue stat is safe to keep for non-financial roles. */}
                 <div className={`mt-3 grid gap-2 border-t border-slate-100 pt-3 text-sm ${canSeeFinancials ? "grid-cols-3" : "grid-cols-1"}`}>
                   <div>
-                    <p className="text-xs text-slate-500">{t("dash.today_sales")}</p>
+                    <p className="text-xs text-slate-500">{t("dash.period_revenue")}</p>
                     <p className="font-mono font-semibold text-slate-900">{formatLkr(trendRevenueTotal)}</p>
                   </div>
                   {canSeeFinancials && (
