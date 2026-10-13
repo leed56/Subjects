@@ -57,6 +57,12 @@ async function runStockMutation(
   }
 }
 
+function StockActionState({ error, canWrite, disabledHint }: { error: string; canWrite: boolean; disabledHint?: string | null }) {
+  if (error) return <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-medium text-rose-800">{error}</div>;
+  if (!canWrite) return <div role="note" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-800">{disabledHint}</div>;
+  return null;
+}
+
 export default function StockPage() {
   const { org } = useSubscription();
   const pathname = usePathname();
@@ -152,10 +158,12 @@ function StockWorkspace({
   const [stockInId, setStockInId] = useState<string | null>(null);
   const [stockInQty, setStockInQty] = useState("1");
   const [savingStockIn, setSavingStockIn] = useState(false);
+  const [stockInError, setStockInError] = useState("");
   const [stockOutId, setStockOutId] = useState<string | null>(null);
   const [stockOutQty, setStockOutQty] = useState("1");
   const [stockOutNote, setStockOutNote] = useState("");
   const [savingStockOut, setSavingStockOut] = useState(false);
+  const [stockOutError, setStockOutError] = useState("");
 
   // Write-off / return-to-supplier dialogs (HVAC platform Phase 3 —
   // distinct stock-movement kinds from a manual Stock Out, kept in the
@@ -164,12 +172,14 @@ function StockWorkspace({
   const [writeOffQty, setWriteOffQty] = useState("1");
   const [writeOffNote, setWriteOffNote] = useState("");
   const [savingWriteOff, setSavingWriteOff] = useState(false);
+  const [writeOffError, setWriteOffError] = useState("");
 
   const [returnId, setReturnId] = useState<string | null>(null);
   const [returnQty, setReturnQty] = useState("1");
   const [returnSupplierId, setReturnSupplierId] = useState("");
   const [returnNote, setReturnNote] = useState("");
   const [savingReturn, setSavingReturn] = useState(false);
+  const [returnError, setReturnError] = useState("");
 
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
@@ -459,14 +469,17 @@ function StockWorkspace({
   const openStockIn = (productId: string) => {
     setStockInId(productId);
     setStockInQty("1");
+    setStockInError("");
   };
 
   const handleStockIn = async () => {
     if (!canWrite || !stockInId || savingStockIn || stockInQtyError) return;
     setSavingStockIn(true);
+    setStockInError("");
     const result = await runStockMutation(() => stockInToCloud(stockInId, stockInQtyNumber, "Purchase / GRN"), t("common.save_failed"));
     setSavingStockIn(false);
     if (!result.ok) {
+      setStockInError(result.error ?? t("common.save_failed"));
       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
       return;
     }
@@ -478,15 +491,18 @@ function StockWorkspace({
     setStockOutId(productId);
     setStockOutQty("1");
     setStockOutNote("");
+    setStockOutError("");
   };
 
   const handleStockOut = async () => {
     if (!canWrite || !stockOutId || !stockOutProduct || savingStockOut || stockOutQtyError) return;
     setSavingStockOut(true);
+    setStockOutError("");
     const note = stockOutNote.trim() || t("stock.stock_out");
     const result = await runStockMutation(() => stockOutToCloud(stockOutId, stockOutQtyNumber, note), t("common.save_failed"));
     setSavingStockOut(false);
     if (!result.ok) {
+      setStockOutError(result.error ?? t("common.save_failed"));
       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
       return;
     }
@@ -498,14 +514,17 @@ function StockWorkspace({
     setWriteOffId(productId);
     setWriteOffQty("1");
     setWriteOffNote("");
+    setWriteOffError("");
   };
 
   const handleWriteOff = async () => {
     if (!canWrite || !writeOffId || !writeOffProduct || savingWriteOff || writeOffQtyError) return;
     setSavingWriteOff(true);
+    setWriteOffError("");
     const result = await runStockMutation(() => writeOffStockToCloud(writeOffId, writeOffQtyNumber, writeOffNote.trim() || undefined), t("common.save_failed"));
     setSavingWriteOff(false);
     if (!result.ok) {
+      setWriteOffError(result.error ?? t("common.save_failed"));
       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
       return;
     }
@@ -518,14 +537,17 @@ function StockWorkspace({
     setReturnQty("1");
     setReturnSupplierId("");
     setReturnNote("");
+    setReturnError("");
   };
 
   const handleReturn = async () => {
     if (!canWrite || !returnId || !returnProduct || !returnSupplierId || savingReturn || returnQtyError) return;
     setSavingReturn(true);
+    setReturnError("");
     const result = await runStockMutation(() => returnStockToSupplierToCloud(returnId, returnQtyNumber, returnSupplierId, returnNote.trim() || undefined), t("common.save_failed"));
     setSavingReturn(false);
     if (!result.ok) {
+      setReturnError(result.error ?? t("common.save_failed"));
       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
       return;
     }
@@ -1001,6 +1023,7 @@ function StockWorkspace({
         >
           {stockInProduct && (
             <div className="space-y-4">
+              <StockActionState error={stockInError} canWrite={canWrite} disabledHint={disabledHint ?? t("sub.read_only")} />
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-medium uppercase text-slate-500">{t("stock.current_qty")}</p>
                 <p className="mt-1 text-xl font-bold text-slate-900">
@@ -1013,7 +1036,7 @@ function StockWorkspace({
                   min={stockQuantityStep(stockInUnit)}
                   step={stockQuantityStep(stockInUnit)}
                   value={stockInQty}
-                  onChange={(e) => setStockInQty(e.target.value)}
+                  onChange={(e) => { setStockInQty(e.target.value); setStockInError(""); }}
                   aria-invalid={!!stockInQtyError}
                   autoFocus
                 />
@@ -1046,6 +1069,7 @@ function StockWorkspace({
         >
           {stockOutProduct && (
             <div className="space-y-4">
+              <StockActionState error={stockOutError} canWrite={canWrite} disabledHint={disabledHint ?? t("sub.read_only")} />
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-medium uppercase text-slate-500">{t("stock.current_qty")}</p>
                 <p className="mt-1 text-xl font-bold text-slate-900">
@@ -1059,13 +1083,13 @@ function StockWorkspace({
                   max={stockOutProduct.stockQty}
                   step={stockQuantityStep(stockOutUnit)}
                   value={stockOutQty}
-                  onChange={(e) => setStockOutQty(e.target.value)}
+                  onChange={(e) => { setStockOutQty(e.target.value); setStockOutError(""); }}
                   aria-invalid={!!stockOutQtyError}
                   autoFocus
                 />
               </FormField>
               <FormField label={t("stock.out_note")}>
-                <TextInput value={stockOutNote} onChange={(e) => setStockOutNote(e.target.value)} placeholder={t("stock.out_note_ph")} />
+                <TextInput value={stockOutNote} onChange={(e) => { setStockOutNote(e.target.value); setStockOutError(""); }} placeholder={t("stock.out_note_ph")} />
               </FormField>
             </div>
           )}
@@ -1095,6 +1119,7 @@ function StockWorkspace({
         >
           {writeOffProduct && (
             <div className="space-y-4">
+              <StockActionState error={writeOffError} canWrite={canWrite} disabledHint={disabledHint ?? t("sub.read_only")} />
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-medium uppercase text-slate-500">{t("stock.current_qty")}</p>
                 <p className="mt-1 text-xl font-bold text-slate-900">
@@ -1108,13 +1133,13 @@ function StockWorkspace({
                   max={writeOffProduct.stockQty}
                   step={stockQuantityStep(writeOffUnit)}
                   value={writeOffQty}
-                  onChange={(e) => setWriteOffQty(e.target.value)}
+                  onChange={(e) => { setWriteOffQty(e.target.value); setWriteOffError(""); }}
                   aria-invalid={!!writeOffQtyError}
                   autoFocus
                 />
               </FormField>
               <FormField label={t("stock.out_note")}>
-                <TextInput value={writeOffNote} onChange={(e) => setWriteOffNote(e.target.value)} placeholder={t("stock.write_off_note_ph")} />
+                <TextInput value={writeOffNote} onChange={(e) => { setWriteOffNote(e.target.value); setWriteOffError(""); }} placeholder={t("stock.write_off_note_ph")} />
               </FormField>
             </div>
           )}
@@ -1144,6 +1169,7 @@ function StockWorkspace({
         >
           {returnProduct && (
             <div className="space-y-4">
+              <StockActionState error={returnError} canWrite={canWrite} disabledHint={disabledHint ?? t("sub.read_only")} />
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-medium uppercase text-slate-500">{t("stock.current_qty")}</p>
                 <p className="mt-1 text-xl font-bold text-slate-900">
@@ -1153,7 +1179,7 @@ function StockWorkspace({
               <FormField label={t("sup.title")} required>
                 <select
                   value={returnSupplierId}
-                  onChange={(e) => setReturnSupplierId(e.target.value)}
+                  onChange={(e) => { setReturnSupplierId(e.target.value); setReturnError(""); }}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 >
                   <option value="">{t("common.select")}</option>
@@ -1169,12 +1195,12 @@ function StockWorkspace({
                   max={returnProduct.stockQty}
                   step={stockQuantityStep(returnUnit)}
                   value={returnQty}
-                  onChange={(e) => setReturnQty(e.target.value)}
+                  onChange={(e) => { setReturnQty(e.target.value); setReturnError(""); }}
                   aria-invalid={!!returnQtyError}
                 />
               </FormField>
               <FormField label={t("stock.out_note")}>
-                <TextInput value={returnNote} onChange={(e) => setReturnNote(e.target.value)} placeholder={t("stock.out_note_ph")} />
+                <TextInput value={returnNote} onChange={(e) => { setReturnNote(e.target.value); setReturnError(""); }} placeholder={t("stock.out_note_ph")} />
               </FormField>
             </div>
           )}
