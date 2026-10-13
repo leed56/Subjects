@@ -1643,7 +1643,7 @@ function MaterialsTable({
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
+        <table className="mobile-card-table w-full text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-500">
             <tr>
               <th className="px-3 py-2">{t("jobs.item_name")}</th>
@@ -1659,42 +1659,44 @@ function MaterialsTable({
           <tbody className="divide-y divide-slate-100">
             {items.map((i) => (
               <tr key={i.id}>
-                <td className="px-3 py-2 font-medium text-slate-900">
-                  {i.name}
-                  {i.isReplacement && (
-                    <span className="ml-1.5 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
-                      {t("jobs.item.replacement")}
-                    </span>
-                  )}
-                  {i.source && (
-                    <p className="mt-0.5 text-xs font-normal text-slate-400">
-                      {sourceLabels[i.source]}
-                      {i.purchasedForJob && ` · ${t("jobs.purchased_for_job")}`}
-                    </p>
-                  )}
-                  {i.technicianId && (
-                    <p className="mt-0.5 text-xs font-normal text-slate-400">
-                      {technicians.find((tc) => tc.id === i.technicianId)?.name ?? t("jobs.no_technician")}
-                    </p>
-                  )}
-                  {i.purchaseRef && <p className="mt-0.5 text-xs font-normal text-slate-400">{i.purchaseRef}</p>}
+                <td data-label={t("jobs.item_name")} className="px-3 py-2 font-medium text-slate-900">
+                  <div>
+                    {i.name}
+                    {i.isReplacement && (
+                      <span className="ml-1.5 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                        {t("jobs.item.replacement")}
+                      </span>
+                    )}
+                    {i.source && (
+                      <p className="mt-0.5 text-xs font-normal text-slate-400">
+                        {sourceLabels[i.source]}
+                        {i.purchasedForJob && ` · ${t("jobs.purchased_for_job")}`}
+                      </p>
+                    )}
+                    {i.technicianId && (
+                      <p className="mt-0.5 text-xs font-normal text-slate-400">
+                        {technicians.find((tc) => tc.id === i.technicianId)?.name ?? t("jobs.no_technician")}
+                      </p>
+                    )}
+                    {i.purchaseRef && <p className="mt-0.5 text-xs font-normal text-slate-400">{i.purchaseRef}</p>}
+                  </div>
                 </td>
-                <td className="px-3 py-2 text-slate-600">
+                <td data-label={t("bank.type")} className="px-3 py-2 text-slate-600">
                   {itemTypeLabels[i.itemType]}
                   {i.unit && <span className="text-slate-400"> · {i.unit}</span>}
                 </td>
-                <td className="px-3 py-2 text-right font-mono">{i.qty}</td>
-                {canSeeFinancials && <td className="px-3 py-2 text-right font-mono">{formatLkr(i.unitPrice)}</td>}
+                <td data-label={t("jobs.qty")} className="px-3 py-2 text-right font-mono">{i.qty}</td>
+                {canSeeFinancials && <td data-label={t("jobs.cost_label")} className="px-3 py-2 text-right font-mono">{formatLkr(i.unitPrice)}</td>}
                 {canSeeFinancials && (
-                  <td className="px-3 py-2 text-right font-mono">{i.customerPrice != null ? formatLkr(i.customerPrice) : "—"}</td>
+                  <td data-label={t("jobs.field.customer_price")} className="px-3 py-2 text-right font-mono">{i.customerPrice != null ? formatLkr(i.customerPrice) : "—"}</td>
                 )}
                 {canSeeFinancials && (
-                  <td className="px-3 py-2 text-right font-mono font-semibold">
+                  <td data-label={t("jobs.customer_total")} className="px-3 py-2 text-right font-mono font-semibold">
                     {lineCustomerTotal(i) != null ? formatLkr(lineCustomerTotal(i)!) : "—"}
                   </td>
                 )}
-                <td className="px-3 py-2 text-xs text-slate-600">{warrantyLabel(i)}</td>
-                <td className="px-3 py-2 text-right">
+                <td data-label={t("jobs.warranty_type")} className="px-3 py-2 text-xs text-slate-600">{warrantyLabel(i)}</td>
+                <td data-label={t("common.actions")} className="px-3 py-2 text-right">
                   {canOperateJobs && (
                     <button
                       disabled={deletingItemId === i.id}
@@ -1710,7 +1712,7 @@ function MaterialsTable({
             ))}
           </tbody>
           {canSeeFinancials && (
-            <tfoot className="border-t border-slate-200 bg-slate-50 text-sm font-semibold text-slate-900">
+            <tfoot className="hidden border-t border-slate-200 bg-slate-50 text-sm font-semibold text-slate-900 sm:table-footer-group">
               <tr>
                 <td className="px-3 py-2" colSpan={3}>{t("jobs.materials_totals")}</td>
                 <td className="px-3 py-2 text-right font-mono">{formatLkr(totalInternalCost)}</td>
@@ -1724,6 +1726,22 @@ function MaterialsTable({
           )}
         </table>
       </div>
+      {canSeeFinancials && (
+        <div className="grid gap-2 border-t border-slate-200 bg-slate-50 p-3 text-sm sm:hidden">
+          <div className="flex items-center justify-between gap-3 text-slate-600">
+            <span>{t("jobs.cost_label")}</span>
+            <span className="font-mono font-semibold text-slate-900">{formatLkr(totalInternalCost)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3 text-slate-600">
+            <span>{t("jobs.customer_total")}</span>
+            <span className="font-mono font-semibold text-slate-900">{formatLkr(totalCustomerValue)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-2 font-semibold text-emerald-700">
+            <span>{t("jobs.parts_gross_profit")}</span>
+            <span className="font-mono">{formatLkr(totalCustomerValue - totalInternalCost)}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
