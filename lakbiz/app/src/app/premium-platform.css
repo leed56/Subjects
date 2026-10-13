@@ -1124,7 +1124,6 @@
     padding: 0 14px;
     gap: 8px;
   }
-  .demo-topbar > div:first-child > span:first-of-type,
   .demo-topbar .demo-avatar {
     display: none;
   }
