@@ -475,6 +475,20 @@ html[lang="ta"] :where(h1, h2, h3, h4, p, a, button, label, th, [role="tab"]) {
   .mobile-card-table tbody td > * {
     min-width: 0;
   }
+
+  .mobile-card-table.mobile-card-table-dark tbody tr {
+    border-color: #334155;
+    background: #0f172a;
+    box-shadow: 0 8px 24px rgba(2, 6, 23, 0.24);
+  }
+
+  .mobile-card-table.mobile-card-table-dark tbody td {
+    border-bottom-color: #1e293b;
+  }
+
+  .mobile-card-table.mobile-card-table-dark tbody td::before {
+    color: #94a3b8;
+  }
 }
 
 @page {

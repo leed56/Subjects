@@ -52,6 +52,7 @@ export default function AdminShopsPage() {
 
   const load = () => {
     setLoading(true);
+    setMessage(null);
     void fetch("/api/admin/shops")
       .then((r) => r.json())
       .then((json: { ok?: boolean; shops?: ShopRow[]; error?: string }) => {
@@ -66,6 +67,7 @@ export default function AdminShopsPage() {
           setMessage(json.error ?? t("admin.failed"));
         }
       })
+      .catch(() => setMessage(t("admin.failed")))
       .finally(() => setLoading(false));
   };
 
@@ -77,15 +79,21 @@ export default function AdminShopsPage() {
     successMsg: string,
   ) => {
     setSavingTrialId(id);
-    const res = await fetch(`/api/admin/shops/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const json = (await res.json()) as { ok?: boolean; error?: string };
-    setSavingTrialId(null);
-    setMessage(json.ok ? successMsg : (json.error ?? t("admin.failed")));
-    if (json.ok) load();
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/admin/shops/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      setMessage(json.ok ? successMsg : (json.error ?? t("admin.failed")));
+      if (json.ok) load();
+    } catch {
+      setMessage(t("admin.failed"));
+    } finally {
+      setSavingTrialId(null);
+    }
   };
 
   const suspend = (id: string) =>
@@ -145,7 +153,7 @@ export default function AdminShopsPage() {
         <p className="mt-8 text-slate-400">{t("common.loading")}</p>
       ) : (
         <div className="mt-8 overflow-x-auto rounded-2xl border border-slate-800">
-          <table className="min-w-full text-left text-sm">
+          <table className="mobile-card-table mobile-card-table-dark min-w-full text-left text-sm">
             <thead className="bg-slate-900 text-slate-400">
               <tr>
                 <th className="px-4 py-3">{t("admin.shop_col")}</th>
@@ -170,21 +178,24 @@ export default function AdminShopsPage() {
                       expiringSoon ? "bg-amber-950/20" : ""
                     }`}
                   >
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-white">{shop.name}</p>
-                      <p className="text-xs text-slate-500">{shop.phone ?? t("admin.trial_none")}</p>
+                    <td data-label={t("admin.shop_col")} className="px-4 py-3">
+                      <div>
+                        <p className="font-medium text-white">{shop.name}</p>
+                        <p className="text-xs text-slate-500">{shop.phone ?? t("admin.trial_none")}</p>
+                      </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="mr-1.5 inline-flex align-text-bottom">
+                    <td data-label={t("admin.template_col")} className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1.5">
                         {sector ? <SectorIcon sectorId={sector.id} className="h-4 w-4" /> : <ShopIcon className="h-4 w-4" />}
+                        {adminSectorLabel(locale, shop.sector)}
                       </span>
-                      {adminSectorLabel(locale, shop.sector)}
                     </td>
-                    <td className="px-4 py-3 text-slate-300">
+                    <td data-label={t("admin.owner_login_col")} className="px-4 py-3 break-all text-slate-300">
                       {shop.ownerEmail ?? t("admin.trial_none")}
                     </td>
-                    <td className="px-4 py-3 text-slate-300">
-                      <select
+                    <td data-label={t("admin.plan_col")} className="px-4 py-3 text-slate-300">
+                      <div className="flex flex-col items-end gap-1 sm:items-start">
+                        <select
                         value={shop.planId}
                         onChange={(e) => setPlan(shop.id, e.target.value as PlanId)}
                         disabled={saving}
@@ -195,34 +206,38 @@ export default function AdminShopsPage() {
                             {adminPlanLabel(t, planId)}
                           </option>
                         ))}
-                      </select>
-                      <select
+                        </select>
+                        <select
                         value={shop.billingCycle}
                         onChange={(e) =>
                           setBillingCycle(shop.id, e.target.value as BillingCycle)
                         }
                         disabled={saving}
-                        className="mt-1 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-white"
+                        className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-white"
                       >
                         <option value="monthly">{t("sub.monthly")}</option>
                         <option value="annual">{t("sub.annual")}</option>
-                      </select>
+                        </select>
+                      </div>
                     </td>
-                    <td className="px-4 py-3 text-slate-300">
-                      {adminStatusLabel(t, shop.status)}
-                      {expiringSoon && daysLeft != null && (
-                        <span className="ml-2 rounded-full bg-amber-900/80 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-100">
-                          {t("admin.trial_days_left").replace("{days}", String(daysLeft))}
-                        </span>
-                      )}
+                    <td data-label={t("admin.status_col")} className="px-4 py-3 text-slate-300">
+                      <span>
+                        {adminStatusLabel(t, shop.status)}
+                        {expiringSoon && daysLeft != null && (
+                          <span className="ml-2 rounded-full bg-amber-900/80 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-100">
+                            {t("admin.trial_days_left").replace("{days}", String(daysLeft))}
+                          </span>
+                        )}
+                      </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <p className="text-slate-300">
+                    <td data-label={t("admin.trial_col")} className="px-4 py-3">
+                      <div>
+                        <p className="text-slate-300">
                         {shop.trialEndsAt
                           ? formatTrialEnd(shop.trialEndsAt, locale, t("admin.trial_none"))
                           : t("admin.trial_none")}
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center justify-end gap-1.5 sm:justify-start">
                         <input
                           type="date"
                           value={trialDates[shop.id] ?? ""}
@@ -259,9 +274,10 @@ export default function AdminShopsPage() {
                         >
                           {t("admin.trial_extend_14")}
                         </button>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td data-label={t("admin.actions_col")} className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
                         {shop.status !== "active" && (
                           <button
