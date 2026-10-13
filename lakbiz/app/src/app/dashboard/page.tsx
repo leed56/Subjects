@@ -899,13 +899,14 @@ export default function DashboardPage() {
             <SectionHeader
               title={t("dash.performance_title")}
               action={
-                <div className="flex gap-1 rounded-lg border border-slate-200 p-0.5">
+                <div className="flex max-w-36 flex-wrap justify-end gap-1 rounded-lg border border-slate-200 p-0.5 sm:max-w-none">
                   {(["30d", "3m", "6m", "12m"] as TrendPeriod[]).map((p) => (
                     <button
                       key={p}
                       type="button"
                       onClick={() => setTrendPeriod(p)}
-                      className={`rounded-md px-2 py-1 text-xs font-semibold ${trendPeriod === p ? "bg-teal-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}
+                      aria-pressed={trendPeriod === p}
+                      className={`rounded-md px-2 py-1 text-xs font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 ${trendPeriod === p ? "bg-teal-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}
                     >
                       {t(`dash.period_${p}`)}
                     </button>
@@ -917,9 +918,15 @@ export default function DashboardPage() {
               <EmptyState title={t("dash.performance_empty")} />
             ) : (
               <>
-                <div className="flex h-44 items-stretch gap-2 border-b border-slate-100 pt-4">
-                  {trend.map((p) => (
-                    <div key={p.key} className="flex h-full min-w-0 flex-1 flex-col items-center gap-2">
+                <div className="-mx-1 overflow-x-auto px-1 pb-1" tabIndex={trendPeriod === "30d" ? 0 : undefined} aria-label={trendPeriod === "30d" ? t("dash.performance_scroll_hint") : undefined}>
+                  <div className={`flex h-44 items-stretch gap-2 border-b border-slate-100 pt-4 ${trendPeriod === "30d" ? "min-w-[640px] lg:min-w-0" : ""}`}>
+                    {trend.map((p, index) => (
+                    <div
+                      key={p.key}
+                      role="img"
+                      aria-label={`${p.label}: ${t("dash.period_revenue")} ${formatLkr(p.revenue)}${canSeeFinancials ? `, ${t("dash.gross_profit")} ${formatLkr(p.profit)}` : ""}`}
+                      className="flex h-full min-w-0 flex-1 flex-col items-center gap-2"
+                    >
                       <div className="flex min-h-0 w-full flex-1 items-end justify-center gap-1">
                         <div
                           title={`${t("dash.period_revenue")}: ${formatLkr(p.revenue)}`}
@@ -937,11 +944,12 @@ export default function DashboardPage() {
                           />
                         )}
                       </div>
-                      <span className="text-[10px] text-slate-400">{p.label}</span>
+                      <span className="whitespace-nowrap text-[10px] text-slate-400">{trendPeriod !== "30d" || index === 0 || index === trend.length - 1 || index % 5 === 0 ? p.label : ""}</span>
                     </div>
                   ))}
+                  </div>
                 </div>
-                <div className="mt-3 flex items-center gap-4 text-xs">
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
                   <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-teal-500" />{t("dash.period_revenue")}</span>
                   {canSeeFinancials && (
                     <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-emerald-300" />{t("dash.gross_profit")}</span>
@@ -951,7 +959,7 @@ export default function DashboardPage() {
                     stat row was previously unconditional, showing them to
                     every role regardless of canSeeFinancials. Only the
                     revenue stat is safe to keep for non-financial roles. */}
-                <div className={`mt-3 grid gap-2 border-t border-slate-100 pt-3 text-sm ${canSeeFinancials ? "grid-cols-3" : "grid-cols-1"}`}>
+                <div className={`mt-3 grid gap-3 border-t border-slate-100 pt-3 text-sm ${canSeeFinancials ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1"}`}>
                   <div>
                     <p className="text-xs text-slate-500">{t("dash.period_revenue")}</p>
                     <p className="font-mono font-semibold text-slate-900">{formatLkr(trendRevenueTotal)}</p>
