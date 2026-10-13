@@ -34,7 +34,7 @@ export function CreditNoteView({
   const isTaxDocument = business.vatRegistered === true && Boolean(business.vatNumber);
 
   return (
-    <article className="credit-note-paper mx-auto max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:max-w-none print:border-0 print:p-0 print:shadow-none sm:p-8">
+    <article data-print-document="credit-note" className="credit-note-paper mx-auto max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm print:max-w-none print:border-0 print:p-0 print:shadow-none sm:p-8">
       {isTaxDocument && (
         <div className="mb-5 border-2 border-slate-900 px-4 py-2 text-center">
           <p className="text-lg font-bold uppercase tracking-[0.12em] text-slate-950">Credit Note</p>

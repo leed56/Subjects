@@ -417,23 +417,38 @@ html[lang="ta"] :where(h1, h2, h3, h4, p, a, button, label, th, [role="tab"]) {
   }
 }
 
+@page {
+  size: A4 portrait;
+  margin: 12mm;
+}
+
 @media print {
-  .no-print {
+  .no-print,
+  .app-shell-print-hidden,
+  aside {
     display: none !important;
   }
 
-  header,
-  nav {
-    display: none !important;
-  }
-
+  html,
   body {
     background: white;
+    color: #0f172a;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
-  .invoice-paper {
+  [data-print-document] {
+    box-sizing: border-box;
+    width: 100% !important;
+    max-width: 186mm !important;
+    margin: 0 auto !important;
     box-shadow: none !important;
-    max-width: 100% !important;
+    break-after: auto;
+  }
+
+  .invoice-paper,
+  .credit-note-paper {
+    border-radius: 0 !important;
     padding: 0 !important;
   }
 
@@ -448,7 +463,32 @@ html[lang="ta"] :where(h1, h2, h3, h4, p, a, button, label, th, [role="tab"]) {
     padding: 0.5rem !important;
   }
 
+  [data-print-document] thead {
+    display: table-header-group;
+  }
+
+  [data-print-document] tfoot {
+    display: table-footer-group;
+  }
+
+  [data-print-document] tr,
+  [data-print-document] img,
+  [data-print-document] footer,
+  [data-print-document] > div:last-of-type,
+  [data-print-document] > section:last-of-type {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  [data-print-document] table {
+    width: 100% !important;
+    border-collapse: collapse;
+  }
+
   main {
     padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
   }
 }

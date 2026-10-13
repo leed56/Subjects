@@ -42,12 +42,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       </a>
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <MobileNav />
-        <TrialBanner />
-        <PwaInstallPrompt />
-        <OfflineBanner />
-        <CloudSyncBanner />
-        <SectorWorkspaceAutoBanner />
+        <div className="app-shell-print-hidden contents">
+          <MobileNav />
+          <TrialBanner />
+          <PwaInstallPrompt />
+          <OfflineBanner />
+          <CloudSyncBanner />
+          <SectorWorkspaceAutoBanner />
+        </div>
         <div id="main-content" tabIndex={-1} className="flex-1 pb-20 lg:pb-0">{children}</div>
       </div>
     </div>
