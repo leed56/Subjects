@@ -933,6 +933,7 @@ function StockWorkspace({
               lockedSectorId={org.isAuthenticated ? org.sector : undefined}
               defaultSectorId={org.sector}
               submitLabel={saving ? t("common.saving") : t("common.update")}
+              submitting={saving}
               onCancel={() => { if (!saving) setFormOpen(false); }}
               onSubmit={async (input) => {
                 if (!canWrite || saving) return;
@@ -952,6 +953,7 @@ function StockWorkspace({
               lockedSectorId={org.isAuthenticated ? org.sector : undefined}
               defaultSectorId={org.sector}
               submitLabel={saving ? t("common.saving") : undefined}
+              submitting={saving}
               onCancel={() => { if (!saving) setFormOpen(false); }}
               onSubmit={async (input) => {
                 if (!canWrite || saving) return;
