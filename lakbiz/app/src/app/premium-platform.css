@@ -232,8 +232,11 @@
 }
 .demo-app {
   display: flex;
+  width: 100%;
+  max-width: 100vw;
   min-height: 100vh;
   align-items: flex-start;
+  overflow-x: clip;
 }
 .demo-sidebar {
   width: 246px;
@@ -326,6 +329,11 @@
 .demo-canvas {
   flex: 1;
   min-width: 0;
+  max-width: 100%;
+}
+.demo-mobile-identity,
+.demo-sidebar-close {
+  display: none;
 }
 .demo-topbar {
   height: 72px;
@@ -982,9 +990,14 @@
 @media (max-width: 800px) {
   .demo-sidebar {
     position: fixed;
+    top: 0;
+    bottom: 0;
     left: 0;
     z-index: 75;
     width: 260px;
+    max-width: min(86vw, 320px);
+    height: 100dvh;
+    overflow: hidden;
     transform: translateX(-100%);
     visibility: hidden;
     transition:
@@ -994,6 +1007,24 @@
   .demo-sidebar-open {
     transform: translateX(0);
     visibility: visible;
+    box-shadow: 24px 0 60px #0c1b2e2e;
+  }
+  .demo-sidebar-close {
+    position: absolute;
+    top: 16px;
+    right: 12px;
+    z-index: 2;
+    display: inline-flex;
+    width: 36px;
+    height: 36px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #dce8f1;
+    border-radius: 10px;
+    background: #fff;
+    color: #587183;
+    font-size: 24px;
+    line-height: 1;
   }
   .demo-menu-scrim {
     display: block;
@@ -1159,11 +1190,78 @@
     background: white;
   }
   .demo-canvas {
+    flex-basis: 100%;
     width: 100%;
+    min-width: 0;
+    max-width: 100vw;
   }
 }
 
 @media (max-width: 540px) {
+  .demo-topbar {
+    height: auto;
+    min-height: 106px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    padding: 10px 12px;
+  }
+  .demo-topbar > div:first-child {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+  }
+  .demo-mobile-identity {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+  }
+  .demo-mobile-mark {
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #0879e6, #14bec4);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 750;
+    box-shadow: 0 5px 14px #008dce26;
+  }
+  .demo-mobile-identity strong,
+  .demo-mobile-identity small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .demo-mobile-identity strong {
+    color: #172941;
+    font-size: 12px;
+  }
+  .demo-mobile-identity small {
+    max-width: 155px;
+    margin-top: 2px;
+    color: #8190a4;
+    font-size: 9px;
+  }
+  .demo-topbar .reference-global-search {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+  .demo-topbar > div:last-child {
+    align-self: start;
+  }
+  .demo-topbar select {
+    min-height: 36px;
+  }
+  .demo-sample-strip {
+    align-items: flex-start;
+  }
   .demo-journal-line {
     grid-template-columns: minmax(0, 1fr) 70px 70px;
     gap: 8px;

@@ -265,6 +265,14 @@ export function DemoWorkspace({
         Skip to content
       </a>
       <aside className={`demo-sidebar ${menu ? "demo-sidebar-open" : ""}`}>
+        <button
+          type="button"
+          className="demo-sidebar-close"
+          aria-label="Close navigation"
+          onClick={() => setMenu(false)}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
         <Link href="/demo" className="demo-brand">
           <BrandMark />
           <span>
@@ -376,6 +384,13 @@ export function DemoWorkspace({
             >
               <MenuIcon className="h-5 w-5" />
             </button>
+            <span className="demo-mobile-identity">
+              <span className="demo-mobile-mark">L</span>
+              <span className="min-w-0">
+                <strong>LakBiz</strong>
+                <small>{data.settings.name}</small>
+              </span>
+            </span>
             <label className="reference-global-search">
               <SearchIcon className="h-4 w-4" />
               <span className="sr-only">Find workspace or product</span>
