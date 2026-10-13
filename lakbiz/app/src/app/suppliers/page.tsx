@@ -895,7 +895,7 @@ export default function SuppliersPage() {
                 {ledgerEntries.length === 0 ? (
                   <div className="p-6"><ProEmptyState title={t("cust.ledger_empty")} /></div>
                 ) : (
-                  <table className="w-full text-left text-sm">
+                  <table className="mobile-card-table w-full text-left text-sm">
                     <thead className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
                       <tr>
                         <th className="px-4 py-3">{t("common.date")}</th>
@@ -907,10 +907,10 @@ export default function SuppliersPage() {
                     <tbody>
                       {ledgerEntries.map((e, i) => (
                         <tr key={i} className="border-b last:border-0">
-                          <td className="px-4 py-3 font-semibold text-slate-500">{new Date(e.date).toLocaleDateString("en-LK")}</td>
-                          <td className="px-4 py-3 font-semibold text-slate-700">{e.label}</td>
-                          <td className={`px-4 py-3 text-right font-mono font-bold ${e.amount < 0 ? "text-emerald-700" : "text-slate-800"}`}>{e.amount < 0 ? "−" : "+"}{formatLkr(Math.abs(e.amount))}</td>
-                          <td className="px-4 py-3 text-right font-mono font-bold text-slate-950">{formatLkr(e.balance)}</td>
+                          <td data-label={t("common.date")} className="px-4 py-3 font-semibold text-slate-500">{new Date(e.date).toLocaleDateString("en-LK")}</td>
+                          <td data-label={t("common.details")} className="px-4 py-3 font-semibold text-slate-700">{e.label}</td>
+                          <td data-label={t("bills.amount")} className={`px-4 py-3 text-right font-mono font-bold ${e.amount < 0 ? "text-emerald-700" : "text-slate-800"}`}>{e.amount < 0 ? "−" : "+"}{formatLkr(Math.abs(e.amount))}</td>
+                          <td data-label={t("cust.balance")} className="px-4 py-3 text-right font-mono font-bold text-slate-950">{formatLkr(e.balance)}</td>
                         </tr>
                       ))}
                     </tbody>

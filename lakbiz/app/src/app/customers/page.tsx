@@ -819,7 +819,7 @@ function CustomerProfileDrawer({
             <EmptyState title={t("cust.ledger_empty")} />
           ) : (
             <div className="overflow-hidden rounded-lg border border-slate-200">
-              <table className="w-full text-left text-sm">
+              <table className="mobile-card-table w-full text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-500">
                   <tr>
                     <th className="px-3 py-2">{t("common.date")}</th>
@@ -830,9 +830,9 @@ function CustomerProfileDrawer({
                 <tbody className="divide-y divide-slate-100">
                   {ledgerEntries.map((entry, i) => (
                     <tr key={i}>
-                      <td className="px-3 py-2 text-slate-500">{new Date(entry.date).toLocaleDateString("en-LK")}</td>
-                      <td className="px-3 py-2 text-slate-700">{entry.label}</td>
-                      <td className="px-3 py-2 text-right font-mono font-semibold text-slate-900">{formatLkr(entry.balance)}</td>
+                      <td data-label={t("common.date")} className="px-3 py-2 text-slate-500">{new Date(entry.date).toLocaleDateString("en-LK")}</td>
+                      <td data-label={t("common.details")} className="px-3 py-2 text-slate-700">{entry.label}</td>
+                      <td data-label={t("cust.balance")} className="px-3 py-2 text-right font-mono font-semibold text-slate-900">{formatLkr(entry.balance)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -920,7 +920,7 @@ function WholesalePricingModal({
       {filtered.length === 0 ? (
         <EmptyState title={t("sales.no_match")} />
       ) : (
-        <table className="w-full text-left text-sm">
+        <table className="mobile-card-table w-full text-left text-sm">
           <thead className="sticky top-0 border-b border-slate-200 bg-white text-xs font-semibold uppercase text-slate-500">
             <tr>
               <th className="py-2">{t("common.name")}</th>
@@ -971,12 +971,14 @@ function WholesalePriceRow({
 
   return (
     <tr>
-      <td className="py-2.5">
-        <p className="font-medium text-slate-900">{product.name}</p>
-        <p className="text-xs text-slate-400">{product.category}</p>
+      <td data-label={t("common.name")} className="py-2.5">
+        <div>
+          <p className="font-medium text-slate-900">{product.name}</p>
+          <p className="text-xs text-slate-400">{product.category}</p>
+        </div>
       </td>
-      <td className="py-2.5 text-right font-mono text-slate-500">{formatLkr(product.sellPrice)}</td>
-      <td className="py-2.5 text-right">
+      <td data-label={t("sales.retail_price")} className="py-2.5 text-right font-mono text-slate-500">{formatLkr(product.sellPrice)}</td>
+      <td data-label={t("cust.wholesale_price")} className="py-2.5 text-right">
         <input
           type="number"
           min={0}
@@ -987,7 +989,7 @@ function WholesalePriceRow({
           className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-right text-xs font-semibold text-slate-900 outline-none focus:border-teal-500 disabled:opacity-50"
         />
       </td>
-      <td className="py-2.5 text-right">
+      <td data-label={t("common.actions")} className="py-2.5 text-right">
         <div className="flex justify-end gap-1.5">
           <button
             type="button"
