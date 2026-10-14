@@ -1573,6 +1573,7 @@ const si: Dict = {
   "sub.plans_current_badge": "Current",
   "sub.plans_assigned_hint": "LakBiz විසින් assign",
   "sub.plans_managed_account": "Managed account",
+  "sub.plans_days_left": "Trial අවසන් වීමට දින {days}",
   "sub.status_trialing": "අත්හදා බැලීම",
   "sub.status_active": "සක්‍රියයි",
   "sub.status_past_due": "ගෙවීම ප්‍රමාදයි",
@@ -3332,6 +3333,7 @@ const en: Dict = {
   "sub.plans_current_badge": "Current",
   "sub.plans_assigned_hint": "Assigned by LakBiz",
   "sub.plans_managed_account": "Managed account",
+  "sub.plans_days_left": "{days} days left in trial",
   "sub.status_trialing": "Trialing",
   "sub.status_active": "Active",
   "sub.status_past_due": "Past due",
@@ -3551,6 +3553,7 @@ const en: Dict = {
 // lower-frequency or role-specific screens) is tracked as follow-up work,
 // not silently claimed as done here.
 const ta: Dict = {
+  "sub.plans_days_left": "சோதனைக் காலம் முடிவதற்கு {days} நாட்கள் உள்ளன",
   "admin.validation_summary": "கடையை உருவாக்கும் முன் குறிக்கப்பட்ட விவரங்களைச் சரிசெய்யவும்.",
   "admin.email_invalid": "செல்லுபடியான உரிமையாளர் மின்னஞ்சல் முகவரியை உள்ளிடவும்.",
   "admin.password_short": "கடவுச்சொல் குறைந்தது 6 எழுத்துகளைக் கொண்டிருக்க வேண்டும்.",
