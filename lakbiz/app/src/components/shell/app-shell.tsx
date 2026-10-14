@@ -50,7 +50,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           <CloudSyncBanner />
           <SectorWorkspaceAutoBanner />
         </div>
-        <div id="main-content" tabIndex={-1} className="flex-1 pb-20 lg:pb-0">{children}</div>
+        <div
+          id="main-content"
+          tabIndex={-1}
+          className="flex-1 [&>main]:pb-20 lg:[&>main]:pb-10"
+        >
+          {children}
+        </div>
       </div>
     </div>
   );
