@@ -14,6 +14,7 @@
     "qa:textile:seed": "node scripts/seed-textile-certification.mjs",
     "qa:textile:verify": "node scripts/verify-textile-certification.mjs",
     "qa:demo:responsive": "node scripts/qa-demo-responsive.mjs",
+    "qa:phase1": "node scripts/qa-phase1-workflows.mjs",
     "check:i18n": "node scripts/check-i18n-parity.mjs",
     "verify": "npm run lint && npm run typecheck && npm run check:i18n && npm run test && npm run build"
   },

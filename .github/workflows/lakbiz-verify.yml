@@ -121,3 +121,19 @@ jobs:
             ${{ runner.temp }}/lakbiz-stock-states/results.json
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Phase 1 workflow recovery and responsive fixtures
+        run: npm run qa:phase1
+        env:
+          LAKBIZ_UI_QA_DIR: ${{ runner.temp }}/lakbiz-phase1-workflows
+
+      - name: Upload Phase 1 workflow fixture screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lakbiz-phase1-workflow-fixtures
+          path: |
+            ${{ runner.temp }}/lakbiz-phase1-workflows/*.png
+            ${{ runner.temp }}/lakbiz-phase1-workflows/results.json
+          if-no-files-found: warn
+          retention-days: 7

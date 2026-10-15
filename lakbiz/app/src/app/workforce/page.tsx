@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
@@ -75,6 +75,8 @@ export default function WorkforcePage() {
   } = useAppStore();
   const { t } = useLocale();
   const { canWrite, disabledHint } = useWriteAccess();
+  const mutationLock = useRef(false);
+  const [mutationBusy, setMutationBusy] = useState(false);
   // Route access to /workforce includes technicians (permissions.ts:
   // TECHNICIAN_ROUTES), who the app's own permission matrix says should
   // not see financial fields here — rate/payable/margin figures below
@@ -222,19 +224,49 @@ export default function WorkforcePage() {
           </p>
         )}
 
-        <section className={`grid gap-4 sm:grid-cols-2 ${canSeeFinancials ? "xl:grid-cols-4" : ""}`}>
-          <ProStatCard label={t("work.team")} value={String(data.technicians.length)} hint={t("work.in_house")} icon={<WorkforceIcon className="h-5 w-5" />} tone="teal" />
-          <ProStatCard label={t("work.contractors")} value={String(data.contractors.length)} hint={`${activeContractors.length} ${t("work.active")}`} icon={<SuppliersIcon className="h-5 w-5" />} tone="blue" />
+        <section
+          className={`grid gap-4 sm:grid-cols-2 ${canSeeFinancials ? "xl:grid-cols-4" : ""}`}
+        >
+          <ProStatCard
+            label={t("work.team")}
+            value={String(data.technicians.length)}
+            hint={t("work.in_house")}
+            icon={<WorkforceIcon className="h-5 w-5" />}
+            tone="teal"
+          />
+          <ProStatCard
+            label={t("work.contractors")}
+            value={String(data.contractors.length)}
+            hint={`${activeContractors.length} ${t("work.active")}`}
+            icon={<SuppliersIcon className="h-5 w-5" />}
+            tone="blue"
+          />
           {canSeeFinancials && (
             <>
-              <ProStatCard label={t("work.outstanding_payout")} value={formatLkr(outstandingPayout)} hint={t("work.owed_contractors")} icon={<ExpenseIcon className="h-5 w-5" />} tone="amber" />
-              <ProStatCard label={t("work.total_margin")} value={formatLkr(totalMargin)} hint={t("work.margin_hint")} icon={<ReportsIcon className="h-5 w-5" />} tone="emerald" />
+              <ProStatCard
+                label={t("work.outstanding_payout")}
+                value={formatLkr(outstandingPayout)}
+                hint={t("work.owed_contractors")}
+                icon={<ExpenseIcon className="h-5 w-5" />}
+                tone="amber"
+              />
+              <ProStatCard
+                label={t("work.total_margin")}
+                value={formatLkr(totalMargin)}
+                hint={t("work.margin_hint")}
+                icon={<ReportsIcon className="h-5 w-5" />}
+                tone="emerald"
+              />
             </>
           )}
         </section>
 
         <section className="mt-6">
-          <ProCard title={t("work.team")} eyebrow={t("work.in_house")} action={<ProBadge tone="teal">{data.technicians.length}</ProBadge>}>
+          <ProCard
+            title={t("work.team")}
+            eyebrow={t("work.in_house")}
+            action={<ProBadge tone="teal">{data.technicians.length}</ProBadge>}
+          >
             {data.technicians.length === 0 ? (
               <ProEmptyState
                 title={t("work.no_team")}
@@ -254,50 +286,96 @@ export default function WorkforcePage() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {data.technicians.map((tch) => (
-                  <article key={tch.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4 ring-1 ring-slate-100">
+                  <article
+                    key={tch.id}
+                    className="rounded-xl border border-slate-200 bg-slate-50 p-4 ring-1 ring-slate-100"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h2 className="truncate text-base font-bold text-slate-950">{tch.name}</h2>
-                        <p className="mt-1 text-xs font-semibold text-slate-500">{tch.phone || "—"}</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">
+                          {tch.phone || "—"}
+                        </p>
                       </div>
-                      <ProBadge tone={tch.active ? "emerald" : "slate"}>{tch.active ? t("work.active") : t("work.inactive")}</ProBadge>
+                      <ProBadge tone={tch.active ? "emerald" : "slate"}>
+                        {tch.active ? t("work.active") : t("work.inactive")}
+                      </ProBadge>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {tch.specialties.length === 0 ? (
                         <span className="text-xs font-semibold text-slate-400">—</span>
                       ) : (
-                        tch.specialties.map((s) => <span key={s} className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-bold text-teal-700">{specialtyLabels[s]}</span>)
+                        tch.specialties.map((s) => (
+                          <span
+                            key={s}
+                            className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-bold text-teal-700"
+                          >
+                            {specialtyLabels[s]}
+                          </span>
+                        ))
                       )}
                     </div>
                     {canSeeFinancials && (
                       <p className="mt-3 border-t border-slate-200 pt-3 text-xs font-bold text-slate-500">
-                        {t("work.hourly_rate")}: <span className="font-bold text-slate-900">{tch.hourlyRate ? formatLkr(tch.hourlyRate) : "—"}</span>
+                        {t("work.hourly_rate")}:{" "}
+                        <span className="font-bold text-slate-900">
+                          {tch.hourlyRate ? formatLkr(tch.hourlyRate) : "—"}
+                        </span>
                       </p>
                     )}
                     <div className="mt-4 flex gap-2">
                       <button
-                        disabled={updatingTechId === tch.id || deletingTechId === tch.id}
+                        disabled={!canWrite || mutationBusy}
                         onClick={async () => {
-                          if (updatingTechId || deletingTechId) return;
-                          setUpdatingTechId(tch.id);
-                          setFormMessage("");
-                          const result = await updateTechnicianToCloud(tch.id, { active: !tch.active });
-                          setUpdatingTechId(null);
-                          if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
+                          if (!canWrite || mutationLock.current) return;
+                          mutationLock.current = true;
+                          setMutationBusy(true);
+                          try {
+                            if (updatingTechId || deletingTechId) return;
+                            setUpdatingTechId(tch.id);
+                            setFormMessage("");
+                            const result = await updateTechnicianToCloud(tch.id, {
+                              active: !tch.active,
+                            });
+                            setUpdatingTechId(null);
+                            if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
+                          } catch {
+                            setFormMessage(t("common.save_failed"));
+                          } finally {
+                            setUpdatingTechId(null);
+                            mutationLock.current = false;
+                            setMutationBusy(false);
+                          }
                         }}
                         className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
                       >
-                        {updatingTechId === tch.id ? t("common.saving") : tch.active ? t("work.deactivate") : t("work.activate")}
+                        {updatingTechId === tch.id
+                          ? t("common.saving")
+                          : tch.active
+                            ? t("work.deactivate")
+                            : t("work.activate")}
                       </button>
                       <button
-                        disabled={updatingTechId === tch.id || deletingTechId === tch.id}
+                        disabled={!canWrite || mutationBusy}
                         onClick={async () => {
-                          if (updatingTechId || deletingTechId || !confirm(t("work.delete_tech"))) return;
-                          setDeletingTechId(tch.id);
-                          setFormMessage("");
-                          const result = await deleteTechnicianToCloud(tch.id);
-                          setDeletingTechId(null);
-                          if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
+                          if (!canWrite || mutationLock.current) return;
+                          mutationLock.current = true;
+                          setMutationBusy(true);
+                          try {
+                            if (updatingTechId || deletingTechId || !confirm(t("work.delete_tech")))
+                              return;
+                            setDeletingTechId(tch.id);
+                            setFormMessage("");
+                            const result = await deleteTechnicianToCloud(tch.id);
+                            setDeletingTechId(null);
+                            if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
+                          } catch {
+                            setFormMessage(t("common.save_failed"));
+                          } finally {
+                            setDeletingTechId(null);
+                            mutationLock.current = false;
+                            setMutationBusy(false);
+                          }
                         }}
                         className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
                       >
@@ -312,7 +390,11 @@ export default function WorkforcePage() {
         </section>
 
         <section className="mt-6">
-          <ProCard title={t("work.contractors")} eyebrow={t("work.subcontractors")} action={<ProBadge tone="amber">{data.contractors.length}</ProBadge>}>
+          <ProCard
+            title={t("work.contractors")}
+            eyebrow={t("work.subcontractors")}
+            action={<ProBadge tone="amber">{data.contractors.length}</ProBadge>}
+          >
             {data.contractors.length === 0 ? (
               <ProEmptyState
                 title={t("work.no_contractors")}
@@ -334,68 +416,143 @@ export default function WorkforcePage() {
                 {data.contractors.map((c) => {
                   const stats = contractorJobStats(c.id);
                   return (
-                  <article key={c.id} className="rounded-xl border border-slate-200 bg-white p-4 ring-1 ring-slate-100">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h2 className="truncate text-base font-bold text-slate-950">{c.name}</h2>
-                        <p className="mt-1 text-xs font-semibold text-slate-500">{c.company || "—"}{c.phone ? ` · ${c.phone}` : ""}</p>
-                      </div>
-                      <ProBadge tone={c.active ? "emerald" : "slate"}>{c.active ? t("work.active") : t("work.inactive")}</ProBadge>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {c.specialties.map((s) => <span key={s} className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">{specialtyLabels[s]}</span>)}
-                    </div>
-                    {canSeeFinancials && (
-                      <>
-                        <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-sm">
-                          <div>
-                            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("work.rate")}</p>
-                            <p className="font-bold text-slate-900">{c.rateAmount > 0 ? `${formatLkr(c.rateAmount)} · ${rateLabels[c.rateType]}` : "—"}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("work.payable")}</p>
-                            <p className={`font-mono font-bold ${c.payableBalance > 0 ? "text-rose-600" : "text-slate-900"}`}>{formatLkr(c.payableBalance)}</p>
-                          </div>
+                    <article
+                      key={c.id}
+                      className="rounded-xl border border-slate-200 bg-white p-4 ring-1 ring-slate-100"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h2 className="truncate text-base font-bold text-slate-950">{c.name}</h2>
+                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                            {c.company || "—"}
+                            {c.phone ? ` · ${c.phone}` : ""}
+                          </p>
                         </div>
-                        <p className="mt-3 text-xs font-bold text-slate-500">{t("work.jobs_done")}: {stats.count} · {t("work.margin")}: <span className="font-bold text-emerald-700">{formatLkr(stats.margin)}</span></p>
-                      </>
-                    )}
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {canSeeFinancials && c.payableBalance > 0 && (
-                        <button onClick={() => { setPayContractor(c); setPayAmount(c.payableBalance); setPayMethod("cash"); setPayNote(""); }} className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100">
-                          {t("work.pay")}
-                        </button>
+                        <ProBadge tone={c.active ? "emerald" : "slate"}>
+                          {c.active ? t("work.active") : t("work.inactive")}
+                        </ProBadge>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {c.specialties.map((s) => (
+                          <span
+                            key={s}
+                            className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700"
+                          >
+                            {specialtyLabels[s]}
+                          </span>
+                        ))}
+                      </div>
+                      {canSeeFinancials && (
+                        <>
+                          <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-sm">
+                            <div>
+                              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                                {t("work.rate")}
+                              </p>
+                              <p className="font-bold text-slate-900">
+                                {c.rateAmount > 0
+                                  ? `${formatLkr(c.rateAmount)} · ${rateLabels[c.rateType]}`
+                                  : "—"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                                {t("work.payable")}
+                              </p>
+                              <p
+                                className={`font-mono font-bold ${c.payableBalance > 0 ? "text-rose-600" : "text-slate-900"}`}
+                              >
+                                {formatLkr(c.payableBalance)}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="mt-3 text-xs font-bold text-slate-500">
+                            {t("work.jobs_done")}: {stats.count} · {t("work.margin")}:{" "}
+                            <span className="font-bold text-emerald-700">
+                              {formatLkr(stats.margin)}
+                            </span>
+                          </p>
+                        </>
                       )}
-                      <button
-                        disabled={updatingConId === c.id || deletingConId === c.id}
-                        onClick={async () => {
-                          if (updatingConId || deletingConId) return;
-                          setUpdatingConId(c.id);
-                          setFormMessage("");
-                          const result = await updateContractorToCloud(c.id, { active: !c.active });
-                          setUpdatingConId(null);
-                          if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
-                        }}
-                        className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
-                      >
-                        {updatingConId === c.id ? t("common.saving") : c.active ? t("work.deactivate") : t("work.activate")}
-                      </button>
-                      <button
-                        disabled={updatingConId === c.id || deletingConId === c.id}
-                        onClick={async () => {
-                          if (updatingConId || deletingConId || !confirm(t("work.delete_contractor"))) return;
-                          setDeletingConId(c.id);
-                          setFormMessage("");
-                          const result = await deleteContractorToCloud(c.id);
-                          setDeletingConId(null);
-                          if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
-                        }}
-                        className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
-                      >
-                        {deletingConId === c.id ? t("common.saving") : t("common.delete")}
-                      </button>
-                    </div>
-                  </article>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {canSeeFinancials && c.payableBalance > 0 && (
+                          <button
+                            onClick={() => {
+                              setPayContractor(c);
+                              setPayAmount(c.payableBalance);
+                              setPayMethod("cash");
+                              setPayNote("");
+                            }}
+                            className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+                          >
+                            {t("work.pay")}
+                          </button>
+                        )}
+                        <button
+                          disabled={!canWrite || mutationBusy}
+                          onClick={async () => {
+                            if (!canWrite || mutationLock.current) return;
+                            mutationLock.current = true;
+                            setMutationBusy(true);
+                            try {
+                              if (updatingConId || deletingConId) return;
+                              setUpdatingConId(c.id);
+                              setFormMessage("");
+                              const result = await updateContractorToCloud(c.id, {
+                                active: !c.active,
+                              });
+                              setUpdatingConId(null);
+                              if (!result.ok)
+                                setFormMessage(result.error ?? t("common.save_failed"));
+                            } catch {
+                              setFormMessage(t("common.save_failed"));
+                            } finally {
+                              setUpdatingConId(null);
+                              mutationLock.current = false;
+                              setMutationBusy(false);
+                            }
+                          }}
+                          className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                        >
+                          {updatingConId === c.id
+                            ? t("common.saving")
+                            : c.active
+                              ? t("work.deactivate")
+                              : t("work.activate")}
+                        </button>
+                        <button
+                          disabled={!canWrite || mutationBusy}
+                          onClick={async () => {
+                            if (!canWrite || mutationLock.current) return;
+                            mutationLock.current = true;
+                            setMutationBusy(true);
+                            try {
+                              if (
+                                updatingConId ||
+                                deletingConId ||
+                                !confirm(t("work.delete_contractor"))
+                              )
+                                return;
+                              setDeletingConId(c.id);
+                              setFormMessage("");
+                              const result = await deleteContractorToCloud(c.id);
+                              setDeletingConId(null);
+                              if (!result.ok)
+                                setFormMessage(result.error ?? t("common.save_failed"));
+                            } catch {
+                              setFormMessage(t("common.save_failed"));
+                            } finally {
+                              setDeletingConId(null);
+                              mutationLock.current = false;
+                              setMutationBusy(false);
+                            }
+                          }}
+                          className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                        >
+                          {deletingConId === c.id ? t("common.saving") : t("common.delete")}
+                        </button>
+                      </div>
+                    </article>
                   );
                 })}
               </div>
@@ -405,7 +562,11 @@ export default function WorkforcePage() {
 
         {data.contractorPayments.length > 0 && (
           <section className="mt-6">
-            <ProCard title={t("work.payouts")} eyebrow={t("work.contractors")} action={<ProBadge tone="emerald">{data.contractorPayments.length}</ProBadge>}>
+            <ProCard
+              title={t("work.payouts")}
+              eyebrow={t("work.contractors")}
+              action={<ProBadge tone="emerald">{data.contractorPayments.length}</ProBadge>}
+            >
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="mobile-card-table w-full text-left text-sm">
                   <thead className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -419,10 +580,30 @@ export default function WorkforcePage() {
                   <tbody>
                     {data.contractorPayments.slice(0, 20).map((p) => (
                       <tr key={p.id} className="border-b last:border-0">
-                        <td data-label={t("common.date")} className="px-4 py-3 font-semibold text-slate-600">{p.date.slice(0, 10)}</td>
-                        <td data-label={t("work.contractors")} className="px-4 py-3 font-bold text-slate-950">{p.contractorName}</td>
-                        <td data-label={t("work.method")} className="px-4 py-3 font-semibold text-slate-600">{methodLabel(p.method)}</td>
-                        <td data-label={t("bank.amount")} className="px-4 py-3 text-right font-mono font-bold text-emerald-600">{formatLkr(p.amount)}</td>
+                        <td
+                          data-label={t("common.date")}
+                          className="px-4 py-3 font-semibold text-slate-600"
+                        >
+                          {p.date.slice(0, 10)}
+                        </td>
+                        <td
+                          data-label={t("work.contractors")}
+                          className="px-4 py-3 font-bold text-slate-950"
+                        >
+                          {p.contractorName}
+                        </td>
+                        <td
+                          data-label={t("work.method")}
+                          className="px-4 py-3 font-semibold text-slate-600"
+                        >
+                          {methodLabel(p.method)}
+                        </td>
+                        <td
+                          data-label={t("bank.amount")}
+                          className="px-4 py-3 text-right font-mono font-bold text-emerald-600"
+                        >
+                          {formatLkr(p.amount)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -438,59 +619,125 @@ export default function WorkforcePage() {
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-white/80 bg-white p-5 shadow-sm shadow-slate-950/20">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-600">{t("work.in_house")}</p>
-                <h3 className="mt-2 text-xl font-bold text-slate-950">{t("work.add_tech_title")}</h3>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-600">
+                  {t("work.in_house")}
+                </p>
+                <h3 className="mt-2 text-xl font-bold text-slate-950">
+                  {t("work.add_tech_title")}
+                </h3>
               </div>
-              <button type="button" onClick={() => setShowTechModal(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!mutationLock.current) setShowTechModal(false);
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+              >
+                ✕
+              </button>
             </div>
             <form
               className="mt-5"
               onSubmit={async (e) => {
                 e.preventDefault();
-                if (savingTech) return;
-                setSavingTech(true);
-                setFormMessage("");
-                const result = await saveTechnicianToCloud({
-                  name: techName,
-                  phone: techPhone,
-                  specialties: techSpecs,
-                  hourlyRate: canSeeFinancials && techHourlyRate ? Number(techHourlyRate) || undefined : undefined,
-                });
-                setSavingTech(false);
-                if (!result.ok) {
-                  setFormMessage(result.error ?? t("sub.read_only"));
-                  return;
+                if (!canWrite || mutationLock.current) return;
+                mutationLock.current = true;
+                setMutationBusy(true);
+                try {
+                  if (savingTech || !techName.trim()) return;
+                  setSavingTech(true);
+                  setFormMessage("");
+                  const result = await saveTechnicianToCloud({
+                    name: techName.trim(),
+                    phone: techPhone,
+                    specialties: techSpecs,
+                    hourlyRate:
+                      canSeeFinancials && techHourlyRate
+                        ? Number(techHourlyRate) || undefined
+                        : undefined,
+                  });
+                  setSavingTech(false);
+                  if (!result.ok) {
+                    setFormMessage(result.error ?? t("sub.read_only"));
+                    return;
+                  }
+                  setShowTechModal(false);
+                  resetTechForm();
+                } catch {
+                  setFormMessage(t("common.save_failed"));
+                } finally {
+                  setSavingTech(false);
+                  mutationLock.current = false;
+                  setMutationBusy(false);
                 }
-                setShowTechModal(false);
-                resetTechForm();
               }}
             >
-              <div className="grid gap-3 sm:grid-cols-2">
-                <input required placeholder={t("work.name")} value={techName} onChange={(e) => setTechName(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                <input placeholder={t("work.phone")} value={techPhone} onChange={(e) => setTechPhone(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-              </div>
-              <div className="mt-3">
-                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">{t("work.specialties")}</p>
-                <SpecialtyPicker value={techSpecs} onChange={setTechSpecs} labels={specialtyLabels} />
-              </div>
-              {canSeeFinancials && (
-                <div className="mt-3">
-                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">{t("work.hourly_rate")}</p>
+              <fieldset disabled={mutationBusy || !canWrite} className="contents">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <input
-                    type="number"
-                    min={0}
-                    placeholder={t("work.hourly_rate_ph")}
-                    value={techHourlyRate}
-                    onChange={(e) => setTechHourlyRate(e.target.value)}
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    required
+                    placeholder={t("work.name")}
+                    value={techName}
+                    onChange={(e) => setTechName(e.target.value)}
+                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                  />
+                  <input
+                    placeholder={t("work.phone")}
+                    value={techPhone}
+                    onChange={(e) => setTechPhone(e.target.value)}
+                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
                   />
                 </div>
-              )}
-              {formMessage && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <button type="submit" disabled={savingTech} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingTech ? t("common.saving") : t("common.save")}</button>
-                <button type="button" onClick={() => setShowTechModal(false)} disabled={savingTech} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
-              </div>
+                <div className="mt-3">
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+                    {t("work.specialties")}
+                  </p>
+                  <SpecialtyPicker
+                    value={techSpecs}
+                    onChange={setTechSpecs}
+                    labels={specialtyLabels}
+                  />
+                </div>
+                {canSeeFinancials && (
+                  <div className="mt-3">
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+                      {t("work.hourly_rate")}
+                    </p>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder={t("work.hourly_rate_ph")}
+                      value={techHourlyRate}
+                      onChange={(e) => setTechHourlyRate(e.target.value)}
+                      className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    />
+                  </div>
+                )}
+                {formMessage && (
+                  <p role="alert" className="mt-3 text-sm font-semibold text-amber-700">
+                    {formMessage}
+                  </p>
+                )}
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="submit"
+                    disabled={mutationBusy || !canWrite}
+                    className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingTech ? t("common.saving") : t("common.save")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!mutationLock.current) setShowTechModal(false);
+                    }}
+                    disabled={mutationBusy || !canWrite}
+                    className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {t("common.cancel")}
+                  </button>
+                </div>
+              </fieldset>
             </form>
           </div>
         </div>
@@ -501,61 +748,138 @@ export default function WorkforcePage() {
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-white/80 bg-white p-5 shadow-sm shadow-slate-950/20">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-600">{t("work.contractors")}</p>
-                <h3 className="mt-2 text-xl font-bold text-slate-950">{t("work.add_contractor_title")}</h3>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-600">
+                  {t("work.contractors")}
+                </p>
+                <h3 className="mt-2 text-xl font-bold text-slate-950">
+                  {t("work.add_contractor_title")}
+                </h3>
               </div>
-              <button type="button" onClick={() => setShowConModal(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!mutationLock.current) setShowConModal(false);
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+              >
+                ✕
+              </button>
             </div>
             <form
               className="mt-5"
               onSubmit={async (e) => {
                 e.preventDefault();
-                if (savingCon) return;
-                setSavingCon(true);
-                setFormMessage("");
-                const result = await saveContractorToCloud({
-                  name: conName,
-                  company: conCompany,
-                  phone: conPhone,
-                  specialties: conSpecs,
-                  rateType: conRateType,
-                  rateAmount: conRate,
-                });
-                setSavingCon(false);
-                if (!result.ok) {
-                  setFormMessage(result.error ?? t("sub.read_only"));
-                  return;
+                if (!canWrite || mutationLock.current) return;
+                mutationLock.current = true;
+                setMutationBusy(true);
+                try {
+                  if (savingCon || !conName.trim() || !Number.isFinite(conRate) || conRate < 0)
+                    return;
+                  setSavingCon(true);
+                  setFormMessage("");
+                  const result = await saveContractorToCloud({
+                    name: conName.trim(),
+                    company: conCompany,
+                    phone: conPhone,
+                    specialties: conSpecs,
+                    rateType: conRateType,
+                    rateAmount: conRate,
+                  });
+                  setSavingCon(false);
+                  if (!result.ok) {
+                    setFormMessage(result.error ?? t("sub.read_only"));
+                    return;
+                  }
+                  setShowConModal(false);
+                  resetConForm();
+                } catch {
+                  setFormMessage(t("common.save_failed"));
+                } finally {
+                  setSavingCon(false);
+                  mutationLock.current = false;
+                  setMutationBusy(false);
                 }
-                setShowConModal(false);
-                resetConForm();
               }}
             >
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <input required placeholder={t("work.name")} value={conName} onChange={(e) => setConName(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                <input placeholder={t("work.company")} value={conCompany} onChange={(e) => setConCompany(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                <input placeholder={t("work.phone")} value={conPhone} onChange={(e) => setConPhone(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                {canSeeFinancials && (
-                  <>
-                    <select value={conRateType} onChange={(e) => setConRateType(e.target.value as ContractorRateType)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                      {RATE_TYPES.map((r) => (
-                        <option key={r} value={r}>
-                          {rateLabels[r]}
-                        </option>
-                      ))}
-                    </select>
-                    <input type="number" placeholder={t("work.rate_amount")} value={conRate || ""} onChange={(e) => setConRate(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  </>
+              <fieldset disabled={mutationBusy || !canWrite} className="contents">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <input
+                    required
+                    placeholder={t("work.name")}
+                    value={conName}
+                    onChange={(e) => setConName(e.target.value)}
+                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                  />
+                  <input
+                    placeholder={t("work.company")}
+                    value={conCompany}
+                    onChange={(e) => setConCompany(e.target.value)}
+                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                  />
+                  <input
+                    placeholder={t("work.phone")}
+                    value={conPhone}
+                    onChange={(e) => setConPhone(e.target.value)}
+                    className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                  />
+                  {canSeeFinancials && (
+                    <>
+                      <select
+                        value={conRateType}
+                        onChange={(e) => setConRateType(e.target.value as ContractorRateType)}
+                        className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                      >
+                        {RATE_TYPES.map((r) => (
+                          <option key={r} value={r}>
+                            {rateLabels[r]}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        placeholder={t("work.rate_amount")}
+                        value={conRate || ""}
+                        onChange={(e) => setConRate(Number(e.target.value))}
+                        className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                      />
+                    </>
+                  )}
+                </div>
+                <div className="mt-3">
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+                    {t("work.specialties")}
+                  </p>
+                  <SpecialtyPicker
+                    value={conSpecs}
+                    onChange={setConSpecs}
+                    labels={specialtyLabels}
+                  />
+                </div>
+                {formMessage && (
+                  <p role="alert" className="mt-3 text-sm font-semibold text-amber-700">
+                    {formMessage}
+                  </p>
                 )}
-              </div>
-              <div className="mt-3">
-                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">{t("work.specialties")}</p>
-                <SpecialtyPicker value={conSpecs} onChange={setConSpecs} labels={specialtyLabels} />
-              </div>
-              {formMessage && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <button type="submit" disabled={savingCon} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingCon ? t("common.saving") : t("common.save")}</button>
-                <button type="button" onClick={() => setShowConModal(false)} disabled={savingCon} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
-              </div>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="submit"
+                    disabled={mutationBusy || !canWrite}
+                    className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingCon ? t("common.saving") : t("common.save")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!mutationLock.current) setShowConModal(false);
+                    }}
+                    disabled={mutationBusy || !canWrite}
+                    className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {t("common.cancel")}
+                  </button>
+                </div>
+              </fieldset>
             </form>
           </div>
         </div>
@@ -566,43 +890,107 @@ export default function WorkforcePage() {
           <div className="w-full max-w-md rounded-xl border border-white/80 bg-white p-5 shadow-sm shadow-slate-950/20">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-600">{t("work.pay")}</p>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-600">
+                  {t("work.pay")}
+                </p>
                 <h3 className="mt-2 text-xl font-bold text-slate-950">{payContractor.name}</h3>
-                <p className="mt-1 text-sm font-semibold text-slate-500">{t("work.payable")}: {formatLkr(payContractor.payableBalance)}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  {t("work.payable")}: {formatLkr(payContractor.payableBalance)}
+                </p>
               </div>
-              <button onClick={() => setPayContractor(null)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+              <button
+                onClick={() => {
+                  if (!mutationLock.current) setPayContractor(null);
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+              >
+                ✕
+              </button>
             </div>
             <form
               className="mt-5 space-y-3"
               onSubmit={async (e) => {
                 e.preventDefault();
-                if (savingPayment || payAmount <= 0) return;
-                setSavingPayment(true);
-                setPayMessage("");
-                const result = await recordContractorPaymentToCloud(
-                  payContractor.id,
-                  payAmount,
-                  payMethod,
-                  payNote,
-                );
-                setSavingPayment(false);
-                if (!result.ok) {
-                  setPayMessage(result.error ?? t("common.save_failed"));
-                  return;
+                if (!canWrite || mutationLock.current) return;
+                mutationLock.current = true;
+                setMutationBusy(true);
+                try {
+                  if (savingPayment || !Number.isFinite(payAmount) || payAmount <= 0) return;
+                  setSavingPayment(true);
+                  setPayMessage("");
+                  const result = await recordContractorPaymentToCloud(
+                    payContractor.id,
+                    payAmount,
+                    payMethod,
+                    payNote,
+                  );
+                  setSavingPayment(false);
+                  if (!result.ok) {
+                    setPayMessage(result.error ?? t("common.save_failed"));
+                    return;
+                  }
+                  setPayContractor(null);
+                } catch {
+                  setPayMessage(t("common.save_failed"));
+                } finally {
+                  setSavingPayment(false);
+                  mutationLock.current = false;
+                  setMutationBusy(false);
                 }
-                setPayContractor(null);
               }}
             >
-              {payMessage && <p className="text-sm font-semibold text-rose-700">{payMessage}</p>}
-              <input type="number" required min={1} placeholder={t("bank.amount")} value={payAmount || ""} onChange={(e) => setPayAmount(Number(e.target.value))} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" />
-              <select value={payMethod} onChange={(e) => setPayMethod(e.target.value as PaymentMethod)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-emerald-300">
-                {PAY_METHODS.map((m) => <option key={m} value={m}>{methodLabel(m)}</option>)}
-              </select>
-              <input placeholder={t("work.note")} value={payNote} onChange={(e) => setPayNote(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-emerald-300" />
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <button type="submit" disabled={savingPayment || payAmount <= 0} className="flex-1 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-700/20 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{savingPayment ? t("common.saving") : t("work.record_payout")}</button>
-                <button type="button" onClick={() => setPayContractor(null)} disabled={savingPayment} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
-              </div>
+              <fieldset disabled={mutationBusy || !canWrite} className="contents">
+                {payMessage && (
+                  <p role="alert" className="text-sm font-semibold text-rose-700">
+                    {payMessage}
+                  </p>
+                )}
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  placeholder={t("bank.amount")}
+                  value={payAmount || ""}
+                  onChange={(e) => setPayAmount(Number(e.target.value))}
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                />
+                <select
+                  value={payMethod}
+                  onChange={(e) => setPayMethod(e.target.value as PaymentMethod)}
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-emerald-300"
+                >
+                  {PAY_METHODS.map((m) => (
+                    <option key={m} value={m}>
+                      {methodLabel(m)}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  placeholder={t("work.note")}
+                  value={payNote}
+                  onChange={(e) => setPayNote(e.target.value)}
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-emerald-300"
+                />
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="submit"
+                    disabled={savingPayment || payAmount <= 0}
+                    className="flex-1 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-700/20 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingPayment ? t("common.saving") : t("work.record_payout")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!mutationLock.current) setPayContractor(null);
+                    }}
+                    disabled={mutationBusy || !canWrite}
+                    className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {t("common.cancel")}
+                  </button>
+                </div>
+              </fieldset>
             </form>
           </div>
         </div>

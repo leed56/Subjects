@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
@@ -97,6 +97,7 @@ export default function PosBankRoutingPage() {
   const text = locale === "si" ? copy.si : copy.en;
   const { org, orgRole } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
+  const mutationLock = useRef(false);
   const [routeAccountId, setRouteAccountId] = useState("");
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -138,11 +139,16 @@ export default function PosBankRoutingPage() {
       setLoading(false);
     }
 
-    void load();
+    void load().catch(() => {
+      if (!cancelled) {
+        setError(text.unavailableDesc);
+        setLoading(false);
+      }
+    });
     return () => {
       cancelled = true;
     };
-  }, [org.id, org.isAuthenticated, orgRole]);
+  }, [org.id, org.isAuthenticated, orgRole, text.unavailableDesc]);
 
   const currentAccount = useMemo(
     () => data?.bankAccounts.find((account) => account.id === routeAccountId) ?? null,
@@ -174,25 +180,33 @@ export default function PosBankRoutingPage() {
   }
 
   async function saveRoute() {
-    if (!org.id || !selectedAccountId || saving) return;
-    setSaving(true);
-    setMessage(null);
-    setError(null);
+    if (!canWrite || mutationLock.current) return;
+    mutationLock.current = true;
+    try {
+      if (!org.id || orgRole !== "owner" || !selectedAccountId || saving) return;
+      setSaving(true);
+      setMessage(null);
+      setError(null);
 
-    const result = await configurePosBankRoute(org.id, selectedAccountId);
-    setSaving(false);
+      const result = await configurePosBankRoute(org.id, selectedAccountId);
 
-    if (!result.ok) {
-      if (saleTenderSchemaUnavailable(result.error)) {
-        setUpgradeNeeded(true);
+      if (!result.ok) {
+        if (saleTenderSchemaUnavailable(result.error)) {
+          setUpgradeNeeded(true);
+          return;
+        }
+        setError(result.error ?? text.saveError);
         return;
       }
-      setError(result.error ?? text.saveError);
-      return;
-    }
 
-    setRouteAccountId(selectedAccountId);
-    setMessage(text.savedMessage);
+      setRouteAccountId(selectedAccountId);
+      setMessage(text.savedMessage);
+    } catch {
+      setError(text.saveError);
+    } finally {
+      setSaving(false);
+      mutationLock.current = false;
+    }
   }
 
   const buttonLabel = saving
@@ -212,8 +226,12 @@ export default function PosBankRoutingPage() {
           description={text.description}
           actions={
             <>
-              <ProButton href="/banking" variant="secondary">{text.banking}</ProButton>
-              <ProButton href="/sales" variant="secondary">{text.sales}</ProButton>
+              <ProButton href="/banking" variant="secondary">
+                {text.banking}
+              </ProButton>
+              <ProButton href="/sales" variant="secondary">
+                {text.sales}
+              </ProButton>
             </>
           }
         />
@@ -223,7 +241,11 @@ export default function PosBankRoutingPage() {
             <ProEmptyState
               title={text.unavailableTitle}
               description={text.unavailableDesc}
-              action={<ProButton href="/banking" variant="secondary">{text.backBanking}</ProButton>}
+              action={
+                <ProButton href="/banking" variant="secondary">
+                  {text.backBanking}
+                </ProButton>
+              }
             />
           </ProCard>
         ) : loading ? (
@@ -241,7 +263,9 @@ export default function PosBankRoutingPage() {
             <ProCard className="h-fit">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-teal-700">{text.current}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-teal-700">
+                    {text.current}
+                  </p>
                   <h2 className="mt-2 text-lg font-semibold text-slate-950">
                     {currentAccount ? currentAccount.bankName : text.notConfigured}
                   </h2>
@@ -267,7 +291,9 @@ export default function PosBankRoutingPage() {
             </ProCard>
 
             <ProCard>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-teal-700">{text.settings}</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-teal-700">
+                {text.settings}
+              </p>
               <h2 className="mt-2 text-lg font-semibold text-slate-950">{text.chooseTitle}</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">{text.chooseDesc}</p>
 
@@ -276,6 +302,7 @@ export default function PosBankRoutingPage() {
                 <select
                   className={inputClass}
                   value={selectedAccountId}
+                  disabled={saving || !canWrite}
                   onChange={(event) => {
                     setSelectedAccountId(event.target.value);
                     setMessage(null);
@@ -292,12 +319,18 @@ export default function PosBankRoutingPage() {
               </label>
 
               {message && (
-                <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+                <p
+                  role="status"
+                  className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800"
+                >
                   {message}
                 </p>
               )}
               {error && (
-                <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
+                <p
+                  role="alert"
+                  className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800"
+                >
                   {error}
                 </p>
               )}
@@ -305,8 +338,10 @@ export default function PosBankRoutingPage() {
               <button
                 type="button"
                 onClick={() => void saveRoute()}
-                disabled={!canWrite || !selectedAccountId || saving || selectedAccountId === routeAccountId}
-                title={!canWrite ? disabledHint ?? undefined : undefined}
+                disabled={
+                  !canWrite || !selectedAccountId || saving || selectedAccountId === routeAccountId
+                }
+                title={!canWrite ? (disabledHint ?? undefined) : undefined}
                 className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
               >
                 {buttonLabel}
