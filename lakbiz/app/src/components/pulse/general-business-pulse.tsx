@@ -75,6 +75,7 @@ export function GeneralBusinessPulse() {
     (total, product) => total + product.buyPrice * product.stockQty,
     0,
   );
+  const noSalesYet = data.sales.length === 0;
 
   const stockActions: PulseAction[] = lowStock.slice(0, 5).map((product) => ({
     key: `stock-${product.id}`,
@@ -162,9 +163,21 @@ export function GeneralBusinessPulse() {
         </div>
       </div>
 
-      <p className="text-sm text-slate-600">
-        {buildSummaryLine(locale, salesChangePct, actions.length)}
-      </p>
+      {noSalesYet ? (
+        <section className="overflow-hidden rounded-2xl border border-teal-200 bg-[linear-gradient(135deg,#ecfdf8,#eff6ff)] p-5 shadow-sm sm:p-6">
+          <div className="flex items-start gap-4">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-teal-600 text-lg font-black text-white shadow-lg shadow-teal-900/15">1</span>
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-teal-700">{tt(locale, "ඊළඟ හොඳම පියවර", "Your best next step", "உங்கள் அடுத்த சிறந்த படி")}</p>
+              <h2 className="mt-1 text-lg font-bold text-slate-950">{tt(locale, "ඔබේ පළමු අලෙවිය වාර්තා කරන්න", "Record your first sale", "உங்கள் முதல் விற்பனையை பதிவு செய்யுங்கள்")}</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">{tt(locale, "ඉන්පසු මෙහි සැබෑ ආදායම, ලාභය සහ මුදල් එකතු කිරීම් පෙන්වයි.", "Revenue, profit and collection trends will begin here immediately afterward.", "அதன் பிறகு வருவாய், லாபம் மற்றும் வசூல் போக்குகள் இங்கே தோன்றும்.")}</p>
+              <Link href="/sales" className="mt-4 inline-flex min-h-10 items-center rounded-xl bg-slate-950 px-4 text-sm font-bold text-white shadow-sm hover:bg-slate-800">{tt(locale, "අලෙවිය ආරම්භ කරන්න", "Start a sale", "விற்பனையை தொடங்கு")} →</Link>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <p className="text-sm text-slate-600">{buildSummaryLine(locale, salesChangePct, actions.length)}</p>
+      )}
       {org.isAuthenticated && (
         <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-700">
           <SyncIcon className="h-3.5 w-3.5" />
@@ -187,11 +200,15 @@ export function GeneralBusinessPulse() {
                 : `${salesChangePct >= 0 ? "+" : ""}${salesChangePct}%`}
             </p>
           </div>
-          <Sparkline values={trend.slice(-8).map((point) => point.revenue)} stroke="#2dd4bf" />
+          {noSalesYet ? (
+            <div className="hidden rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-right sm:block"><p className="text-xs font-bold text-teal-300">Ready for live data</p><p className="mt-1 text-[11px] text-slate-400">First sale activates the trend</p></div>
+          ) : (
+            <Sparkline values={trend.slice(-8).map((point) => point.revenue)} stroke="#2dd4bf" />
+          )}
         </div>
       </section>
 
-      <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6">
+      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
         <StatCard label={tt(locale, "දළ ලාභය", "Gross profit", "மொத்த லாபம்")} value={formatCompactLkr(selected.profit)} hint={`${marginPct}% ${tt(locale, "ආන්තිකය", "margin", "விளிம்பு")}`} tone="positive" />
         <StatCard label={tt(locale, "එකතු කළ මුදල්", "Cash collected", "வசூலித்த பணம்")} value={formatCompactLkr(cashCollected)} hint={tt(locale, "විකුණුම් සහ ණය එකතු කිරීම්", "Sales and credit collections", "விற்பனை மற்றும் கடன் வசூல்")} />
         <StatCard label={tt(locale, "ලැබිය යුතු", "Receivables", "பெறத்தக்கவை")} value={formatCompactLkr(stats.creditOutstanding)} hint={`${overLimitCustomers.length} ${tt(locale, "සීමාව ඉක්මවා", "over limit", "வரம்பை மீறியது")}`} tone={overLimitCustomers.length ? "danger" : "default"} />

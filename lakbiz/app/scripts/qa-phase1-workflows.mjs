@@ -9,7 +9,7 @@ const {chromium}=require(process.env.LAKBIZ_QA_PLAYWRIGHT ?? 'playwright');
 const root=path.resolve(import.meta.dirname,'..');
 const out=process.env.LAKBIZ_UI_QA_DIR ?? path.join(os.tmpdir(),'lakbiz-phase1-workflows');
 fs.mkdirSync(out,{recursive:true});
-const routes=['workforce','vehicles','teams','assets','expenses','schedule','stock/advanced','stock/advanced/queue','stock/advanced/returns','banking/pos-routing','pulse','stock/imports'];
+const routes=['dashboard','workforce','vehicles','teams','assets','expenses','schedule','stock/advanced','stock/advanced/queue','stock/advanced/returns','banking/pos-routing','pulse','stock/imports'];
 const f='const f=window.fixture;';
 const mutate=`async function mutate(...args){f.calls.push(args);await new Promise(r=>setTimeout(r,80));if(f.rejectMutation)throw Error('Synthetic rejected request');return {ok:false,data:null,error:'Synthetic save failure'}}`;
 const stubs={
@@ -21,10 +21,10 @@ const stubs={
  '@/lib/subscription/use-can-write':`${f}export function useWriteAccess(){return {canWrite:!f.readOnly,disabledHint:f.readOnly?'Read only':null}}`,
  '@/components/write-disabled-hint':`${f}export function WriteDisabledHint(){return f.readOnly?<p>Read only</p>:null}`,
  '@/lib/subscription/subscription-provider':`${f}const org={id:'fixture-org',isAuthenticated:true,sector:'ac',name:'Fixture shop'};export function useSubscription(){return {org,orgRole:f.readOnly?'cashier':'owner',canSeeFinancials:!f.readOnly,can:()=>!f.readOnly,subscription:{planId:'pro'}}}`,
- '@/lib/store/use-app-store':`${f}${mutate}export function useAppStore(){return new Proxy({data:f.data,ready:true,cloudSyncing:false,cloudSyncError:null},{get:(target,key)=>key in target?target[key]:mutate})}`,
+ '@/lib/store/use-app-store':`${f}${mutate}export function useAppStore(){return new Proxy({data:f.data,ready:true,cloudSyncing:false,cloudSyncError:null,offlinePendingSync:false,offlinePendingChangeCount:0},{get:(target,key)=>key in target?target[key]:mutate})}`,
  '@/components/ui/toast':`${f}export function useToast(){return {toast:x=>f.toasts.push(x)}}`,
  '@/components/messaging/message-send-button':'export function MessageSendButton(){return null}',
- '@/lib/messaging/use-sms-api-configured':'export function useWhatsAppApiConfigured(){return false}',
+ '@/lib/messaging/use-sms-api-configured':'export function useWhatsAppApiConfigured(){return false}export function useSmsApiConfigured(){return false}',
 };
 const imports=routes.map((route,i)=>`import Page${i} from ${JSON.stringify(root+'/src/app/'+route+'/page.tsx')};`).join('\n');
 const entry=`import React from 'react';import {createRoot} from 'react-dom/client';import {emptyAppData} from ${JSON.stringify(root+'/src/lib/store/storage.ts')};${imports}

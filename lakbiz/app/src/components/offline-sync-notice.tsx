@@ -32,7 +32,12 @@ export function OfflineSyncNotice({ className = "mb-4" }: { className?: string }
     org.isAuthenticated &&
     offlinePendingSync &&
     !(isOnline && cloudSyncing);
-  const count = Math.max(offlinePendingChangeCount, 1);
+  const count = Math.max(
+    typeof offlinePendingChangeCount === "number" && Number.isFinite(offlinePendingChangeCount)
+      ? offlinePendingChangeCount
+      : 0,
+    1,
+  );
 
   return (
     <>

@@ -117,7 +117,7 @@ export type StatTone = "default" | "positive" | "warning" | "danger";
 /** Values and hints still come from the sector's real calculations. */
 export function StatCard({ tone = "default", ...props }: { label: string; value: string; hint: string; tone?: StatTone }) {
   const mappedTone = { default: "blue", positive: "emerald", warning: "amber", danger: "rose" } as const;
-  return <WorkspaceMetric {...props} tone={mappedTone[tone]} ui="pulse-stat-card" className="w-[13.5rem] shrink-0 snap-start" />;
+  return <WorkspaceMetric {...props} tone={mappedTone[tone]} ui="pulse-stat-card" className="w-[82vw] max-w-[18rem] shrink-0 snap-start sm:w-[calc((100%-1.5rem)/3)] sm:max-w-none" />;
 }
 
 /** One plain-language sentence summarizing the month, the way a person
