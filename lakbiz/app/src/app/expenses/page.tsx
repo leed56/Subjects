@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
 import { PageHeader, MetricCard, EmptyState, SearchInput, FilterBar } from "@/components/ui/primitives";
@@ -60,6 +60,9 @@ export default function ExpensesPage() {
   const { toast } = useToast();
 
   const [expenses, setExpenses] = useState<Expense[] | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const mutationLock = useRef(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -82,15 +85,32 @@ export default function ExpensesPage() {
       return;
     }
     let cancelled = false;
+    setExpenses(null);
+    setLoadError(null);
     void fetchOrgExpenses(orgId).then((result) => {
       if (cancelled) return;
       if (result.error) setLoadError(result.error);
       setExpenses(result.data);
+    }).catch(() => {
+      if (!cancelled) { setLoadError(t("resilience.error_title")); setExpenses([]); }
     });
     return () => {
       cancelled = true;
     };
-  }, [orgId, canSeeFinancials]);
+  }, [orgId, canSeeFinancials, loadAttempt, t]);
+
+  if (loadError && canSeeFinancials) {
+    return (
+      <AppShell><ProMain>
+        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-rose-800">
+          <p>{loadError}</p>
+          <button type="button" onClick={() => { setLoadError(null); setExpenses(null); setLoadAttempt((n) => n + 1); }} className="mt-4 rounded-lg bg-teal-600 px-4 py-2 font-semibold text-white hover:bg-teal-700">
+            {t("resilience.retry")}
+          </button>
+        </div>
+      </ProMain></AppShell>
+    );
+  }
 
   if (!org.isAuthenticated || !localReady || !localData || expenses === null) {
     return (
@@ -113,7 +133,8 @@ export default function ExpensesPage() {
   }
 
   const resetForm = () => {
-    setForm(emptyForm);
+    setForm({ ...emptyForm, expenseDate: todayIso() });
+    setFormError(null);
     setEditing(null);
   };
 
@@ -123,6 +144,7 @@ export default function ExpensesPage() {
   };
 
   const openEdit = (expense: Expense) => {
+    setFormError(null);
     setEditing(expense);
     setForm({
       category: expense.category,
@@ -137,7 +159,7 @@ export default function ExpensesPage() {
   };
 
   const handleSave = async () => {
-    if (saving || !form.amount || Number(form.amount) <= 0) return;
+    if (mutationLock.current || saving || !orgId || !canSeeFinancials || !form.amount || !Number.isFinite(Number(form.amount)) || Number(form.amount) <= 0) return;
     const input: ExpenseInput = {
       category: form.category,
       amount: Number(form.amount),
@@ -147,34 +169,49 @@ export default function ExpensesPage() {
       notes: form.notes,
       jobId: form.jobId || null,
     };
+    mutationLock.current = true;
     setSaving(true);
-    const result = editing ? await updateExpense(editing.id, input) : await createExpense(orgId!, input);
-    setSaving(false);
-    if (result.error || !result.data) {
-      toast({ tone: "error", title: t("common.save_failed"), description: result.error ?? undefined });
-      return;
+    setFormError(null);
+    try {
+      const result = editing ? await updateExpense(editing.id, input) : await createExpense(orgId!, input);
+      if (result.error || !result.data) {
+        setFormError(result.error ?? t("common.save_failed"));
+        return;
+      }
+      setExpenses((prev) => {
+        const next = (prev ?? []).filter((e) => e.id !== result.data!.id);
+        return [result.data!, ...next].sort((a, b) => (a.expenseDate < b.expenseDate ? 1 : -1));
+      });
+      toast({ tone: "success", title: editing ? t("common.update") : t("expenses.added") });
+      setFormOpen(false);
+      resetForm();
+    } catch {
+      setFormError(t("common.save_failed"));
+    } finally {
+      mutationLock.current = false;
+      setSaving(false);
     }
-    setExpenses((prev) => {
-      const next = (prev ?? []).filter((e) => e.id !== result.data!.id);
-      return [result.data!, ...next].sort((a, b) => (a.expenseDate < b.expenseDate ? 1 : -1));
-    });
-    toast({ tone: "success", title: editing ? t("common.update") : t("expenses.added") });
-    setFormOpen(false);
-    resetForm();
   };
 
   const confirmDelete = async () => {
-    if (!deleteTarget || deleting) return;
+    if (!deleteTarget || deleting || mutationLock.current || !canSeeFinancials) return;
+    mutationLock.current = true;
     setDeleting(true);
-    const result = await deleteExpense(deleteTarget.id);
-    setDeleting(false);
-    if (result.error) {
-      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
-      return;
+    try {
+      const result = await deleteExpense(deleteTarget.id);
+      if (result.error) {
+        toast({ tone: "error", title: t("common.save_failed"), description: result.error });
+        return;
+      }
+      setExpenses((prev) => (prev ?? []).filter((e) => e.id !== deleteTarget.id));
+      toast({ tone: "success", title: t("common.delete"), description: `${t(`expenses.cat_${deleteTarget.category}`)} · ${formatLkr(deleteTarget.amount)}` });
+      setDeleteTarget(null);
+    } catch {
+      toast({ tone: "error", title: t("common.save_failed") });
+    } finally {
+      mutationLock.current = false;
+      setDeleting(false);
     }
-    setExpenses((prev) => (prev ?? []).filter((e) => e.id !== deleteTarget.id));
-    toast({ tone: "success", title: t("common.delete"), description: `${t(`expenses.cat_${deleteTarget.category}`)} · ${formatLkr(deleteTarget.amount)}` });
-    setDeleteTarget(null);
   };
 
   const query = search.trim().toLowerCase();
@@ -294,10 +331,6 @@ export default function ExpensesPage() {
           }
         />
 
-        {loadError && (
-          <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{loadError}</div>
-        )}
-
         <FilterBar>
           <SearchInput value={search} onChange={setSearch} placeholder={t("expenses.search_placeholder")} className="min-w-[200px] flex-1" />
           <SelectInput
@@ -323,17 +356,17 @@ export default function ExpensesPage() {
 
         <Drawer
           open={formOpen}
-          onClose={() => setFormOpen(false)}
+          onClose={() => { if (!saving) setFormOpen(false); }}
           title={editing ? t("common.edit") : t("expenses.add")}
           footer={
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setFormOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => setFormOpen(false)} disabled={saving} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 {t("common.cancel")}
               </button>
               <button
                 type="button"
                 onClick={() => void handleSave()}
-                disabled={saving || !form.amount || Number(form.amount) <= 0}
+                disabled={saving || !form.amount || !Number.isFinite(Number(form.amount)) || Number(form.amount) <= 0}
                 className="flex-1 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
               >
                 {saving ? t("common.saving") : editing ? t("common.update") : t("expenses.add")}
@@ -341,7 +374,8 @@ export default function ExpensesPage() {
             </div>
           }
         >
-          <div className="space-y-4">
+          {formError && <p role="alert" className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{formError}</p>}
+          <fieldset disabled={saving} className="space-y-4">
             <FormField label={t("expenses.category")}>
               <SelectInput
                 value={form.category}
@@ -378,7 +412,7 @@ export default function ExpensesPage() {
             <FormField label={t("common.notes")}>
               <TextInput value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
             </FormField>
-          </div>
+          </fieldset>
         </Drawer>
 
         <ConfirmDialog
@@ -390,7 +424,7 @@ export default function ExpensesPage() {
           cancelLabel={t("common.cancel")}
           loading={deleting}
           onConfirm={() => void confirmDelete()}
-          onClose={() => setDeleteTarget(null)}
+          onClose={() => { if (!deleting) setDeleteTarget(null); }}
         />
       </ProMain>
     </AppShell>
