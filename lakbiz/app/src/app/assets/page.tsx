@@ -70,6 +70,9 @@ export default function AssetsPage() {
   const { toast } = useToast();
 
   const [assets, setAssets] = useState<AcAsset[] | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [historyAttempt, setHistoryAttempt] = useState(0);
+  const [historyError, setHistoryError] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -98,29 +101,54 @@ export default function AssetsPage() {
       return;
     }
     let cancelled = false;
+    setLoadError(null);
+    setAssets(null);
     void fetchOrgAssets(orgId).then((result) => {
       if (cancelled) return;
       if (result.error) setLoadError(result.error);
       setAssets(result.data);
+    }).catch(() => {
+      if (!cancelled) { setLoadError(t("resilience.error_title")); setAssets([]); }
     });
     return () => {
       cancelled = true;
     };
-  }, [orgId]);
+  }, [orgId, loadAttempt, t]);
 
   useEffect(() => {
     if (!profileAsset || profileTab !== "jobs") return;
     let cancelled = false;
+    setHistoryError(false);
+    setProfileJobs(null);
+    setProfileJobItems(null);
     void fetchAssetJobs(profileAsset.id).then(async (result) => {
       if (cancelled) return;
-      setProfileJobs(result.data);
+      if (result.error) throw new Error(result.error);
       const itemsResult = await fetchAssetJobItems(result.data.map((j) => j.id));
-      if (!cancelled) setProfileJobItems(itemsResult.data);
+      if (cancelled) return;
+      if (itemsResult.error) throw new Error(itemsResult.error);
+      setProfileJobs(result.data);
+      setProfileJobItems(itemsResult.data);
+    }).catch(() => {
+      if (!cancelled) setHistoryError(true);
     });
     return () => {
       cancelled = true;
     };
-  }, [profileAsset, profileTab]);
+  }, [profileAsset, profileTab, historyAttempt]);
+
+  if (loadError && org.isAuthenticated) {
+    return (
+      <AppShell><ProMain>
+        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-rose-800">
+          <p>{loadError}</p>
+          <button type="button" onClick={() => { setLoadError(null); setAssets(null); setLoadAttempt((n) => n + 1); }} className="mt-4 rounded-lg bg-teal-600 px-4 py-2 font-semibold text-white hover:bg-teal-700">
+            {t("resilience.retry")}
+          </button>
+        </div>
+      </ProMain></AppShell>
+    );
+  }
 
   if (!org.isAuthenticated || !localReady || !localData || assets === null) {
     return (
@@ -249,7 +277,7 @@ export default function AssetsPage() {
       header: t("assets.asset"),
       render: (a) => (
         <div>
-          <button type="button" onClick={() => { setProfileAsset(a); setProfileTab("overview"); setProfileJobs(null); setProfileJobItems(null); }} className="font-semibold text-slate-900 hover:text-teal-700 hover:underline">
+          <button type="button" onClick={() => { setProfileAsset(a); setProfileTab("overview"); setProfileJobs(null); setProfileJobItems(null); setHistoryError(false); }} className="font-semibold text-slate-900 hover:text-teal-700 hover:underline">
             {[a.brand, a.model].filter(Boolean).join(" ") || t("assets.untitled")}
           </button>
           <p className="mt-0.5 text-xs text-slate-500">{a.serialNo ?? "—"}</p>
@@ -316,10 +344,6 @@ export default function AssetsPage() {
             </div>
           }
         />
-
-        {loadError && (
-          <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{loadError}</div>
-        )}
 
         <FilterBar>
           <SearchInput value={search} onChange={setSearch} placeholder={t("assets.search_placeholder")} className="min-w-[220px] flex-1" />
@@ -535,7 +559,14 @@ export default function AssetsPage() {
                 </dl>
               )}
               {profileTab === "jobs" &&
-                (profileJobs === null || profileJobItems === null ? (
+                (historyError ? (
+                  <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                    <p>{t("resilience.error_title")}</p>
+                    <button type="button" onClick={() => { setHistoryError(false); setHistoryAttempt((n) => n + 1); }} className="mt-3 rounded-lg bg-teal-600 px-4 py-2 font-semibold text-white hover:bg-teal-700">
+                      {t("resilience.retry")}
+                    </button>
+                  </div>
+                ) : profileJobs === null || profileJobItems === null ? (
                   <ProLoadingState label={t("common.loading")} />
                 ) : profileJobs.length === 0 ? (
                   <EmptyState title={t("assets.no_jobs")} description={t("assets.no_jobs_hint")} />
