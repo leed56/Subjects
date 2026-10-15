@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
 import { PageHeader, MetricCard, EmptyState, StatusBadge, SearchInput, FilterBar, Tabs, ActionMenu } from "@/components/ui/primitives";
@@ -12,6 +12,7 @@ import { PlusIcon } from "@/components/ui/icons";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
+import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { formatLkr } from "@/lib/format";
 import { daysUntilDate } from "@/lib/ac-service";
 import { computeRepeatRepairSignal } from "@/lib/repeat-repair";
@@ -68,6 +69,9 @@ export default function AssetsPage() {
   const { org, canSeeFinancials } = useSubscription();
   const { data: localData, ready: localReady } = useAppStore();
   const { toast } = useToast();
+  const { canWrite, disabledHint } = useWriteAccess();
+  const mutationLock = useRef(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const [assets, setAssets] = useState<AcAsset[] | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -166,16 +170,20 @@ export default function AssetsPage() {
   };
 
   const resetForm = () => {
+    setFormError(null);
     setForm(emptyForm);
     setEditing(null);
   };
 
   const openCreate = () => {
+    if (!canWrite || mutationLock.current) return;
     resetForm();
     setFormOpen(true);
   };
 
   const openEdit = (asset: AcAsset) => {
+    if (mutationLock.current) return;
+    setFormError(null);
     setEditing(asset);
     setForm({
       customerId: asset.customerId ?? "",
@@ -199,7 +207,14 @@ export default function AssetsPage() {
   };
 
   const handleSave = async () => {
-    if (saving) return;
+    if (mutationLock.current || saving || !orgId || !canWrite) return;
+    if (form.btu && (!Number.isFinite(Number(form.btu)) || Number(form.btu) < 0 || !Number.isInteger(Number(form.btu)))) {
+      setFormError(t("stock.validation_non_negative"));
+      const field = document.getElementById("asset-btu") as HTMLInputElement | null;
+      field?.focus();
+      field?.reportValidity();
+      return;
+    }
     const input: AcAssetInput = {
       customerId: form.customerId || null,
       brand: form.brand,
@@ -218,35 +233,51 @@ export default function AssetsPage() {
       nextServiceDate: form.nextServiceDate || null,
       notes: form.notes,
     };
+    mutationLock.current = true;
     setSaving(true);
-    const result = editing ? await updateAsset(editing.id, input) : await createAsset(orgId!, input);
-    setSaving(false);
-    if (result.error || !result.data) {
-      toast({ tone: "error", title: t("common.save_failed"), description: result.error ?? undefined });
-      return;
+    setFormError(null);
+    try {
+      const result = editing ? await updateAsset(editing.id, input) : await createAsset(orgId!, input);
+      if (result.error || !result.data) {
+        setFormError(result.error ?? t("common.save_failed"));
+        return;
+      }
+      setAssets((prev) => {
+        const next = (prev ?? []).filter((a) => a.id !== result.data!.id);
+        return [result.data!, ...next];
+      });
+      if (profileAsset?.id === result.data.id) setProfileAsset(result.data);
+      toast({ tone: "success", title: editing ? t("common.update") : t("assets.added") });
+      setFormOpen(false);
+      resetForm();
+    } catch {
+      setFormError(t("common.save_failed"));
+    } finally {
+      mutationLock.current = false;
+      setSaving(false);
     }
-    setAssets((prev) => {
-      const next = (prev ?? []).filter((a) => a.id !== result.data!.id);
-      return [result.data!, ...next];
-    });
-    toast({ tone: "success", title: editing ? t("common.update") : t("assets.added") });
-    setFormOpen(false);
-    resetForm();
   };
 
   const confirmDelete = async () => {
-    if (!deleteTarget || deleting) return;
+    if (!deleteTarget || deleting || mutationLock.current || !canWrite) return;
+    mutationLock.current = true;
     setDeleting(true);
-    const result = await deleteAsset(deleteTarget.id);
-    setDeleting(false);
-    if (result.error) {
-      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
-      return;
+    try {
+      const result = await deleteAsset(deleteTarget.id);
+      if (result.error) {
+        toast({ tone: "error", title: t("common.save_failed"), description: result.error });
+        return;
+      }
+      setAssets((prev) => (prev ?? []).filter((a) => a.id !== deleteTarget.id));
+      if (profileAsset?.id === deleteTarget.id) setProfileAsset(null);
+      toast({ tone: "success", title: t("common.delete"), description: deleteTarget.brand ?? deleteTarget.serialNo ?? "" });
+      setDeleteTarget(null);
+    } catch {
+      toast({ tone: "error", title: t("common.save_failed") });
+    } finally {
+      mutationLock.current = false;
+      setDeleting(false);
     }
-    setAssets((prev) => (prev ?? []).filter((a) => a.id !== deleteTarget.id));
-    if (profileAsset?.id === deleteTarget.id) setProfileAsset(null);
-    toast({ tone: "success", title: t("common.delete"), description: deleteTarget.brand ?? deleteTarget.serialNo ?? "" });
-    setDeleteTarget(null);
   };
 
   const query = search.trim().toLowerCase();
@@ -309,7 +340,7 @@ export default function AssetsPage() {
         <ActionMenu
           items={[
             { label: t("common.edit"), onSelect: () => openEdit(a) },
-            { label: t("common.delete"), tone: "danger" as const, onSelect: () => setDeleteTarget(a) },
+            { label: t("common.delete"), disabled: !canWrite || saving || deleting, tone: "danger" as const, onSelect: () => setDeleteTarget(a) },
           ]}
         />
       ),
@@ -328,7 +359,7 @@ export default function AssetsPage() {
           actions={
             <button
               type="button"
-              onClick={openCreate}
+              onClick={openCreate} disabled={!canWrite || saving || deleting} title={disabledHint ?? undefined}
               className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700"
             >
               <PlusIcon className="h-4 w-4" />
@@ -377,14 +408,16 @@ export default function AssetsPage() {
           <DataTable columns={columns} rows={filtered} emptyState={<EmptyState title={t("sales.no_match")} />} />
         )}
 
+        {!canWrite && <p role="status" className="mb-4 text-sm text-amber-800">{disabledHint}</p>}
+
         {/* Create / edit drawer */}
         <Drawer
           open={formOpen}
-          onClose={() => setFormOpen(false)}
+          onClose={() => { if (!saving) setFormOpen(false); }}
           title={editing ? t("common.edit") : t("assets.add")}
           footer={
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setFormOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => setFormOpen(false)} disabled={saving} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 {t("common.cancel")}
               </button>
               <button
@@ -398,7 +431,9 @@ export default function AssetsPage() {
             </div>
           }
         >
-          <div className="space-y-4">
+          {!canWrite && <p role="status" className="mb-4 text-sm text-amber-800">{disabledHint}</p>}
+          {formError && <p role="alert" className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{formError}</p>}
+          <fieldset disabled={saving || !canWrite} className="space-y-4">
             <FormField label={t("common.customer")}>
               <SelectInput value={form.customerId} onChange={(v) => setForm((f) => ({ ...f, customerId: v }))} options={customerOptions} />
             </FormField>
@@ -423,7 +458,7 @@ export default function AssetsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <FormField label={t("assets.btu")}>
-                <TextInput type="number" value={form.btu} onChange={(e) => setForm((f) => ({ ...f, btu: e.target.value }))} />
+                <TextInput id="asset-btu" type="number" min="0" step="1" value={form.btu} onChange={(e) => setForm((f) => ({ ...f, btu: e.target.value }))} />
               </FormField>
               <FormField label={t("assets.ac_type")}>
                 <SelectInput
@@ -465,7 +500,7 @@ export default function AssetsPage() {
             <FormField label={t("common.notes")}>
               <TextInput value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
             </FormField>
-          </div>
+          </fieldset>
         </Drawer>
 
         {/* Asset profile drawer */}
@@ -712,7 +747,7 @@ export default function AssetsPage() {
           cancelLabel={t("common.cancel")}
           loading={deleting}
           onConfirm={() => void confirmDelete()}
-          onClose={() => setDeleteTarget(null)}
+          onClose={() => { if (!deleting) setDeleteTarget(null); }}
         />
       </ProMain>
     </AppShell>
