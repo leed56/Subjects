@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
 import { PageHeader, MetricCard, EmptyState, StatusBadge } from "@/components/ui/primitives";
@@ -11,6 +11,7 @@ import { ChevronRightIcon, CheckIcon } from "@/components/ui/icons";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { CallLink, NavigateLink } from "@/components/ui/field-links";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { ACJob } from "@/lib/store/types";
@@ -63,6 +64,10 @@ export default function SchedulePage() {
   const { org, orgRole } = useSubscription();
   const { data: localData, ready: localReady, updateACJobToCloud } = useAppStore();
   const { toast } = useToast();
+  const { canWrite, disabledHint } = useWriteAccess();
+  const saveLock = useRef(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const canReschedule = canWrite && (orgRole === "owner" || orgRole === "manager" || orgRole === "data_entry");
 
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [assigneeFilter, setAssigneeFilter] = useState("");
@@ -128,32 +133,45 @@ export default function SchedulePage() {
   const todayCount = localData.acJobs.filter((j) => j.scheduledDate === todayIso && j.status !== "cancelled").length;
 
   const openReschedule = (job: ACJob) => {
+    if (!canReschedule || saveLock.current) return;
+    setSaveError(null);
     setRescheduleTarget(job);
     setRescheduleDate(job.scheduledDate ?? todayIso);
     setJustRescheduled(null);
   };
 
   const closeRescheduleDrawer = () => {
+    if (saveLock.current) return;
+    setSaveError(null);
     setRescheduleTarget(null);
     setJustRescheduled(null);
   };
 
   const handleReschedule = async () => {
-    if (!rescheduleTarget || saving) return;
+    if (!rescheduleTarget || saving || saveLock.current || !canReschedule) return;
+    const target = rescheduleTarget;
+    const scheduledDate = rescheduleDate || undefined;
+    saveLock.current = true;
     setSaving(true);
-    const result = await updateACJobToCloud(rescheduleTarget.id, { scheduledDate: rescheduleDate || undefined });
-    setSaving(false);
-    if (!result.ok) {
-      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
-      return;
+    setSaveError(null);
+    try {
+      const result = await updateACJobToCloud(target.id, { scheduledDate });
+      if (!result.ok) {
+        setSaveError(result.error ?? t("common.save_failed"));
+        return;
+      }
+      toast({ tone: "success", title: t("schedule.rescheduled") });
+      setJustRescheduled({ ...target, scheduledDate });
+    } catch {
+      setSaveError(t("common.save_failed"));
+    } finally {
+      saveLock.current = false;
+      setSaving(false);
     }
-    toast({ tone: "success", title: t("schedule.rescheduled") });
-    setJustRescheduled({ ...rescheduleTarget, scheduledDate: rescheduleDate || undefined });
   };
 
   const dayLabel = (d: Date) => d.toLocaleDateString(locale === "si" ? "si-LK" : "en-LK", { weekday: "short", day: "numeric", month: "short" });
 
-  const canReschedule = orgRole === "owner" || orgRole === "manager" || orgRole === "data_entry";
 
   return (
     <AppShell>
@@ -197,7 +215,9 @@ export default function SchedulePage() {
                 <button
                   key={j.id}
                   type="button"
-                  onClick={() => canReschedule && openReschedule(j)}
+                  disabled={!canReschedule || saving}
+                  title={!canReschedule ? disabledHint ?? t("sub.write_blocked") : undefined}
+                  onClick={() => openReschedule(j)}
                   className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-left text-xs shadow-sm hover:border-amber-400"
                 >
                   <p className="font-semibold text-slate-900">{j.customerName}</p>
@@ -261,13 +281,13 @@ export default function SchedulePage() {
               </button>
             ) : (
               <div className="flex items-center gap-2">
-                <button type="button" onClick={closeRescheduleDrawer} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                <button type="button" onClick={closeRescheduleDrawer} disabled={saving} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                   {t("common.cancel")}
                 </button>
                 <button
                   type="button"
                   onClick={() => void handleReschedule()}
-                  disabled={saving}
+                  disabled={saving || !canReschedule}
                   className="flex-1 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
                 >
                   {saving ? t("common.saving") : t("schedule.set_date")}
@@ -312,9 +332,13 @@ export default function SchedulePage() {
                     <NavigateLink address={rescheduleTarget.address} label={t("common.navigate")} />
                   </div>
                 </div>
-                <FormField label={t("schedule.new_date")}>
-                  <DateInput value={rescheduleDate} onChange={setRescheduleDate} />
-                </FormField>
+                {!canReschedule && <p role="status" className="text-sm text-amber-800">{disabledHint ?? t("sub.write_blocked")}</p>}
+                {saveError && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{saveError}</p>}
+                <fieldset disabled={saving || !canReschedule}>
+                  <FormField label={t("schedule.new_date")}>
+                    <DateInput value={rescheduleDate} onChange={(value) => { setRescheduleDate(value); setSaveError(null); }} />
+                  </FormField>
+                </fieldset>
               </div>
             )
           )}
