@@ -9,13 +9,14 @@ const {chromium}=require(process.env.LAKBIZ_QA_PLAYWRIGHT ?? 'playwright');
 const root=path.resolve(import.meta.dirname,'..');
 const out=process.env.LAKBIZ_UI_QA_DIR ?? path.join(os.tmpdir(),'lakbiz-phase1-workflows');
 fs.mkdirSync(out,{recursive:true});
-const routes=['workforce','vehicles','teams','assets','expenses','schedule','stock/advanced','stock/advanced/queue','stock/advanced/returns','banking/pos-routing'];
+const routes=['workforce','vehicles','teams','assets','expenses','schedule','stock/advanced','stock/advanced/queue','stock/advanced/returns','banking/pos-routing','pulse'];
 const f='const f=window.fixture;';
 const mutate=`async function mutate(...args){f.calls.push(args);await new Promise(r=>setTimeout(r,80));if(f.rejectMutation)throw Error('Synthetic rejected request');return {ok:false,data:null,error:'Synthetic save failure'}}`;
 const stubs={
  'next/link':'import React from "react";export default function Link({children,...p}){return <a {...p}>{children}</a>}',
  'next/navigation':'export function useSearchParams(){return new URLSearchParams()}export function useRouter(){return {push(){},replace(){}}}export function usePathname(){return location.pathname}',
  '@/components/shell/app-shell':'export function AppShell({children}){return <div className="min-w-0">{children}</div>}',
+ '@/components/auth-provider':'export function useAuth(){return {user:{email:"owner@example.com"},logout:async()=>{}}}',
  '@/lib/i18n/locale-provider':`import {translate} from ${JSON.stringify(root+'/src/lib/i18n/translations.ts')};${f}const t=k=>translate(f.locale,k);export function useLocale(){return {locale:f.locale,t}}`,
  '@/lib/subscription/use-can-write':`${f}export function useWriteAccess(){return {canWrite:!f.readOnly,disabledHint:f.readOnly?'Read only':null}}`,
  '@/components/write-disabled-hint':`${f}export function WriteDisabledHint(){return f.readOnly?<p>Read only</p>:null}`,
