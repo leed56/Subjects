@@ -92,6 +92,7 @@ export const NAV_SECTIONS: NavSection[] = [
         roleOnly: ["owner", "manager"],
       },
       { href: "/suppliers", labelKey: "nav.suppliers", feature: "suppliers" },
+      { href: "/stock/imports", labelEn: "Imports & landed cost", labelSi: "ආනයන සහ ගොඩබෑමේ පිරිවැය", labelTa: "இறக்குமதி மற்றும் தரையிறங்கிய செலவு", roleOnly: ["owner"] },
       { href: "/vehicles", labelKey: "nav.vehicles", feature: "vehicles" },
     ],
   },
