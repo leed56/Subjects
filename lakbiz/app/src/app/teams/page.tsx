@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
 import { PageHeader, MetricCard, EmptyState, StatusBadge, SearchInput, FilterBar, Tabs, ActionMenu } from "@/components/ui/primitives";
@@ -49,6 +49,11 @@ export default function TeamsPage() {
 
   const [crews, setCrews] = useState<Crew[] | null>(null);
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [jobsAttempt, setJobsAttempt] = useState(0);
+  const [membersError, setMembersError] = useState(false);
+  const [jobsError, setJobsError] = useState(false);
+  const memberRequest = useRef(0);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -78,41 +83,64 @@ export default function TeamsPage() {
       return;
     }
     let cancelled = false;
+    setLoadError(null);
+    setCrews(null);
     void Promise.all([fetchOrgCrews(orgId), fetchOrgCrewMembers(orgId)]).then(([crewsResult, membersResult]) => {
       if (cancelled) return;
-      if (crewsResult.error) setLoadError(crewsResult.error);
+      if (crewsResult.error || membersResult.error) throw new Error(crewsResult.error ?? membersResult.error!);
       setCrews(crewsResult.data);
       const counts: Record<string, number> = {};
       for (const m of membersResult.data) counts[m.crewId] = (counts[m.crewId] ?? 0) + 1;
       setMemberCounts(counts);
+    }).catch(() => {
+      if (!cancelled) { setLoadError(t("resilience.error_title")); setCrews([]); }
     });
     return () => {
       cancelled = true;
     };
-  }, [orgId]);
+  }, [orgId, loadAttempt, t]);
 
-  const reloadProfileMembers = (crewId: string) => {
+  const reloadProfileMembers = useCallback((crewId: string) => {
+    const request = ++memberRequest.current;
+    setProfileMembers(null);
+    setMembersError(false);
     void fetchCrewMembers(crewId).then((result) => {
+      if (request !== memberRequest.current) return;
+      if (result.error) throw new Error(result.error);
       setProfileMembers(result.data);
       setMemberCounts((prev) => ({ ...prev, [crewId]: result.data.length }));
+    }).catch(() => {
+      if (request === memberRequest.current) setMembersError(true);
     });
-  };
+  }, []);
 
   useEffect(() => {
     if (!profileCrew) return;
     reloadProfileMembers(profileCrew.id);
-  }, [profileCrew]);
+    return () => { memberRequest.current += 1; };
+  }, [profileCrew, reloadProfileMembers]);
 
   useEffect(() => {
     if (!profileCrew || profileTab !== "jobs") return;
     let cancelled = false;
+    setProfileJobs(null);
+    setJobsError(false);
     void fetchCrewJobs(profileCrew.id).then((result) => {
-      if (!cancelled) setProfileJobs(result.data);
-    });
+      if (cancelled) return;
+      if (result.error) throw new Error(result.error);
+      setProfileJobs(result.data);
+    }).catch(() => { if (!cancelled) setJobsError(true); });
     return () => {
       cancelled = true;
     };
-  }, [profileCrew, profileTab]);
+  }, [profileCrew, profileTab, jobsAttempt]);
+
+  if (loadError && org.isAuthenticated) {
+    return <AppShell><ProMain><div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                    <p>{t("resilience.error_title")}</p>
+                    <button type="button" onClick={() => { setLoadError(null); setCrews(null); setLoadAttempt((n) => n + 1); }} className="mt-3 rounded-lg bg-teal-600 px-4 py-2 font-semibold text-white hover:bg-teal-700">{t("resilience.retry")}</button>
+                  </div></ProMain></AppShell>;
+  }
 
   if (!org.isAuthenticated || !localReady || !localData || crews === null) {
     return (
@@ -310,10 +338,6 @@ export default function TeamsPage() {
           }
         />
 
-        {loadError && (
-          <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{loadError}</div>
-        )}
-
         <FilterBar>
           <SearchInput value={search} onChange={setSearch} placeholder={t("crews.search_placeholder")} className="min-w-[220px] flex-1" />
           <div className="flex gap-1.5">
@@ -416,7 +440,10 @@ export default function TeamsPage() {
             />
             <div className="mt-4">
               {profileTab === "members" &&
-                (profileMembers === null ? (
+                (membersError ? (<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                    <p>{t("resilience.error_title")}</p>
+                    <button type="button" onClick={() => reloadProfileMembers(profileCrew.id)} className="mt-3 rounded-lg bg-teal-600 px-4 py-2 font-semibold text-white hover:bg-teal-700">{t("resilience.retry")}</button>
+                  </div>) : profileMembers === null ? (
                   <ProLoadingState label={t("common.loading")} />
                 ) : (
                   <div className="space-y-4">
@@ -503,7 +530,10 @@ export default function TeamsPage() {
                   </div>
                 ))}
               {profileTab === "jobs" &&
-                (profileJobs === null ? (
+                (jobsError ? (<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                    <p>{t("resilience.error_title")}</p>
+                    <button type="button" onClick={() => { setJobsError(false); setProfileJobs(null); setJobsAttempt((n) => n + 1); }} className="mt-3 rounded-lg bg-teal-600 px-4 py-2 font-semibold text-white hover:bg-teal-700">{t("resilience.retry")}</button>
+                  </div>) : profileJobs === null ? (
                   <ProLoadingState label={t("common.loading")} />
                 ) : profileJobs.length === 0 ? (
                   <EmptyState title={t("crews.no_jobs")} description={t("crews.no_jobs_hint")} />
