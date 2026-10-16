@@ -27,7 +27,7 @@ import { Drawer, DrawerFooter, Dialog, ConfirmDialog } from "@/components/ui/ove
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
 import { FormField, TextInput, SelectInput, MoneyInput, DateInput } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
-import { AssetIcon, PlusIcon, FilterIcon, CloseIcon } from "@/components/ui/icons";
+import { AssetIcon, FilterIcon, CloseIcon } from "@/components/ui/icons";
 import {
   AC_BRANDS,
   AC_BTU_OPTIONS,
@@ -631,7 +631,6 @@ export default function JobsPage() {
                 onClick={openCreate}
                 className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <PlusIcon className="h-4 w-4" />
                 {t("jobs.new")}
               </button>
             ) : undefined

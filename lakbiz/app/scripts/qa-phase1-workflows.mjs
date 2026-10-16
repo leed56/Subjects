@@ -9,7 +9,7 @@ const {chromium}=require(process.env.LAKBIZ_QA_PLAYWRIGHT ?? 'playwright');
 const root=path.resolve(import.meta.dirname,'..');
 const out=process.env.LAKBIZ_UI_QA_DIR ?? path.join(os.tmpdir(),'lakbiz-phase1-workflows');
 fs.mkdirSync(out,{recursive:true});
-const routes=['dashboard','workforce','vehicles','teams','assets','expenses','schedule','stock/advanced','stock/advanced/queue','stock/advanced/returns','banking/pos-routing','pulse','stock/imports'];
+const routes=['dashboard','customers','workforce','vehicles','teams','assets','expenses','schedule','stock/advanced','stock/advanced/queue','stock/advanced/returns','banking/pos-routing','pulse','stock/imports'];
 const f='const f=window.fixture;';
 const mutate=`async function mutate(...args){f.calls.push(args);await new Promise(r=>setTimeout(r,80));if(f.rejectMutation)throw Error('Synthetic rejected request');return {ok:false,data:null,error:'Synthetic save failure'}}`;
 const stubs={
@@ -25,6 +25,7 @@ const stubs={
  '@/components/ui/toast':`${f}export function useToast(){return {toast:x=>f.toasts.push(x)}}`,
  '@/components/messaging/message-send-button':'export function MessageSendButton(){return null}',
  '@/lib/messaging/use-sms-api-configured':'export function useWhatsAppApiConfigured(){return false}export function useSmsApiConfigured(){return false}',
+ '@/lib/messaging/use-notification-logs':'export function useNotificationLogs(){return []}',
 };
 const imports=routes.map((route,i)=>`import Page${i} from ${JSON.stringify(root+'/src/app/'+route+'/page.tsx')};`).join('\n');
 const entry=`import React from 'react';import {createRoot} from 'react-dom/client';import {emptyAppData} from ${JSON.stringify(root+'/src/lib/store/storage.ts')};${imports}
@@ -50,7 +51,8 @@ function assert(value,message){if(!value)throw Error(message)}
 try{
  for(const width of [390,768,1440])for(const route of routes){
   const page=await browser.newPage({viewport:{width,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  fixture={route:routes.indexOf(route),locale:'en',data:{},calls:[],toasts:[],rejectMutation:true};
+  const customerData=route==='customers'?{customers:Array.from({length:19},(_,i)=>({id:`customer-${i}`,name:`Customer ${i+1}`,contactType:'individual',phone:`077000${String(i).padStart(4,'0')}`,address:'Colombo',creditBalance:0,creditLimit:10000}))}:{};
+  fixture={route:routes.indexOf(route),locale:'en',data:customerData,calls:[],toasts:[],rejectMutation:true};
   await page.goto(`http://127.0.0.1:${server.address().port}`);await page.waitForTimeout(250);
   assert(!errors.length,`${route}: ${errors.join(';')}`);
   assert(await page.locator('main').count()>0,`${route}: no main`);

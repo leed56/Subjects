@@ -637,7 +637,7 @@ export default function DashboardPage() {
           actions={
             <>
               <Link href={dashboardPrimary.href} className={primaryButton}>
-                + {textileNoTransactions
+                {textileNoTransactions
                   ? locale === "si"
                     ? "පළමු රෙදි අලෙවිය සම්පූර්ණ කරන්න"
                     : locale === "ta"
@@ -645,7 +645,7 @@ export default function DashboardPage() {
                       : "Complete first fabric sale"
                   : dashboardPrimary.label}
               </Link>
-              {canSeeJobs && <Link href="/jobs" className={primaryButton}>{t("jobs.new")}</Link>}
+              {canSeeJobs && dashboardPrimary.href !== "/jobs" && <Link href="/jobs" className={primaryButton}>{t("jobs.new")}</Link>}
               <ActionMenu
                 label={t("dash.more")}
                 items={[

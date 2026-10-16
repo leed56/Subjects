@@ -86,6 +86,7 @@ export default function CustomersPage() {
   const [savingPriceProductId, setSavingPriceProductId] = useState<string | null>(null);
 
   const [typeFilter, setTypeFilter] = useState<ContactFilter>("all");
+  const [page, setPage] = useState(1);
   // Global search (Cmd/Ctrl+K) links a customer result here with ?q=<name>
   // — same seeded-once-at-mount pattern as /stock's own ?q= handling.
   const searchParams = useSearchParams();
@@ -194,6 +195,10 @@ export default function CustomersPage() {
           (c.vatNumber ?? "").toLowerCase().includes(query),
       )
     : typeFiltered;
+  const pageSize = 10;
+  const pageCount = Math.max(1, Math.ceil(customers.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const visibleCustomers = customers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const canExport = can("export");
   const canBulkMessaging = can("bulk_messaging");
@@ -230,7 +235,7 @@ export default function CustomersPage() {
             className="flex flex-wrap items-center gap-2 text-left font-semibold text-slate-900 hover:text-teal-700 hover:underline"
           >
             {c.name}
-            <ContactTypeBadge type={c.contactType} />
+            <span className="sm:hidden"><ContactTypeBadge type={c.contactType} /></span>
           </button>
           {c.contactType === "company" && c.contactPerson && (
             <p className="mt-0.5 text-xs text-slate-500">{c.contactPerson}</p>
@@ -372,7 +377,7 @@ export default function CustomersPage() {
         ) : (
           <>
             <FilterBar>
-              <SearchInput value={search} onChange={setSearch} placeholder={t("cust.search_placeholder")} className="min-w-[220px] flex-1" />
+              <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("cust.search_placeholder")} className="min-w-[220px] flex-1" />
               <div className="grid w-full grid-cols-3 gap-1.5 sm:flex sm:w-auto">
                 {(
                   [
@@ -384,7 +389,7 @@ export default function CustomersPage() {
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => setTypeFilter(tab.id)}
+                    onClick={() => { setTypeFilter(tab.id); setPage(1); }}
                     aria-pressed={typeFilter === tab.id}
                     className={`min-h-11 rounded-lg px-2 py-2 text-sm font-medium transition sm:px-3 ${
                       typeFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
@@ -398,7 +403,7 @@ export default function CustomersPage() {
 
             <DataTable
               columns={columns}
-              rows={customers}
+              rows={visibleCustomers}
               emptyState={
                 <EmptyState
                   size="compact"
@@ -419,6 +424,19 @@ export default function CustomersPage() {
                 />
               }
             />
+
+            {customers.length > pageSize && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
+                <p className="font-semibold text-slate-500">
+                  {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, customers.length)} of {customers.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button type="button" disabled={currentPage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="min-h-9 rounded-lg border border-slate-200 px-3 font-semibold text-slate-600 disabled:opacity-40">← Previous</button>
+                  <span className="min-w-20 text-center text-xs font-bold uppercase tracking-wide text-slate-500">Page {currentPage} / {pageCount}</span>
+                  <button type="button" disabled={currentPage === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))} className="min-h-9 rounded-lg border border-slate-200 px-3 font-semibold text-slate-600 disabled:opacity-40">Next →</button>
+                </div>
+              </div>
+            )}
 
             {hasCreditActivity && (
               <section className="mt-5" aria-label={t("cust.credit_owed")}>
