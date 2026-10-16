@@ -100,6 +100,10 @@ await db.exec(await readFile(new URL(
   "../../supabase/migrations/20261016104228_inventory_transfer_atomic_authority.sql",
   import.meta.url,
 ), "utf8"));
+await db.exec(await readFile(new URL(
+  "../../supabase/migrations/20261016105104_inventory_location_reconciliation.sql",
+  import.meta.url,
+), "utf8"));
 
 let checks = 0;
 function pass(label) { checks++; console.log(`PASS ${label}`); }
@@ -120,6 +124,8 @@ assert.equal(Number(await scalar(
   "qty_on_hand",
 )), 10);
 pass("existing simple stock reconciles into the default location");
+assert.equal(Number(await scalar(`select count(*) as n from get_inventory_location_reconciliation('${org}') where difference <> 0`, "n")), 0);
+pass("opening custody balances reconcile for simple, variant, lot and serial stock");
 
 await db.exec(`select create_inventory_transfer_draft(
   '${org}','${transfer}','${main}','${destination}',
@@ -136,6 +142,8 @@ assert.equal(Number(await scalar(
 )), 6);
 assert.equal(Number(await scalar(`select stock_qty from products_base where id='${simpleProduct}'`, "stock_qty")), 10);
 pass("dispatch removes source availability without changing aggregate stock");
+assert.equal(Number(await scalar(`select count(*) as n from get_inventory_location_reconciliation('${org}') where difference <> 0`, "n")), 0);
+pass("dispatched stock is counted in transit without a false shortage");
 
 await db.exec(`select mark_inventory_transfer_in_transit('${transfer}')`);
 await db.exec(`select receive_inventory_transfer('${transfer}')`);
@@ -216,10 +224,27 @@ await db.exec(`select dispatch_inventory_transfer('${lotTransfer}'); select mark
 assert.equal(Number(await scalar(`select qty_on_hand from inventory_location_balances where location_id='${destination}' and lot_id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'`, "qty_on_hand")), 3);
 assert.equal(Number(await scalar(`select qty_on_hand from inventory_location_balances where location_id='${destination}' and variant_id='99999999-9999-4999-8999-999999999999'`, "qty_on_hand")), 2);
 pass("partial lot and variant custody moves preserve exact identities");
+assert.equal(Number(await scalar(`select count(*) as n from get_inventory_location_reconciliation('${org}') where difference <> 0`, "n")), 0);
+pass("received partial lots, variants and serial units still reconcile exactly");
+
+await db.exec("reset role");
+await db.exec(`update products_base set stock_qty=stock_qty-1 where id='${simpleProduct}'`);
+await role(owner);
+assert.equal(Number(await scalar(`select difference from get_inventory_location_reconciliation('${org}','${simpleProduct}') where identity_kind='product_total'`, "difference")), -1);
+pass("legacy aggregate writes are reported as custody drift");
+const staleTransfer = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+await db.exec(`select create_inventory_transfer_draft('${org}','${staleTransfer}','${main}','${destination}',
+  '[{"product_id":"${simpleProduct}","qty":1}]'::jsonb,null)`);
+await rejects(`select dispatch_inventory_transfer('${staleTransfer}')`, "drift blocks dispatch even when source location has enough stock");
+await rejects(`select inventory_internal.dispatch_inventory_transfer('${staleTransfer}')`, "client cannot bypass reconciliation through private movement function");
+await db.exec("reset role");
+await db.exec(`update products_base set stock_qty=stock_qty+1 where id='${simpleProduct}'`);
+await role(owner);
 
 await db.exec(`select cancel_inventory_transfer('${excessive}')`);
 await rejects(`select dispatch_inventory_transfer('${excessive}')`, "cancelled drafts cannot dispatch");
 await role(outsider);
+await rejects(`select * from get_inventory_location_reconciliation('${org}')`, "another tenant cannot read the reconciliation report");
 assert.equal(Number(await scalar(`select count(*) as n from inventory_location_balances where organization_id='${org}'`, "n")), 0);
 pass("location balances are hidden from another tenant");
 
@@ -229,6 +254,7 @@ await rejects(`select create_inventory_transfer_draft(
   '[{"product_id":"${simpleProduct}","qty":1}]'::jsonb,null
 )`, "another tenant cannot create a transfer");
 await role("", "anon");
+await rejects(`select * from get_inventory_location_reconciliation('${org}')`, "anonymous reconciliation access is denied");
 await rejects(`select dispatch_inventory_transfer('${transfer}')`, "anonymous transfer RPC access is denied");
 
 console.log(`Inventory transfer authority: ${checks} checks passed.`);
