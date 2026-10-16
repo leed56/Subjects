@@ -74,7 +74,7 @@ jobs:
       - name: Unit tests
         run: npm run test
 
-      - name: Isolated inventory transfer database fixtures
+      - name: Isolated inventory transfer and purchase receipt database fixtures
         shell: bash
         run: |
           set -euo pipefail

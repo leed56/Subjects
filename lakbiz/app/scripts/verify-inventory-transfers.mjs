@@ -428,4 +428,6 @@ if (nativeUrl) {
   pass("native Postgres: two stale device snapshots cannot overwrite each other's stock");
 }
 console.log(`Inventory transfer authority: ${checks} checks passed.`);
+const { verifyPurchaseReceipts } = await import('./verify-purchase-receipts.mjs');
+await verifyPurchaseReceipts({db,Client,nativeUrl,org,other,owner,outsider,role});
 await db.close();
