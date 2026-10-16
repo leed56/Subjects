@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { ProductForm } from "@/components/product-form";
 import { StockCommandHeader } from "@/components/stock/stock-command-header";
 import { ExportActions } from "@/components/export/export-actions";
@@ -732,6 +733,7 @@ function StockWorkspace({
           onCategoryChange={(category) => { setCategoryFilter(category); setPage(1); }}
           actions={
             <>
+              <Link href="/stock/transfers" className="inline-flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700">Locations & transfers</Link>
               {canExport && (
                 <ExportActions
                   compact

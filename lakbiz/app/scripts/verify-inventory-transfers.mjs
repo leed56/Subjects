@@ -7,8 +7,22 @@ process.on("uncaughtException", error => {
   process.exit(1);
 });
 
-const { PGlite } = await import(process.env.INVENTORY_TEST_MODULE ?? "@electric-sql/pglite");
-const db = new PGlite();
+let db;
+let Client;
+const nativeUrl = process.env.INVENTORY_TEST_URL;
+if (nativeUrl) {
+  const target = new URL(nativeUrl);
+  if (!["localhost","127.0.0.1","[::1]"].includes(target.hostname) || target.pathname !== "/lakbiz_inventory_test") {
+    throw new Error("Native fixtures require a loopback lakbiz_inventory_test database; remote databases are refused.");
+  }
+  ({ Client } = await import(process.env.INVENTORY_PG_MODULE ?? "pg"));
+  const client = new Client({ connectionString: nativeUrl });
+  await client.connect();
+  db = { exec: sql => client.query(sql), query: sql => client.query(sql), close: () => client.end() };
+} else {
+  const { PGlite } = await import(process.env.INVENTORY_TEST_MODULE ?? "@electric-sql/pglite");
+  db = new PGlite();
+}
 const org = "11111111-1111-4111-8111-111111111111";
 const other = "22222222-2222-4222-8222-222222222222";
 const owner = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -59,6 +73,15 @@ create table inventory_units(
   notes text, updated_at timestamptz not null default now()
 );
 grant select on products_base, inventory_units to authenticated;
+create table stock_logs(
+  id text primary key,organization_id uuid not null,product_id text not null,product_name text not null,
+  log_type text not null check(log_type in ('in','out','sale','purchase','job_usage','job_return','supplier_return','write_off','customer_return')),
+  qty numeric(14,3) not null,note text,log_date timestamptz not null default now(),
+  related_job_id text,related_supplier_id text,user_id uuid
+);
+grant select on stock_logs to authenticated;
+create table suppliers(id text primary key,organization_id uuid not null);
+insert into suppliers values('foreign-supplier','${other}');
 insert into auth.users values ('${owner}'), ('${outsider}');
 insert into organizations values ('${org}'), ('${other}');
 insert into org_members values ('${org}','${owner}','owner'), ('${other}','${outsider}','owner');
@@ -257,5 +280,152 @@ await role("", "anon");
 await rejects(`select * from get_inventory_location_reconciliation('${org}')`, "anonymous reconciliation access is denied");
 await rejects(`select dispatch_inventory_transfer('${transfer}')`, "anonymous transfer RPC access is denied");
 
+await db.exec("reset role");
+await db.exec(await readFile(new URL(
+  "../../supabase/migrations/20261016105637_inventory_location_operations.sql", import.meta.url,
+), "utf8"));
+await db.exec(`update products_base set stock_qty=stock_qty-1 where id='${simpleProduct}'`);
+await role(owner);
+assert.equal(Number(await scalar(`select qty_on_hand from inventory_location_balances where product_id='${simpleProduct}' and location_id='${main}'`, "qty_on_hand")), 5);
+assert.equal(Number(await scalar(`select count(*) as n from get_inventory_location_reconciliation('${org}') where difference<>0`, "n")), 0);
+pass("existing simple stock writes atomically update default-location custody");
+const balance = await scalar(`select id from inventory_location_balances where product_id='${simpleProduct}' and location_id='${main}'`, "id");
+const hold = "abababab-abab-4bab-8bab-abababababab";
+await db.exec(`select reserve_inventory_stock('${org}','${hold}',4,'Customer hold','${balance}',null)`);
+await db.exec("reset role");
+await rejects(`update products_base set stock_qty=stock_qty-2 where id='${simpleProduct}'`, "existing sale or adjustment cannot consume held main-location stock");
+await role(owner);
+await rejects(`select reserve_inventory_stock('${org}',gen_random_uuid(),2,'Overbooking','${balance}',null)`, "reservation cannot overbook available balance");
+await db.exec(`select release_inventory_reservation('${hold}');select release_inventory_reservation('${hold}')`);
+assert.equal(Number(await scalar(`select qty_reserved from inventory_location_balances where id='${balance}'`, "qty_reserved")), 0);
+pass("release is retry-safe and restores exact availability");
+await db.exec("reset role");
+await db.exec(`update inventory_lots set qty_on_hand=qty_on_hand-1 where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  update products_base set stock_qty=stock_qty-1 where id='lot-product'`);
+await role(owner);
+assert.equal(Number(await scalar(`select count(*) as n from get_inventory_location_reconciliation('${org}','lot-product') where difference<>0`, "n")), 0);
+pass("existing lot sales/dispositions update custody without double-decrementing aggregate stock");
+await db.exec("reset role");
+await db.exec(`update product_variants set stock_qty=stock_qty+1 where id='99999999-9999-4999-8999-999999999999';
+  update products_base set stock_qty=stock_qty+1 where id='variant-product'`);
+await role(owner);
+assert.equal(Number(await scalar(`select count(*) as n from get_inventory_location_reconciliation('${org}','variant-product') where difference<>0`, "n")), 0);
+pass("variant receipts and returns replenish default custody without a second product decrement");
+const unitHold = "acacacac-acac-4cac-8cac-acacacacacac";
+await db.exec(`select reserve_inventory_stock('${org}','${unitHold}',1,'Serial hold',null,'${serialUnit}')`);
+await db.exec("reset role");
+await rejects(`update inventory_units set status='sold' where id='${serialUnit}'`, "reserved serialized identity cannot be sold outside release workflow");
+await role(owner);
+await db.exec(`select release_inventory_reservation('${unitHold}')`);
+assert.equal(await scalar(`select status from inventory_units where id='${serialUnit}'`, "status"), "available");
+pass("serialized hold release restores the same unit identity");
+await db.exec("reset role");
+await db.exec(`update inventory_location_balances set qty_on_hand=qty_on_hand+1 where id='${balance}'`);
+await role(owner);
+await rejects(`select reconcile_default_inventory_balance('${balance}',5,'Stale screen')`, "reconciliation rejects stale operator quantities");
+await db.exec(`select reconcile_default_inventory_balance('${balance}',6,'Verified physical count against source')`);
+assert.equal(Number(await scalar(`select count(*) as n from get_inventory_location_reconciliation('${org}','${simpleProduct}') where difference<>0`, "n")), 0);
+assert.equal(Number(await scalar(`select count(*) as n from inventory_reconciliation_audit where balance_id='${balance}'`, "n")), 1);
+pass("owner reconciliation repairs only location stock and preserves an immutable audit record");
+await role(outsider);
+await rejects(`select reserve_inventory_stock('${org}',gen_random_uuid(),1,'Wrong tenant','${balance}',null)`, "reservation rejects another tenant");
+await rejects(`select reconcile_default_inventory_balance('${balance}',5,'Wrong tenant')`, "repair rejects another tenant");
+await role(owner);
+const command = JSON.stringify([{product_id:simpleProduct,command_key:'fixture-command',expected_qty:9,next_qty:10}]);
+await db.exec(`select apply_inventory_stock_commands('${org}','${command}')`);
+await db.exec(`select apply_inventory_stock_commands('${org}','${command}')`);
+assert.equal(Number(await scalar(`select stock_qty from products_base where id='${simpleProduct}'`,"stock_qty")),10);
+pass("atomic stock command replay cannot apply a receipt twice");
+await rejects(`select apply_inventory_stock_commands('${org}','[{"product_id":"${simpleProduct}","command_key":"stale","expected_qty":9,"next_qty":8}]')`,"stale device quantity cannot overwrite newer cloud stock");
+await rejects(`select apply_inventory_stock_commands('${org}','[{"product_id":"${simpleProduct}","command_key":"fixture-command","expected_qty":9,"next_qty":11}]')`,"replayed command key cannot carry changed quantities");
+await rejects(`select apply_inventory_stock_commands('${org}','[{"product_id":"${simpleProduct}","command_key":"batch-first","expected_qty":10,"next_qty":11},{"product_id":"variant-product","command_key":"batch-fail","expected_qty":999,"next_qty":1000}]')`,"one stale stock command rolls back the entire batch");
+assert.equal(Number(await scalar(`select stock_qty from products_base where id='${simpleProduct}'`,"stock_qty")),10);
+assert.equal(Number(await scalar(`select count(*) as n from inventory_stock_commands where command_key='batch-first'`,"n")),0);
+pass("failed command batch leaves neither a quantity change nor a replay marker");
+await db.exec("reset role");
+await db.exec("update inventory_lots set status='quarantine' where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'");
+await role(owner);
+const blockedBalance=await scalar(`select id from inventory_location_balances where lot_id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee' and location_id='${main}'`,"id");
+await rejects(`select reserve_inventory_stock('${org}',gen_random_uuid(),1,'Blocked lot','${blockedBalance}',null)`,"quarantined lot cannot be promised by a customer hold");
+await db.exec("reset role;update inventory_lots set status='available' where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'");
+await role(owner);
+await rejects(`select initialize_inventory_opening_custody('${org}','Too late')`,"opening custody cannot run after movement authority is enabled");
+await db.exec(`reset role;update inventory_transfer_settings set enabled=false where organization_id='${org}';
+  insert into products_base(id,organization_id,name,stock_qty) values('late-opening','${org}','Migrated opening',2)`);
+await role(owner);
+await db.exec(`select initialize_inventory_opening_custody('${org}','Verified unassigned stock at main location')`);
+assert.equal(Number(await scalar("select qty_on_hand from inventory_location_balances where product_id='late-opening'","qty_on_hand")),2);
+pass("owner opening review registers missing migrated custody without changing source stock");
+await db.exec(`select initialize_inventory_opening_custody('${org}','Repeat verified opening review')`);
+assert.equal(Number(await scalar("select count(*) as n from inventory_location_balances where product_id='late-opening'","n")),1);
+pass("repeated opening review does not duplicate physical stock");
+assert.equal(await scalar(`select location_id from inventory_units where id='${serialUnit}'`,"location_id"),destination);
+assert.equal(Number(await scalar(`select qty_on_hand from inventory_location_balances where product_id='${simpleProduct}' and location_id='${destination}'`,"qty_on_hand")),4);
+pass("opening review preserves existing branch and serialized custody");
+await db.exec(`reset role;update inventory_transfer_settings set enabled=true where organization_id='${org}'`);
+await role(owner);
+const atomicLog=JSON.stringify([{product_id:simpleProduct,command_key:'stock-log:atomic-in',expected_qty:10,next_qty:11,
+  stock_log:{id:'atomic-in',product_id:simpleProduct,log_type:'in',qty:1,user_id:outsider}}]);
+await db.exec(`select apply_inventory_stock_commands('${org}','${atomicLog}');select apply_inventory_stock_commands('${org}','${atomicLog}')`);
+assert.equal(Number(await scalar("select count(*) as n from stock_logs where id='atomic-in'","n")),1);
+assert.equal(await scalar("select user_id from stock_logs where id='atomic-in'","user_id"),owner);
+pass("stock quantity and server-stamped movement audit commit together and replay once");
+const badLog=JSON.stringify([{product_id:simpleProduct,command_key:'stock-log:bad-date',expected_qty:11,next_qty:12,
+  stock_log:{id:'bad-date',product_id:simpleProduct,log_type:'in',qty:1,log_date:'invalid-date'}}]);
+await rejects(`select apply_inventory_stock_commands('${org}','${badLog}')`,"a failed stock-log insert rolls back the quantity and location change");
+assert.equal(Number(await scalar(`select stock_qty from products_base where id='${simpleProduct}'`,"stock_qty")),11);
+assert.equal(Number(await scalar("select count(*) as n from inventory_stock_commands where command_key='stock-log:bad-date'","n")),0);
+pass("audit failure leaves no stock command marker or partial quantity update");
+const foreignLog=JSON.stringify([{product_id:simpleProduct,command_key:'stock-log:foreign-supplier',expected_qty:11,next_qty:12,
+  stock_log:{id:'foreign-supplier',product_id:simpleProduct,log_type:'in',qty:1,related_supplier_id:'foreign-supplier'}}]);
+await rejects(`select apply_inventory_stock_commands('${org}','${foreignLog}')`,"stock movement audit cannot reference another tenant's supplier");
+if (nativeUrl) {
+  await db.exec("reset role");
+  await db.exec(`insert into products_base(id,organization_id,name,stock_qty) values
+    ('race-holds','${org}','Concurrent holds',10),
+    ('race-sale','${org}','Concurrent sale',10),
+    ('race-receipt','${org}','Concurrent receipt',10),
+    ('race-command','${org}','Concurrent stock command',10)`);
+  async function race(sqls) {
+    const clients = await Promise.all(sqls.map(async () => {
+      const client = new Client({ connectionString: nativeUrl });
+      await client.connect();
+      await client.query(`select set_config('request.jwt.claim.sub','${owner}',false)`);
+      return client;
+    }));
+    try { return await Promise.allSettled(sqls.map((sql,i) => clients[i].query(sql))); }
+    finally { await Promise.all(clients.map(client => client.end())); }
+  }
+  const raceBalance = await scalar(`select id from inventory_location_balances where product_id='race-holds'`, "id");
+  const holdIds = ["12121212-1212-4212-8212-121212121212","13131313-1313-4313-8313-131313131313"];
+  let outcomes = await race(holdIds.map(id => `select reserve_inventory_stock('${org}','${id}',7,'Concurrent hold','${raceBalance}',null)`));
+  assert.equal(outcomes.filter(row=>row.status==='fulfilled').length,1);
+  assert.equal(Number(await scalar(`select qty_reserved from inventory_location_balances where id='${raceBalance}'`,"qty_reserved")),7);
+  pass("native Postgres: simultaneous reservations cannot overbook");
+  await role(owner);
+  const saleRace = "14141414-1414-4414-8414-141414141414";
+  await db.exec(`select create_inventory_transfer_draft('${org}','${saleRace}','${main}','${destination}',
+    '[{"product_id":"race-sale","qty":7}]',null)`);
+  outcomes=await race([
+    `update products_base set stock_qty=stock_qty-7 where id='race-sale'`,
+    `select dispatch_inventory_transfer('${saleRace}')`,
+  ]);
+  assert.equal(outcomes.filter(row=>row.status==='fulfilled').length,1);
+  assert.equal(Number(await scalar(`select count(*) as n from get_inventory_location_reconciliation('${org}','race-sale') where difference<>0`,"n")),0);
+  pass("native Postgres: simultaneous sale and transfer cannot consume the same stock");
+  const receiptRace="15151515-1515-4515-8515-151515151515";
+  await db.exec(`select create_inventory_transfer_draft('${org}','${receiptRace}','${main}','${destination}',
+    '[{"product_id":"race-receipt","qty":3}]',null);
+    select dispatch_inventory_transfer('${receiptRace}');select mark_inventory_transfer_in_transit('${receiptRace}')`);
+  outcomes=await race([`select receive_inventory_transfer('${receiptRace}')`,`select receive_inventory_transfer('${receiptRace}')`]);
+  assert.equal(outcomes.filter(row=>row.status==='fulfilled').length,1);
+  assert.equal(Number(await scalar(`select qty_on_hand from inventory_location_balances where product_id='race-receipt' and location_id='${destination}'`,"qty_on_hand")),3);
+  pass("native Postgres: simultaneous receipt retries credit destination exactly once");
+  outcomes=await race(['first-device','second-device'].map(key=>`select apply_inventory_stock_commands('${org}',
+    '[{"product_id":"race-command","command_key":"${key}","expected_qty":10,"next_qty":7}]')`));
+  assert.equal(outcomes.filter(row=>row.status==='fulfilled').length,1);
+  assert.equal(Number(await scalar("select stock_qty from products_base where id='race-command'","stock_qty")),7);
+  pass("native Postgres: two stale device snapshots cannot overwrite each other's stock");
+}
 console.log(`Inventory transfer authority: ${checks} checks passed.`);
 await db.close();

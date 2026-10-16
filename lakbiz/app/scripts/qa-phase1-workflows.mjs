@@ -9,10 +9,11 @@ const {chromium}=require(process.env.LAKBIZ_QA_PLAYWRIGHT ?? 'playwright');
 const root=path.resolve(import.meta.dirname,'..');
 const out=process.env.LAKBIZ_UI_QA_DIR ?? path.join(os.tmpdir(),'lakbiz-phase1-workflows');
 fs.mkdirSync(out,{recursive:true});
-const routes=['dashboard','customers','workforce','vehicles','teams','assets','expenses','schedule','stock/advanced','stock/advanced/queue','stock/advanced/returns','banking/pos-routing','pulse','stock/imports'];
+const routes=['dashboard','customers','workforce','vehicles','teams','assets','expenses','schedule','stock/advanced','stock/advanced/queue','stock/advanced/returns','banking/pos-routing','pulse','stock/imports','stock/transfers'];
 const f='const f=window.fixture;';
 const mutate=`async function mutate(...args){f.calls.push(args);await new Promise(r=>setTimeout(r,80));if(f.rejectMutation)throw Error('Synthetic rejected request');return {ok:false,data:null,error:'Synthetic save failure'}}`;
 const stubs={
+ '@/lib/supabase/inventory-location-client':`${f}${mutate}export async function loadInventoryLocations(){if(f.failLoads)throw Error('Synthetic load failure');return {organizationId:'fixture-org',locations:[{id:'main',name:'Main stockroom',code:'MAIN',is_default:true,active:true},{id:'branch',name:'Branch',code:'BRANCH',active:true}],balances:[{id:'balance',location_id:'main',product_id:'p',qty_on_hand:10,qty_reserved:0,variant_id:null,lot_id:null}],units:[],transfers:[],reservations:[],enabled:true}}export async function inventoryOperation(...args){await mutate(...args)}export async function createStockLocation(...args){await mutate(...args)}export async function inspectInventoryProduct(){return []}`,
  'next/link':'import React from "react";export default function Link({children,...p}){return <a {...p}>{children}</a>}',
  'next/navigation':'export function useSearchParams(){return new URLSearchParams()}export function useRouter(){return {push(){},replace(){}}}export function usePathname(){return location.pathname}',
  '@/components/shell/app-shell':'export function AppShell({children}){return <div className="min-w-0">{children}</div>}',
@@ -67,6 +68,27 @@ try{
    await dialog.getByRole('alert').waitFor();assert(await save.isEnabled(),`${route}: saving lock stuck`);
    if(route==='teams')assert(await dialog.locator('input').first().inputValue()==='Preserved QA draft','Crew draft lost');
    assert(await page.evaluate(()=>window.fixture.calls.length)===1,`${route}: unexpected mutation calls`);
+  }
+  if(route==='stock/transfers'){
+   await page.getByRole('combobox',{name:/^Source stock/}).selectOption('b:balance');
+   await page.getByRole('combobox',{name:/^Destination/}).selectOption('branch');
+   await page.getByLabel('Quantity',{exact:true}).fill('2');
+   await page.getByLabel('Reason / notes',{exact:true}).fill('Keep this transfer draft');
+   await page.getByRole('button',{name:'Create transfer draft',exact:true}).click();
+   await page.getByRole('alert').waitFor();
+   assert(await page.getByLabel('Quantity',{exact:true}).inputValue()==='2','Transfer quantity draft lost');
+   assert(await page.getByLabel('Reason / notes',{exact:true}).inputValue()==='Keep this transfer draft','Transfer reason draft lost');
+   assert(await page.getByRole('button',{name:'Create transfer draft',exact:true}).isEnabled(),'Transfer lock stuck');
+   await page.evaluate(()=>{window.fixture.failLoads=true});
+   await page.getByRole('button',{name:'Refresh',exact:true}).click();
+   await page.getByText('Synthetic load failure',{exact:true}).waitFor();
+   assert(await page.getByRole('button',{name:'Create transfer draft',exact:true}).count()===0,'Failed load leaves stale stock actions available');
+   await page.evaluate(()=>{window.fixture.failLoads=false});
+   await page.getByRole('button',{name:'Retry loading',exact:true}).click();
+   await page.getByRole('combobox',{name:/^Source stock/}).waitFor();
+   assert(await page.getByLabel('Quantity',{exact:true}).inputValue()==='2','Retry discarded the operator draft');
+   fixture={...fixture,readOnly:true};await page.reload();
+   await page.getByText('Stock operator access required',{exact:true}).waitFor();
   }
   results.push({route,width,passed:true});await page.close();
  }

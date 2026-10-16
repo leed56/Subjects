@@ -28,6 +28,20 @@ jobs:
     name: Lint, types, tests, build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      inventory-postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: inventory-fixture-only
+          POSTGRES_DB: lakbiz_inventory_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     defaults:
       run:
         working-directory: lakbiz/app
@@ -65,8 +79,9 @@ jobs:
         run: |
           set -euo pipefail
           inventory_qa_tools="${RUNNER_TEMP}/lakbiz-inventory-db-tools"
-          npm install --prefix "$inventory_qa_tools" --no-save --no-package-lock @electric-sql/pglite@0.3.14
+          npm install --prefix "$inventory_qa_tools" --no-save --no-package-lock @electric-sql/pglite@0.3.14 pg@8.16.3
           INVENTORY_TEST_MODULE="$inventory_qa_tools/node_modules/@electric-sql/pglite/dist/index.js" node scripts/verify-inventory-transfers.mjs
+          INVENTORY_PG_MODULE="$inventory_qa_tools/node_modules/pg/esm/index.mjs" INVENTORY_TEST_URL="postgresql://postgres:inventory-fixture-only@127.0.0.1:5432/lakbiz_inventory_test" node scripts/verify-inventory-transfers.mjs
 
       - name: Production build
         run: npm run build
