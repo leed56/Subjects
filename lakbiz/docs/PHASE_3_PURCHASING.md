@@ -37,7 +37,7 @@ The connected checkpoint passed 113 native PostgreSQL checks: the preceding 95 p
 ## Remaining
 
 - Exact lot, variant and serial receiving, with authenticated integration verification.
-- Supplier invoice linkage that avoids receiving the same goods again when recording the bill.
+- Supplier invoice screen/history/ledger and settlement integration. The receipt-linked invoice database authority is prepared separately, not activated: see `PHASE_3_RECEIPT_INVOICES.md`. It posts payable exactly once without receiving stock again; legacy payable writers must be adapted before its gate is enabled.
 - Transactional shipment lifecycle, landed-cost allocation, recoverable VAT separation, FX settlement and residual rounding.
 - Full authenticated browser → real historical schema → data failure/retry certification and controlled company rollout. Synthetic browser adapters and database fixtures do not replace this release step.
 

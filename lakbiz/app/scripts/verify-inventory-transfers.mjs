@@ -432,4 +432,6 @@ const { verifyPurchaseReceipts } = await import('./verify-purchase-receipts.mjs'
 await verifyPurchaseReceipts({db,Client,nativeUrl,org,other,owner,outsider,role});
 const { verifyPurchaseApplication } = await import('./verify-purchase-application.mjs');
 await verifyPurchaseApplication({db,Client,nativeUrl,org,other,owner,outsider,role});
+const { verifyReceiptInvoices } = await import('./verify-receipt-invoices.mjs');
+await verifyReceiptInvoices({db,Client,nativeUrl,org,other,owner,outsider,role});
 await db.close();
