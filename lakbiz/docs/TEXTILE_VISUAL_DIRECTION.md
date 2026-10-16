@@ -1,0 +1,11 @@
+# Textile launch: wholesale fabric-roll distributors
+
+The first textile market is wholesale textile fabric-roll distribution. Textile demo imagery and shared production headers show fabric rolls, never ready-made shirts or other finished garments. Product illustrations distinguish cotton, denim/twill, printed rayon and linen/chiffon roll families. These are illustrative fabric families, not photographs of a customer's exact SKU.
+
+Asset: `lakbiz/app/public/images/textile-fabric-rolls-atlas.webp` — a local, optimized 1024×1024 four-cell atlas. Shared textile banners and demo product cards select this asset instead of the garment cell in the general industry atlas. The demo describes wholesale fabric-roll distribution and uses the sample company Ceylon Fabric Distribution. Existing measured-stock workflows are unchanged.
+
+Generated with the built-in image-generation tool, then resized/encoded to WebP with Sharp. The original generated PNG is retained in the Codex generated-images directory.
+
+## Final generation prompt
+
+Create a premium photorealistic website asset: a square 2x2 contact sheet with exactly FOUR equal square photographic cells edge to edge, no gaps, no borders, no text. Each cell shows ONLY wholesale textile FABRIC ROLLS with visible cardboard core ends, clearly long bolts/rolls, never folded finished clothing or garments. Top left: stacked cream, sand and muted teal cotton fabric rolls, textured woven cloth. Top right: indigo and blue denim fabric rolls with clearly visible cylindrical cores. Bottom left: several colorful patterned and printed woven fabric rolls for a wholesale fabric distributor, elegant burgundy, sage, terracotta patterns. Bottom right: white and pastel linen/polycotton rolls arranged neatly in a professional textile stockroom. Soft off-white studio background in each cell, tasteful realistic soft shadows, detailed textile grain, sophisticated restrained colors compatible with a teal and navy ERP interface. Objects centered within each square cell with generous breathing room, crisp catalog photography, no people, no shirts, no mannequins, no dresses, no trousers, no ready-made garments, no logos, no watermarks. Output single 1024x1024 image.

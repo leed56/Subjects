@@ -8,7 +8,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const require = createRequire(import.meta.url);
-const { chromium } = require("playwright");
+const { chromium } = require(process.env.LAKBIZ_QA_PLAYWRIGHT ?? "playwright");
 const root = path.resolve(import.meta.dirname, "..");
 const output = process.env.LAKBIZ_UI_QA_DIR ?? "/tmp/lakbiz-industry-banners";
 fs.mkdirSync(output, { recursive: true });
@@ -35,7 +35,7 @@ function load(relative) {
   return compiledModule.exports;
 }
 const { PageHeader } = load("src/components/ui/primitives.tsx");
-const { ReferenceBanner } = load("src/components/demo/reference-visuals.tsx");
+const { ReferenceBanner, ProductPhoto } = load("src/components/demo/reference-visuals.tsx");
 const { INDUSTRY_TEMPLATES } = load("src/lib/erp/industry-templates.ts");
 const h = React.createElement;
 const layoutHtml = fs.readFileSync(path.join(root, ".next/server/app/login.html"), "utf8");
@@ -47,7 +47,9 @@ function fixture(industry) {
   return renderToStaticMarkup(h("main", { className: "mx-auto max-w-6xl space-y-6 px-4 py-6" },
     h("div", { className: "erp-demo" }, h(ReferenceBanner, { template, title: template.nameEn, description: "Industry overview" })),
     h("div", { className: "erp-demo" }, h(ReferenceBanner, { template, title: "Inventory & Imports", description: "Shipments for this industry", imports: true })),
-    h(PageHeader, { sector: industry, title: template.nameEn, description: "Live workspace header" })));
+    h(PageHeader, { sector: industry, title: template.nameEn, description: "Live workspace header" }),
+    industry === "textile" && h("div", {className:"flex gap-4",id:"textile-roll-varieties"}, ...["Cotton poplin","Indigo denim","Floral rayon","Linen blend"].map(name =>
+      h(ProductPhoto,{key:name,industry,product:{name,category:name}})))));
 }
 const server = createServer((req, res) => {
   const url = new URL(req.url, "http://localhost");
@@ -60,7 +62,7 @@ const server = createServer((req, res) => {
   const directory = url.pathname.startsWith("/images/") ? path.join(root, "public") : path.join(root, ".next");
   const relative = url.pathname.replace(/^\/_next\//, "");
   const file = path.resolve(directory, relative.replace(/^\//, ""));
-  if (!file.startsWith(`${directory}/`) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404); res.end(); return; }
+  if (!file.startsWith(`${directory}${path.sep}`) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404); res.end(); return; }
   res.end(fs.readFileSync(file));
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -76,7 +78,7 @@ try {
     await page.goto(`http://127.0.0.1:${server.address().port}/?industry=${template.id}`);
     await page.evaluate(() => document.fonts.ready);
     // Decode the actual local atlas before inspecting or capturing the banners.
-    await page.evaluate(async () => { const image = new Image(); image.src = "/images/industry-products-atlas.webp"; await image.decode(); });
+    await page.evaluate(async () => { await Promise.all(["/images/industry-products-atlas.webp","/images/textile-fabric-rolls-atlas.webp"].map(async src => { const image = new Image(); image.src=src; await image.decode(); })); });
     const failures = await page.evaluate((industry) => {
       const errors = [];
       if (document.documentElement.scrollWidth > innerWidth + 1) errors.push("Page overflows viewport");
@@ -92,6 +94,12 @@ try {
         }
       });
       if (groups.length !== 3) errors.push("Missing demo, import or live banner");
+      if (industry === "textile") {
+        const textilePhotos = [...document.querySelectorAll('[data-image-context="textile"] image')];
+        if (textilePhotos.length !== 3 || textilePhotos.some(photo => photo.getAttribute('href') !== '/images/textile-fabric-rolls-atlas.webp')) errors.push('Textile banner still uses the general garment atlas');
+        const varieties = [...document.querySelectorAll('#textile-roll-varieties .reference-product-photo')];
+        if (varieties.length !== 4 || varieties.some(photo => !photo.style.backgroundImage.includes('textile-fabric-rolls-atlas.webp')) || new Set(varieties.map(photo => photo.style.backgroundPosition)).size !== 4) errors.push('Fabric products do not show four roll varieties');
+      }
       return errors;
     }, template.id);
     results.push({ industry: template.id, width, failures });

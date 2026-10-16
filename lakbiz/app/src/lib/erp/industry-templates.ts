@@ -148,8 +148,8 @@ const SPECIALISM: Record<
   },
   textile: {
     accent: "#7c3aed",
-    company: "Ceylon Fabric Studio",
-    promise: "Every metre. Every shade. Every margin.",
+    company: "Ceylon Fabric Distribution",
+    promise: "Wholesale rolls. Measured stock. Clear trade.",
     highlights: [
       "Fabric roll & dye lot identity",
       "Measured cuts & remnants",
@@ -260,6 +260,10 @@ const SPECIALISM: Record<
 
 export const INDUSTRY_TEMPLATES = sectors.map((sector) => ({
   ...sector,
+  ...(sector.id === "textile" ? {
+    nameEn: "Wholesale Fabric Roll Distribution",
+    description: "For wholesale textile fabric-roll distributors: roll stock, dye lots, measured quantities, trade pricing, customer credit and dispatch.",
+  } : {}),
   ...SPECIALISM[sector.id],
   version: TEMPLATE_VERSION,
   inventory: inventoryTrackingPreset(sector.id),

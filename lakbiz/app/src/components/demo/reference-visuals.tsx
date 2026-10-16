@@ -5,7 +5,7 @@ import type { DemoProduct, DemoState } from "@/lib/erp/demo-types";
 import { money, totalStock, landedCost } from "@/lib/erp/demo-engine";
 import { DemoSection, DemoPill, demoDate } from "./demo-ui";
 import type { DemoAction } from "./demo-action-drawer";
-import { IndustryBannerArtwork } from "@/components/ui/industry-imagery";
+import { IndustryBannerArtwork, IndustryImage } from "@/components/ui/industry-imagery";
 
 const CELLS: Record<SectorId, number> = {
   grocery: 0,
@@ -39,6 +39,12 @@ export function ProductPhoto({
   product?: DemoProduct;
   className?: string;
 }) {
+  if (industry === "textile") {
+    const fabric = `${product?.name ?? ""} ${product?.category ?? ""}`.toLowerCase();
+    const variant = /denim|twill|suiting/.test(fabric) ? 1 : /floral|rayon|print/.test(fabric) ? 2 : /linen|chiffon/.test(fabric) ? 3 : 0;
+    return <IndustryImage sector="textile" variant={variant} className={className}
+      imageLabel={product ? `${product.name} — illustrative wholesale fabric rolls` : "Wholesale textile fabric rolls"} />;
+  }
   const cosmeticsCell = industry === "cosmetics" && product
     ? COSMETICS_PHOTOS[product.sku]
     : undefined;
