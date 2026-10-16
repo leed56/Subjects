@@ -2,7 +2,7 @@
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 
-export async function verifyPurchaseReceipts({db,Client,nativeUrl,org,other,owner,outsider,role}) {
+export async function verifyPurchaseReceipts({db,Client,nativeUrl,org,owner,outsider,role}) {
   let checks=0;
   const pass=label=>{checks++; console.log(`PASS purchasing: ${label}`);};
   const scalar=async(sql,key)=>(await db.query(sql)).rows[0][key];

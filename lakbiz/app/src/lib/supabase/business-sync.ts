@@ -32,6 +32,7 @@ import {
   mergePullWithLocal,
 } from "@/lib/offline/sync-conflict";
 import { localDataWatermark } from "./sync-watermark";
+import { purchaseAuthority } from "./purchase-authority";
 
 export type CloudPushResult = {
   error: string | null;
@@ -390,6 +391,7 @@ export async function pullBusinessData(
       const lines = (purchaseOrderLinesByPo.get(row.id) ?? [])
         .sort((a, b) => a.line_order - b.line_order)
         .map((line) => ({
+          id: line.id,
           productId: line.product_id ?? "",
           productName: line.product_name,
           qtyOrdered: num(line.qty_ordered),
@@ -679,6 +681,7 @@ async function upsertOrgRows(
     | "purchase_order_lines",
   rows: Record<string, unknown>[],
 ): Promise<string | null> {
+  if (table === "stock_logs") rows = rows.filter(row => !String(row.id).startsWith("po-receipt:"));
   if (rows.length === 0) return null;
   const supabase = createBrowserClient();
   if (!supabase) return "Supabase not configured";
@@ -900,7 +903,7 @@ async function deleteOrgRowsNotIn(
   if (fetchError) return fetchError.message;
 
   const keep = new Set(keepIds);
-  const toDelete = (rows ?? []).map((row) => row.id).filter((id) => !keep.has(id));
+  const toDelete = (rows ?? []).map((row) => row.id).filter((id) => !keep.has(id) && !(table === "stock_logs" && String(id).startsWith("po-receipt:")));
   if (toDelete.length === 0) return null;
 
   const batchSize = 50;
@@ -1652,6 +1655,9 @@ export async function syncPurchaseOrderSnapshot(
   purchaseOrderId: string,
   options?: { newStockLogIds?: string[] },
 ): Promise<string | null> {
+  const authority = await purchaseAuthority(organizationId);
+  if (authority.error) return authority.error;
+  if (authority.enabled) return "Use atomic purchasing commands; a snapshot cannot replace purchase orders or receipt lines.";
   const po = data.purchaseOrders.find((row) => row.id === purchaseOrderId);
   if (!po) return "Purchase order not found locally";
 
@@ -2400,6 +2406,9 @@ export async function pushBusinessData(
 ): Promise<CloudPushResult> {
   const seenGeneration =
     options?.seenGeneration ?? (await fetchOrgSyncGeneration(organizationId));
+  const purchasing = await purchaseAuthority(organizationId);
+  if (purchasing.error) return { error: purchasing.error, stale: false, generation: seenGeneration };
+  const authoritativeProductIds = new Set<string>();
   const authority = await locationStockAuthority(organizationId);
   if (authority.error) return {error:authority.error,stale:false,generation:seenGeneration};
   if (authority.enabled) {
@@ -2408,9 +2417,17 @@ export async function pushBusinessData(
     const cloud = await fetchAllPages((from,to)=>db.from("products").select("id,stock_qty").eq("organization_id",organizationId).range(from,to));
     if (cloud.error) return {error:cloud.error.message,stale:false,generation:seenGeneration};
     const quantities = new Map((cloud.data ?? []).map(row=>[String(row.id),Number(row.stock_qty)]));
+    for (const id of quantities.keys()) authoritativeProductIds.add(id);
     if (data.products.some(product=>quantities.has(product.id) && quantities.get(product.id)!==product.stockQty)) {
       return {error:"Cloud stock changed. Reload and reconcile pending stock actions; a snapshot cannot replace authoritative location quantities.",stale:true,generation:seenGeneration};
     }
+  }
+  if (purchasing.enabled && !authority.enabled && data.products.length > 0) {
+    const db = createBrowserClient();
+    if (!db) return { error: "Cloud not connected", stale: false, generation: seenGeneration };
+    const existing = await fetchAllPages((from,to) => db.from("products").select("id").eq("organization_id",organizationId).range(from,to));
+    if (existing.error) return { error: existing.error.message, stale: false, generation: seenGeneration };
+    for (const row of existing.data ?? []) authoritativeProductIds.add(String(row.id));
   }
   let products = data.products;
   if (options?.preserveBuyPrices) {
@@ -2790,6 +2807,13 @@ export async function pushBusinessData(
   ];
 
   for (const step of upsertSteps) {
+    if (purchasing.enabled && step.table === "purchase_orders") continue;
+    if (purchasing.enabled && step.table === "stock_logs") {
+      step.rows = step.rows.filter(row => !String(row.id).startsWith("po-receipt:"));
+    }
+    if (purchasing.enabled && step.table === "products") {
+      step.rows = step.rows.map(row => { const safe = { ...row }; if (authoritativeProductIds.has(String(row.id))) delete safe.buy_price; return safe; });
+    }
     const maskedTables = new Set([
       "sales",
       "products",
@@ -2850,7 +2874,7 @@ export async function pushBusinessData(
   );
   if (purchaseErr) return { error: purchaseErr, stale: false, generation: seenGeneration };
 
-  const poErr = await replaceLinesBatch(
+  const poErr = purchasing.enabled ? null : await replaceLinesBatch(
     "purchase_order_lines",
     organizationId,
     "purchase_order_id",
@@ -2929,6 +2953,9 @@ export async function pushBusinessData(
   ];
 
   for (const step of pruneSteps) {
+    // Never prune authoritative orders or server receipt audit from a device's
+    // older snapshot. Log pruning is disabled wholesale to preserve unknown IDs.
+    if (purchasing.enabled && ["purchase_orders", "stock_logs"].includes(step.table)) continue;
     const err = await deleteOrgRowsNotIn(step.table, organizationId, step.ids);
     if (err) return { error: err, stale: false, generation: seenGeneration };
   }

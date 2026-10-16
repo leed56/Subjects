@@ -4,12 +4,13 @@ import os from 'node:os';
 import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
 const require=createRequire(import.meta.url);
-const {build}=require(process.env.TEXTILE_QA_ESBUILD ?? 'esbuild');
+const {build,stop}=require(process.env.TEXTILE_QA_ESBUILD ?? 'esbuild');
 const {chromium}=require(process.env.LAKBIZ_QA_PLAYWRIGHT ?? 'playwright');
 const root=path.resolve(import.meta.dirname,'..');
 const out=process.env.LAKBIZ_UI_QA_DIR ?? path.join(os.tmpdir(),'lakbiz-phase1-workflows');
 fs.mkdirSync(out,{recursive:true});
-const routes=['dashboard','customers','workforce','vehicles','teams','assets','expenses','schedule','stock/advanced','stock/advanced/queue','stock/advanced/returns','banking/pos-routing','pulse','stock/imports','stock/transfers'];
+const routes=['dashboard','customers','workforce','vehicles','teams','assets','expenses','schedule','stock/advanced','stock/advanced/queue','stock/advanced/returns','banking/pos-routing','pulse','stock/imports','stock/transfers','suppliers']
+ .filter(route=>!process.env.LAKBIZ_QA_ROUTES||process.env.LAKBIZ_QA_ROUTES.split(',').includes(route));
 const f='const f=window.fixture;';
 const mutate=`async function mutate(...args){f.calls.push(args);await new Promise(r=>setTimeout(r,80));if(f.rejectMutation)throw Error('Synthetic rejected request');return {ok:false,data:null,error:'Synthetic save failure'}}`;
 const stubs={
@@ -22,7 +23,7 @@ const stubs={
  '@/lib/subscription/use-can-write':`${f}export function useWriteAccess(){return {canWrite:!f.readOnly,disabledHint:f.readOnly?'Read only':null}}`,
  '@/components/write-disabled-hint':`${f}export function WriteDisabledHint(){return f.readOnly?<p>Read only</p>:null}`,
  '@/lib/subscription/subscription-provider':`${f}const org={id:'fixture-org',isAuthenticated:true,sector:'ac',name:'Fixture shop'};export function useSubscription(){return {org,orgRole:f.readOnly?'cashier':'owner',canSeeFinancials:!f.readOnly,can:()=>!f.readOnly,subscription:{planId:'pro'}}}`,
- '@/lib/store/use-app-store':`${f}${mutate}export function useAppStore(){return new Proxy({data:f.data,ready:true,cloudSyncing:false,cloudSyncError:null,offlinePendingSync:false,offlinePendingChangeCount:0},{get:(target,key)=>key in target?target[key]:mutate})}`,
+ '@/lib/store/use-app-store':`${f}${mutate}export function useAppStore(){return new Proxy({data:f.data,ready:true,pendingPurchaseAction:f.pendingPurchase===true,cloudSyncing:false,cloudSyncError:null,offlinePendingSync:false,offlinePendingChangeCount:0},{get:(target,key)=>key in target?target[key]:mutate})}`,
  '@/components/ui/toast':`${f}export function useToast(){return {toast:x=>f.toasts.push(x)}}`,
  '@/components/messaging/message-send-button':'export function MessageSendButton(){return null}',
  '@/lib/messaging/use-sms-api-configured':'export function useWhatsAppApiConfigured(){return false}export function useSmsApiConfigured(){return false}',
@@ -53,7 +54,8 @@ try{
  for(const width of [390,768,1440])for(const route of routes){
   const page=await browser.newPage({viewport:{width,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
   const customerData=route==='customers'?{customers:Array.from({length:19},(_,i)=>({id:`customer-${i}`,name:`Customer ${i+1}`,contactType:'individual',phone:`077000${String(i).padStart(4,'0')}`,address:'Colombo',creditBalance:0,creditLimit:10000}))}:{};
-  fixture={route:routes.indexOf(route),locale:'en',data:customerData,calls:[],toasts:[],rejectMutation:true};
+  const purchasingData=route==='suppliers'?{suppliers:[{id:'s',name:'Fixture supplier',payableBalance:0}],products:[{id:'p',name:'Fixture product',category:'General',sectorId:'ac',condition:'new',customFields:{},stockQty:10,buyPrice:5,sellPrice:10,active:true}],purchaseOrders:[{id:'po',poNo:'PO-001',supplierId:'s',supplierName:'Fixture supplier',date:'2026-10-16',expectedTotal:50,status:'pending',lines:[{id:'line',productId:'p',productName:'Fixture product',qtyOrdered:10,qtyReceived:0,unitCost:5}]}]}:{};
+  fixture={route:routes.indexOf(route),locale:'en',data:{...customerData,...purchasingData},calls:[],toasts:[],rejectMutation:true};
   await page.goto(`http://127.0.0.1:${server.address().port}`);await page.waitForTimeout(250);
   assert(!errors.length,`${route}: ${errors.join(';')}`);
   assert(await page.locator('main').count()>0,`${route}: no main`);
@@ -90,7 +92,31 @@ try{
    fixture={...fixture,readOnly:true};await page.reload();
    await page.getByText('Stock operator access required',{exact:true}).waitFor();
   }
+  if(route==='suppliers'){
+   await page.getByRole('tab',{name:/Purchase orders/}).click();
+   await page.getByRole('button',{name:'Receive',exact:true}).filter({visible:true}).first().click();
+   const quantity=page.getByRole('spinbutton',{name:'Receive Fixture product',exact:true});await quantity.fill('3');
+   const save=page.getByRole('button',{name:'Save',exact:true}).last();await save.click();
+   await page.getByRole('alert').waitFor();
+   assert(await quantity.inputValue()==='3','Receipt draft lost after rejected request');
+   assert(await save.isEnabled(),'Receipt saving lock stuck');
+   await page.screenshot({path:path.join(out,`suppliers-receipt-error-${width}.png`),fullPage:true});
+   assert(await page.evaluate(()=>window.fixture.calls.length)===1,'Receipt submitted more than once');
+   await page.getByRole('button',{name:'Close receiving',exact:true}).click();
+   await page.getByRole('button',{name:'+ New purchase order',exact:true}).click();
+   const ordered=page.getByRole('spinbutton',{name:'Order quantity Fixture product',exact:true});await ordered.fill('4');
+   await page.getByRole('spinbutton',{name:'Order unit cost Fixture product',exact:true}).fill('7');
+   await page.getByRole('button',{name:'Save',exact:true}).first().click();
+   await page.getByRole('alert').waitFor();
+   assert(await ordered.inputValue()==='4','Order draft lost after rejected request');
+   assert(await page.getByRole('button',{name:'Save',exact:true}).first().isEnabled(),'Order saving lock stuck');
+   assert(await page.evaluate(()=>window.fixture.calls.length)===2,'Order submitted more than once');
+   fixture={...fixture,pendingPurchase:true,calls:[]};await page.reload();
+   const recover=page.getByRole('button',{name:'Check pending purchase action',exact:true});await recover.click();
+   await page.getByRole('alert').waitFor();assert(await recover.isEnabled(),'Pending recovery lock stuck');
+   assert(await page.evaluate(()=>window.fixture.calls.length)===1,'Recovery submitted multiple actions');
+  }
   results.push({route,width,passed:true});await page.close();
  }
  fs.writeFileSync(path.join(out,'results.json'),JSON.stringify(results,null,2));console.log(`${results.length} production route fixtures passed; isolated adapters, no live writes.`);
-}finally{await browser.close();server.close();}
+}finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await browser.close();stop();}
