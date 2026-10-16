@@ -60,6 +60,14 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      - name: Isolated inventory transfer database fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          inventory_qa_tools="${RUNNER_TEMP}/lakbiz-inventory-db-tools"
+          npm install --prefix "$inventory_qa_tools" --no-save --no-package-lock @electric-sql/pglite@0.3.14
+          INVENTORY_TEST_MODULE="$inventory_qa_tools/node_modules/@electric-sql/pglite/dist/index.js" node scripts/verify-inventory-transfers.mjs
+
       - name: Production build
         run: npm run build
 
