@@ -34,10 +34,20 @@ Background sync skips authoritative PO headers, line replacement and PO pruning.
 
 The connected checkpoint passed 113 native PostgreSQL checks: the preceding 95 plus 18 application-authority checks. These include concurrent creation retries, cancellation versus receipt, stable IDs, tenant access and immutable receipt logs. The PGlite equivalent passed 105 checks. Client regressions cover uncertain results, failed refresh/storage, authority lookup failures, changed pending requests, scoped recovery and background-sync isolation. Responsive Supplier fixtures verify retained receipt/order drafts and unlocked controls after rejected saves.
 
+## Connected invoice workspace and exact planning allocation
+
+The owner workspace `/suppliers/invoices`, linked from Suppliers, now lists immutable deliveries and receipt-linked bills. Owners select complete deliveries from one order, enter actual LKR invoice rates and input VAT, and record through the prepared invoice RPC. Stock is never received by this screen. It requires an authenticated company and the existing invoice gate; missing-schema and disabled companies receive an explicit upgrade/rollout state.
+
+The company/user-scoped command is persisted before submission and serialized across tabs. Unknown outcomes and failed history refreshes retain the same invoice UUID and payload. A separate pending-invoice action replays that command; changed submissions are blocked. Definite transaction rejection releases the command and preserves the visible draft. History must confirm the saved invoice before the recovery record is cleared. Company/role changes discard stale UI responses. This does not yet merge invoice balances into the legacy supplier ledger or make the legacy GRN/payment writers safe for activation.
+
+The imports worksheet now calculates outstanding quantities and uses integer minor units with stable largest-remainder allocation. VAT remains outside inventory cost, invalid FX/precision is rejected, and every allocated cent is conserved without a negative final residual. This is still a planning calculation, not persisted shipment processing.
+
+Verification for this application checkpoint: 428 tests across 59 files, TypeScript, changed-file lint, a 325-route production build, and nine isolated production browser fixtures covering Suppliers, delivery invoices and Imports at 390/768/1440 widths. New checks cover invoice replay after unknown outcomes and refresh failure, storage/user/company boundaries, definite rejection, draft retention, recovery controls, owner access, exact fractional rounding and stable allocation across 200 lines. The first unrestricted test run had one existing demo-render timeout during a concurrent build; the bounded-worker rerun passed all tests. Browser fixtures use isolated adapters, not live purchasing writes.
+
 ## Remaining
 
 - Exact lot, variant and serial receiving, with authenticated integration verification.
-- Supplier invoice screen/history/ledger and settlement integration. The receipt-linked invoice database authority is prepared separately, not activated: see `PHASE_3_RECEIPT_INVOICES.md`. It posts payable exactly once without receiving stock again; legacy payable writers must be adapted before its gate is enabled.
+- Supplier ledger and settlement integration; the invoice screen/history is connected. The receipt-linked invoice database authority is prepared separately, not activated: see `PHASE_3_RECEIPT_INVOICES.md`. It posts payable exactly once without receiving stock again; legacy payable writers must be adapted before its gate is enabled.
 - Transactional shipment lifecycle, landed-cost allocation, recoverable VAT separation, FX settlement and residual rounding.
 - Full authenticated browser → real historical schema → data failure/retry certification and controlled company rollout. Synthetic browser adapters and database fixtures do not replace this release step.
 

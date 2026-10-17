@@ -1,6 +1,6 @@
 # Phase 3 checkpoint: receipt-linked supplier invoice authority
 
-Status: database foundation prepared and verified; application integration and activation remain pending.
+Status: database foundation and owner invoice workspace prepared; legacy ledger/settlement integration and activation remain pending.
 
 ## Behavior
 
@@ -20,7 +20,9 @@ Invoice headers, receipt allocations and lines are immutable to app roles. Read 
 
 Do not enable the invoice gate yet. When it is enabled, a trigger rejects direct client changes to supplier payable balances, including stale whole-business snapshots. Unchanged balances and ordinary supplier metadata remain editable. The existing legacy GRN and payment writers are not adapted to this authority and must be replaced or blocked before enablement.
 
-The Supplier screen, purchase history, supplier ledger and payable snapshot adapters do not yet consume this new invoice ledger. The next application increment must provide receipt selection, rate/VAT entry, persistent request recovery, server refresh/merge and clear separation of linked invoices from stock-receiving GRNs. Settlement integration, backdated/reporting behavior, full authenticated historical-schema security review and company certification remain necessary. No live company is enabled by this migration or test suite.
+The Suppliers screen links to `/suppliers/invoices`, with receipt selection, rate/VAT entry, persistent request recovery and a dedicated server-loaded invoice history. The workspace confirms the invoice in history before acknowledging its recovery command. It uses the prepared schema's `received_at` timestamp for deliveries. To avoid silently billing against truncated history, it fails closed above 200 receipts/invoices or 4,000 receipt allocations; server-side history filtering/pagination is still needed for larger companies before activation.
+
+The legacy supplier ledger and payable snapshot adapters do not yet consume this new ledger. Settlement integration, backdated/reporting behavior, full authenticated historical-schema security review and company certification remain necessary. No live company is enabled by this migration or test suite.
 
 ## Verification
 

@@ -9,11 +9,12 @@ const {chromium}=require(process.env.LAKBIZ_QA_PLAYWRIGHT ?? 'playwright');
 const root=path.resolve(import.meta.dirname,'..');
 const out=process.env.LAKBIZ_UI_QA_DIR ?? path.join(os.tmpdir(),'lakbiz-phase1-workflows');
 fs.mkdirSync(out,{recursive:true});
-const routes=['dashboard','customers','workforce','vehicles','teams','assets','expenses','schedule','stock/advanced','stock/advanced/queue','stock/advanced/returns','banking/pos-routing','pulse','stock/imports','stock/transfers','suppliers']
+const routes=['dashboard','customers','workforce','vehicles','teams','assets','expenses','schedule','stock/advanced','stock/advanced/queue','stock/advanced/returns','banking/pos-routing','pulse','stock/imports','stock/transfers','suppliers','suppliers/invoices']
  .filter(route=>!process.env.LAKBIZ_QA_ROUTES||process.env.LAKBIZ_QA_ROUTES.split(',').includes(route));
 const f='const f=window.fixture;';
 const mutate=`async function mutate(...args){f.calls.push(args);await new Promise(r=>setTimeout(r,80));if(f.rejectMutation)throw Error('Synthetic rejected request');return {ok:false,data:null,error:'Synthetic save failure'}}`;
 const stubs={
+ '@/lib/supabase/receipt-invoices':`${f}${mutate}export function invoicePending(){return f.pendingInvoice===true}export async function loadInvoiceWorkspace(){if(f.failLoads)throw Error('Synthetic invoice load failure');return {organizationId:'fixture-org',userId:'owner',enabled:true,receipts:[{organization_id:'fixture-org',receipt_id:'receipt',purchase_order_id:'po',received_at:'2026-10-16T10:00:00Z',request_lines:[{line_id:'line',qty:2}]}],invoices:[],billed:[]}}export const saveReceiptInvoice=mutate;`,
  '@/lib/supabase/inventory-location-client':`${f}${mutate}export async function loadInventoryLocations(){if(f.failLoads)throw Error('Synthetic load failure');return {organizationId:'fixture-org',locations:[{id:'main',name:'Main stockroom',code:'MAIN',is_default:true,active:true},{id:'branch',name:'Branch',code:'BRANCH',active:true}],balances:[{id:'balance',location_id:'main',product_id:'p',qty_on_hand:10,qty_reserved:0,variant_id:null,lot_id:null}],units:[],transfers:[],reservations:[],enabled:true}}export async function inventoryOperation(...args){await mutate(...args)}export async function createStockLocation(...args){await mutate(...args)}export async function inspectInventoryProduct(){return []}`,
  'next/link':'import React from "react";export default function Link({children,...p}){return <a {...p}>{children}</a>}',
  'next/navigation':'export function useSearchParams(){return new URLSearchParams()}export function useRouter(){return {push(){},replace(){}}}export function usePathname(){return location.pathname}',
@@ -54,7 +55,7 @@ try{
  for(const width of [390,768,1440])for(const route of routes){
   const page=await browser.newPage({viewport:{width,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
   const customerData=route==='customers'?{customers:Array.from({length:19},(_,i)=>({id:`customer-${i}`,name:`Customer ${i+1}`,contactType:'individual',phone:`077000${String(i).padStart(4,'0')}`,address:'Colombo',creditBalance:0,creditLimit:10000}))}:{};
-  const purchasingData=route==='suppliers'?{suppliers:[{id:'s',name:'Fixture supplier',payableBalance:0}],products:[{id:'p',name:'Fixture product',category:'General',sectorId:'ac',condition:'new',customFields:{},stockQty:10,buyPrice:5,sellPrice:10,active:true}],purchaseOrders:[{id:'po',poNo:'PO-001',supplierId:'s',supplierName:'Fixture supplier',date:'2026-10-16',expectedTotal:50,status:'pending',lines:[{id:'line',productId:'p',productName:'Fixture product',qtyOrdered:10,qtyReceived:0,unitCost:5}]}]}:{};
+  const purchasingData=route.startsWith('suppliers')?{suppliers:[{id:'s',name:'Fixture supplier',payableBalance:0}],products:[{id:'p',name:'Fixture product',category:'General',sectorId:'ac',condition:'new',customFields:{},stockQty:10,buyPrice:5,sellPrice:10,active:true}],purchaseOrders:[{id:'po',poNo:'PO-001',supplierId:'s',supplierName:'Fixture supplier',date:'2026-10-16',expectedTotal:50,status:'pending',lines:[{id:'line',productId:'p',productName:'Fixture product',qtyOrdered:10,qtyReceived:0,unitCost:5}]}]}:{};
   fixture={route:routes.indexOf(route),locale:'en',data:{...customerData,...purchasingData},calls:[],toasts:[],rejectMutation:true};
   await page.goto(`http://127.0.0.1:${server.address().port}`);await page.waitForTimeout(250);
   assert(!errors.length,`${route}: ${errors.join(';')}`);
@@ -115,6 +116,24 @@ try{
    const recover=page.getByRole('button',{name:'Check pending purchase action',exact:true});await recover.click();
    await page.getByRole('alert').waitFor();assert(await recover.isEnabled(),'Pending recovery lock stuck');
    assert(await page.evaluate(()=>window.fixture.calls.length)===1,'Recovery submitted multiple actions');
+  }
+  if(route==='suppliers/invoices'){
+   await page.getByRole('combobox',{name:/^Purchase order/}).selectOption('po');
+   await page.getByRole('checkbox').check();
+   await page.getByLabel('Supplier invoice number',{exact:true}).fill('Keep invoice 001');
+   await page.getByLabel('Invoice date',{exact:true}).fill('2026-10-16');
+   await page.getByRole('button',{name:'Record supplier invoice',exact:true}).click();
+   await page.getByRole('alert').waitFor();
+   assert(await page.getByLabel('Supplier invoice number',{exact:true}).inputValue()==='Keep invoice 001','Invoice draft lost');
+   assert(await page.getByRole('button',{name:'Record supplier invoice',exact:true}).isEnabled(),'Invoice saving lock stuck');
+   assert(await page.getByRole('checkbox').isChecked(),'Invoice receipt selection lost');
+   await page.screenshot({path:path.join(out,`suppliers-invoices-rejected-${width}.png`),fullPage:true});
+   fixture={...fixture,pendingInvoice:true,calls:[]};await page.reload();
+   const check=page.getByRole('button',{name:'Check pending invoice',exact:true});await check.click();await page.getByRole('alert').waitFor();
+   assert(await check.isEnabled(),'Invoice recovery lock stuck');
+   fixture={...fixture,pendingInvoice:false,readOnly:true};await page.reload();
+   await page.getByText('Owner access is required to review supplier costs and invoices.',{exact:true}).waitFor();
+   assert(await page.getByRole('checkbox').count()===0,'Non-owner sees receipt details');
   }
   results.push({route,width,passed:true});await page.close();
  }

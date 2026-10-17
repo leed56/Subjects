@@ -407,6 +407,7 @@ export default function SuppliersPage() {
           actions={
             <>
               <ProButton href="/stock" variant="secondary">{t("nav.stock")}</ProButton>
+              <ProButton href="/suppliers/invoices" variant="secondary">Delivery invoices</ProButton>
               <Button
                 onClick={openPo}
                 disabled={data.suppliers.length === 0 || data.products.length === 0}
