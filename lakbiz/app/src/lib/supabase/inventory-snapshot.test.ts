@@ -10,7 +10,7 @@ vi.mock("./client", () => ({ createBrowserClient: () => ({
     const builder = {
       select:()=>builder, eq:()=>builder, in:()=>builder,
       range:(from:number)=>{offset=from;return builder;},
-      maybeSingle:async()=>({data:{enabled:state.enabled},error:state.settingError?{message:state.settingError,code:"NETWORK"}:null}),
+      maybeSingle:async()=>({data:{enabled:table!=="purchase_invoice_settings" && state.enabled},error:state.settingError?{message:state.settingError,code:"NETWORK"}:null}),
       then:(resolve:(value:unknown)=>unknown)=>Promise.resolve({data:offset===0&&table==="products"?[{id:"p",stock_qty:state.cloudQty}]:[],error:null}).then(resolve),
       insert:async(rows:unknown)=>{state.writes.push({name:`insert:${table}`,args:{rows}});return {error:null};},
       upsert:async(rows:unknown)=>{state.writes.push({name:`upsert:${table}`,args:{rows}});return {error:null};},

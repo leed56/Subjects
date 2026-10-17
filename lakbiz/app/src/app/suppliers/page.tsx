@@ -30,6 +30,8 @@ import type { PaymentMethod } from "@/lib/types";
 import { calcInputVat } from "@/lib/vat";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { SupplierStatement } from "@/components/supplier-statement";
 
 type SupplierSection = "directory" | "orders" | "receipts";
 
@@ -49,6 +51,7 @@ export default function SuppliersPage() {
   } = useAppStore();
   const { t } = useLocale();
   const { canWrite, disabledHint } = useWriteAccess();
+  const { org, orgRole } = useSubscription();
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -923,46 +926,7 @@ export default function SuppliersPage() {
           </div>
         )}
 
-        {ledgerSupplier && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-white/80 bg-white p-5 shadow-sm shadow-slate-950/20">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-600">{t("cust.ledger")}</p>
-                  <h3 className="mt-2 text-xl font-bold text-slate-950">{ledgerSupplier.name}</h3>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">{t("sup.you_owe_col")}: {formatLkr(ledgerSupplier.payableBalance)}</p>
-                </div>
-                <button onClick={() => setLedgerSupplier(null)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
-              </div>
-              <div className="mt-5 flex-1 overflow-y-auto rounded-2xl border border-slate-200">
-                {ledgerEntries.length === 0 ? (
-                  <div className="p-6"><ProEmptyState title={t("cust.ledger_empty")} /></div>
-                ) : (
-                  <table className="mobile-card-table w-full text-left text-sm">
-                    <thead className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3">{t("common.date")}</th>
-                        <th className="px-4 py-3">{t("common.details")}</th>
-                        <th className="px-4 py-3 text-right">{t("bills.amount")}</th>
-                        <th className="px-4 py-3 text-right">{t("cust.balance")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ledgerEntries.map((e, i) => (
-                        <tr key={i} className="border-b last:border-0">
-                          <td data-label={t("common.date")} className="px-4 py-3 font-semibold text-slate-500">{new Date(e.date).toLocaleDateString("en-LK")}</td>
-                          <td data-label={t("common.details")} className="px-4 py-3 font-semibold text-slate-700">{e.label}</td>
-                          <td data-label={t("bills.amount")} className={`px-4 py-3 text-right font-mono font-bold ${e.amount < 0 ? "text-emerald-700" : "text-slate-800"}`}>{e.amount < 0 ? "−" : "+"}{formatLkr(Math.abs(e.amount))}</td>
-                          <td data-label={t("cust.balance")} className="px-4 py-3 text-right font-mono font-bold text-slate-950">{formatLkr(e.balance)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        {ledgerSupplier && <SupplierStatement key={`${org.id}:${ledgerSupplier.id}`} org={org.isAuthenticated && orgRole === "owner" ? org.id ?? undefined : undefined} supplier={ledgerSupplier} entries={ledgerEntries} onClose={() => setLedgerSupplier(null)} />}
       </ProMain>
     </AppShell>
   );

@@ -1,6 +1,6 @@
 # Phase 3 checkpoint: receipt-linked supplier invoice authority
 
-Status: database foundation and owner invoice workspace prepared; legacy ledger/settlement integration and activation remain pending.
+Status: invoice foundation, owner workspace, supplier statement and LKR cash settlements prepared; bank/FX settlement, metadata/snapshot adapters and activation remain pending.
 
 ## Behavior
 
@@ -22,7 +22,7 @@ Do not enable the invoice gate yet. When it is enabled, a trigger rejects direct
 
 The Suppliers screen links to `/suppliers/invoices`, with receipt selection, rate/VAT entry, persistent request recovery and a dedicated server-loaded invoice history. The workspace confirms the invoice in history before acknowledging its recovery command. It uses the prepared schema's `received_at` timestamp for deliveries. To avoid silently billing against truncated history, it fails closed above 200 receipts/invoices or 4,000 receipt allocations; server-side history filtering/pagination is still needed for larger companies before activation.
 
-The legacy supplier ledger and payable snapshot adapters do not yet consume this new ledger. Settlement integration, backdated/reporting behavior, full authenticated historical-schema security review and company certification remain necessary. No live company is enabled by this migration or test suite.
+The Supplier Ledger now reads a paginated statement combining legacy records, receipt-linked invoices and new cash settlements. LKR cash payments can settle a received invoice atomically. Legacy GRN/payment writes and full-business snapshots are blocked before mutation under invoice authority; supplier metadata/full-snapshot adapters must still be completed before activation. Bank/FX settlement, backdated/reporting certification, authenticated historical-schema security review and company certification remain necessary. See `PHASE_3_CASH_SETTLEMENTS.md`. No live company is enabled by these migrations or tests.
 
 ## Verification
 

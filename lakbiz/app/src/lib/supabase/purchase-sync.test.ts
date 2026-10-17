@@ -1,14 +1,14 @@
 import {beforeEach,describe,expect,it,vi} from "vitest";
 import {emptyAppData} from "@/lib/store/storage";
-import {pushBusinessData,syncPurchaseOrderSnapshot} from "./business-sync";
-const state=vi.hoisted(()=>({enabled:true,error:false,writes:[] as {table:string;operation:string;rows:unknown}[]}));
+import {pushBusinessData,syncPurchaseOrderSnapshot,syncPurchaseSnapshot,syncSupplierPaymentSnapshot} from "./business-sync";
+const state=vi.hoisted(()=>({enabled:true,invoiceEnabled:false,error:false,writes:[] as {table:string;operation:string;rows:unknown}[]}));
 vi.mock('./client',()=>({createBrowserClient:()=>({
   from(table:string){
     let offset=0;let operation='select';
     const builder={
       select:()=>builder,eq:()=>builder,in:()=>builder,not:()=>builder,order:()=>builder,
       range:(from:number)=>{offset=from;return builder;},
-      maybeSingle:async()=>({data:{enabled:table==='purchase_receipt_settings'&&state.enabled},error:state.error?{code:'NETWORK',message:'Authority unavailable'}:null}),
+      maybeSingle:async()=>({data:{enabled:table==='purchase_invoice_settings'?state.invoiceEnabled:table==='purchase_receipt_settings'&&state.enabled},error:state.error?{code:'NETWORK',message:'Authority unavailable'}:null}),
       upsert:(rows:unknown)=>{state.writes.push({table,operation:'upsert',rows});return builder;},
       insert:(rows:unknown)=>{state.writes.push({table,operation:'insert',rows});return builder;},
       delete:()=>{operation='delete';state.writes.push({table,operation,rows:[]});return builder;},
@@ -19,8 +19,15 @@ vi.mock('./client',()=>({createBrowserClient:()=>({
 })}));
 const data=()=>({...emptyAppData(),purchaseOrders:[{id:'po',poNo:'PO',supplierId:'s',supplierName:'Supplier',date:'2026-10-16',expectedTotal:5,status:'pending' as const,
   lines:[{productId:'p',productName:'Product',qtyOrdered:1,qtyReceived:0,unitCost:5}]}],stockLogs:[{id:'po-receipt:known:line',productId:'p',productName:'Product',type:'purchase' as const,qty:1,date:'2026-10-16'}]});
-beforeEach(()=>{state.enabled=true;state.error=false;state.writes=[];});
+beforeEach(()=>{state.enabled=true;state.invoiceEnabled=false;state.error=false;state.writes=[];});
 describe('authoritative purchasing snapshot isolation',()=>{
+  it('invoice authority blocks legacy GRN/payment and full snapshots before any stock or payable write',async()=>{
+    state.invoiceEnabled=true;
+    expect(await syncPurchaseSnapshot('org',data(),'grn')).toMatch(/Legacy GRNs/);
+    expect(await syncSupplierPaymentSnapshot('org',data(),'payment')).toMatch(/Legacy GRNs/);
+    expect((await pushBusinessData('org',data(),{seenGeneration:0})).error).toMatch(/Legacy GRNs/);
+    expect(state.writes).toEqual([]);
+  });
   it('background sync cannot replace order headers, line identities or unknown receipt logs',async()=>{
     const result=await pushBusinessData('org',data(),{seenGeneration:0});
     expect(result.error).toBeNull();

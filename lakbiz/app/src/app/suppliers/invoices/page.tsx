@@ -9,6 +9,7 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { invoicePending, loadInvoiceWorkspace, saveReceiptInvoice, type InvoiceWorkspace } from "@/lib/supabase/receipt-invoices";
 import { formatLkr } from "@/lib/format";
 import { purchaseLineMinor } from "@/lib/landed-cost";
+import { InvoiceCashSettlement } from "@/components/invoice-cash-settlement";
 
 const card = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm";
 const field = "mt-1.5 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-slate-50";
@@ -29,6 +30,7 @@ export default function SupplierInvoicesPage() {
   const [date, setDate] = useState("");
   const [vat, setVat] = useState("0");
   const [rates, setRates] = useState<Record<string, string>>({});
+  const [settlementInvoice, setSettlementInvoice] = useState("");
   const lock = useRef(false);
   const generation = useRef({ value: 0 });
   const owner = orgRole === "owner";
@@ -53,7 +55,7 @@ export default function SupplierInvoicesPage() {
     catch (failure) { if (request === generation.current.value) { setLoaded(null); setError(failure instanceof Error ? failure.message : "Invoices could not be loaded."); } }
     finally { if (request === generation.current.value) setLoading(false); }
   }, [org.id, org.isAuthenticated, owner]);
-  useEffect(() => { const requests = generation.current; setSelected([]); setOrderId(""); setRates({}); setNumber(""); setDate(""); setVat("0"); setMessage(""); setPending(false); setBusy(false); void refresh(); return () => { requests.value++; }; }, [refresh]);
+  useEffect(() => { const requests = generation.current; setSelected([]); setOrderId(""); setRates({}); setNumber(""); setDate(""); setVat("0"); setMessage(""); setPending(false); setBusy(false); setSettlementInvoice(""); void refresh(); return () => { requests.value++; }; }, [refresh]);
 
   async function save(resume = false) {
     if (lock.current || !writable || !snapshot || !org.id) return;
@@ -74,6 +76,7 @@ export default function SupplierInvoicesPage() {
       {loading && <p role="status" className={card}>Loading supplier invoices…</p>}
       {!org.isAuthenticated && <p className={card}>Connect an authenticated company to review received deliveries and supplier bills.</p>}
       {snapshot && <>
+        {settlementInvoice && org.id && <InvoiceCashSettlement key={`${org.id}:${settlementInvoice}`} org={org.id} invoice={settlementInvoice} writable={Boolean(writable)} onClose={() => setSettlementInvoice("")} />}
         {!snapshot.enabled && <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Recording bills awaits the purchasing rollout and company certification.</p>}
         {pending && <section className={`${card} mb-5`}><h2 className="font-bold">An invoice needs confirmation</h2><p className="mt-2 text-sm text-slate-600">Check the original request before entering another bill.</p><button className={`${button} mt-3`} disabled={busy || !writable} onClick={() => void save(true)}>Check pending invoice</button></section>}
         <form onSubmit={event => { event.preventDefault(); void save(); }} className="grid items-start gap-5 xl:grid-cols-[1.2fr_0.8fr]">
@@ -91,7 +94,7 @@ export default function SupplierInvoicesPage() {
             <button className={`${button} w-full`} disabled={!lines.length} type="submit">{busy ? "Confirming invoice…" : "Record supplier invoice"}</button>
           </fieldset></section>
         </form>
-        <section className={`${card} mt-5`}><h2 className="text-lg font-bold">Invoice history</h2><p className="mt-1 text-sm text-slate-500">Each bill links to existing deliveries. Supplier payments are reviewed separately.</p>{!snapshot.invoices.length ? <p className="mt-5 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">No delivery-linked supplier invoices yet.</p> : <ul className="mt-4 divide-y divide-slate-100">{snapshot.invoices.map(invoice => <li key={invoice.id} className="flex flex-wrap justify-between gap-3 py-4"><div><p className="font-bold">{invoice.supplier_invoice_no}</p><p className="mt-1 text-sm text-slate-500">{data?.suppliers.find(supplier => supplier.id === invoice.supplier_id)?.name ?? "Supplier"} · {invoice.invoice_date}</p></div><div className="text-right"><p className="font-mono font-bold">{formatLkr(Number(invoice.total_minor) / 100)}</p><p className="mt-1 text-xs text-slate-500">Input VAT {formatLkr(Number(invoice.input_vat_minor) / 100)}</p></div></li>)}</ul>}</section>
+        <section className={`${card} mt-5`}><h2 className="text-lg font-bold">Invoice history</h2><p className="mt-1 text-sm text-slate-500">Each bill links to existing deliveries. Supplier payments are reviewed separately.</p>{!snapshot.invoices.length ? <p className="mt-5 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">No delivery-linked supplier invoices yet.</p> : <ul className="mt-4 divide-y divide-slate-100">{snapshot.invoices.map(invoice => <li key={invoice.id} className="flex flex-wrap justify-between gap-3 py-4"><div><p className="font-bold">{invoice.supplier_invoice_no}</p><p className="mt-1 text-sm text-slate-500">{data?.suppliers.find(supplier => supplier.id === invoice.supplier_id)?.name ?? "Supplier"} · {invoice.invoice_date}</p></div><div className="text-right"><p className="font-mono font-bold">{formatLkr(Number(invoice.total_minor) / 100)}</p><p className="mt-1 text-xs text-slate-500">Input VAT {formatLkr(Number(invoice.input_vat_minor) / 100)}</p><button className="mt-2 min-h-11 text-sm font-bold text-teal-800" onClick={() => setSettlementInvoice(invoice.id)}>Review / pay cash</button></div></li>)}</ul>}</section>
       </>}
     </>}
   </ProMain></AppShell>;

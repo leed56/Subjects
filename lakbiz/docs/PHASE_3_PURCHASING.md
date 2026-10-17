@@ -46,8 +46,10 @@ Verification for this application checkpoint: 428 tests across 59 files, TypeScr
 
 ## Remaining
 
+The subsequent cash-settlement checkpoint connects the Supplier Ledger to a paginated cloud statement and adds receipt-invoice LKR cash payments with retry-safe payable updates. Legacy GRN/payment and full snapshot writes fail closed under invoice authority. See `PHASE_3_CASH_SETTLEMENTS.md` for behavior, verification and activation restrictions. Bank/FX payments and metadata/full-snapshot adapters remain pending.
+
 - Exact lot, variant and serial receiving, with authenticated integration verification.
-- Supplier ledger and settlement integration; the invoice screen/history is connected. The receipt-linked invoice database authority is prepared separately, not activated: see `PHASE_3_RECEIPT_INVOICES.md`. It posts payable exactly once without receiving stock again; legacy payable writers must be adapted before its gate is enabled.
+- Bank/FX settlement and safe supplier metadata/full-snapshot adapters; invoice history, supplier statement and linked LKR cash settlements are connected. All purchasing authority remains prepared rather than activated: see `PHASE_3_RECEIPT_INVOICES.md` and `PHASE_3_CASH_SETTLEMENTS.md`.
 - Transactional shipment lifecycle, landed-cost allocation, recoverable VAT separation, FX settlement and residual rounding.
 - Full authenticated browser → real historical schema → data failure/retry certification and controlled company rollout. Synthetic browser adapters and database fixtures do not replace this release step.
 

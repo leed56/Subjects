@@ -33,6 +33,7 @@ import {
 } from "@/lib/offline/sync-conflict";
 import { localDataWatermark } from "./sync-watermark";
 import { purchaseAuthority } from "./purchase-authority";
+import { legacySupplierWriteError } from "./invoice-settlements";
 
 export type CloudPushResult = {
   error: string | null;
@@ -1542,6 +1543,8 @@ export async function syncPurchaseSnapshot(
   purchaseId: string,
   options?: { newChequeIds?: string[] },
 ): Promise<string | null> {
+  const authorityError = await legacySupplierWriteError(organizationId);
+  if (authorityError) return authorityError;
   const purchase = data.purchases.find((row) => row.id === purchaseId);
   if (!purchase) return "Purchase not found locally";
   const purchaseStockError = await commitLocationStockChanges(organizationId,data,purchase.lines
@@ -1707,6 +1710,8 @@ export async function syncSupplierPaymentSnapshot(
   data: AppData,
   paymentId: string,
 ): Promise<string | null> {
+  const authorityError = await legacySupplierWriteError(organizationId);
+  if (authorityError) return authorityError;
   const payment = data.supplierPayments.find((row) => row.id === paymentId);
   if (!payment) return "Payment not found locally";
 
@@ -2406,6 +2411,8 @@ export async function pushBusinessData(
 ): Promise<CloudPushResult> {
   const seenGeneration =
     options?.seenGeneration ?? (await fetchOrgSyncGeneration(organizationId));
+  const invoiceError = await legacySupplierWriteError(organizationId);
+  if (invoiceError) return { error: invoiceError, stale: false, generation: seenGeneration };
   const purchasing = await purchaseAuthority(organizationId);
   if (purchasing.error) return { error: purchasing.error, stale: false, generation: seenGeneration };
   const authoritativeProductIds = new Set<string>();

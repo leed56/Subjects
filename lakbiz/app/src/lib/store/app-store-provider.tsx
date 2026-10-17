@@ -26,6 +26,7 @@ import { stripFinancialData } from "@/lib/org-role/strip-financials";
 import { getPlan } from "@/lib/subscription/plans";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { saveOrgShopSettings } from "@/lib/supabase/org-settings";
+import { legacySupplierWriteError } from "@/lib/supabase/invoice-settlements";
 import {
   pushBusinessData,
   syncCustomersSnapshot,
@@ -1296,6 +1297,12 @@ function useAppStoreState(): AppStoreValue {
 
       const prevChequeIds = new Set(data.cheques.map((cheque) => cheque.id));
       const prevPurchasesLen = data.purchases.length;
+      if (org.id && org.isAuthenticated) {
+        if (!isOnline) return { ok: false, error: "Connect online to verify supplier invoice authority before recording a GRN." };
+        const authorityError = await legacySupplierWriteError(org.id);
+        if (authorityError) return { ok: false, error: authorityError };
+        if (purchaseScopeRef.current !== `${org.id}:${user?.id ?? ""}` || latestDataRef.current !== data) return { ok: false, error: "The company or business data changed. Reopen the form before saving." };
+      }
       const next = createPurchase(data, input, user?.id);
       if (next.purchases.length === prevPurchasesLen) {
         return { ok: false, error: "Could not record purchase" };
@@ -1603,6 +1610,12 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
 
       const prevPaymentsLen = data.supplierPayments.length;
+      if (org.id && org.isAuthenticated) {
+        if (!isOnline) return { ok: false, error: "Connect online to verify supplier invoice authority before paying a supplier." };
+        const authorityError = await legacySupplierWriteError(org.id);
+        if (authorityError) return { ok: false, error: authorityError };
+        if (purchaseScopeRef.current !== `${org.id}:${user?.id ?? ""}` || latestDataRef.current !== data) return { ok: false, error: "The company or business data changed. Reopen the form before saving." };
+      }
       const next = recordSupplierPayment(data, supplierId, amount, method, note);
       if (next.supplierPayments.length === prevPaymentsLen) {
         return { ok: false, error: "Could not record payment" };

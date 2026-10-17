@@ -14,7 +14,8 @@ const routes=['dashboard','customers','workforce','vehicles','teams','assets','e
 const f='const f=window.fixture;';
 const mutate=`async function mutate(...args){f.calls.push(args);await new Promise(r=>setTimeout(r,80));if(f.rejectMutation)throw Error('Synthetic rejected request');return {ok:false,data:null,error:'Synthetic save failure'}}`;
 const stubs={
- '@/lib/supabase/receipt-invoices':`${f}${mutate}export function invoicePending(){return f.pendingInvoice===true}export async function loadInvoiceWorkspace(){if(f.failLoads)throw Error('Synthetic invoice load failure');return {organizationId:'fixture-org',userId:'owner',enabled:true,receipts:[{organization_id:'fixture-org',receipt_id:'receipt',purchase_order_id:'po',received_at:'2026-10-16T10:00:00Z',request_lines:[{line_id:'line',qty:2}]}],invoices:[],billed:[]}}export const saveReceiptInvoice=mutate;`,
+ '@/lib/supabase/invoice-settlements':`${f}${mutate}export function cashSettlementPending(){return f.pendingCash===true}export async function loadInvoiceSettlement(){return {organization_id:'fixture-org',invoice_id:'invoice',number:'INV-001',invoice_date:'2026-10-16',total_minor:1000,paid_minor:0,payable_balance:10,payments:[],userId:'owner'}}export const saveInvoiceCashSettlement=mutate;export async function loadSupplierStatement(org,supplier,page){if(f.failStatement)throw Error('Statement load failed');return {organization_id:org,supplier_id:supplier,payable_balance:10,opening_minor:0,count:51,page,entries:[{identity:'invoice:invoice',date:'2026-10-17',label:'Invoice INV-001',amount_minor:1000,balance_minor:1000}]}}`,
+ '@/lib/supabase/receipt-invoices':`${f}${mutate}export function invoicePending(){return f.pendingInvoice===true}export async function loadInvoiceWorkspace(){if(f.failLoads)throw Error('Synthetic invoice load failure');return {organizationId:'fixture-org',userId:'owner',enabled:true,receipts:[{organization_id:'fixture-org',receipt_id:'receipt',purchase_order_id:'po',received_at:'2026-10-16T10:00:00Z',request_lines:[{line_id:'line',qty:2}]}],invoices:[{id:"invoice",supplier_id:"s",supplier_invoice_no:"INV-001",invoice_date:"2026-10-16",total_minor:1000,input_vat_minor:0}],billed:[]}}export const saveReceiptInvoice=mutate;`,
  '@/lib/supabase/inventory-location-client':`${f}${mutate}export async function loadInventoryLocations(){if(f.failLoads)throw Error('Synthetic load failure');return {organizationId:'fixture-org',locations:[{id:'main',name:'Main stockroom',code:'MAIN',is_default:true,active:true},{id:'branch',name:'Branch',code:'BRANCH',active:true}],balances:[{id:'balance',location_id:'main',product_id:'p',qty_on_hand:10,qty_reserved:0,variant_id:null,lot_id:null}],units:[],transfers:[],reservations:[],enabled:true}}export async function inventoryOperation(...args){await mutate(...args)}export async function createStockLocation(...args){await mutate(...args)}export async function inspectInventoryProduct(){return []}`,
  'next/link':'import React from "react";export default function Link({children,...p}){return <a {...p}>{children}</a>}',
  'next/navigation':'export function useSearchParams(){return new URLSearchParams()}export function useRouter(){return {push(){},replace(){}}}export function usePathname(){return location.pathname}',
@@ -94,6 +95,15 @@ try{
    await page.getByText('Stock operator access required',{exact:true}).waitFor();
   }
   if(route==='suppliers'){
+   await page.getByRole('button',{name:'Ledger',exact:true}).filter({visible:true}).first().click();
+   const statement=page.getByRole('dialog',{name:'Supplier statement'});await statement.getByRole('cell',{name:/Invoice INV-001/}).waitFor();
+   await statement.getByRole('button',{name:'Next',exact:true}).click();await statement.getByText('Page 2 · 51 entries',{exact:true}).waitFor();
+   await page.keyboard.press('Escape');assert(await statement.count()===0,'Statement Escape close failed');
+   await page.evaluate(()=>{window.fixture.failStatement=true});
+   await page.getByRole('button',{name:'Ledger',exact:true}).filter({visible:true}).first().click();
+   await statement.getByRole('alert').waitFor();assert(await statement.getByRole('table').count()===0,'Failed statement falls back to incomplete legacy rows');
+   await page.evaluate(()=>{window.fixture.failStatement=false});await statement.getByRole('button',{name:'Retry statement',exact:true}).click();await statement.getByRole('cell',{name:/Invoice INV-001/}).waitFor();
+   await statement.getByRole('button',{name:'Close supplier statement',exact:true}).click();
    await page.getByRole('tab',{name:/Purchase orders/}).click();
    await page.getByRole('button',{name:'Receive',exact:true}).filter({visible:true}).first().click();
    const quantity=page.getByRole('spinbutton',{name:'Receive Fixture product',exact:true});await quantity.fill('3');
@@ -131,7 +141,18 @@ try{
    fixture={...fixture,pendingInvoice:true,calls:[]};await page.reload();
    const check=page.getByRole('button',{name:'Check pending invoice',exact:true});await check.click();await page.getByRole('alert').waitFor();
    assert(await check.isEnabled(),'Invoice recovery lock stuck');
-   fixture={...fixture,pendingInvoice:false,readOnly:true};await page.reload();
+   fixture={...fixture,pendingInvoice:false,pendingCash:false,calls:[]};await page.reload();
+   await page.getByRole('button',{name:'Review / pay cash',exact:true}).click();
+   const cash=page.getByRole('region',{name:'Invoice cash settlement'});
+   await cash.getByLabel('Cash amount (LKR)',{exact:true}).fill('3');await cash.getByLabel('Payment date',{exact:true}).fill('2026-10-17');
+   await cash.getByLabel('Receipt reference / note',{exact:true}).fill('Keep this cash receipt');await cash.getByRole('button',{name:'Record cash payment',exact:true}).click();
+   await cash.getByRole('alert').waitFor();assert(await cash.getByLabel('Cash amount (LKR)',{exact:true}).inputValue()==='3','Cash amount draft lost');
+   assert(await cash.getByLabel('Receipt reference / note',{exact:true}).inputValue()==='Keep this cash receipt','Cash reference lost');
+   assert(await cash.getByRole('button',{name:'Record cash payment',exact:true}).isEnabled(),'Cash saving lock stuck');
+   await page.screenshot({path:path.join(out,`invoice-cash-rejected-${width}.png`),fullPage:true});
+   fixture={...fixture,pendingCash:true,calls:[]};await page.reload();await page.getByRole('button',{name:'Review / pay cash',exact:true}).click();
+   const cashCheck=cash.getByRole('button',{name:'Check pending cash payment',exact:true});await cashCheck.click();await cash.getByRole('alert').waitFor();assert(await cashCheck.isEnabled(),'Cash recovery lock stuck');
+   fixture={...fixture,pendingInvoice:false,pendingCash:false,readOnly:true};await page.reload();
    await page.getByText('Owner access is required to review supplier costs and invoices.',{exact:true}).waitFor();
    assert(await page.getByRole('checkbox').count()===0,'Non-owner sees receipt details');
   }
