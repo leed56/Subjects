@@ -148,6 +148,22 @@ const GROCERY_BLUEPRINT: readonly SectorCategoryBlueprint[] = [
 ];
 
 export const SECTOR_CATEGORY_BLUEPRINTS: Partial<Record<SectorId, readonly SectorCategoryBlueprint[]>> = {
+  cosmetics: [
+    { department: "Skincare", category: "Skincare", subcategory: "Cleansers & Toners" },
+    { department: "Skincare", category: "Skincare", subcategory: "Moisturisers & Serums" },
+    { department: "Skincare", category: "Sun Care", subcategory: "Sunscreen & After Sun" },
+    { department: "Makeup", category: "Face Makeup", subcategory: "Foundation & Concealer" },
+    { department: "Makeup", category: "Face Makeup", subcategory: "Powder & Blush" },
+    { department: "Makeup", category: "Eye Makeup", subcategory: "Mascara, Liner & Shadow" },
+    { department: "Makeup", category: "Lip Products", subcategory: "Lipstick, Gloss & Balm" },
+    { department: "Makeup", category: "Nail Care", subcategory: "Polish & Treatments" },
+    { department: "Hair & Body", category: "Hair Care", subcategory: "Shampoo & Conditioner" },
+    { department: "Hair & Body", category: "Hair Care", subcategory: "Styling & Colour" },
+    { department: "Hair & Body", category: "Body Care", subcategory: "Lotions & Body Wash" },
+    { department: "Fragrance", category: "Perfume & Fragrance", subcategory: "Perfume & Body Mist" },
+    { department: "Beauty Tools", category: "Beauty Accessories", subcategory: "Brushes, Sponges & Tools" },
+    { department: "Gifts", category: "Gift Sets", subcategory: "Beauty & Fragrance Sets" },
+  ],
   pharmacy: PHARMACY_BLUEPRINT,
   grocery: GROCERY_BLUEPRINT,
 };

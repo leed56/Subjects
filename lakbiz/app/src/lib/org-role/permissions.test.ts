@@ -201,3 +201,11 @@ describe("canUseSuppliersModule / canUseBankingModule", () => {
     }
   });
 });
+
+
+describe("accounting route", () => {
+  it("belongs only to the owner", () => {
+    expect(canAccessShopRoute("owner", "/accounting")).toBe(true);
+    for (const role of ALL_ROLES.filter(role => role !== "owner")) expect(canAccessShopRoute(role, "/accounting")).toBe(false);
+  });
+});

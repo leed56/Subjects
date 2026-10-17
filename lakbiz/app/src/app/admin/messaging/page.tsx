@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import {
   DEFAULT_PLATFORM_MESSAGING_POLICY,
+  parsePlatformMessagingPolicy,
   type PlatformMessagingPolicy,
 } from "@/lib/messaging/platform-policy";
 
@@ -17,10 +18,14 @@ export default function AdminMessagingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageIsError, setMessageIsError] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [customRemindDay, setCustomRemindDay] = useState("");
 
   const load = useCallback(() => {
     setLoading(true);
+    setLoadFailed(false);
+    setMessage(null);
     void fetch("/api/admin/messaging")
       .then((r) => r.json())
       .then(
@@ -35,50 +40,77 @@ export default function AdminMessagingPage() {
             setTextLkConfigured(json.textLkConfigured ?? null);
           } else {
             setMessage(json.error ?? t("admin.load_failed"));
+            setMessageIsError(true);
+            setLoadFailed(true);
           }
         },
       )
+      .catch(() => {
+        setMessage(t("admin.load_failed"));
+        setMessageIsError(true);
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   useEffect(load, [load]);
 
   const save = async (next: PlatformMessagingPolicy) => {
+    if (saving) return;
     setSaving(true);
     setMessage(null);
-    const res = await fetch("/api/admin/messaging", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(next),
-    });
-    const json = (await res.json()) as {
-      ok?: boolean;
-      policy?: PlatformMessagingPolicy;
-      error?: string;
-    };
-    setSaving(false);
-    if (json.ok && json.policy) {
-      setPolicy(json.policy);
-      setMessage(t("admin.messaging_saved"));
-    } else {
-      setMessage(json.error ?? t("admin.save_failed"));
+    setMessageIsError(false);
+    try {
+      const normalized = parsePlatformMessagingPolicy(next);
+      const res = await fetch("/api/admin/messaging", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(normalized),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        policy?: PlatformMessagingPolicy;
+        error?: string;
+      };
+      if (res.ok && json.ok && json.policy) {
+        setPolicy(json.policy);
+        setMessage(t("admin.messaging_saved"));
+      } else {
+        setMessage(json.error ?? t("admin.save_failed"));
+        setMessageIsError(true);
+      }
+    } catch {
+      setMessage(t("admin.save_failed"));
+      setMessageIsError(true);
+    } finally {
+      setSaving(false);
     }
   };
 
   const resetDefaults = async () => {
+    if (saving) return;
     setSaving(true);
-    const res = await fetch("/api/admin/messaging", { method: "POST" });
-    const json = (await res.json()) as {
-      ok?: boolean;
-      policy?: PlatformMessagingPolicy;
-      error?: string;
-    };
-    setSaving(false);
-    if (json.ok && json.policy) {
-      setPolicy(json.policy);
-      setMessage(t("admin.messaging_reset"));
-    } else {
-      setMessage(json.error ?? t("admin.reset_failed"));
+    setMessage(null);
+    setMessageIsError(false);
+    try {
+      const res = await fetch("/api/admin/messaging", { method: "POST" });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        policy?: PlatformMessagingPolicy;
+        error?: string;
+      };
+      if (res.ok && json.ok && json.policy) {
+        setPolicy(json.policy);
+        setMessage(t("admin.messaging_reset"));
+      } else {
+        setMessage(json.error ?? t("admin.reset_failed"));
+        setMessageIsError(true);
+      }
+    } catch {
+      setMessage(t("admin.reset_failed"));
+      setMessageIsError(true);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -105,33 +137,37 @@ export default function AdminMessagingPage() {
   };
 
   const runRenewalCron = async () => {
+    if (saving) return;
     setSaving(true);
     setMessage(null);
-    const res = await fetch("/api/cron/subscription-renewal-reminders", {
-      method: "POST",
-    });
-    const json = (await res.json()) as {
-      ok?: boolean;
-      sent?: number;
-      matched?: number;
-      skippedReason?: string;
-      error?: string;
-      errors?: string[];
-    };
-    setSaving(false);
-    if (json.ok) {
-      setMessage(
-        t("admin.messaging_renewal_run_ok")
-          .replace("{sent}", String(json.sent ?? 0))
-          .replace("{matched}", String(json.matched ?? 0)),
-      );
-    } else {
-      setMessage(
-        json.skippedReason ??
-          json.error ??
-          json.errors?.[0] ??
-          t("admin.failed"),
-      );
+    setMessageIsError(false);
+    try {
+      const res = await fetch("/api/cron/subscription-renewal-reminders", {
+        method: "POST",
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        sent?: number;
+        matched?: number;
+        skippedReason?: string;
+        error?: string;
+        errors?: string[];
+      };
+      if (res.ok && json.ok) {
+        setMessage(
+          t("admin.messaging_renewal_run_ok")
+            .replace("{sent}", String(json.sent ?? 0))
+            .replace("{matched}", String(json.matched ?? 0)),
+        );
+      } else {
+        setMessage(json.skippedReason ?? json.error ?? json.errors?.[0] ?? t("admin.failed"));
+        setMessageIsError(true);
+      }
+    } catch {
+      setMessage(t("admin.failed"));
+      setMessageIsError(true);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -144,14 +180,19 @@ export default function AdminMessagingPage() {
       <p className="mt-2 text-slate-400">{t("admin.messaging_subtitle")}</p>
 
       {message && (
-        <p className="mt-4 rounded-lg bg-slate-800 px-4 py-3 text-sm text-teal-200">
+        <p role={messageIsError ? "alert" : "status"} className={`mt-4 rounded-lg px-4 py-3 text-sm ${messageIsError ? "border border-red-800 bg-red-950/50 text-red-200" : "bg-slate-800 text-teal-200"}`}>
           {message}
         </p>
       )}
 
       {loading ? (
         <p className="mt-8 text-slate-400">{t("common.loading")}</p>
+      ) : loadFailed ? (
+        <button type="button" onClick={load} className="mt-6 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500">
+          {t("resilience.retry")}
+        </button>
       ) : (
+        <fieldset disabled={saving} className="contents">
         <div className="mt-8 space-y-6">
           <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
             <h3 className="font-semibold text-white">{t("admin.messaging_status")}</h3>
@@ -368,6 +409,7 @@ export default function AdminMessagingPage() {
             </button>
           </div>
         </div>
+        </fieldset>
       )}
     </main>
   );

@@ -417,23 +417,112 @@ html[lang="ta"] :where(h1, h2, h3, h4, p, a, button, label, th, [role="tab"]) {
   }
 }
 
+@media (max-width: 639px) {
+  .mobile-card-table,
+  .mobile-card-table tbody,
+  .mobile-card-table tr,
+  .mobile-card-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .mobile-card-table thead {
+    display: none;
+  }
+
+  .mobile-card-table tbody {
+    display: grid;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .mobile-card-table tbody tr {
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.875rem;
+    background: #fff;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.035);
+  }
+
+  .mobile-card-table tbody td {
+    display: flex;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    padding: 0.65rem 0.8rem !important;
+    text-align: right;
+  }
+
+  .mobile-card-table tbody td:last-child {
+    border-bottom: 0;
+  }
+
+  .mobile-card-table tbody td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    color: #64748b;
+    font-family: inherit;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 1.25;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .mobile-card-table tbody td > * {
+    min-width: 0;
+  }
+
+  .mobile-card-table.mobile-card-table-dark tbody tr {
+    border-color: #334155;
+    background: #0f172a;
+    box-shadow: 0 8px 24px rgba(2, 6, 23, 0.24);
+  }
+
+  .mobile-card-table.mobile-card-table-dark tbody td {
+    border-bottom-color: #1e293b;
+  }
+
+  .mobile-card-table.mobile-card-table-dark tbody td::before {
+    color: #94a3b8;
+  }
+}
+
+@page {
+  size: A4 portrait;
+  margin: 12mm;
+}
+
 @media print {
-  .no-print {
+  .no-print,
+  .app-shell-print-hidden,
+  aside {
     display: none !important;
   }
 
-  header,
-  nav {
-    display: none !important;
-  }
-
+  html,
   body {
     background: white;
+    color: #0f172a;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 
-  .invoice-paper {
+  [data-print-document] {
+    box-sizing: border-box;
+    width: 100% !important;
+    max-width: 186mm !important;
+    margin: 0 auto !important;
     box-shadow: none !important;
-    max-width: 100% !important;
+    break-after: auto;
+  }
+
+  .invoice-paper,
+  .credit-note-paper {
+    border-radius: 0 !important;
     padding: 0 !important;
   }
 
@@ -448,7 +537,32 @@ html[lang="ta"] :where(h1, h2, h3, h4, p, a, button, label, th, [role="tab"]) {
     padding: 0.5rem !important;
   }
 
+  [data-print-document] thead {
+    display: table-header-group;
+  }
+
+  [data-print-document] tfoot {
+    display: table-footer-group;
+  }
+
+  [data-print-document] tr,
+  [data-print-document] img,
+  [data-print-document] footer,
+  [data-print-document] > div:last-of-type,
+  [data-print-document] > section:last-of-type {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  [data-print-document] table {
+    width: 100% !important;
+    border-collapse: collapse;
+  }
+
   main {
     padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
   }
 }

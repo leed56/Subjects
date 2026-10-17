@@ -6,6 +6,13 @@ import {
 } from "@/lib/inventory-tracking";
 
 describe("sector inventory tracking", () => {
+  it("tracks beauty expiry by batch and shades by variant lots without forcing accessories into expiry tracking", () => {
+    const beauty = inventoryTrackingPreset("cosmetics");
+    expect(beauty.defaultMode).toBe("lot");
+    expect(beauty.fefo).toBe(true);
+    expect(beauty.allowedModes).toEqual(["simple", "lot", "variant", "variant_lot"]);
+    expect(beauty.variantAxes).toEqual(["shade", "pack"]);
+  });
   it("defines a valid strategy for every provisionable sector", () => {
     for (const sector of sectors) {
       const preset = inventoryTrackingPreset(sector.id);

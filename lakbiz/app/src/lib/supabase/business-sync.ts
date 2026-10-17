@@ -32,6 +32,8 @@ import {
   mergePullWithLocal,
 } from "@/lib/offline/sync-conflict";
 import { localDataWatermark } from "./sync-watermark";
+import { purchaseAuthority } from "./purchase-authority";
+import { legacySupplierWriteError } from "./invoice-settlements";
 
 export type CloudPushResult = {
   error: string | null;
@@ -119,6 +121,10 @@ function asSectorId(value: string | null | undefined): SectorId {
   const allowed: SectorId[] = [
     "grocery",
     "pharmacy",
+    "cosmetics",
+    "hardware",
+    "stationery",
+    "wholesale",
     "electronics",
     "mobile_shop",
     "electricals",
@@ -386,6 +392,7 @@ export async function pullBusinessData(
       const lines = (purchaseOrderLinesByPo.get(row.id) ?? [])
         .sort((a, b) => a.line_order - b.line_order)
         .map((line) => ({
+          id: line.id,
           productId: line.product_id ?? "",
           productName: line.product_name,
           qtyOrdered: num(line.qty_ordered),
@@ -675,6 +682,7 @@ async function upsertOrgRows(
     | "purchase_order_lines",
   rows: Record<string, unknown>[],
 ): Promise<string | null> {
+  if (table === "stock_logs") rows = rows.filter(row => !String(row.id).startsWith("po-receipt:"));
   if (rows.length === 0) return null;
   const supabase = createBrowserClient();
   if (!supabase) return "Supabase not configured";
@@ -742,6 +750,53 @@ export async function syncCustomersSnapshot(
   );
 }
 
+async function locationStockAuthority(organizationId: string): Promise<{ enabled: boolean; error: string | null }> {
+  const db = createBrowserClient();
+  if (!db) return { enabled: false, error: "Supabase not configured" };
+  try {
+    const { data, error } = await db.from("inventory_transfer_settings").select("enabled").eq("organization_id", organizationId).maybeSingle();
+    if (error && ["42P01", "PGRST205"].includes(error.code)) return { enabled: false, error: null };
+    return { enabled: data?.enabled === true, error: error?.message ?? null };
+  } catch (failure) { return { enabled: false, error: failure instanceof Error ? failure.message : "Could not verify stock authority" }; }
+}
+
+async function commitLocationStockChanges(
+  organizationId: string, data: AppData,
+  movements: { productId: string; delta: number; key: string; stockLog?: StockLog }[],
+  knownAuthority?: boolean,
+): Promise<string | null> {
+  if (movements.length === 0) return null;
+  const authority = knownAuthority === undefined ? await locationStockAuthority(organizationId) : {enabled:knownAuthority,error:null};
+  if (authority.error || !authority.enabled) return authority.error;
+  const db = createBrowserClient();
+  if (!db) return "Supabase not configured";
+  const ordered = [...movements].sort((a,b) => a.productId.localeCompare(b.productId) || a.key.localeCompare(b.key));
+  const remaining = new Map<string,number>();
+  for (const row of ordered) remaining.set(row.productId,(remaining.get(row.productId) ?? 0)+row.delta);
+  const roundQty = (value: number) => Math.round(value*1000)/1000;
+  const next = new Map<string,number>();
+  for (const [id,delta] of remaining) {
+    const product = data.products.find(row=>row.id===id);
+    if (!product) return "Stock command product is missing locally";
+    next.set(id,roundQty(product.stockQty-delta));
+  }
+  const changes = ordered.map(row => {
+    const expected = next.get(row.productId)!;
+    const desired = roundQty(expected+row.delta);
+    next.set(row.productId,desired);
+    return { product_id:row.productId,command_key:row.key,expected_qty:expected,next_qty:desired,
+      ...(row.stockLog ? { stock_log: stockLogRow(organizationId,row.stockLog) } : {}) };
+  });
+  const { error } = await db.rpc("apply_inventory_stock_commands",{ p_organization_id:organizationId,p_changes:changes });
+  return error?.message ?? null;
+}
+
+function stockLogMovements(logs: StockLog[]) {
+  return logs.map(log => ({ productId:log.productId,
+    delta:(["in","purchase","job_return","customer_return"].includes(log.type)?1:-1)*Math.abs(log.qty),
+    key:`stock-log:${log.id}`, stockLog:log }));
+}
+
 /** Masked views (sales/products/ac_jobs/contractors/vehicles/technicians/job_items): avoid upsert — SELECT on *_base is revoked, and the view itself has no unique constraint for ON CONFLICT to target. */
 async function upsertMaskedViewRows(
   table: "sales" | "products" | "ac_jobs" | "contractors" | "vehicles" | "technicians" | "job_items",
@@ -767,7 +822,16 @@ async function upsertMaskedViewRows(
     for (const row of existing ?? []) existingIds.add(String(row.id));
   }
   const toInsert = rows.filter((row) => !existingIds.has(String(row.id)));
-  const toUpdate = rows.filter((row) => existingIds.has(String(row.id)));
+  let toUpdate = rows.filter((row) => existingIds.has(String(row.id)));
+  if (table === "products") {
+    const authority = await locationStockAuthority(organizationId);
+    if (authority.error) return authority.error;
+    if (authority.enabled) toUpdate = toUpdate.map(row => {
+      const metadata = { ...row };
+      delete metadata.stock_qty;
+      return metadata;
+    });
+  }
 
   for (const rowBatch of chunk(toInsert, BULK_UPDATE_BATCH_SIZE)) {
     const { error } = await supabase.from(table).insert(rowBatch);
@@ -840,7 +904,7 @@ async function deleteOrgRowsNotIn(
   if (fetchError) return fetchError.message;
 
   const keep = new Set(keepIds);
-  const toDelete = (rows ?? []).map((row) => row.id).filter((id) => !keep.has(id));
+  const toDelete = (rows ?? []).map((row) => row.id).filter((id) => !keep.has(id) && !(table === "stock_logs" && String(id).startsWith("po-receipt:")));
   if (toDelete.length === 0) return null;
 
   const batchSize = 50;
@@ -1200,6 +1264,27 @@ export async function syncProductSnapshot(
   options?: { preserveBuyPrices?: boolean; stockLogIds?: string[] },
 ): Promise<string | null> {
   if (productIds.length === 0) return null;
+  const locationAuthority = await locationStockAuthority(organizationId);
+  if (locationAuthority.error) return locationAuthority.error;
+  const movementLogs = data.stockLogs.filter(log => (options?.stockLogIds ?? []).includes(log.id));
+  const stockError = await commitLocationStockChanges(organizationId,data,stockLogMovements(movementLogs),locationAuthority.enabled);
+  if (stockError) return stockError;
+  if (locationAuthority.enabled && movementLogs.length>0) return null;
+  if ((options?.stockLogIds?.length ?? 0) === 0) {
+    const authority = locationAuthority;
+    if (authority.error) return authority.error;
+    if (authority.enabled) {
+      const db = createBrowserClient();
+      if (!db) return "Supabase not configured";
+      for (const ids of chunk(productIds,100)) {
+        const {data:cloud,error}=await db.from("products").select("id,stock_qty").eq("organization_id",organizationId).in("id",ids);
+        if (error) return error.message;
+        if ((cloud ?? []).some(row=>data.products.find(product=>product.id===row.id)?.stockQty!==Number(row.stock_qty))) {
+          return "Stock quantities require a stock movement. Reload current stock and use Stock In, Stock Out or the exact identity workflow.";
+        }
+      }
+    }
+  }
   const products = await productsWithPreservedBuyPrices(
     organizationId,
     data.products,
@@ -1226,6 +1311,18 @@ export async function syncProductsSnapshot(
   data: AppData,
   options?: { preserveBuyPrices?: boolean },
 ): Promise<string | null> {
+  const authority = await locationStockAuthority(organizationId);
+  if (authority.error) return authority.error;
+  if (authority.enabled) {
+    const db = createBrowserClient();
+    if (!db) return "Supabase not configured";
+    const cloud = await fetchAllPages((from,to)=>db.from("products").select("id,stock_qty").eq("organization_id",organizationId).range(from,to));
+    if (cloud.error) return cloud.error.message;
+    const quantities = new Map((cloud.data ?? []).map(row=>[String(row.id),Number(row.stock_qty)]));
+    if (data.products.some(product=>quantities.has(product.id) && quantities.get(product.id)!==product.stockQty)) {
+      return "Bulk product snapshots cannot change authoritative stock. Reload and use explicit stock movements for quantity changes.";
+    }
+  }
   const products = await productsWithPreservedBuyPrices(
     organizationId,
     data.products,
@@ -1264,6 +1361,9 @@ export async function syncSaleSnapshot(
 ): Promise<string | null> {
   const sale = data.sales.find((row) => row.id === saleId);
   if (!sale) return "Sale not found locally";
+  const saleStockError = await commitLocationStockChanges(organizationId,data,sale.lines
+    .filter(line=>Boolean(line.productId)).map((line,index)=>({productId:line.productId,delta:-line.qty,key:`sale:${saleId}:${index}`})));
+  if (saleStockError) return saleStockError;
 
   const custErr = await syncCustomersSnapshot(organizationId, data.customers);
   if (custErr) return custErr;
@@ -1443,8 +1543,13 @@ export async function syncPurchaseSnapshot(
   purchaseId: string,
   options?: { newChequeIds?: string[] },
 ): Promise<string | null> {
+  const authorityError = await legacySupplierWriteError(organizationId);
+  if (authorityError) return authorityError;
   const purchase = data.purchases.find((row) => row.id === purchaseId);
   if (!purchase) return "Purchase not found locally";
+  const purchaseStockError = await commitLocationStockChanges(organizationId,data,purchase.lines
+    .filter(line=>Boolean(line.productId)).map((line,index)=>({productId:line.productId,delta:line.qty,key:`purchase:${purchaseId}:${index}`})));
+  if (purchaseStockError) return purchaseStockError;
 
   const supErr = await syncSuppliersSnapshot(organizationId, data.suppliers);
   if (supErr) return supErr;
@@ -1553,6 +1658,9 @@ export async function syncPurchaseOrderSnapshot(
   purchaseOrderId: string,
   options?: { newStockLogIds?: string[] },
 ): Promise<string | null> {
+  const authority = await purchaseAuthority(organizationId);
+  if (authority.error) return authority.error;
+  if (authority.enabled) return "Use atomic purchasing commands; a snapshot cannot replace purchase orders or receipt lines.";
   const po = data.purchaseOrders.find((row) => row.id === purchaseOrderId);
   if (!po) return "Purchase order not found locally";
 
@@ -1571,6 +1679,8 @@ export async function syncPurchaseOrderSnapshot(
   const newStockLogIds = options?.newStockLogIds ?? [];
   if (newStockLogIds.length > 0) {
     const logs = data.stockLogs.filter((log) => newStockLogIds.includes(log.id));
+    const stockError = await commitLocationStockChanges(organizationId,data,stockLogMovements(logs));
+    if (stockError) return stockError;
     if (logs.length > 0) {
       const logErr = await upsertOrgRows(
         "stock_logs",
@@ -1600,6 +1710,8 @@ export async function syncSupplierPaymentSnapshot(
   data: AppData,
   paymentId: string,
 ): Promise<string | null> {
+  const authorityError = await legacySupplierWriteError(organizationId);
+  if (authorityError) return authorityError;
   const payment = data.supplierPayments.find((row) => row.id === paymentId);
   if (!payment) return "Payment not found locally";
 
@@ -2299,6 +2411,31 @@ export async function pushBusinessData(
 ): Promise<CloudPushResult> {
   const seenGeneration =
     options?.seenGeneration ?? (await fetchOrgSyncGeneration(organizationId));
+  const invoiceError = await legacySupplierWriteError(organizationId);
+  if (invoiceError) return { error: invoiceError, stale: false, generation: seenGeneration };
+  const purchasing = await purchaseAuthority(organizationId);
+  if (purchasing.error) return { error: purchasing.error, stale: false, generation: seenGeneration };
+  const authoritativeProductIds = new Set<string>();
+  const authority = await locationStockAuthority(organizationId);
+  if (authority.error) return {error:authority.error,stale:false,generation:seenGeneration};
+  if (authority.enabled) {
+    const db = createBrowserClient();
+    if (!db) return {error:"Supabase not configured",stale:false,generation:seenGeneration};
+    const cloud = await fetchAllPages((from,to)=>db.from("products").select("id,stock_qty").eq("organization_id",organizationId).range(from,to));
+    if (cloud.error) return {error:cloud.error.message,stale:false,generation:seenGeneration};
+    const quantities = new Map((cloud.data ?? []).map(row=>[String(row.id),Number(row.stock_qty)]));
+    for (const id of quantities.keys()) authoritativeProductIds.add(id);
+    if (data.products.some(product=>quantities.has(product.id) && quantities.get(product.id)!==product.stockQty)) {
+      return {error:"Cloud stock changed. Reload and reconcile pending stock actions; a snapshot cannot replace authoritative location quantities.",stale:true,generation:seenGeneration};
+    }
+  }
+  if (purchasing.enabled && !authority.enabled && data.products.length > 0) {
+    const db = createBrowserClient();
+    if (!db) return { error: "Cloud not connected", stale: false, generation: seenGeneration };
+    const existing = await fetchAllPages((from,to) => db.from("products").select("id").eq("organization_id",organizationId).range(from,to));
+    if (existing.error) return { error: existing.error.message, stale: false, generation: seenGeneration };
+    for (const row of existing.data ?? []) authoritativeProductIds.add(String(row.id));
+  }
   let products = data.products;
   if (options?.preserveBuyPrices) {
     const supabase = createBrowserClient();
@@ -2677,6 +2814,13 @@ export async function pushBusinessData(
   ];
 
   for (const step of upsertSteps) {
+    if (purchasing.enabled && step.table === "purchase_orders") continue;
+    if (purchasing.enabled && step.table === "stock_logs") {
+      step.rows = step.rows.filter(row => !String(row.id).startsWith("po-receipt:"));
+    }
+    if (purchasing.enabled && step.table === "products") {
+      step.rows = step.rows.map(row => { const safe = { ...row }; if (authoritativeProductIds.has(String(row.id))) delete safe.buy_price; return safe; });
+    }
     const maskedTables = new Set([
       "sales",
       "products",
@@ -2737,7 +2881,7 @@ export async function pushBusinessData(
   );
   if (purchaseErr) return { error: purchaseErr, stale: false, generation: seenGeneration };
 
-  const poErr = await replaceLinesBatch(
+  const poErr = purchasing.enabled ? null : await replaceLinesBatch(
     "purchase_order_lines",
     organizationId,
     "purchase_order_id",
@@ -2816,6 +2960,9 @@ export async function pushBusinessData(
   ];
 
   for (const step of pruneSteps) {
+    // Never prune authoritative orders or server receipt audit from a device's
+    // older snapshot. Log pruning is disabled wholesale to preserve unknown IDs.
+    if (purchasing.enabled && ["purchase_orders", "stock_logs"].includes(step.table)) continue;
     const err = await deleteOrgRowsNotIn(step.table, organizationId, step.ids);
     if (err) return { error: err, stale: false, generation: seenGeneration };
   }

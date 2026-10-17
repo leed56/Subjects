@@ -43,7 +43,7 @@ export default function PlansPage() {
           description={t("sub.plans_page_desc")}
           actions={
             <ProButton href="/dashboard" variant="secondary">
-              Dashboard
+              {t("nav.dashboard")}
             </ProButton>
           }
         />
@@ -60,7 +60,7 @@ export default function PlansPage() {
             label={t("sub.plans_stat_plan")}
             value={planName}
             hint={t("sub.plans_assigned_hint")}
-            icon="Plan"
+            icon="◆"
             tone="teal"
           />
           <ProStatCard
@@ -68,10 +68,10 @@ export default function PlansPage() {
             value={t(`sub.status_${subscription.status}`)}
             hint={
               daysLeftInTrial != null
-                ? `${daysLeftInTrial} day${daysLeftInTrial === 1 ? "" : "s"} left`
+                ? t("sub.plans_days_left").replace("{days}", String(daysLeftInTrial))
                 : t("sub.plans_managed_account")
             }
-            icon="OK"
+            icon="✓"
             tone={statusTone}
           />
           <ProStatCard
@@ -82,25 +82,25 @@ export default function PlansPage() {
                 ? t("sub.annual_save")
                 : t("sub.plans_reference_price")
             }
-            icon="Billing"
+            icon="↻"
             tone="slate"
           />
           <ProStatCard
             label={t("sub.plans_stat_business")}
             value={org.name}
             hint={org.isAuthenticated ? t("sub.db_connected") : t("sub.login_demo")}
-            icon="Shop"
+            icon="⌂"
             tone="blue"
           />
           <ProStatCard
             label={t("sub.plans_stat_period")}
             value={
               periodEnd
-                ? new Date(periodEnd).toLocaleDateString("en-LK")
+                ? new Date(periodEnd).toLocaleDateString(locale === "si" ? "si-LK" : locale === "ta" ? "ta-LK" : "en-LK")
                 : t("sub.plans_manual_period")
             }
             hint={t("sub.plans_updated_by")}
-            icon="Date"
+            icon="◷"
             tone="amber"
           />
         </section>

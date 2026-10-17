@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
@@ -45,6 +45,8 @@ export default function VehiclesPage() {
   } = useAppStore();
   const { t } = useLocale();
   const { canWrite, disabledHint } = useWriteAccess();
+  const mutationLock = useRef(false);
+  const [mutationBusy, setMutationBusy] = useState(false);
   const { canSeeFinancials, org } = useSubscription();
   const whatsappApiConfigured = useWhatsAppApiConfigured();
   const canApiWhatsApp = whatsappApiConfigured === true && sectorAllowsApiWhatsApp(org.sector);
@@ -180,10 +182,21 @@ export default function VehiclesPage() {
 
   const forSale = data.vehicles.filter((v) => v.status === "for_sale");
   const sold = data.vehicles.filter((v) => v.status === "sold");
-  const agingCount = data.vehicles.filter((v) => v.status === "for_sale" && daysInStock(v.dateAdded) >= 60).length;
-  const stockCost = forSale.reduce((sum, v) => sum + vehicleTotalCost(v.purchasePrice, v.reconditionCost), 0);
-  const potentialProfit = forSale.reduce((sum, v) => sum + (v.askPrice - vehicleTotalCost(v.purchasePrice, v.reconditionCost)), 0);
-  const soldProfit = sold.reduce((sum, v) => sum + ((v.soldPrice ?? 0) - vehicleTotalCost(v.purchasePrice, v.reconditionCost)), 0);
+  const agingCount = data.vehicles.filter(
+    (v) => v.status === "for_sale" && daysInStock(v.dateAdded) >= 60,
+  ).length;
+  const stockCost = forSale.reduce(
+    (sum, v) => sum + vehicleTotalCost(v.purchasePrice, v.reconditionCost),
+    0,
+  );
+  const potentialProfit = forSale.reduce(
+    (sum, v) => sum + (v.askPrice - vehicleTotalCost(v.purchasePrice, v.reconditionCost)),
+    0,
+  );
+  const soldProfit = sold.reduce(
+    (sum, v) => sum + ((v.soldPrice ?? 0) - vehicleTotalCost(v.purchasePrice, v.reconditionCost)),
+    0,
+  );
   const sellVehicleRecord = sellId ? data.vehicles.find((v) => v.id === sellId) : null;
 
   const vehStatusLabel = (s: VehicleStatus | "all" | "aging") => {
@@ -205,36 +218,75 @@ export default function VehiclesPage() {
           description={`${forSale.length} ${t("veh.for_sale_count")} · ${t("veh.subtitle")}`}
           actions={
             <>
-              <ProButton href="/customers" variant="secondary">{t("nav.customers")}</ProButton>
-              {canSeeFinancials && <Button
-                type="button"
-                disabled={!canWrite}
-                title={!canWrite ? (disabledHint ?? undefined) : undefined}
-                onClick={() => {
-                  resetForm();
-                  setShowForm(true);
-                }}
-                variant="primary"
-              >
-                {t("veh.add")}
-              </Button>}
+              <ProButton href="/customers" variant="secondary">
+                {t("nav.customers")}
+              </ProButton>
+              {canSeeFinancials && (
+                <Button
+                  type="button"
+                  disabled={!canWrite}
+                  title={!canWrite ? (disabledHint ?? undefined) : undefined}
+                  onClick={() => {
+                    resetForm();
+                    setShowForm(true);
+                  }}
+                  variant="primary"
+                >
+                  {t("veh.add")}
+                </Button>
+              )}
             </>
           }
           metrics={
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard label={t("veh.for_sale")} value={String(forSale.length)} hint={t("veh.for_sale_count")} icon={<VehiclesIcon className="h-5 w-5" />} />
+              <MetricCard
+                label={t("veh.for_sale")}
+                value={String(forSale.length)}
+                hint={t("veh.for_sale_count")}
+                icon={<VehiclesIcon className="h-5 w-5" />}
+              />
               {canSeeFinancials ? (
                 <>
-                  <MetricCard label={t("common.cost")} value={formatLkr(stockCost)} hint="Current showroom stock" icon={<CostingIcon className="h-5 w-5" />} />
-                  <MetricCard label={t("common.profit")} value={formatLkr(potentialProfit)} hint="Potential on asking price" icon={<ReportsIcon className="h-5 w-5" />} tone="positive" />
+                  <MetricCard
+                    label={t("common.cost")}
+                    value={formatLkr(stockCost)}
+                    hint="Current showroom stock"
+                    icon={<CostingIcon className="h-5 w-5" />}
+                  />
+                  <MetricCard
+                    label={t("common.profit")}
+                    value={formatLkr(potentialProfit)}
+                    hint="Potential on asking price"
+                    icon={<ReportsIcon className="h-5 w-5" />}
+                    tone="positive"
+                  />
                 </>
               ) : (
                 <>
-                  <MetricCard label={t("veh.incoming")} value={String(data.vehicles.filter((vehicle) => vehicle.status === "incoming").length)} hint="Awaiting yard arrival" icon={<VehiclesIcon className="h-5 w-5" />} />
-                  <MetricCard label={t("veh.sold")} value={String(sold.length)} hint="Completed vehicle sales" icon={<ReportsIcon className="h-5 w-5" />} tone="positive" />
+                  <MetricCard
+                    label={t("veh.incoming")}
+                    value={String(
+                      data.vehicles.filter((vehicle) => vehicle.status === "incoming").length,
+                    )}
+                    hint="Awaiting yard arrival"
+                    icon={<VehiclesIcon className="h-5 w-5" />}
+                  />
+                  <MetricCard
+                    label={t("veh.sold")}
+                    value={String(sold.length)}
+                    hint="Completed vehicle sales"
+                    icon={<ReportsIcon className="h-5 w-5" />}
+                    tone="positive"
+                  />
                 </>
               )}
-              <MetricCard label={t("veh.aging")} value={String(agingCount)} hint="60+ days in yard" icon={<AlertTriangleIcon className="h-5 w-5" />} tone={agingCount ? "warning" : "default"} />
+              <MetricCard
+                label={t("veh.aging")}
+                value={String(agingCount)}
+                hint="60+ days in yard"
+                icon={<AlertTriangleIcon className="h-5 w-5" />}
+                tone={agingCount ? "warning" : "default"}
+              />
             </section>
           }
         />
@@ -257,101 +309,237 @@ export default function VehiclesPage() {
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
-                  if (savingVehicle) return;
-                  if (!model.trim() || !chassisNo.trim()) {
-                    setMessage(t("veh.model_required"));
-                    return;
+                  if (!canWrite || mutationLock.current) return;
+                  mutationLock.current = true;
+                  setMutationBusy(true);
+                  try {
+                    if (
+                      savingVehicle ||
+                      !canSeeFinancials ||
+                      [year, mileageKm, purchasePrice, reconditionCost, askPrice, minPrice].some(
+                        (value) => !Number.isFinite(value) || value < 0,
+                      )
+                    )
+                      return;
+                    if (!model.trim() || !chassisNo.trim()) {
+                      setMessage(t("veh.model_required"));
+                      return;
+                    }
+                    const input = {
+                      make,
+                      model,
+                      year,
+                      chassisNo,
+                      engineNo,
+                      regNo,
+                      color,
+                      fuel,
+                      transmission,
+                      mileageKm,
+                      condition,
+                      purchasePrice,
+                      reconditionCost,
+                      askPrice,
+                      minPrice: minPrice || undefined,
+                      status,
+                      notes,
+                    };
+                    setSavingVehicle(true);
+                    setMessage("");
+                    const result = await saveVehicleToCloud(input, editing?.id);
+                    setSavingVehicle(false);
+                    if (!result.ok) {
+                      setMessage(
+                        result.error === "Duplicate chassis number"
+                          ? t("veh.duplicate_chassis")
+                          : (result.error ?? t("common.save_failed")),
+                      );
+                      return;
+                    }
+                    setMessage(editing ? t("veh.updated") : t("veh.added"));
+                    resetForm();
+                    setShowForm(false);
+                    setTimeout(() => setMessage(""), 3000);
+                  } catch {
+                    setMessage(t("common.save_failed"));
+                  } finally {
+                    setSavingVehicle(false);
+                    mutationLock.current = false;
+                    setMutationBusy(false);
                   }
-                  const input = {
-                    make,
-                    model,
-                    year,
-                    chassisNo,
-                    engineNo,
-                    regNo,
-                    color,
-                    fuel,
-                    transmission,
-                    mileageKm,
-                    condition,
-                    purchasePrice,
-                    reconditionCost,
-                    askPrice,
-                    minPrice: minPrice || undefined,
-                    status,
-                    notes,
-                  };
-                  setSavingVehicle(true);
-                  setMessage("");
-                  const result = await saveVehicleToCloud(input, editing?.id);
-                  setSavingVehicle(false);
-                  if (!result.ok) {
-                    setMessage(
-                      result.error === "Duplicate chassis number"
-                        ? t("veh.duplicate_chassis")
-                        : result.error ?? t("common.save_failed"),
-                    );
-                    setTimeout(() => setMessage(""), 4000);
-                    return;
-                  }
-                  setMessage(editing ? t("veh.updated") : t("veh.added"));
-                  resetForm();
-                  setShowForm(false);
-                  setTimeout(() => setMessage(""), 3000);
                 }}
               >
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <select value={make} onChange={(e) => setMake(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                    {CAR_MAKES.map((m) => <option key={m}>{m}</option>)}
-                  </select>
-                  <input required placeholder={t("veh.model")} value={model} onChange={(e) => setModel(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input type="number" placeholder={t("veh.year")} value={year} onChange={(e) => setYear(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input required placeholder={t("veh.chassis")} value={chassisNo} onChange={(e) => setChassisNo(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 font-mono text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input placeholder={t("veh.engine_no")} value={engineNo} onChange={(e) => setEngineNo(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input placeholder={t("veh.reg_no")} value={regNo} onChange={(e) => setRegNo(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <select value={fuel} onChange={(e) => setFuel(e.target.value as VehicleRecord["fuel"])} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                    <option value="petrol">{t("veh.petrol")}</option>
-                    <option value="diesel">{t("veh.diesel")}</option>
-                    <option value="hybrid">{t("veh.hybrid")}</option>
-                    <option value="electric">{t("veh.electric")}</option>
-                  </select>
-                  <select value={transmission} onChange={(e) => setTransmission(e.target.value as VehicleRecord["transmission"])} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                    <option value="auto">{t("veh.auto")}</option>
-                    <option value="manual">{t("veh.manual")}</option>
-                  </select>
-                  <input type="number" placeholder={t("veh.mileage")} value={mileageKm || ""} onChange={(e) => setMileageKm(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input placeholder={t("veh.condition")} value={condition} onChange={(e) => setCondition(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <select value={status} onChange={(e) => setStatus(e.target.value as VehicleStatus)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                    {VEHICLE_STATUSES.filter((s) => s.value !== "sold").map((s) => <option key={s.value} value={s.value}>{vehStatusLabel(s.value as VehicleStatus)}</option>)}
-                  </select>
-                  <input type="number" placeholder={t("veh.purchase")} value={purchasePrice || ""} onChange={(e) => setPurchasePrice(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input type="number" placeholder={t("veh.recondition")} value={reconditionCost || ""} onChange={(e) => setReconditionCost(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input type="number" placeholder={t("veh.ask_price")} value={askPrice || ""} onChange={(e) => setAskPrice(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input type="number" placeholder={t("veh.min_price")} value={minPrice || ""} onChange={(e) => setMinPrice(Number(e.target.value))} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input placeholder={t("jobs.job_notes")} value={notes} onChange={(e) => setNotes(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 lg:col-span-2" />
-                </div>
+                <fieldset disabled={mutationBusy || !canWrite} className="contents">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <select
+                      value={make}
+                      onChange={(e) => setMake(e.target.value)}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    >
+                      {CAR_MAKES.map((m) => (
+                        <option key={m}>{m}</option>
+                      ))}
+                    </select>
+                    <input
+                      required
+                      placeholder={t("veh.model")}
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    />
+                    <input
+                      type="number"
+                      placeholder={t("veh.year")}
+                      value={year}
+                      onChange={(e) => setYear(Number(e.target.value))}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    />
+                    <input
+                      required
+                      placeholder={t("veh.chassis")}
+                      value={chassisNo}
+                      onChange={(e) => setChassisNo(e.target.value)}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 font-mono text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    />
+                    <input
+                      placeholder={t("veh.engine_no")}
+                      value={engineNo}
+                      onChange={(e) => setEngineNo(e.target.value)}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    />
+                    <input
+                      placeholder={t("veh.reg_no")}
+                      value={regNo}
+                      onChange={(e) => setRegNo(e.target.value)}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    />
+                    <select
+                      value={fuel}
+                      onChange={(e) => setFuel(e.target.value as VehicleRecord["fuel"])}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    >
+                      <option value="petrol">{t("veh.petrol")}</option>
+                      <option value="diesel">{t("veh.diesel")}</option>
+                      <option value="hybrid">{t("veh.hybrid")}</option>
+                      <option value="electric">{t("veh.electric")}</option>
+                    </select>
+                    <select
+                      value={transmission}
+                      onChange={(e) =>
+                        setTransmission(e.target.value as VehicleRecord["transmission"])
+                      }
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    >
+                      <option value="auto">{t("veh.auto")}</option>
+                      <option value="manual">{t("veh.manual")}</option>
+                    </select>
+                    <input
+                      type="number"
+                      placeholder={t("veh.mileage")}
+                      value={mileageKm || ""}
+                      onChange={(e) => setMileageKm(Number(e.target.value))}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    />
+                    <input
+                      placeholder={t("veh.condition")}
+                      value={condition}
+                      onChange={(e) => setCondition(e.target.value)}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    />
+                    <select
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value as VehicleStatus)}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    >
+                      {VEHICLE_STATUSES.filter((s) => s.value !== "sold").map((s) => (
+                        <option key={s.value} value={s.value}>
+                          {vehStatusLabel(s.value as VehicleStatus)}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      placeholder={t("veh.purchase")}
+                      value={purchasePrice || ""}
+                      onChange={(e) => setPurchasePrice(Number(e.target.value))}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    />
+                    <input
+                      type="number"
+                      placeholder={t("veh.recondition")}
+                      value={reconditionCost || ""}
+                      onChange={(e) => setReconditionCost(Number(e.target.value))}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    />
+                    <input
+                      type="number"
+                      placeholder={t("veh.ask_price")}
+                      value={askPrice || ""}
+                      onChange={(e) => setAskPrice(Number(e.target.value))}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    />
+                    <input
+                      type="number"
+                      placeholder={t("veh.min_price")}
+                      value={minPrice || ""}
+                      onChange={(e) => setMinPrice(Number(e.target.value))}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    />
+                    <input
+                      placeholder={t("jobs.job_notes")}
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 lg:col-span-2"
+                    />
+                  </div>
 
-                <div className="mt-5 rounded-[1.25rem] bg-slate-950 p-4 text-white">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("veh.total_cost")}</p>
-                      <p className="mt-1 font-mono text-xl font-bold text-white">{formatLkr(currentCost)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("veh.est_profit")}</p>
-                      <p className="mt-1 font-mono text-xl font-bold text-teal-300">{formatLkr(askPrice - currentCost)}</p>
+                  <div className="mt-5 rounded-[1.25rem] bg-slate-950 p-4 text-white">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                          {t("veh.total_cost")}
+                        </p>
+                        <p className="mt-1 font-mono text-xl font-bold text-white">
+                          {formatLkr(currentCost)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                          {t("veh.est_profit")}
+                        </p>
+                        <p className="mt-1 font-mono text-xl font-bold text-teal-300">
+                          {formatLkr(askPrice - currentCost)}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button type="submit" disabled={!canWrite || savingVehicle} title={!canWrite ? (disabledHint ?? undefined) : undefined} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
-                    {savingVehicle ? t("common.saving") : editing ? t("common.update") : t("veh.add")}
-                  </button>
-                  <button type="button" onClick={() => { resetForm(); setShowForm(false); }} disabled={savingVehicle} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="submit"
+                      disabled={!canWrite || savingVehicle}
+                      title={!canWrite ? (disabledHint ?? undefined) : undefined}
+                      className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingVehicle
+                        ? t("common.saving")
+                        : editing
+                          ? t("common.update")
+                          : t("veh.add")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetForm();
+                        setShowForm(false);
+                      }}
+                      disabled={mutationBusy || !canWrite}
+                      className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
                       {t("common.cancel")}
-                  </button>
-                </div>
+                    </button>
+                  </div>
+                </fieldset>
               </form>
             </ProCard>
           </section>
@@ -361,7 +549,9 @@ export default function VehiclesPage() {
           <Tabs
             value={filter}
             onChange={(value) => setFilter(value as VehicleStatus | "all" | "aging")}
-            tabs={(["all", "for_sale", "reconditioning", "incoming", "sold", "aging"] as const).map((value) => ({ value, label: vehStatusLabel(value) }))}
+            tabs={(["all", "for_sale", "reconditioning", "incoming", "sold", "aging"] as const).map(
+              (value) => ({ value, label: vehStatusLabel(value) }),
+            )}
           />
           <SearchInput
             value={search}
@@ -399,18 +589,28 @@ export default function VehiclesPage() {
                   key={v.id}
                   vehicle={v}
                   canSeeFinancials={canSeeFinancials}
-                  canWrite={canWrite}
+                  canWrite={canWrite && !mutationBusy}
                   statusLabel={vehStatusLabel(v.status)}
                   onEdit={() => loadVehicle(v)}
                   onListForSale={async () => {
-                    if (updatingVehicleId) return;
-                    setUpdatingVehicleId(v.id);
-                    setMessage("");
-                    const result = await updateVehicleToCloud(v.id, { status: "for_sale" });
-                    setUpdatingVehicleId(null);
-                    if (!result.ok) {
-                      setMessage(result.error ?? t("common.save_failed"));
-                      setTimeout(() => setMessage(""), 4000);
+                    if (!canWrite || mutationLock.current) return;
+                    mutationLock.current = true;
+                    setMutationBusy(true);
+                    try {
+                      if (updatingVehicleId) return;
+                      setUpdatingVehicleId(v.id);
+                      setMessage("");
+                      const result = await updateVehicleToCloud(v.id, { status: "for_sale" });
+                      setUpdatingVehicleId(null);
+                      if (!result.ok) {
+                        setMessage(result.error ?? t("common.save_failed"));
+                      }
+                    } catch {
+                      setMessage(t("common.save_failed"));
+                    } finally {
+                      setUpdatingVehicleId(null);
+                      mutationLock.current = false;
+                      setMutationBusy(false);
                     }
                   }}
                   onSell={() => {
@@ -420,14 +620,28 @@ export default function VehiclesPage() {
                     setSellBankAccountId(data.bankAccounts[0]?.id ?? "");
                   }}
                   onDelete={async () => {
-                    if (deletingVehicleId || !confirm(`${t("common.confirm_delete")} ${v.stockId}?`)) return;
-                    setDeletingVehicleId(v.id);
-                    setMessage("");
-                    const result = await deleteVehicleToCloud(v.id);
-                    setDeletingVehicleId(null);
-                    if (!result.ok) {
-                      setMessage(result.error ?? t("common.save_failed"));
-                      setTimeout(() => setMessage(""), 4000);
+                    if (!canWrite || mutationLock.current) return;
+                    mutationLock.current = true;
+                    setMutationBusy(true);
+                    try {
+                      if (
+                        deletingVehicleId ||
+                        !confirm(`${t("common.confirm_delete")} ${v.stockId}?`)
+                      )
+                        return;
+                      setDeletingVehicleId(v.id);
+                      setMessage("");
+                      const result = await deleteVehicleToCloud(v.id);
+                      setDeletingVehicleId(null);
+                      if (!result.ok) {
+                        setMessage(result.error ?? t("common.save_failed"));
+                      }
+                    } catch {
+                      setMessage(t("common.save_failed"));
+                    } finally {
+                      setDeletingVehicleId(null);
+                      mutationLock.current = false;
+                      setMutationBusy(false);
                     }
                   }}
                   updating={updatingVehicleId === v.id}
@@ -440,8 +654,13 @@ export default function VehiclesPage() {
 
         {canSeeFinancials && sold.length > 0 && (
           <section className="mt-6">
-            <ProCard title={t("veh.sold")} action={<ProBadge tone="emerald">{formatLkr(soldProfit)}</ProBadge>}>
-              <p className="text-sm font-semibold text-slate-600">Sold vehicle profit summary is included in the dashboard cards above.</p>
+            <ProCard
+              title={t("veh.sold")}
+              action={<ProBadge tone="emerald">{formatLkr(soldProfit)}</ProBadge>}
+            >
+              <p className="text-sm font-semibold text-slate-600">
+                Sold vehicle profit summary is included in the dashboard cards above.
+              </p>
             </ProCard>
           </section>
         )}
@@ -451,16 +670,36 @@ export default function VehiclesPage() {
             <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl border border-white/80 bg-white p-5 shadow-sm shadow-slate-950/20">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-600">{t("veh.sell")}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-600">
+                    {t("veh.sell")}
+                  </p>
                   <h3 className="mt-2 text-xl font-bold text-slate-950">
                     {sellVehicleRecord.make} {sellVehicleRecord.model}
                   </h3>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">{sellVehicleRecord.stockId} · {sellVehicleRecord.chassisNo}</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    {sellVehicleRecord.stockId} · {sellVehicleRecord.chassisNo}
+                  </p>
                 </div>
-                <button type="button" aria-label={t("common.close")} onClick={() => { setSellId(null); resetSellForm(); }} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-lg text-slate-600 hover:bg-slate-200">×</button>
+                <button
+                  type="button"
+                  aria-label={t("common.close")}
+                  onClick={() => {
+                    setSellId(null);
+                    resetSellForm();
+                  }}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-lg text-slate-600 hover:bg-slate-200"
+                >
+                  ×
+                </button>
               </div>
               <div className="mt-5 space-y-3">
-                <input type="number" placeholder={t("veh.sell_price")} value={sellPrice || ""} onChange={(e) => setSellPrice(Number(e.target.value))} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                <input
+                  type="number"
+                  placeholder={t("veh.sell_price")}
+                  value={sellPrice || ""}
+                  onChange={(e) => setSellPrice(Number(e.target.value))}
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                />
                 <select
                   value={sellCustomerId}
                   onChange={(e) => {
@@ -472,24 +711,57 @@ export default function VehiclesPage() {
                   className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
                 >
                   <option value="">{t("jobs.customer_opt")}</option>
-                  {data.customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {data.customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
                 </select>
-                {!sellCustomerId && <input placeholder={t("veh.buyer_name")} value={sellCustomerName} onChange={(e) => setSellCustomerName(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />}
+                {!sellCustomerId && (
+                  <input
+                    placeholder={t("veh.buyer_name")}
+                    value={sellCustomerName}
+                    onChange={(e) => setSellCustomerName(e.target.value)}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                  />
+                )}
                 {canApiWhatsApp && (
-                  <input placeholder="Buyer WhatsApp number (07XXXXXXXX)" value={sellCustomerPhone} onChange={(e) => setSellCustomerPhone(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
+                  <input
+                    placeholder="Buyer WhatsApp number (07XXXXXXXX)"
+                    value={sellCustomerPhone}
+                    onChange={(e) => setSellCustomerPhone(e.target.value)}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                  />
                 )}
                 {canApiWhatsApp && isValidSlMobile(sellCustomerPhone) && (
                   <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                    <input type="checkbox" checked={sendWhatsAppReceipt} onChange={(e) => setSendWhatsAppReceipt(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-300" />
+                    <input
+                      type="checkbox"
+                      checked={sendWhatsAppReceipt}
+                      onChange={(e) => setSendWhatsAppReceipt(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-300"
+                    />
                     Send WhatsApp sale confirmation to buyer
                   </label>
                 )}
-                <select value={sellPayment} onChange={(e) => setSellPayment(e.target.value as PaymentMethod)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                  {PAYMENT_OPTIONS.map((m) => <option key={m} value={m}>{paymentLabel(t, m)}</option>)}
+                <select
+                  value={sellPayment}
+                  onChange={(e) => setSellPayment(e.target.value as PaymentMethod)}
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                >
+                  {PAYMENT_OPTIONS.map((m) => (
+                    <option key={m} value={m}>
+                      {paymentLabel(t, m)}
+                    </option>
+                  ))}
                 </select>
-                {(sellPayment === "bank_transfer" || sellPayment === "card") && (
-                  data.bankAccounts.length > 0 ? (
-                    <select value={sellBankAccountId} onChange={(e) => setSellBankAccountId(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                {(sellPayment === "bank_transfer" || sellPayment === "card") &&
+                  (data.bankAccounts.length > 0 ? (
+                    <select
+                      value={sellBankAccountId}
+                      onChange={(e) => setSellBankAccountId(e.target.value)}
+                      className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                    >
                       {data.bankAccounts.map((account) => (
                         <option key={account.id} value={account.id}>
                           {account.bankName} · {account.accountNumber}
@@ -499,83 +771,145 @@ export default function VehiclesPage() {
                   ) : (
                     <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
                       Add a receiving account in Banking before recording this payment method.
-                      <a href="/banking" className="ml-2 font-bold underline">Open Banking</a>
+                      <a href="/banking" className="ml-2 font-bold underline">
+                        Open Banking
+                      </a>
                     </div>
-                  )
-                )}
+                  ))}
                 {sellPayment === "credit" && (
-                  <select value={financePartner} onChange={(e) => setFinancePartner(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
-                    {FINANCE_PARTNERS.map((f) => <option key={f}>{f}</option>)}
+                  <select
+                    value={financePartner}
+                    onChange={(e) => setFinancePartner(e.target.value)}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+                  >
+                    {FINANCE_PARTNERS.map((f) => (
+                      <option key={f}>{f}</option>
+                    ))}
                   </select>
                 )}
               </div>
-              {canSeeFinancials && <div className="mt-5 rounded-2xl bg-slate-950 p-4 text-white">
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("common.profit")}</p>
-                <p className="mt-1 font-mono text-2xl font-bold text-teal-300">
-                  {formatLkr(sellPrice - vehicleTotalCost(sellVehicleRecord.purchasePrice, sellVehicleRecord.reconditionCost))}
+              {canSeeFinancials && (
+                <div className="mt-5 rounded-2xl bg-slate-950 p-4 text-white">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                    {t("common.profit")}
+                  </p>
+                  <p className="mt-1 font-mono text-2xl font-bold text-teal-300">
+                    {formatLkr(
+                      sellPrice -
+                        vehicleTotalCost(
+                          sellVehicleRecord.purchasePrice,
+                          sellVehicleRecord.reconditionCost,
+                        ),
+                    )}
+                  </p>
+                </div>
+              )}
+              {message && (
+                <p role="status" className="mt-4 text-sm text-slate-700">
+                  {message}
                 </p>
-              </div>}
-              <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+              )}
+              <fieldset
+                disabled={mutationBusy || !canWrite}
+                className="mt-5 flex flex-col gap-2 sm:flex-row"
+              >
                 <button
                   onClick={async () => {
-                    if (savingSale) return;
-                    if (sellPayment === "credit" && !sellCustomerId) {
-                      setMessage(t("veh.credit_need"));
-                      setSellId(null);
-                      return;
-                    }
-                    if ((sellPayment === "bank_transfer" || sellPayment === "card") && !sellBankAccountId) {
-                      setMessage("Select a receiving bank account before confirming the sale.");
-                      return;
-                    }
-                    setSavingSale(true);
-                    setMessage("");
-                    const result = await sellVehicleToCloud({
-                      vehicleId: sellId,
-                      sellPrice,
-                      customerId: sellCustomerId || undefined,
-                      customerName: sellCustomerName || undefined,
-                      paymentMethod: sellPayment,
-                      bankAccountId: sellBankAccountId || undefined,
-                      financePartner: sellPayment === "credit" && financePartner !== "Cash only" ? financePartner : undefined,
-                    });
-                    setSavingSale(false);
-                    if (!result.ok) {
-                      setMessage(result.error ?? t("common.save_failed"));
-                      setTimeout(() => setMessage(""), 4000);
-                      return;
-                    }
-                    setMessage(t("veh.sold_msg"));
-                    if (canApiWhatsApp && sendWhatsAppReceipt && isValidSlMobile(sellCustomerPhone) && sellVehicleRecord) {
-                      const buyerName = sellCustomerName || data.customers.find((c) => c.id === sellCustomerId)?.name;
-                      const receiptText = `Thank you for purchasing the ${sellVehicleRecord.make} ${sellVehicleRecord.model} ${sellVehicleRecord.year} (${sellVehicleRecord.stockId}) for LKR ${sellPrice.toLocaleString()}. We appreciate your business!`;
-                      void sendApiWhatsApp({
-                        phone: sellCustomerPhone,
-                        message: receiptText,
-                        templateId: "custom",
-                        contextType: "vehicle_sale",
-                        contextId: sellVehicleRecord.id,
-                        recipientName: buyerName,
-                      }).then((sendResult) => {
-                        if (!sendResult.ok) {
-                          setMessage(`${t("veh.sold_msg")} — WhatsApp receipt failed: ${sendResult.error ?? "unknown error"}`);
-                          setTimeout(() => setMessage(""), 5000);
-                        }
+                    if (!canWrite || mutationLock.current) return;
+                    mutationLock.current = true;
+                    setMutationBusy(true);
+                    try {
+                      if (
+                        savingSale ||
+                        !canSeeFinancials ||
+                        !Number.isFinite(sellPrice) ||
+                        sellPrice <= 0
+                      )
+                        return;
+                      if (sellPayment === "credit" && !sellCustomerId) {
+                        setMessage(t("veh.credit_need"));
+                        return;
+                      }
+                      if (
+                        (sellPayment === "bank_transfer" || sellPayment === "card") &&
+                        !sellBankAccountId
+                      ) {
+                        setMessage("Select a receiving bank account before confirming the sale.");
+                        return;
+                      }
+                      setSavingSale(true);
+                      setMessage("");
+                      const result = await sellVehicleToCloud({
+                        vehicleId: sellId,
+                        sellPrice,
+                        customerId: sellCustomerId || undefined,
+                        customerName: sellCustomerName || undefined,
+                        paymentMethod: sellPayment,
+                        bankAccountId: sellBankAccountId || undefined,
+                        financePartner:
+                          sellPayment === "credit" && financePartner !== "Cash only"
+                            ? financePartner
+                            : undefined,
                       });
+                      setSavingSale(false);
+                      if (!result.ok) {
+                        setMessage(result.error ?? t("common.save_failed"));
+                        return;
+                      }
+                      setMessage(t("veh.sold_msg"));
+                      if (
+                        canApiWhatsApp &&
+                        sendWhatsAppReceipt &&
+                        isValidSlMobile(sellCustomerPhone) &&
+                        sellVehicleRecord
+                      ) {
+                        const buyerName =
+                          sellCustomerName ||
+                          data.customers.find((c) => c.id === sellCustomerId)?.name;
+                        const receiptText = `Thank you for purchasing the ${sellVehicleRecord.make} ${sellVehicleRecord.model} ${sellVehicleRecord.year} (${sellVehicleRecord.stockId}) for LKR ${sellPrice.toLocaleString()}. We appreciate your business!`;
+                        void sendApiWhatsApp({
+                          phone: sellCustomerPhone,
+                          message: receiptText,
+                          templateId: "custom",
+                          contextType: "vehicle_sale",
+                          contextId: sellVehicleRecord.id,
+                          recipientName: buyerName,
+                        }).then((sendResult) => {
+                          if (!sendResult.ok) {
+                            setMessage(
+                              `${t("veh.sold_msg")} — WhatsApp receipt failed: ${sendResult.error ?? "unknown error"}`,
+                            );
+                            setTimeout(() => setMessage(""), 5000);
+                          }
+                        });
+                      }
+                      setSellId(null);
+                      resetSellForm();
+                      setTimeout(() => setMessage(""), 3000);
+                    } catch {
+                      setMessage(t("common.save_failed"));
+                    } finally {
+                      setSavingSale(false);
+                      mutationLock.current = false;
+                      setMutationBusy(false);
                     }
-                    setSellId(null);
-                    resetSellForm();
-                    setTimeout(() => setMessage(""), 3000);
                   }}
-                  disabled={savingSale}
+                  disabled={mutationBusy || !canWrite}
                   className="flex-1 rounded-2xl bg-teal-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {savingSale ? t("common.saving") : t("veh.confirm_sale")}
                 </button>
-                <button onClick={() => { setSellId(null); resetSellForm(); }} disabled={savingSale} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                <button
+                  onClick={() => {
+                    setSellId(null);
+                    resetSellForm();
+                  }}
+                  disabled={mutationBusy || !canWrite}
+                  className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
                   {t("common.cancel")}
                 </button>
-              </div>
+              </fieldset>
             </div>
           </div>
         )}

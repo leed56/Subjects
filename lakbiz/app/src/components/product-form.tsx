@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Product, SectorId } from "@/lib/types";
 import { sectors, defaultCategoryForSector, categoriesForSector } from "@/lib/sectors";
 import {
@@ -12,8 +12,12 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { ProductReferenceCombobox } from "@/components/product-reference-combobox";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { ProductInput } from "@/lib/store/types";
+import { validateProductDraft, type ProductDraftField } from "@/lib/product-form-validation";
 
 function unitsForSector(sectorId: SectorId): string[] {
+  if (sectorId === "cosmetics") {
+    return ["pcs", "bottle", "tube", "jar", "palette", "pack", "set", "box", "ml", "g"];
+  }
   if (sectorId === "pharmacy") {
     return ["pcs", "tablet", "capsule", "strip", "box", "bottle", "tube", "vial", "ampoule", "pack", "ml"];
   }
@@ -56,6 +60,7 @@ interface ProductFormProps {
   onSubmit: (input: ProductInput) => void;
   onCancel?: () => void;
   submitLabel?: string;
+  submitting?: boolean;
 }
 
 const fieldLabel = "text-[13px] font-semibold text-slate-600";
@@ -71,6 +76,7 @@ export function ProductForm({
   onSubmit,
   onCancel,
   submitLabel,
+  submitting = false,
 }: ProductFormProps) {
   const { t, locale } = useLocale();
   const { canSeeFinancials } = useSubscription();
@@ -107,7 +113,9 @@ export function ProductForm({
     [lockedSectorId, form.sectorId, form.unit],
   );
   const effectiveSectorId = lockedSectorId ?? form.sectorId;
-  const conditionRelevant = effectiveSectorId !== "pharmacy" && effectiveSectorId !== "grocery";
+  const conditionRelevant = effectiveSectorId !== "pharmacy" && effectiveSectorId !== "grocery" && effectiveSectorId !== "cosmetics";
+  const formRef = useRef<HTMLFormElement>(null);
+  const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     if (initial) return;
@@ -128,6 +136,14 @@ export function ProductForm({
     [lockedSectorId, form.sectorId],
   );
   const sectorFields = useMemo(() => sectorFormFields(form.sectorId), [form.sectorId]);
+  const validationErrors = useMemo(() => validateProductDraft(form), [form]);
+  const fieldError = (field: ProductDraftField) => submitted ? validationErrors[field] : undefined;
+  const errorText = (field: ProductDraftField) => {
+    const error = fieldError(field);
+    if (!error) return undefined;
+    return t(error === "required" ? "stock.validation_name_required" : "stock.validation_non_negative");
+  };
+  const fieldInputClass = (field: ProductDraftField) => `${inputClass} ${fieldError(field) ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100" : ""}`;
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -150,21 +166,27 @@ export function ProductForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) return;
+    if (submitting) return;
+    setSubmitted(true);
+    if (Object.keys(validationErrors).length > 0) {
+      requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus());
+      return;
+    }
     const sectorId = lockedSectorId ?? form.sectorId;
     const { sectorCustom, ...rest } = form;
     onSubmit({
       ...rest,
+      name: rest.name.trim(),
+      sku: rest.sku?.trim() || undefined,
       sectorId,
       category: categoriesForSector(sectorId).includes(rest.category)
         ? rest.category
         : defaultCategoryForSector(sectorId),
       // Condition is meaningful for resale/asset sectors, not normal pharmacy
       // or grocery catalogue items. Keep the persisted invariant as `new`.
-      condition: sectorId === "pharmacy" || sectorId === "grocery" ? "new" : rest.condition,
+      condition: sectorId === "pharmacy" || sectorId === "grocery" || sectorId === "cosmetics" ? "new" : rest.condition,
       customFields: sectorCustom,
     });
-    if (!initial) setForm(emptyForm(shopSectorId));
   };
 
   const saveLabel = submitLabel ?? t("stock.save_item");
@@ -182,7 +204,12 @@ export function ProductForm({
     : "Additional identity and handling information used for this item.";
 
   return (
-    <form data-product-form="true" onSubmit={handleSubmit} className="space-y-5 pb-24">
+    <form ref={formRef} data-product-form="true" noValidate onSubmit={handleSubmit} className="space-y-5 pb-24">
+      {submitted && Object.keys(validationErrors).length > 0 && (
+        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
+          {t("stock.validation_summary")}
+        </div>
+      )}
       <section className={sectionClass}>
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
@@ -200,6 +227,7 @@ export function ProductForm({
               label={t("stock.item_name")}
               value={form.name}
               autoFocus
+              error={errorText("name")}
               onChange={(value) => set("name", value)}
               onSelect={(suggestion) => {
                 setForm((current) => ({
@@ -236,8 +264,11 @@ export function ProductForm({
                 autoFocus
                 value={form.name}
                 onChange={(e) => set("name", e.target.value)}
-                className={inputClass}
+                aria-invalid={!!fieldError("name")}
+                aria-describedby={fieldError("name") ? "product-name-error" : undefined}
+                className={fieldInputClass("name")}
               />
+              {errorText("name") && <p id="product-name-error" role="alert" className="mt-1.5 text-xs font-medium text-rose-700">{errorText("name")}</p>}
             </label>
           )}
 
@@ -302,8 +333,11 @@ export function ProductForm({
                 min={0}
                 value={form.buyPrice || ""}
                 onChange={(e) => set("buyPrice", Number(e.target.value))}
-                className={inputClass}
+                aria-invalid={!!fieldError("buyPrice")}
+                aria-describedby={fieldError("buyPrice") ? "product-buy-price-error" : undefined}
+                className={fieldInputClass("buyPrice")}
               />
+              {errorText("buyPrice") && <p id="product-buy-price-error" role="alert" className="mt-1.5 text-xs font-medium text-rose-700">{errorText("buyPrice")}</p>}
             </label>
           )}
 
@@ -314,8 +348,11 @@ export function ProductForm({
               min={0}
               value={form.sellPrice || ""}
               onChange={(e) => set("sellPrice", Number(e.target.value))}
-              className={inputClass}
+              aria-invalid={!!fieldError("sellPrice")}
+              aria-describedby={fieldError("sellPrice") ? "product-sell-price-error" : undefined}
+              className={fieldInputClass("sellPrice")}
             />
+            {errorText("sellPrice") && <p id="product-sell-price-error" role="alert" className="mt-1.5 text-xs font-medium text-rose-700">{errorText("sellPrice")}</p>}
           </label>
 
           <label className="block">
@@ -325,8 +362,11 @@ export function ProductForm({
               min={0}
               value={form.stockQty || ""}
               onChange={(e) => set("stockQty", Number(e.target.value))}
-              className={inputClass}
+              aria-invalid={!!fieldError("stockQty")}
+              aria-describedby={fieldError("stockQty") ? "product-stock-qty-error" : undefined}
+              className={fieldInputClass("stockQty")}
             />
+            {errorText("stockQty") && <p id="product-stock-qty-error" role="alert" className="mt-1.5 text-xs font-medium text-rose-700">{errorText("stockQty")}</p>}
           </label>
 
           <label className="block">
@@ -336,8 +376,11 @@ export function ProductForm({
               min={0}
               value={form.reorderLevel ?? ""}
               onChange={(e) => set("reorderLevel", Number(e.target.value))}
-              className={inputClass}
+              aria-invalid={!!fieldError("reorderLevel")}
+              aria-describedby={fieldError("reorderLevel") ? "product-reorder-level-error" : undefined}
+              className={fieldInputClass("reorderLevel")}
             />
+            {errorText("reorderLevel") && <p id="product-reorder-level-error" role="alert" className="mt-1.5 text-xs font-medium text-rose-700">{errorText("reorderLevel")}</p>}
           </label>
 
           {initial && (
@@ -417,7 +460,9 @@ export function ProductForm({
         ) : <span />}
         <button
           type="submit"
-          className="inline-flex min-h-11 items-center justify-center rounded-xl bg-teal-600 px-5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(13,148,136,0.2)] transition hover:bg-teal-700 hover:shadow-[0_10px_24px_rgba(13,148,136,0.24)]"
+          disabled={submitting}
+          aria-busy={submitting}
+          className="inline-flex min-h-11 items-center justify-center rounded-xl bg-teal-600 px-5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(13,148,136,0.2)] transition hover:bg-teal-700 hover:shadow-[0_10px_24px_rgba(13,148,136,0.24)] disabled:cursor-wait disabled:opacity-60"
         >
           {saveLabel}
         </button>

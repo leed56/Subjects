@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BusinessTemplate } from "@/lib/admin/templates";
 import { BUSINESS_TEMPLATES } from "@/lib/admin/templates";
 import { adminPlanLabel, adminSectorLabel, adminTemplateLabel } from "@/lib/admin/admin-labels";
@@ -11,6 +11,7 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import type { PlanId } from "@/lib/subscription/types";
 
 const PLANS: PlanId[] = ["starter", "business", "pro"];
+type CreateShopField = "shopName" | "ownerEmail" | "password" | "trialDays";
 
 export default function AdminCreateShopPage() {
   const router = useRouter();
@@ -26,6 +27,11 @@ export default function AdminCreateShopPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [templatesWarning, setTemplatesWarning] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<CreateShopField, string>>>({});
+  const shopNameRef = useRef<HTMLInputElement>(null);
+  const ownerEmailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const trialDaysRef = useRef<HTMLInputElement>(null);
   const [created, setCreated] = useState<{
     email: string;
     password: string;
@@ -61,47 +67,64 @@ export default function AdminCreateShopPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-    setCreated(null);
+    if (loading) return;
 
-    const res = await fetch("/api/admin/shops", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        shopName,
-        ownerEmail,
-        password,
-        phone,
-        templateId,
-        planId,
-        trialDays,
-      }),
-    });
-
-    const json = (await res.json()) as {
-      ok?: boolean;
-      shop?: {
-        email: string;
-        organizationId: string;
-        sector: string;
-      };
-      error?: string;
-    };
-
-    setLoading(false);
-
-    if (!res.ok || !json.ok || !json.shop) {
-      setError(json.error ?? t("admin.create_error"));
+    const normalizedShopName = shopName.trim();
+    const normalizedOwnerEmail = ownerEmail.trim().toLowerCase();
+    const nextErrors: Partial<Record<CreateShopField, string>> = {};
+    if (!normalizedShopName) nextErrors.shopName = t("sub.shop_required");
+    if (!normalizedOwnerEmail || !/^\S+@\S+\.\S+$/.test(normalizedOwnerEmail)) {
+      nextErrors.ownerEmail = t("admin.email_invalid");
+    }
+    if (password.length < 6) nextErrors.password = t("admin.password_short");
+    if (!Number.isInteger(trialDays) || trialDays < 0 || trialDays > 90) {
+      nextErrors.trialDays = t("admin.trial_invalid");
+    }
+    setFieldErrors(nextErrors);
+    const firstInvalid = (Object.keys(nextErrors) as CreateShopField[])[0];
+    if (firstInvalid) {
+      const refs = { shopName: shopNameRef, ownerEmail: ownerEmailRef, password: passwordRef, trialDays: trialDaysRef };
+      refs[firstInvalid].current?.focus();
       return;
     }
 
-    setCreated({
-      email: json.shop.email,
-      password,
-      organizationId: json.shop.organizationId,
-      sector: json.shop.sector,
-    });
+    setLoading(true);
+    setError(null);
+    setCreated(null);
+    try {
+      const res = await fetch("/api/admin/shops", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shopName: normalizedShopName,
+          ownerEmail: normalizedOwnerEmail,
+          password,
+          phone: phone.trim(),
+          templateId,
+          planId,
+          trialDays,
+        }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        shop?: { email: string; organizationId: string; sector: string };
+        error?: string;
+      };
+      if (!res.ok || !json.ok || !json.shop) {
+        setError(json.error ?? t("admin.create_error"));
+        return;
+      }
+      setCreated({
+        email: json.shop.email,
+        password,
+        organizationId: json.shop.organizationId,
+        sector: json.shop.sector,
+      });
+    } catch {
+      setError(t("admin.create_error"));
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (created) {
@@ -163,8 +186,16 @@ export default function AdminCreateShopPage() {
       <h2 className="mt-4 text-2xl font-bold text-white">{t("admin.create_shop_title")}</h2>
       <p className="mt-2 text-slate-400">{t("admin.create_shop_sub")}</p>
 
-      <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-        <fieldset>
+      <form onSubmit={handleSubmit} noValidate aria-busy={loading} className="mt-8 space-y-6">
+        {Object.keys(fieldErrors).length > 0 && (
+          <div role="alert" className="rounded-xl border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-100">
+            <p className="font-semibold">{t("admin.validation_summary")}</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {Object.values(fieldErrors).map((message) => <li key={message}>{message}</li>)}
+            </ul>
+          </div>
+        )}
+        <fieldset disabled={loading}>
           <legend className="mb-3 text-sm font-medium text-slate-200">
             {t("admin.business_template")}
           </legend>
@@ -192,34 +223,49 @@ export default function AdminCreateShopPage() {
         <label className="block text-sm text-slate-200">
           {t("admin.shop_name")}
           <input
+            ref={shopNameRef}
             required
             value={shopName}
-            onChange={(e) => setShopName(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"
+            onChange={(e) => { setShopName(e.target.value); setFieldErrors((current) => ({ ...current, shopName: undefined })); }}
+            aria-invalid={Boolean(fieldErrors.shopName)}
+            aria-describedby={fieldErrors.shopName ? "shop-name-error" : undefined}
+            disabled={loading}
+            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white disabled:opacity-60"
           />
+          {fieldErrors.shopName && <span id="shop-name-error" className="mt-1 block text-xs text-red-300">{fieldErrors.shopName}</span>}
         </label>
 
         <label className="block text-sm text-slate-200">
           {t("admin.owner_email")}
           <input
+            ref={ownerEmailRef}
             type="email"
             required
             value={ownerEmail}
-            onChange={(e) => setOwnerEmail(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"
+            onChange={(e) => { setOwnerEmail(e.target.value); setFieldErrors((current) => ({ ...current, ownerEmail: undefined })); }}
+            aria-invalid={Boolean(fieldErrors.ownerEmail)}
+            aria-describedby={fieldErrors.ownerEmail ? "owner-email-error" : undefined}
+            disabled={loading}
+            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white disabled:opacity-60"
           />
+          {fieldErrors.ownerEmail && <span id="owner-email-error" className="mt-1 block text-xs text-red-300">{fieldErrors.ownerEmail}</span>}
         </label>
 
         <label className="block text-sm text-slate-200">
           {t("admin.password")}
           <input
+            ref={passwordRef}
             type="text"
             required
             minLength={6}
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-white"
+            onChange={(e) => { setPassword(e.target.value); setFieldErrors((current) => ({ ...current, password: undefined })); }}
+            aria-invalid={Boolean(fieldErrors.password)}
+            aria-describedby={fieldErrors.password ? "password-error" : undefined}
+            disabled={loading}
+            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-white disabled:opacity-60"
           />
+          {fieldErrors.password && <span id="password-error" className="mt-1 block text-xs text-red-300">{fieldErrors.password}</span>}
         </label>
 
         <label className="block text-sm text-slate-200">
@@ -250,13 +296,18 @@ export default function AdminCreateShopPage() {
           <label className="block text-sm text-slate-200">
             {t("admin.trial_days")}
             <input
+              ref={trialDaysRef}
               type="number"
               min={0}
               max={90}
               value={trialDays}
-              onChange={(e) => setTrialDays(Number(e.target.value))}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"
+              onChange={(e) => { setTrialDays(Number(e.target.value)); setFieldErrors((current) => ({ ...current, trialDays: undefined })); }}
+              aria-invalid={Boolean(fieldErrors.trialDays)}
+              aria-describedby={fieldErrors.trialDays ? "trial-days-error" : undefined}
+              disabled={loading}
+              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white disabled:opacity-60"
             />
+            {fieldErrors.trialDays && <span id="trial-days-error" className="mt-1 block text-xs text-red-300">{fieldErrors.trialDays}</span>}
           </label>
         </div>
 

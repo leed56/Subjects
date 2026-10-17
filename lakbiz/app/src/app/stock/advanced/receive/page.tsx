@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProLoadingState, ProMain } from "@/components/ui/pro-shell";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui/primitives";
@@ -47,6 +47,20 @@ function schemaMissing(error: string | null): boolean {
     value.includes("schema cache") ||
     value.includes("could not find the table")
   );
+}
+
+async function runReceivingOperation(
+  operation: () => Promise<{ error: string | null }>,
+): Promise<{ error: string | null }> {
+  try {
+    return await operation();
+  } catch (caught) {
+    return {
+      error: caught instanceof Error && caught.message
+        ? caught.message
+        : "The inventory service could not complete this request.",
+    };
+  }
 }
 
 function physicalCoverage(
@@ -104,14 +118,12 @@ export default function ReceiveTrackedStockPage() {
   const [barcode, setBarcode] = useState("");
   const [warrantyExpiry, setWarrantyExpiry] = useState("");
   const [unitCost, setUnitCost] = useState("");
+  const refreshSequence = useRef(0);
 
   const preset = inventoryTrackingPreset(org.sector);
   const selected = data?.products.find((product) => product.id === productId) ?? null;
   const mode = profile?.trackingMode ?? preset.defaultMode;
-  const coverage = useMemo(
-    () => physicalCoverage(mode, variants, lots, units),
-    [mode, variants, lots, units],
-  );
+  const coverage = physicalCoverage(mode, variants, lots, units);
   const unassigned = selected ? Math.max(0, selected.stockQty - coverage) : 0;
 
   useEffect(() => {
@@ -133,41 +145,51 @@ export default function ReceiveTrackedStockPage() {
 
   async function refresh(id: string) {
     if (!id || !org.id || !org.isAuthenticated) return;
+    const requestSequence = ++refreshSequence.current;
     setLoadingDetail(true);
     setError(null);
-    const [profileResult, variantResult, lotResult, unitResult] = await Promise.all([
-      fetchInventoryProfile(id),
-      fetchProductVariants(id),
-      fetchInventoryLots(id, canSeeFinancials),
-      fetchInventoryUnits(id, canSeeFinancials),
-    ]);
-    const firstError =
-      profileResult.error ||
-      variantResult.error ||
-      lotResult.error ||
-      unitResult.error;
+    try {
+      const [profileResult, variantResult, lotResult, unitResult] = await Promise.all([
+        fetchInventoryProfile(id),
+        fetchProductVariants(id),
+        fetchInventoryLots(id, canSeeFinancials),
+        fetchInventoryUnits(id, canSeeFinancials),
+      ]);
+      if (requestSequence !== refreshSequence.current) return;
+      const firstError =
+        profileResult.error ||
+        variantResult.error ||
+        lotResult.error ||
+        unitResult.error;
 
-    if (schemaMissing(firstError)) {
-      setDbUpgradeNeeded(true);
-      setProfile(null);
-      setVariants([]);
-      setLots([]);
-      setUnits([]);
-      setLoadingDetail(false);
-      return;
+      if (schemaMissing(firstError)) {
+        setDbUpgradeNeeded(true);
+        setProfile(null);
+        setVariants([]);
+        setLots([]);
+        setUnits([]);
+        return;
+      }
+
+      setDbUpgradeNeeded(false);
+      setProfile(profileResult.data);
+      setVariants(variantResult.data);
+      setLots(lotResult.data);
+      setUnits(unitResult.data);
+      setError(firstError);
+    } catch (caught) {
+      if (requestSequence !== refreshSequence.current) return;
+      setError(caught instanceof Error && caught.message ? caught.message : "Could not load tracking details.");
+    } finally {
+      if (requestSequence === refreshSequence.current) setLoadingDetail(false);
     }
-
-    setDbUpgradeNeeded(false);
-    setProfile(profileResult.data);
-    setVariants(variantResult.data);
-    setLots(lotResult.data);
-    setUnits(unitResult.data);
-    setError(firstError);
-    setLoadingDetail(false);
   }
 
   useEffect(() => {
     if (productId) void refresh(productId);
+    return () => {
+      refreshSequence.current += 1;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId, org.id, org.isAuthenticated, canSeeFinancials]);
 
@@ -191,13 +213,14 @@ export default function ReceiveTrackedStockPage() {
 
   async function enableRecommendedTracking() {
     if (!selected || !org.id) return;
+    const organizationId = org.id;
     setSaving(true);
     setError(null);
     setMessage(null);
     const nextMode = preset.defaultMode;
-    const result = await upsertInventoryProfile({
+    const result = await runReceivingOperation(() => upsertInventoryProfile({
       productId: selected.id,
-      organizationId: org.id,
+      organizationId,
       trackingMode: nextMode,
       variantAxes: preset.variantAxes,
       fefoEnabled:
@@ -205,7 +228,7 @@ export default function ReceiveTrackedStockPage() {
       requireSerialOnSale:
         nextMode === "serial" || nextMode === "variant_serial",
       allowNegativeStock: false,
-    });
+    }));
     setSaving(false);
     if (result.error) {
       setError(result.error);
@@ -217,19 +240,20 @@ export default function ReceiveTrackedStockPage() {
 
   async function assignVariant() {
     if (!selected || !org.id || !variantId) return;
+    const organizationId = org.id;
     const qty = Number(variantAssignQty);
     if (!Number.isFinite(qty) || qty <= 0 || qty > unassigned) return;
 
     setSaving(true);
     setError(null);
     setMessage(null);
-    const result = await adjustProductVariantStock(
-      org.id,
+    const result = await runReceivingOperation(() => adjustProductVariantStock(
+      organizationId,
       selected.id,
       variantId,
       qty,
       "Receiving identity assignment",
-    );
+    ));
     setSaving(false);
 
     if (result.error) {
@@ -248,6 +272,7 @@ export default function ReceiveTrackedStockPage() {
 
   async function addBatch() {
     if (!selected || !org.id || !batchNo.trim()) return;
+    const organizationId = org.id;
     const qty = Number(batchQty);
     if (!Number.isFinite(qty) || qty <= 0 || qty > unassigned) return;
     if (mode === "variant_lot" && !variantId) return;
@@ -259,8 +284,8 @@ export default function ReceiveTrackedStockPage() {
       ? data?.suppliers.find((row) => row.id === supplierId)
       : undefined;
     const savedBatchNo = batchNo.trim();
-    const result = await createInventoryLot(
-      org.id,
+    const result = await runReceivingOperation(() => createInventoryLot(
+      organizationId,
       {
         productId: selected.id,
         variantId: mode === "variant_lot" ? variantId : null,
@@ -275,7 +300,7 @@ export default function ReceiveTrackedStockPage() {
           : "Receiving identity assignment",
       },
       canSeeFinancials,
-    );
+    ));
     setSaving(false);
 
     if (result.error) {
@@ -297,6 +322,7 @@ export default function ReceiveTrackedStockPage() {
 
   async function addSerializedUnit() {
     if (!selected || !org.id) return;
+    const organizationId = org.id;
     const exactIdentity = imei.trim() || serialNo.trim() || barcode.trim();
     if (!exactIdentity || unassigned < 1) return;
     if (mode === "variant_serial" && !variantId) return;
@@ -307,8 +333,8 @@ export default function ReceiveTrackedStockPage() {
     const supplier = supplierId
       ? data?.suppliers.find((row) => row.id === supplierId)
       : undefined;
-    const result = await createInventoryUnit(
-      org.id,
+    const result = await runReceivingOperation(() => createInventoryUnit(
+      organizationId,
       {
         productId: selected.id,
         variantId: mode === "variant_serial" ? variantId : null,
@@ -324,7 +350,7 @@ export default function ReceiveTrackedStockPage() {
           : "Receiving identity assignment",
       },
       canSeeFinancials,
-    );
+    ));
     setSaving(false);
 
     if (result.error) {
@@ -469,8 +495,11 @@ export default function ReceiveTrackedStockPage() {
         ) : (
           <div className="mt-5 space-y-5">
             {error && (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
-                {error}
+              <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">
+                <span>{error}</span>
+                <button type="button" className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-bold text-rose-800 hover:bg-rose-100" onClick={() => void refresh(productId)} disabled={loadingDetail}>
+                  {si ? "නැවත උත්සාහ කරන්න" : "Retry"}
+                </button>
               </div>
             )}
             {message && (

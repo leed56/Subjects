@@ -56,6 +56,14 @@ describe("demo catalog quality guards", () => {
     expect(isPharmacyRetailCandidate("ENSURE Vanilla Nutrition Powder, 400g")).toBe(true);
   });
 
+  it("accepts plural snack identities while retaining grocery exclusion precedence", () => {
+    for (const name of ["Munchy Biscuits 200g", "Cream Crackers 100g", "Assorted Candies 50g", "Chocolate Snacks 100g"]) {
+      expect(isPharmacyRetailCandidate(name)).toBe(true);
+      expect(classifyPharmacyRetailProduct(name).category).toBe("Snacks");
+    }
+    expect(isPharmacyRetailCandidate("Rice Flour Biscuits 100g")).toBe(false);
+  });
+
   it("requires brand plus generic identity and compatible strength for regulatory enrichment", () => {
     const valid = {
       brand: "AMLODEP 5",

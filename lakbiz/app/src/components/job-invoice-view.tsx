@@ -78,6 +78,7 @@ export function JobInvoiceView({ job, business, customerAddress, showActions = t
       )}
 
       <article
+        data-print-document="job-invoice"
         className={`invoice-paper mx-auto max-w-md rounded-xl border bg-white p-6 shadow-sm ${
           isTaxInvoice ? "tax-invoice-paper border-slate-900" : "border-slate-200"
         }`}

@@ -26,6 +26,7 @@ import { stripFinancialData } from "@/lib/org-role/strip-financials";
 import { getPlan } from "@/lib/subscription/plans";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { saveOrgShopSettings } from "@/lib/supabase/org-settings";
+import { legacySupplierWriteError } from "@/lib/supabase/invoice-settlements";
 import {
   pushBusinessData,
   syncCustomersSnapshot,
@@ -71,6 +72,7 @@ import {
   setLocalSyncGeneration,
 } from "@/lib/supabase/sync-watermark";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { hasPendingPurchase, mergePurchaseSnapshot, performPurchaseAction } from "@/lib/supabase/purchase-authority";
 import { isBrowserOnline, useOnlineStatus } from "@/lib/offline/connectivity";
 import {
   bumpOfflinePendingChange,
@@ -244,6 +246,8 @@ export type AppStoreValue = {
   cancelPurchaseOrderToCloud: (
     purchaseOrderId: string,
   ) => Promise<{ ok: boolean; error?: string }>;
+  pendingPurchaseAction: boolean;
+  retryPendingPurchaseOrderToCloud: () => Promise<{ ok: boolean; error?: string }>;
   recordSupplierPaymentToCloud: (
     supplierId: string,
     amount: number,
@@ -385,6 +389,17 @@ function useAppStoreState(): AppStoreValue {
   const [cloudRemoteNotice, setCloudRemoteNotice] = useState(false);
   const [offlinePendingSync, setOfflinePendingSync] = useState(false);
   const [offlinePendingChangeCount, setOfflinePendingChangeCount] = useState(0);
+  const [purchasePendingScope, setPurchasePendingScope] = useState("");
+  const purchaseBusyRef = useRef(false);
+  const purchaseScopeRef = useRef("");
+  const purchaseScope = `${org.id ?? ""}:${user?.id ?? ""}`;
+  useEffect(() => {
+    purchaseScopeRef.current = purchaseScope;
+    setPurchasePendingScope(org.id && user?.id && hasPendingPurchase(org.id, user.id) ? purchaseScope : "");
+    const refresh = () => setPurchasePendingScope(org.id && user?.id && hasPendingPurchase(org.id, user.id) ? purchaseScope : "");
+    window.addEventListener("storage", refresh);
+    return () => window.removeEventListener("storage", refresh);
+  }, [org.id, user?.id, purchaseScope]);
   const [syncConflict, setSyncConflict] = useState<{
     summary: SyncConflictSummary;
     local: AppData;
@@ -1282,6 +1297,12 @@ function useAppStoreState(): AppStoreValue {
 
       const prevChequeIds = new Set(data.cheques.map((cheque) => cheque.id));
       const prevPurchasesLen = data.purchases.length;
+      if (org.id && org.isAuthenticated) {
+        if (!isOnline) return { ok: false, error: "Connect online to verify supplier invoice authority before recording a GRN." };
+        const authorityError = await legacySupplierWriteError(org.id);
+        if (authorityError) return { ok: false, error: authorityError };
+        if (purchaseScopeRef.current !== `${org.id}:${user?.id ?? ""}` || latestDataRef.current !== data) return { ok: false, error: "The company or business data changed. Reopen the form before saving." };
+      }
       const next = createPurchase(data, input, user?.id);
       if (next.purchases.length === prevPurchasesLen) {
         return { ok: false, error: "Could not record purchase" };
@@ -1338,9 +1359,50 @@ function useAppStoreState(): AppStoreValue {
     ],
   );
 
+  const tryAtomicPurchasing = useCallback(async (action: Parameters<typeof performPurchaseAction>[2]) => {
+    if (!org.isAuthenticated) return { handled: false as const };
+    if (!org.id || !user || !isSupabaseConfigured()) return { handled: true as const, ok: false, error: "Cloud not connected" };
+    if (!isOnline) return { handled: true as const, ok: false, error: "Go online to verify purchasing and safely submit this action. Your draft is preserved." };
+    if (isReadOnly || !can("write") || !canUseSuppliersModule(orgRole) || !canSeeFinancials || syncConflict) {
+      return { handled: true as const, ok: false, error: "Purchasing is unavailable until owner write access and sync are restored." };
+    }
+    if (purchaseBusyRef.current) return { handled: true as const, ok: false, error: "A purchasing action is already being checked." };
+    purchaseBusyRef.current = true;
+    const scope = purchaseScope;
+    try {
+      const result = await performPurchaseAction(org.id, user.id, action);
+      if (purchaseScopeRef.current !== scope) return { handled: true as const, ok: false, error: "The company changed. Reopen the original company to check its pending purchase action." };
+      if (!result.handled) return result;
+      if ("error" in result) return { handled: true as const, ok: false, error: result.error };
+      if (purchaseScopeRef.current !== scope || !latestDataRef.current) {
+        return { handled: true as const, ok: false, error: "The company changed. Reopen the original company to check its pending purchase action." };
+      }
+      const next = mergePurchaseSnapshot(latestDataRef.current, result.snapshot);
+      // Keep the durable request until the refreshed result is saved locally.
+      saveAppData(next, org.id);
+      latestDataRef.current = next;
+      setData(next);
+      result.acknowledge();
+      setCloudSyncError(null);
+      return { handled: true as const, ok: true };
+    } catch (error) {
+      return { handled: true as const, ok: false, error: error instanceof Error ? error.message : "Could not check purchasing. Retry the pending action." };
+    } finally {
+      purchaseBusyRef.current = false;
+      if (purchaseScopeRef.current === scope) setPurchasePendingScope(hasPendingPurchase(org.id, user.id) ? scope : "");
+    }
+  }, [org.isAuthenticated, org.id, user, isOnline, isReadOnly, can, orgRole, canSeeFinancials, syncConflict, purchaseScope]);
+
+  const retryPendingPurchaseOrderToCloud = useCallback(async () => {
+    const result = await tryAtomicPurchasing({ kind: "resume" });
+    return result.handled ? result : { ok: false, error: "Atomic purchasing is not enabled." };
+  }, [tryAtomicPurchasing]);
+
   const createPurchaseOrderToCloud = useCallback(
     async (input: PurchaseOrderInput): Promise<{ ok: boolean; error?: string }> => {
       if (!data) return { ok: false, error: "Not ready" };
+      const atomic = await tryAtomicPurchasing({ kind: "create", input });
+      if (atomic.handled) return atomic;
       if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
       if (isReadOnly || !can("write") || !canUseSuppliersModule(orgRole)) {
         return { ok: false, error: "Read-only mode" };
@@ -1395,6 +1457,7 @@ function useAppStoreState(): AppStoreValue {
       user,
       scheduleCloudPush,
       refreshOfflinePendingState,
+      tryAtomicPurchasing,
     ],
   );
 
@@ -1404,6 +1467,10 @@ function useAppStoreState(): AppStoreValue {
       lines: PurchaseOrderReceiveLine[],
     ): Promise<{ ok: boolean; error?: string }> => {
       if (!data) return { ok: false, error: "Not ready" };
+      const order = data.purchaseOrders.find(row => row.id === purchaseOrderId);
+      if (!order) return { ok: false, error: "Purchase order not found" };
+      const atomic = await tryAtomicPurchasing({ kind: "receive", order, lines });
+      if (atomic.handled) return atomic;
       if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
       if (isReadOnly || !can("write") || !canUseSuppliersModule(orgRole)) {
         return { ok: false, error: "Read-only mode" };
@@ -1463,12 +1530,15 @@ function useAppStoreState(): AppStoreValue {
       user,
       scheduleCloudPush,
       refreshOfflinePendingState,
+      tryAtomicPurchasing,
     ],
   );
 
   const cancelPurchaseOrderToCloud = useCallback(
     async (purchaseOrderId: string): Promise<{ ok: boolean; error?: string }> => {
       if (!data) return { ok: false, error: "Not ready" };
+      const atomic = await tryAtomicPurchasing({ kind: "cancel", orderId: purchaseOrderId });
+      if (atomic.handled) return atomic;
       if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
       if (isReadOnly || !can("write") || !canUseSuppliersModule(orgRole)) {
         return { ok: false, error: "Read-only mode" };
@@ -1521,6 +1591,7 @@ function useAppStoreState(): AppStoreValue {
       user,
       scheduleCloudPush,
       refreshOfflinePendingState,
+      tryAtomicPurchasing,
     ],
   );
 
@@ -1539,6 +1610,12 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
 
       const prevPaymentsLen = data.supplierPayments.length;
+      if (org.id && org.isAuthenticated) {
+        if (!isOnline) return { ok: false, error: "Connect online to verify supplier invoice authority before paying a supplier." };
+        const authorityError = await legacySupplierWriteError(org.id);
+        if (authorityError) return { ok: false, error: authorityError };
+        if (purchaseScopeRef.current !== `${org.id}:${user?.id ?? ""}` || latestDataRef.current !== data) return { ok: false, error: "The company or business data changed. Reopen the form before saving." };
+      }
       const next = recordSupplierPayment(data, supplierId, amount, method, note);
       if (next.supplierPayments.length === prevPaymentsLen) {
         return { ok: false, error: "Could not record payment" };
@@ -3758,6 +3835,8 @@ function useAppStoreState(): AppStoreValue {
       createPurchaseOrderToCloud,
       receivePurchaseOrderToCloud,
       cancelPurchaseOrderToCloud,
+      pendingPurchaseAction: purchasePendingScope === purchaseScope,
+      retryPendingPurchaseOrderToCloud,
       recordSupplierPaymentToCloud,
       recordCustomerPaymentToCloud,
       addBankAccountToCloud,
@@ -3818,6 +3897,9 @@ function useAppStoreState(): AppStoreValue {
     createPurchaseOrderToCloud,
     receivePurchaseOrderToCloud,
     cancelPurchaseOrderToCloud,
+    purchasePendingScope,
+    purchaseScope,
+    retryPendingPurchaseOrderToCloud,
     recordSupplierPaymentToCloud,
     recordCustomerPaymentToCloud,
     saveACJobToCloud,

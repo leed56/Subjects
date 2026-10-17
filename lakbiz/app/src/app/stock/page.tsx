@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { ProductForm } from "@/components/product-form";
 import { StockCommandHeader } from "@/components/stock/stock-command-header";
 import { ExportActions } from "@/components/export/export-actions";
@@ -15,7 +16,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
 import { StockIcon, PlusIcon } from "@/components/ui/icons";
 import { formatLkr } from "@/lib/format";
-import { exportStockCsv } from "@/lib/export";
+import { exportStockCsv, printHtmlReport, reportSummaryHtml, tableHtml } from "@/lib/export";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { formatProductFieldBadge } from "@/lib/sector-fields";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -24,16 +25,117 @@ import { getPlan } from "@/lib/subscription/plans";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { stockQuantityStep, validateStockQuantity, type StockQuantityError } from "@/lib/stock-quantity";
+import { MAX_SAVED_STOCK_VIEWS, parseSavedStockViews, stockSavedViewsKey, type SavedStockView } from "@/lib/stock-saved-views";
 import type { Product, ProductCondition } from "@/lib/types";
 
 type ConditionFilter = "all" | ProductCondition;
+type StockView = {
+  search: string;
+  condition: ConditionFilter;
+  category: string;
+  lowStock: boolean;
+  inactive: boolean;
+  zeroPrice: boolean;
+  page: number;
+};
 
 const STOCK_PAGE_SIZE = 50;
+function stockPageParam(value: string | null): number {
+  const page = Number(value);
+  return Number.isInteger(page) && page > 1 ? page : 1;
+}
+// Adapter errors normally return a result; unexpected rejection must also
+// release the UI's saving state without discarding the operator's draft.
+async function runStockMutation(
+  operation: () => Promise<{ ok: boolean; error?: string }>,
+  fallback: string,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    return await operation();
+  } catch {
+    return { ok: false, error: fallback };
+  }
+}
+
+function StockActionState({ error, canWrite, disabledHint }: { error: string; canWrite: boolean; disabledHint?: string | null }) {
+  if (error) return <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm font-medium text-rose-800">{error}</div>;
+  if (!canWrite) return <div role="note" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-800">{disabledHint}</div>;
+  return null;
+}
 
 export default function StockPage() {
+  const { org } = useSubscription();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const query = searchParams.toString();
+  const condition = searchParams.get("condition");
+  const initialCondition: ConditionFilter = condition === "new" || condition === "used" ? condition : "all";
+  const replaceStockView = useCallback((view: StockView) => {
+    const params = new URLSearchParams(query);
+    if (view.search.trim()) params.set("q", view.search);
+    else params.delete("q");
+    if (view.lowStock) params.set("filter", "low-stock");
+    else params.delete("filter");
+    if (view.condition !== "all") params.set("condition", view.condition);
+    else params.delete("condition");
+    if (view.category !== "all") params.set("category", view.category);
+    else params.delete("category");
+    if (view.inactive) params.set("inactive", "1");
+    else params.delete("inactive");
+    if (view.zeroPrice) params.set("zero-price", "1");
+    else params.delete("zero-price");
+    if (view.page > 1) params.set("page", String(view.page));
+    else params.delete("page");
+    const nextQuery = params.toString();
+    if (nextQuery === query) return;
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  }, [pathname, query, router]);
+  // Shop/role changes discard open drafts. The URL remains the source of truth
+  // for the shareable stock view, so its filters survive refresh and navigation.
+  const workspaceKey = JSON.stringify([
+    org.id, org.isAuthenticated, org.sector, org.role,
+  ]);
+  return (
+    <StockWorkspace
+      key={workspaceKey}
+      initialSearch={searchParams.get("q") ?? ""}
+      initialLowStock={searchParams.get("filter") === "low-stock"}
+      initialCondition={initialCondition}
+      initialCategory={searchParams.get("category") ?? "all"}
+      initialInactive={searchParams.get("inactive") === "1"}
+      initialZeroPrice={searchParams.get("zero-price") === "1"}
+      initialPage={stockPageParam(searchParams.get("page"))}
+      onViewChange={replaceStockView}
+    />
+  );
+}
+
+function StockWorkspace({
+  initialSearch,
+  initialLowStock,
+  initialCondition,
+  initialCategory,
+  initialInactive,
+  initialZeroPrice,
+  initialPage,
+  onViewChange,
+}: {
+  initialSearch: string;
+  initialLowStock: boolean;
+  initialCondition: ConditionFilter;
+  initialCategory: string;
+  initialInactive: boolean;
+  initialZeroPrice: boolean;
+  initialPage: number;
+  onViewChange: (view: StockView) => void;
+}) {
   const {
     data,
     ready,
+    cloudSyncing,
+    cloudSyncError,
     saveProductToCloud,
     deleteProductToCloud,
     stockInToCloud,
@@ -45,6 +147,7 @@ export default function StockPage() {
   const { canWrite, disabledHint } = useWriteAccess();
   const { t } = useLocale();
   const { toast } = useToast();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const conditionFilterRelevant = org.sector !== "pharmacy" && org.sector !== "grocery";
 
   // Create/edit drawer — form only exists in the DOM while open.
@@ -56,10 +159,12 @@ export default function StockPage() {
   const [stockInId, setStockInId] = useState<string | null>(null);
   const [stockInQty, setStockInQty] = useState("1");
   const [savingStockIn, setSavingStockIn] = useState(false);
+  const [stockInError, setStockInError] = useState("");
   const [stockOutId, setStockOutId] = useState<string | null>(null);
   const [stockOutQty, setStockOutQty] = useState("1");
   const [stockOutNote, setStockOutNote] = useState("");
   const [savingStockOut, setSavingStockOut] = useState(false);
+  const [stockOutError, setStockOutError] = useState("");
 
   // Write-off / return-to-supplier dialogs (HVAC platform Phase 3 —
   // distinct stock-movement kinds from a manual Stock Out, kept in the
@@ -68,33 +173,27 @@ export default function StockPage() {
   const [writeOffQty, setWriteOffQty] = useState("1");
   const [writeOffNote, setWriteOffNote] = useState("");
   const [savingWriteOff, setSavingWriteOff] = useState(false);
+  const [writeOffError, setWriteOffError] = useState("");
 
   const [returnId, setReturnId] = useState<string | null>(null);
   const [returnQty, setReturnQty] = useState("1");
   const [returnSupplierId, setReturnSupplierId] = useState("");
   const [returnNote, setReturnNote] = useState("");
   const [savingReturn, setSavingReturn] = useState(false);
+  const [returnError, setReturnError] = useState("");
 
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
-  // The pharmacy/grocery dashboard's "Low stock" KPI card and Replenishment
-  // Queue rows link here with ?filter=low-stock and ?q=<product name>
-  // respectively — before this, both links landed on an unfiltered list
-  // (the dashboard promised a filtered detail view; this page never read
-  // either param, so a "clickable" KPI card wasn't actually clickable in
-  // any meaningful sense). Seeded once at mount, same pattern as
-  // stock/rolls/page.tsx's `?receive=1`.
-  const searchParams = useSearchParams();
-  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
-  const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
+  const [search, setSearch] = useState(initialSearch);
+  const [conditionFilter, setConditionFilter] = useState<ConditionFilter>(initialCondition);
   // Discontinued items default to hidden — matches getLowStockProducts/the
   // sale picker, which already ignore inactive items — with an explicit
   // toggle to review/reactivate them instead of losing them silently.
-  const [showInactive, setShowInactive] = useState(false);
+  const [showInactive, setShowInactive] = useState(initialInactive);
   // HVAC platform Phase 12 — a real filtered view of exactly what needs
   // reordering, not just the metric-card count that existed before.
-  const [showLowStockOnly, setShowLowStockOnly] = useState(() => searchParams.get("filter") === "low-stock");
+  const [showLowStockOnly, setShowLowStockOnly] = useState(initialLowStock);
   // Round 2 Section 8 — the product form has never required a non-zero
   // price (only the name field is `required`; buy/sell price both default
   // to and accept 0), so a Rs. 0 item isn't necessarily a demo-seed
@@ -103,19 +202,77 @@ export default function StockPage() {
   // `canSeeFinancials` below) leaving it at its 0 default. This filter is
   // the data-quality view requested: a zero sell price (or, for financial
   // roles, a zero buy price) silently breaks margin math on that item.
-  const [showZeroPriceOnly, setShowZeroPriceOnly] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [page, setPage] = useState(1);
+  const [showZeroPriceOnly, setShowZeroPriceOnly] = useState(initialZeroPrice && canSeeFinancials);
+  const [categoryFilter, setCategoryFilter] = useState(initialCategory);
+  const [page, setPage] = useState(initialPage);
+  const [savedViews, setSavedViews] = useState<SavedStockView[]>([]);
+  const [saveViewOpen, setSaveViewOpen] = useState(false);
+  const [saveViewName, setSaveViewName] = useState("");
 
   useEffect(() => {
-    setPage(1);
-  }, [search, conditionFilter, showInactive, showLowStockOnly, showZeroPriceOnly, categoryFilter]);
+    setSearch(initialSearch);
+    setShowLowStockOnly(initialLowStock);
+    setConditionFilter(initialCondition);
+    setCategoryFilter(initialCategory);
+    setShowInactive(initialInactive);
+    setShowZeroPriceOnly(initialZeroPrice && canSeeFinancials);
+    setPage(initialPage);
+  }, [canSeeFinancials, initialCategory, initialCondition, initialInactive, initialLowStock, initialPage, initialSearch, initialZeroPrice]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      onViewChange({
+        search,
+        condition: conditionFilter,
+        category: categoryFilter,
+        lowStock: showLowStockOnly,
+        inactive: showInactive,
+        zeroPrice: showZeroPriceOnly,
+        page,
+      });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [categoryFilter, conditionFilter, onViewChange, page, search, showInactive, showLowStockOnly, showZeroPriceOnly]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isEditing = target?.matches("input, textarea, select, [contenteditable='true']");
+      if (event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey && !isEditing) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      } else if (event.key === "Escape" && target === searchInputRef.current) {
+        event.preventDefault();
+        setSearch("");
+        setPage(1);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   useEffect(() => {
     if (!conditionFilterRelevant && conditionFilter !== "all") setConditionFilter("all");
   }, [conditionFilterRelevant, conditionFilter]);
 
-  if (!ready || !data) {
+  useEffect(() => {
+    if (categoryFilter !== "all" && data && !data.products.some((product) => product.category === categoryFilter)) {
+      setCategoryFilter("all");
+    }
+  }, [categoryFilter, data]);
+
+  useEffect(() => {
+    if (!org.id) {
+      setSavedViews([]);
+      return;
+    }
+    setSavedViews(parseSavedStockViews(window.localStorage.getItem(stockSavedViewsKey(org.id))));
+    setSaveViewOpen(false);
+    setSaveViewName("");
+  }, [org.id]);
+
+  if (!ready || !data || (cloudSyncing && data.products.length === 0)) {
     return (
       <AppShell>
         <ProMain>
@@ -125,12 +282,92 @@ export default function StockPage() {
     );
   }
 
+  if (cloudSyncError && data.products.length === 0) {
+    return (
+      <AppShell>
+        <ProMain>
+          <div role="alert">
+            <EmptyState
+              title={t("stock.load_failed")}
+              description={t("stock.load_failed_hint")}
+              action={
+                <button type="button" onClick={() => window.location.reload()} className="min-h-11 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+                  {t("resilience.retry")}
+                </button>
+              }
+            />
+          </div>
+        </ProMain>
+      </AppShell>
+    );
+  }
+
+  const clearFilters = () => {
+    setSearch("");
+    setConditionFilter("all");
+    setCategoryFilter("all");
+    setShowLowStockOnly(false);
+    setShowZeroPriceOnly(false);
+    // Include inactive products: the default active-only view can itself be empty.
+    setShowInactive(true);
+    setPage(1);
+  };
+
+  const persistSavedViews = (next: SavedStockView[]) => {
+    if (!org.id) return false;
+    try {
+      window.localStorage.setItem(stockSavedViewsKey(org.id), JSON.stringify(next));
+      setSavedViews(next);
+      return true;
+    } catch {
+      toast({ tone: "error", title: t("common.save_failed") });
+      return false;
+    }
+  };
+
+  const saveCurrentView = () => {
+    const name = saveViewName.trim();
+    if (!name || !org.id) return;
+    const existing = savedViews.find((view) => view.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+    const nextView: SavedStockView = {
+      id: existing?.id ?? crypto.randomUUID(),
+      name: name.slice(0, 40),
+      search,
+      condition: conditionFilter,
+      category: categoryFilter,
+      lowStock: showLowStockOnly,
+      inactive: showInactive,
+      zeroPrice: showZeroPriceOnly && canSeeFinancials,
+    };
+    const next = [...savedViews.filter((view) => view.id !== nextView.id), nextView].slice(-MAX_SAVED_STOCK_VIEWS);
+    if (!persistSavedViews(next)) return;
+    setSaveViewName("");
+    setSaveViewOpen(false);
+    toast({ tone: "success", title: t("stock.saved_view_saved"), description: nextView.name });
+  };
+
+  const applySavedView = (view: SavedStockView) => {
+    setSearch(view.search);
+    setConditionFilter(conditionFilterRelevant ? view.condition : "all");
+    setCategoryFilter(view.category);
+    setShowLowStockOnly(view.lowStock);
+    setShowInactive(view.inactive);
+    setShowZeroPriceOnly(view.zeroPrice && canSeeFinancials);
+    setPage(1);
+    toast({ tone: "success", title: t("stock.saved_view_applied"), description: view.name });
+  };
+
+  const removeSavedView = (id: string) => {
+    persistSavedViews(savedViews.filter((view) => view.id !== id));
+  };
+
   const query = search.trim().toLowerCase();
   const searched = query
     ? data.products.filter(
         (p) =>
           p.name.toLowerCase().includes(query) ||
           (p.sku ?? "").toLowerCase().includes(query) ||
+          String(p.customFields.barcode ?? "").toLowerCase().includes(query) ||
           p.category.toLowerCase().includes(query),
       )
     : data.products;
@@ -174,6 +411,36 @@ export default function StockPage() {
   const writeOffQtyNumber = Number(writeOffQty) || 0;
   const returnProduct = returnId ? data.products.find((p) => p.id === returnId) : null;
   const returnQtyNumber = Number(returnQty) || 0;
+  const stockInUnit = String(stockInProduct?.customFields.unit ?? "pcs");
+  const stockOutUnit = String(stockOutProduct?.customFields.unit ?? "pcs");
+  const writeOffUnit = String(writeOffProduct?.customFields.unit ?? "pcs");
+  const returnUnit = String(returnProduct?.customFields.unit ?? "pcs");
+  const stockInQtyError = stockInProduct ? validateStockQuantity(stockInQty, stockInUnit) : null;
+  const stockOutQtyError = stockOutProduct
+    ? validateStockQuantity(stockOutQty, stockOutUnit, stockOutProduct.stockQty)
+    : null;
+  const writeOffQtyError = writeOffProduct
+    ? validateStockQuantity(writeOffQty, writeOffUnit, writeOffProduct.stockQty)
+    : null;
+  const returnQtyError = returnProduct
+    ? validateStockQuantity(returnQty, returnUnit, returnProduct.stockQty)
+    : null;
+
+  const quantityErrorMessage = (
+    error: StockQuantityError | null,
+    unit: string,
+    maximum?: number,
+  ) => {
+    if (!error) return undefined;
+    if (error === "whole") return t("stock.qty_whole").replace("{unit}", unit);
+    if (error === "precision") return t("stock.qty_precision").replace("{unit}", unit);
+    if (error === "exceeds") {
+      return t("stock.qty_available")
+        .replace("{quantity}", String(maximum ?? 0))
+        .replace("{unit}", unit);
+    }
+    return t(error === "required" ? "stock.qty_required" : "stock.qty_positive");
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -185,9 +452,9 @@ export default function StockPage() {
   };
 
   const confirmDelete = async () => {
-    if (!deleteTarget || deletingProductId) return;
+    if (!canWrite || !deleteTarget || deletingProductId) return;
     setDeletingProductId(deleteTarget.id);
-    const result = await deleteProductToCloud(deleteTarget.id);
+    const result = await runStockMutation(() => deleteProductToCloud(deleteTarget.id), t("common.save_failed"));
     setDeletingProductId(null);
     if (!result.ok) {
       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
@@ -203,14 +470,17 @@ export default function StockPage() {
   const openStockIn = (productId: string) => {
     setStockInId(productId);
     setStockInQty("1");
+    setStockInError("");
   };
 
   const handleStockIn = async () => {
-    if (!stockInId || savingStockIn || stockInQtyNumber <= 0) return;
+    if (!canWrite || !stockInId || savingStockIn || stockInQtyError) return;
     setSavingStockIn(true);
-    const result = await stockInToCloud(stockInId, stockInQtyNumber, "Purchase / GRN");
+    setStockInError("");
+    const result = await runStockMutation(() => stockInToCloud(stockInId, stockInQtyNumber, "Purchase / GRN"), t("common.save_failed"));
     setSavingStockIn(false);
     if (!result.ok) {
+      setStockInError(result.error ?? t("common.save_failed"));
       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
       return;
     }
@@ -222,19 +492,18 @@ export default function StockPage() {
     setStockOutId(productId);
     setStockOutQty("1");
     setStockOutNote("");
+    setStockOutError("");
   };
 
   const handleStockOut = async () => {
-    if (!stockOutId || !stockOutProduct || savingStockOut || stockOutQtyNumber < 1) return;
-    if (stockOutQtyNumber > stockOutProduct.stockQty) {
-      toast({ tone: "error", title: t("stock.out_qty_exceeds") });
-      return;
-    }
+    if (!canWrite || !stockOutId || !stockOutProduct || savingStockOut || stockOutQtyError) return;
     setSavingStockOut(true);
+    setStockOutError("");
     const note = stockOutNote.trim() || t("stock.stock_out");
-    const result = await stockOutToCloud(stockOutId, stockOutQtyNumber, note);
+    const result = await runStockMutation(() => stockOutToCloud(stockOutId, stockOutQtyNumber, note), t("common.save_failed"));
     setSavingStockOut(false);
     if (!result.ok) {
+      setStockOutError(result.error ?? t("common.save_failed"));
       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
       return;
     }
@@ -246,18 +515,17 @@ export default function StockPage() {
     setWriteOffId(productId);
     setWriteOffQty("1");
     setWriteOffNote("");
+    setWriteOffError("");
   };
 
   const handleWriteOff = async () => {
-    if (!writeOffId || !writeOffProduct || savingWriteOff || writeOffQtyNumber < 1) return;
-    if (writeOffQtyNumber > writeOffProduct.stockQty) {
-      toast({ tone: "error", title: t("stock.out_qty_exceeds") });
-      return;
-    }
+    if (!canWrite || !writeOffId || !writeOffProduct || savingWriteOff || writeOffQtyError) return;
     setSavingWriteOff(true);
-    const result = await writeOffStockToCloud(writeOffId, writeOffQtyNumber, writeOffNote.trim() || undefined);
+    setWriteOffError("");
+    const result = await runStockMutation(() => writeOffStockToCloud(writeOffId, writeOffQtyNumber, writeOffNote.trim() || undefined), t("common.save_failed"));
     setSavingWriteOff(false);
     if (!result.ok) {
+      setWriteOffError(result.error ?? t("common.save_failed"));
       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
       return;
     }
@@ -270,18 +538,17 @@ export default function StockPage() {
     setReturnQty("1");
     setReturnSupplierId("");
     setReturnNote("");
+    setReturnError("");
   };
 
   const handleReturn = async () => {
-    if (!returnId || !returnProduct || !returnSupplierId || savingReturn || returnQtyNumber < 1) return;
-    if (returnQtyNumber > returnProduct.stockQty) {
-      toast({ tone: "error", title: t("stock.out_qty_exceeds") });
-      return;
-    }
+    if (!canWrite || !returnId || !returnProduct || !returnSupplierId || savingReturn || returnQtyError) return;
     setSavingReturn(true);
-    const result = await returnStockToSupplierToCloud(returnId, returnQtyNumber, returnSupplierId, returnNote.trim() || undefined);
+    setReturnError("");
+    const result = await runStockMutation(() => returnStockToSupplierToCloud(returnId, returnQtyNumber, returnSupplierId, returnNote.trim() || undefined), t("common.save_failed"));
     setSavingReturn(false);
     if (!result.ok) {
+      setReturnError(result.error ?? t("common.save_failed"));
       toast({ tone: "error", title: t("common.save_failed"), description: result.error });
       return;
     }
@@ -301,6 +568,35 @@ export default function StockPage() {
     reorderLevel: t("stock.reorder_level"),
   };
 
+  const printStockReport = () => {
+    const headers = [stockExportLabels.name, stockExportLabels.sku, stockExportLabels.category, stockExportLabels.qty];
+    if (canSeeFinancials) headers.push(stockExportLabels.buyPrice);
+    headers.push(stockExportLabels.sellPrice, stockExportLabels.reorderLevel);
+    const rows = products.map((product) => {
+      const unit = String(product.customFields.unit ?? "pcs");
+      const row: Array<string | number> = [product.name, product.sku ?? "", product.category || "General", `${product.stockQty} ${unit}`];
+      if (canSeeFinancials) row.push(formatLkr(product.buyPrice));
+      row.push(formatLkr(product.sellPrice), product.reorderLevel ?? "—");
+      return row;
+    });
+    const visibleUnits = products.reduce((sum, product) => sum + product.stockQty, 0);
+    const visibleRetailValue = products.reduce((sum, product) => sum + product.stockQty * product.sellPrice, 0);
+    const visibleCostValue = products.reduce((sum, product) => sum + product.stockQty * product.buyPrice, 0);
+    const summary = [
+      { label: t("common.items"), value: `${products.length} / ${data.products.length}` },
+      { label: t("stock.current_qty"), value: visibleUnits.toLocaleString("en-LK") },
+      { label: t("stock.low_stock_filter"), value: products.filter((product) => lowStockIds.has(product.id)).length },
+      ...(canSeeFinancials ? [{ label: t("common.cost"), value: formatLkr(visibleCostValue) }] : []),
+      { label: t("stock.sell_price"), value: formatLkr(visibleRetailValue) },
+    ];
+    printHtmlReport({
+      title: t("export.stock_report"),
+      shopName: data.business.name || org.name || "LakBiz",
+      subtitle: `${products.length} / ${data.products.length}`,
+      bodyHtml: reportSummaryHtml(summary) + tableHtml(headers, rows, canSeeFinancials ? [3, 4, 5, 6] : [3, 4, 5]),
+    });
+  };
+
   const columns: DataTableColumn<Product>[] = [
     {
       key: "name",
@@ -310,7 +606,7 @@ export default function StockPage() {
         return (
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={() => openEdit(p)} className={`font-semibold hover:text-teal-700 hover:underline ${p.active ? "text-slate-900" : "text-slate-400"}`}>
+              <button type="button" onClick={() => openEdit(p)} disabled={!canWrite} title={disabledHint ?? undefined} className={`font-semibold hover:text-teal-700 hover:underline ${p.active ? "text-slate-900" : "text-slate-400"}`}>
                 {p.name}
               </button>
               {conditionFilterRelevant && <ProductConditionBadge condition={p.condition} />}
@@ -393,25 +689,25 @@ export default function StockPage() {
       align: "right",
       render: (p) => (
         <div className="flex items-center justify-end gap-1.5">
-          <button type="button" onClick={() => openStockIn(p.id)} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200">
+          <button type="button" onClick={() => openStockIn(p.id)} disabled={!canWrite} title={disabledHint ?? undefined} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200">
             {t("stock.stock_in")}
           </button>
           <button
             type="button"
             onClick={() => openStockOut(p.id)}
-            disabled={p.stockQty <= 0}
+            disabled={!canWrite || p.stockQty <= 0}
             className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t("stock.stock_out")}
           </button>
           <ActionMenu
             items={[
-              { label: t("common.edit"), onSelect: () => openEdit(p) },
+              { label: t("common.edit"), onSelect: () => openEdit(p), disabled: !canWrite },
               ...(data.suppliers.length > 0
-                ? [{ label: t("stock.return_to_supplier"), onSelect: () => openReturn(p.id), disabled: p.stockQty <= 0 }]
+                ? [{ label: t("stock.return_to_supplier"), onSelect: () => openReturn(p.id), disabled: !canWrite || p.stockQty <= 0 }]
                 : []),
-              { label: t("stock.write_off"), onSelect: () => openWriteOff(p.id), disabled: p.stockQty <= 0 },
-              { label: t("common.delete"), tone: "danger" as const, onSelect: () => setDeleteTarget(p) },
+              { label: t("stock.write_off"), onSelect: () => openWriteOff(p.id), disabled: !canWrite || p.stockQty <= 0 },
+              { label: t("common.delete"), tone: "danger" as const, onSelect: () => setDeleteTarget(p), disabled: !canWrite },
             ]}
           />
         </div>
@@ -434,13 +730,15 @@ export default function StockPage() {
           filteredCount={products.length}
           categories={categoryCounts}
           selectedCategory={categoryFilter}
-          onCategoryChange={setCategoryFilter}
+          onCategoryChange={(category) => { setCategoryFilter(category); setPage(1); }}
           actions={
             <>
+              <Link href="/stock/transfers" className="inline-flex min-h-11 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700">Locations & transfers</Link>
               {canExport && (
                 <ExportActions
                   compact
                   disabled={products.length === 0}
+                  onPrintPdf={printStockReport}
                   onExportCsv={() =>
                     exportStockCsv(data.business, products, {
                       includeBuyPrice: canSeeFinancials,
@@ -467,7 +765,7 @@ export default function StockPage() {
         <WriteDisabledHint className="mb-4" />
 
         <FilterBar>
-          <SearchInput value={search} onChange={setSearch} placeholder={t("stock.search_placeholder")} className="min-w-[220px] flex-1" />
+          <SearchInput inputRef={searchInputRef} keyShortcuts="/ Escape" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("stock.search_placeholder")} className="min-w-[220px] flex-1" />
           {conditionFilterRelevant && (
             <div className="flex gap-1.5">
               {(
@@ -480,7 +778,7 @@ export default function StockPage() {
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setConditionFilter(tab.id)}
+                  onClick={() => { setConditionFilter(tab.id); setPage(1); }}
                   className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                     conditionFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
                   }`}
@@ -493,7 +791,7 @@ export default function StockPage() {
           {lowStock.length > 0 && (
             <button
               type="button"
-              onClick={() => setShowLowStockOnly((v) => !v)}
+              onClick={() => { setShowLowStockOnly((v) => !v); setPage(1); }}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                 showLowStockOnly ? "bg-amber-600 text-white" : "border border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300"
               }`}
@@ -504,7 +802,7 @@ export default function StockPage() {
           {inactiveCount > 0 && (
             <button
               type="button"
-              onClick={() => setShowInactive((v) => !v)}
+              onClick={() => { setShowInactive((v) => !v); setPage(1); }}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                 showInactive ? "bg-slate-700 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
               }`}
@@ -515,7 +813,7 @@ export default function StockPage() {
           {canSeeFinancials && zeroPriced.length > 0 && (
             <button
               type="button"
-              onClick={() => setShowZeroPriceOnly((v) => !v)}
+              onClick={() => { setShowZeroPriceOnly((v) => !v); setPage(1); }}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                 showZeroPriceOnly ? "bg-rose-600 text-white" : "border border-rose-200 bg-rose-50 text-rose-800 hover:border-rose-300"
               }`}
@@ -523,7 +821,47 @@ export default function StockPage() {
               {t("stock.zero_price_filter")} <span className="opacity-70">({zeroPriced.length})</span>
             </button>
           )}
+          {!saveViewOpen ? (
+            <button
+              type="button"
+              onClick={() => setSaveViewOpen(true)}
+              className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-sm font-semibold text-sky-800 transition hover:border-sky-300"
+            >
+              + {t("stock.save_view")}
+            </button>
+          ) : (
+            <div className="flex min-w-[250px] flex-1 items-center gap-2 sm:max-w-md">
+              <input
+                autoFocus
+                maxLength={40}
+                value={saveViewName}
+                onChange={(event) => setSaveViewName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") { event.preventDefault(); saveCurrentView(); }
+                  if (event.key === "Escape") { event.preventDefault(); setSaveViewOpen(false); setSaveViewName(""); }
+                }}
+                placeholder={t("stock.view_name_placeholder")}
+                aria-label={t("stock.view_name_placeholder")}
+                className="min-h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+              />
+              <button type="button" disabled={!saveViewName.trim()} onClick={saveCurrentView} className="min-h-9 rounded-lg bg-sky-600 px-3 text-sm font-semibold text-white disabled:opacity-40">{t("common.save")}</button>
+              <button type="button" onClick={() => { setSaveViewOpen(false); setSaveViewName(""); }} className="min-h-9 rounded-lg px-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">{t("common.cancel")}</button>
+            </div>
+          )}
         </FilterBar>
+
+        {savedViews.length > 0 && (
+          <div className="mb-4 flex items-center gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{t("stock.saved_views")}</span>
+            {savedViews.map((view) => (
+              <span key={view.id} className="inline-flex shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                <button type="button" onClick={() => applySavedView(view)} className="min-h-9 px-3 text-xs font-semibold text-slate-700 hover:bg-sky-50 hover:text-sky-700">{view.name}</button>
+                <button type="button" onClick={() => removeSavedView(view.id)} aria-label={`${t("common.delete")} ${view.name}`} className="min-h-9 border-l border-slate-200 px-2 text-sm text-slate-400 hover:bg-rose-50 hover:text-rose-600">×</button>
+              </span>
+            ))}
+            <span className="ml-auto shrink-0 text-[10px] text-slate-400">{savedViews.length}/{MAX_SAVED_STOCK_VIEWS}</span>
+          </div>
+        )}
 
         {data.products.length === 0 ? (
           <EmptyState
@@ -531,7 +869,7 @@ export default function StockPage() {
             title={t("stock.no_stock")}
             description={t("stock.no_stock_hint")}
             action={
-              <button type="button" onClick={openCreate} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+              <button type="button" onClick={openCreate} disabled={!canWrite} title={disabledHint ?? undefined} className="min-h-11 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
                 {t("stock.add_item")}
               </button>
             }
@@ -542,20 +880,59 @@ export default function StockPage() {
               <Pagination
                 page={currentPage}
                 totalPages={totalPages}
-                start={pageStart + 1}
+                start={products.length === 0 ? 0 : pageStart + 1}
                 end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
                 total={products.length}
                 pageSize={STOCK_PAGE_SIZE}
                 onPageChange={setPage}
               />
             </div>
-            <DataTable columns={columns} rows={pageProducts} emptyState={<EmptyState title={t("sales.no_match")} description={t("stock.search_no_match_desc")} />} />
+            <DataTable columns={columns} rows={pageProducts} mobileRender={(product) => {
+              const unit = String(product.customFields.unit ?? "pcs");
+              const low = product.reorderLevel != null && product.stockQty <= product.reorderLevel;
+              return (
+                <article data-ui="stock-mobile-card" className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <button type="button" onClick={() => openEdit(product)} disabled={!canWrite} className="max-w-full truncate text-left text-sm font-semibold text-slate-950 disabled:text-slate-500">{product.name}</button>
+                      <p className="mt-1 truncate text-xs text-slate-500">{product.sku ? `${product.sku} · ` : ""}{product.category || "General"}</p>
+                    </div>
+                    {low ? <StatusBadge tone="warning">{t("common.low")}</StatusBadge> : <StatusBadge tone="positive">{t("stock.active_item")}</StatusBadge>}
+                  </div>
+                  <div className={`grid gap-2 ${canSeeFinancials ? "grid-cols-3" : "grid-cols-2"}`}>
+                    <div className="rounded-xl bg-slate-50 p-2.5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{t("stock.current_qty")}</p><p className="mt-1 text-sm font-semibold tabular-nums text-slate-950">{product.stockQty} {unit}</p></div>
+                    {canSeeFinancials && <div className="rounded-xl bg-slate-50 p-2.5"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{t("common.cost")}</p><p className="mt-1 truncate text-xs font-semibold tabular-nums text-slate-700">{formatLkr(product.buyPrice)}</p></div>}
+                    <div className="rounded-xl bg-teal-50 p-2.5"><p className="text-[10px] font-bold uppercase tracking-wide text-teal-700">{t("stock.sell_price")}</p><p className="mt-1 truncate text-xs font-semibold tabular-nums text-teal-800">{formatLkr(product.sellPrice)}</p></div>
+                  </div>
+                  <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                    <button type="button" onClick={() => openStockIn(product.id)} disabled={!canWrite} className="min-h-10 rounded-xl bg-slate-100 px-2 text-xs font-semibold text-slate-700 disabled:opacity-40">{t("stock.stock_in")}</button>
+                    <button type="button" onClick={() => openStockOut(product.id)} disabled={!canWrite || product.stockQty <= 0} className="min-h-10 rounded-xl bg-amber-50 px-2 text-xs font-semibold text-amber-800 disabled:opacity-40">{t("stock.stock_out")}</button>
+                    <ActionMenu items={[
+                      { label: t("common.edit"), onSelect: () => openEdit(product), disabled: !canWrite },
+                      ...(data.suppliers.length > 0 ? [{ label: t("stock.return_to_supplier"), onSelect: () => openReturn(product.id), disabled: !canWrite || product.stockQty <= 0 }] : []),
+                      { label: t("stock.write_off"), onSelect: () => openWriteOff(product.id), disabled: !canWrite || product.stockQty <= 0 },
+                      { label: t("common.delete"), tone: "danger" as const, onSelect: () => setDeleteTarget(product), disabled: !canWrite },
+                    ]} />
+                  </div>
+                </article>
+              );
+            }} emptyState={
+              <EmptyState
+                title={t("sales.no_match")}
+                description={t("stock.search_no_match_desc")}
+                action={
+                  <button type="button" onClick={clearFilters} className="min-h-11 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+                    {t("stock.clear_filters")}
+                  </button>
+                }
+              />
+            } />
             {products.length > STOCK_PAGE_SIZE && (
               <div className="mt-3">
                 <Pagination
                   page={currentPage}
                   totalPages={totalPages}
-                  start={pageStart + 1}
+                  start={products.length === 0 ? 0 : pageStart + 1}
                   end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
                   total={products.length}
                   pageSize={STOCK_PAGE_SIZE}
@@ -569,7 +946,7 @@ export default function StockPage() {
         {/* Create / edit drawer — always opens immediately. */}
         <Drawer
           open={formOpen}
-          onClose={() => setFormOpen(false)}
+          onClose={() => { if (!saving) setFormOpen(false); }}
           size="lg"
           title={editing ? editing.name : t("stock.add_item")}
           description={editing ? t("stock.edit_inventory_eyebrow") : t("stock.create_inventory_eyebrow")}
@@ -580,10 +957,12 @@ export default function StockPage() {
               lockedSectorId={org.isAuthenticated ? org.sector : undefined}
               defaultSectorId={org.sector}
               submitLabel={saving ? t("common.saving") : t("common.update")}
-              onCancel={() => setFormOpen(false)}
+              submitting={saving}
+              onCancel={() => { if (!saving) setFormOpen(false); }}
               onSubmit={async (input) => {
+                if (!canWrite || saving) return;
                 setSaving(true);
-                const result = await saveProductToCloud(input, editing.id);
+                const result = await runStockMutation(() => saveProductToCloud(input, editing.id), t("common.save_failed"));
                 setSaving(false);
                 if (!result.ok) {
                   toast({ tone: "error", title: t("common.save_failed"), description: result.error });
@@ -598,8 +977,10 @@ export default function StockPage() {
               lockedSectorId={org.isAuthenticated ? org.sector : undefined}
               defaultSectorId={org.sector}
               submitLabel={saving ? t("common.saving") : undefined}
-              onCancel={() => setFormOpen(false)}
+              submitting={saving}
+              onCancel={() => { if (!saving) setFormOpen(false); }}
               onSubmit={async (input) => {
+                if (!canWrite || saving) return;
                 const plan = getPlan(subscription.planId);
                 const atCap = plan.maxProducts != null && data.products.length >= plan.maxProducts;
                 if (atCap) {
@@ -607,7 +988,7 @@ export default function StockPage() {
                   return;
                 }
                 setSaving(true);
-                const result = await saveProductToCloud(input);
+                const result = await runStockMutation(() => saveProductToCloud(input), t("common.save_failed"));
                 setSaving(false);
                 if (!result.ok) {
                   toast({ tone: "error", title: t("common.save_failed"), description: result.error });
@@ -623,17 +1004,17 @@ export default function StockPage() {
         {/* Stock in */}
         <Dialog
           open={!!stockInId && !!stockInProduct}
-          onClose={() => setStockInId(null)}
+          onClose={() => { if (!savingStockIn) setStockInId(null); }}
           title={t("stock.stock_in")}
           description={stockInProduct?.name}
           footer={
             <>
-              <button type="button" onClick={() => setStockInId(null)} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => setStockInId(null)} disabled={savingStockIn} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 {t("common.cancel")}
               </button>
               <button
                 type="button"
-                disabled={savingStockIn || stockInQtyNumber <= 0}
+                disabled={!canWrite || savingStockIn || !!stockInQtyError}
                 onClick={() => void handleStockIn()}
                 className="rounded-lg bg-teal-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
               >
@@ -644,14 +1025,23 @@ export default function StockPage() {
         >
           {stockInProduct && (
             <div className="space-y-4">
+              <StockActionState error={stockInError} canWrite={canWrite} disabledHint={disabledHint ?? t("sub.read_only")} />
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-medium uppercase text-slate-500">{t("stock.current_qty")}</p>
                 <p className="mt-1 text-xl font-bold text-slate-900">
                   {stockInProduct.stockQty} {String(stockInProduct.customFields.unit ?? "pcs")}
                 </p>
               </div>
-              <FormField label={t("stock.stock_in")} required>
-                <TextInput type="number" min={1} value={stockInQty} onChange={(e) => setStockInQty(e.target.value)} autoFocus />
+              <FormField label={t("stock.stock_in")} required error={quantityErrorMessage(stockInQtyError, stockInUnit)}>
+                <TextInput
+                  type="number"
+                  min={stockQuantityStep(stockInUnit)}
+                  step={stockQuantityStep(stockInUnit)}
+                  value={stockInQty}
+                  onChange={(e) => { setStockInQty(e.target.value); setStockInError(""); }}
+                  aria-invalid={!!stockInQtyError}
+                  autoFocus
+                />
               </FormField>
             </div>
           )}
@@ -660,17 +1050,17 @@ export default function StockPage() {
         {/* Stock out */}
         <Dialog
           open={!!stockOutId && !!stockOutProduct}
-          onClose={() => setStockOutId(null)}
+          onClose={() => { if (!savingStockOut) setStockOutId(null); }}
           title={t("stock.stock_out")}
           description={stockOutProduct?.name}
           footer={
             <>
-              <button type="button" onClick={() => setStockOutId(null)} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => setStockOutId(null)} disabled={savingStockOut} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 {t("common.cancel")}
               </button>
               <button
                 type="button"
-                disabled={savingStockOut || !stockOutProduct || stockOutQtyNumber < 1 || stockOutProduct.stockQty <= 0}
+                disabled={!canWrite || savingStockOut || !stockOutProduct || !!stockOutQtyError || stockOutProduct.stockQty <= 0}
                 onClick={() => void handleStockOut()}
                 className="rounded-lg bg-amber-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
               >
@@ -681,17 +1071,27 @@ export default function StockPage() {
         >
           {stockOutProduct && (
             <div className="space-y-4">
+              <StockActionState error={stockOutError} canWrite={canWrite} disabledHint={disabledHint ?? t("sub.read_only")} />
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-medium uppercase text-slate-500">{t("stock.current_qty")}</p>
                 <p className="mt-1 text-xl font-bold text-slate-900">
                   {stockOutProduct.stockQty} {String(stockOutProduct.customFields.unit ?? "pcs")}
                 </p>
               </div>
-              <FormField label={t("stock.stock_out")} required>
-                <TextInput type="number" min={1} max={stockOutProduct.stockQty} value={stockOutQty} onChange={(e) => setStockOutQty(e.target.value)} autoFocus />
+              <FormField label={t("stock.stock_out")} required error={quantityErrorMessage(stockOutQtyError, stockOutUnit, stockOutProduct.stockQty)}>
+                <TextInput
+                  type="number"
+                  min={stockQuantityStep(stockOutUnit)}
+                  max={stockOutProduct.stockQty}
+                  step={stockQuantityStep(stockOutUnit)}
+                  value={stockOutQty}
+                  onChange={(e) => { setStockOutQty(e.target.value); setStockOutError(""); }}
+                  aria-invalid={!!stockOutQtyError}
+                  autoFocus
+                />
               </FormField>
               <FormField label={t("stock.out_note")}>
-                <TextInput value={stockOutNote} onChange={(e) => setStockOutNote(e.target.value)} placeholder={t("stock.out_note_ph")} />
+                <TextInput value={stockOutNote} onChange={(e) => { setStockOutNote(e.target.value); setStockOutError(""); }} placeholder={t("stock.out_note_ph")} />
               </FormField>
             </div>
           )}
@@ -700,17 +1100,17 @@ export default function StockPage() {
         {/* Write off (HVAC platform Phase 3) */}
         <Dialog
           open={!!writeOffId && !!writeOffProduct}
-          onClose={() => setWriteOffId(null)}
+          onClose={() => { if (!savingWriteOff) setWriteOffId(null); }}
           title={t("stock.write_off")}
           description={writeOffProduct?.name}
           footer={
             <>
-              <button type="button" onClick={() => setWriteOffId(null)} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => setWriteOffId(null)} disabled={savingWriteOff} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 {t("common.cancel")}
               </button>
               <button
                 type="button"
-                disabled={savingWriteOff || !writeOffProduct || writeOffQtyNumber < 1 || writeOffProduct.stockQty <= 0}
+                disabled={!canWrite || savingWriteOff || !writeOffProduct || !!writeOffQtyError || writeOffProduct.stockQty <= 0}
                 onClick={() => void handleWriteOff()}
                 className="rounded-lg bg-rose-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
               >
@@ -721,17 +1121,27 @@ export default function StockPage() {
         >
           {writeOffProduct && (
             <div className="space-y-4">
+              <StockActionState error={writeOffError} canWrite={canWrite} disabledHint={disabledHint ?? t("sub.read_only")} />
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-medium uppercase text-slate-500">{t("stock.current_qty")}</p>
                 <p className="mt-1 text-xl font-bold text-slate-900">
                   {writeOffProduct.stockQty} {String(writeOffProduct.customFields.unit ?? "pcs")}
                 </p>
               </div>
-              <FormField label={t("stock.write_off")} required>
-                <TextInput type="number" min={1} max={writeOffProduct.stockQty} value={writeOffQty} onChange={(e) => setWriteOffQty(e.target.value)} autoFocus />
+              <FormField label={t("stock.write_off")} required error={quantityErrorMessage(writeOffQtyError, writeOffUnit, writeOffProduct.stockQty)}>
+                <TextInput
+                  type="number"
+                  min={stockQuantityStep(writeOffUnit)}
+                  max={writeOffProduct.stockQty}
+                  step={stockQuantityStep(writeOffUnit)}
+                  value={writeOffQty}
+                  onChange={(e) => { setWriteOffQty(e.target.value); setWriteOffError(""); }}
+                  aria-invalid={!!writeOffQtyError}
+                  autoFocus
+                />
               </FormField>
               <FormField label={t("stock.out_note")}>
-                <TextInput value={writeOffNote} onChange={(e) => setWriteOffNote(e.target.value)} placeholder={t("stock.write_off_note_ph")} />
+                <TextInput value={writeOffNote} onChange={(e) => { setWriteOffNote(e.target.value); setWriteOffError(""); }} placeholder={t("stock.write_off_note_ph")} />
               </FormField>
             </div>
           )}
@@ -740,17 +1150,17 @@ export default function StockPage() {
         {/* Return to supplier (HVAC platform Phase 3) */}
         <Dialog
           open={!!returnId && !!returnProduct}
-          onClose={() => setReturnId(null)}
+          onClose={() => { if (!savingReturn) setReturnId(null); }}
           title={t("stock.return_to_supplier")}
           description={returnProduct?.name}
           footer={
             <>
-              <button type="button" onClick={() => setReturnId(null)} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => setReturnId(null)} disabled={savingReturn} className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 {t("common.cancel")}
               </button>
               <button
                 type="button"
-                disabled={savingReturn || !returnProduct || !returnSupplierId || returnQtyNumber < 1 || returnProduct.stockQty <= 0}
+                disabled={!canWrite || savingReturn || !returnProduct || !returnSupplierId || !!returnQtyError || returnProduct.stockQty <= 0}
                 onClick={() => void handleReturn()}
                 className="rounded-lg bg-amber-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
               >
@@ -761,6 +1171,7 @@ export default function StockPage() {
         >
           {returnProduct && (
             <div className="space-y-4">
+              <StockActionState error={returnError} canWrite={canWrite} disabledHint={disabledHint ?? t("sub.read_only")} />
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-medium uppercase text-slate-500">{t("stock.current_qty")}</p>
                 <p className="mt-1 text-xl font-bold text-slate-900">
@@ -770,7 +1181,7 @@ export default function StockPage() {
               <FormField label={t("sup.title")} required>
                 <select
                   value={returnSupplierId}
-                  onChange={(e) => setReturnSupplierId(e.target.value)}
+                  onChange={(e) => { setReturnSupplierId(e.target.value); setReturnError(""); }}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 >
                   <option value="">{t("common.select")}</option>
@@ -779,11 +1190,19 @@ export default function StockPage() {
                   ))}
                 </select>
               </FormField>
-              <FormField label={t("stock.return_to_supplier")} required>
-                <TextInput type="number" min={1} max={returnProduct.stockQty} value={returnQty} onChange={(e) => setReturnQty(e.target.value)} />
+              <FormField label={t("stock.return_to_supplier")} required error={quantityErrorMessage(returnQtyError, returnUnit, returnProduct.stockQty)}>
+                <TextInput
+                  type="number"
+                  min={stockQuantityStep(returnUnit)}
+                  max={returnProduct.stockQty}
+                  step={stockQuantityStep(returnUnit)}
+                  value={returnQty}
+                  onChange={(e) => { setReturnQty(e.target.value); setReturnError(""); }}
+                  aria-invalid={!!returnQtyError}
+                />
               </FormField>
               <FormField label={t("stock.out_note")}>
-                <TextInput value={returnNote} onChange={(e) => setReturnNote(e.target.value)} placeholder={t("stock.out_note_ph")} />
+                <TextInput value={returnNote} onChange={(e) => { setReturnNote(e.target.value); setReturnError(""); }} placeholder={t("stock.out_note_ph")} />
               </FormField>
             </div>
           )}
@@ -798,7 +1217,7 @@ export default function StockPage() {
           cancelLabel={t("common.cancel")}
           loading={!!deletingProductId}
           onConfirm={() => void confirmDelete()}
-          onClose={() => setDeleteTarget(null)}
+          onClose={() => { if (!deletingProductId) setDeleteTarget(null); }}
         />
       </ProMain>
     </AppShell>

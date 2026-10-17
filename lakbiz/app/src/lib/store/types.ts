@@ -575,6 +575,8 @@ export interface Purchase {
 export type PurchaseOrderStatus = "pending" | "partial" | "received" | "cancelled";
 
 export interface PurchaseOrderLine {
+  /** Stable cloud identity used by atomic partial receiving. */
+  id?: string;
   productId: string;
   productName: string;
   qtyOrdered: number;

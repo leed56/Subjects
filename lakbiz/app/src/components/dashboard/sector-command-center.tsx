@@ -15,6 +15,7 @@ import {
 } from "@/lib/supabase/sector-dashboard-client";
 import type { SectorId } from "@/lib/types";
 import { NEAR_EXPIRY_DAYS } from "@/lib/dashboard/pharmacy-config";
+import { batchHealth } from "@/lib/dashboard/batch-health";
 
 type Tone = "default" | "positive" | "warning" | "danger";
 // hintHref: Round 3 addendum — "Available batch qty" used to cram every
@@ -304,17 +305,14 @@ function buildSectorModel(
     };
   }
 
-  if (sector === "pharmacy") {
-    const stockedLots = snapshot.lots.filter((lot) => lot.qtyOnHand > 0);
-    const expired = stockedLots.filter((lot) => lot.status === "expired" || (lot.expiryDate ? daysBetween(lot.expiryDate, now) < 0 : false));
+  if (sector === "pharmacy" || sector === "cosmetics") {
+    const cosmetics = sector === "cosmetics";
+    const { expired, blocked, available: availableLots, nearExpiry: expiringNear } = batchHealth(snapshot.lots, now);
     // Same NEAR_EXPIRY_DAYS window retail-intelligence.ts's
     // buildExpiryMetrics() uses for the "Near expiry" KPI, "Needs
     // attention" panel and "Batch & expiry control" queue — this used to
     // be a separately hardcoded 30 here vs. 90 there, so the same batch
     // could read "0" in this widget and "1" in the other three at once.
-    const expiringNear = stockedLots.filter((lot) => lot.status === "available" && lot.expiryDate && daysBetween(lot.expiryDate, now) >= 0 && daysBetween(lot.expiryDate, now) <= NEAR_EXPIRY_DAYS);
-    const blocked = stockedLots.filter((lot) => lot.status === "quarantine" || lot.status === "recalled" || lot.status === "returned");
-    const availableLots = stockedLots.filter((lot) => lot.status === "available");
     // A batch's qtyOnHand is only meaningful next to its own unit — tablets,
     // ml and boxes cannot be added into one number without lying about what
     // it means. Group by the owning product's unit instead of summing
@@ -344,7 +342,9 @@ function buildSectorModel(
       actions.push({
         key: "unsafe-batches",
         title: `${expired.length + blocked.length} batch${expired.length + blocked.length === 1 ? "" : "es"} blocked from normal sale`,
-        detail: "Expired, recalled, quarantined or returned medicine needs controlled disposition.",
+        detail: cosmetics
+          ? tt(locale, "කල් ඉකුත් වූ හෝ රඳවා ඇති රූපලාවණ්‍ය බැච් විකිණීමට පෙර පරීක්ෂා කරන්න.", "Review expired, recalled or held beauty batches before disposition.", "காலாவதியான அல்லது தடுத்து வைக்கப்பட்ட அழகுசாதனத் தொகுதிகளைச் சரிபார்க்கவும்.")
+          : "Expired, recalled, quarantined or returned medicine needs controlled disposition.",
         href: "/stock/advanced",
         tone: "danger",
       });
@@ -353,15 +353,19 @@ function buildSectorModel(
       actions.push({
         key: "expiry-near",
         title: `${expiringNear.length} batch${expiringNear.length === 1 ? "" : "es"} expire within ${NEAR_EXPIRY_DAYS} days`,
-        detail: "Prioritize FEFO dispensing and avoid unnecessary replenishment of the same line.",
+        detail: cosmetics
+          ? tt(locale, "මුලින් කල් ඉකුත් වන බැච් පළමුව විකුණා නැවත ඇණවුම් සමාලෝචනය කරන්න.", "Sell the earliest-expiring batch first and review replenishment before ordering more.", "முதலில் காலாவதியாகும் தொகுதியை முதலில் விற்று மறுஆர்டரைச் சரிபார்க்கவும்.")
+          : "Prioritize FEFO dispensing and avoid unnecessary replenishment of the same line.",
         href: "/stock/advanced",
         tone: "warning",
       });
     }
     return {
-      eyebrow: "Stock intelligence",
-      title: "Expiry & batch safety",
-      description: "FEFO-focused operational control. Cost remains owner-only; this panel uses batch identity and sellable quantity only.",
+      eyebrow: cosmetics ? tt(locale, "රූපලාවණ්‍ය තොග පාලනය", "Beauty stock intelligence", "அழகுசாதன இருப்பு நிலை") : "Stock intelligence",
+      title: cosmetics ? tt(locale, "බැච් සහ කල් ඉකුත් පාලනය", "Batch & expiry control", "தொகுதி & காலாவதி கட்டுப்பாடு") : "Expiry & batch safety",
+      description: cosmetics
+        ? tt(locale, "වර්ණ සහ පැකේජ තොගය, කල් ඉකුත් වීම සහ බැච් රඳවා ගැනීම් පාලනය කරන්න.", "Keep shade and pack stock traceable, prioritize expiry dates and review held batches.", "நிறம் மற்றும் பேக் இருப்பைக் கண்காணித்து காலாவதி தேதிகளையும் தடுத்து வைக்கப்பட்ட தொகுதிகளையும் சரிபார்க்கவும்.")
+        : "FEFO-focused operational control. Cost remains owner-only; this panel uses batch identity and sellable quantity only.",
       metrics: [
         {
           label: "Available batch qty",
@@ -714,7 +718,7 @@ export function SectorCommandCenter() {
       setSnapshot(EMPTY_SNAPSHOT);
       return;
     }
-    if (!(["pharmacy", "mobile_shop", "electronics", "footwear", "textile"] as SectorId[]).includes(org.sector)) {
+    if (!(["pharmacy", "cosmetics", "mobile_shop", "electronics", "footwear", "textile"] as SectorId[]).includes(org.sector)) {
       setSnapshot(EMPTY_SNAPSHOT);
       return;
     }

@@ -28,11 +28,26 @@ jobs:
     name: Lint, types, tests, build
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      inventory-postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: inventory-fixture-only
+          POSTGRES_DB: lakbiz_inventory_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     defaults:
       run:
         working-directory: lakbiz/app
     env:
       NEXT_TELEMETRY_DISABLED: "1"
+      TZ: UTC
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -59,5 +74,89 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      - name: Isolated inventory transfer and purchase receipt database fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          inventory_qa_tools="${RUNNER_TEMP}/lakbiz-inventory-db-tools"
+          npm install --prefix "$inventory_qa_tools" --no-save --no-package-lock @electric-sql/pglite@0.3.14 pg@8.16.3
+          INVENTORY_TEST_MODULE="$inventory_qa_tools/node_modules/@electric-sql/pglite/dist/index.js" node scripts/verify-inventory-transfers.mjs
+          INVENTORY_PG_MODULE="$inventory_qa_tools/node_modules/pg/esm/index.mjs" INVENTORY_TEST_URL="postgresql://postgres:inventory-fixture-only@127.0.0.1:5432/lakbiz_inventory_test" node scripts/verify-inventory-transfers.mjs
+
       - name: Production build
         run: npm run build
+
+      - name: Install isolated textile UI QA tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          textile_qa_tools="${RUNNER_TEMP}/lakbiz-textile-ui-tools"
+          mkdir -p "$textile_qa_tools"
+          npm install --prefix "$textile_qa_tools" --no-save --no-package-lock playwright@1.55.0 esbuild@0.28.2
+          ln -s "$textile_qa_tools/node_modules/playwright" node_modules/playwright
+          echo "TEXTILE_QA_ESBUILD=$textile_qa_tools/node_modules/esbuild" >> "$GITHUB_ENV"
+          "$textile_qa_tools/node_modules/.bin/playwright" install --with-deps chromium
+
+      - name: Textile checkout layout and interaction fixtures
+        run: node scripts/qa-textile-pos.mjs
+        env:
+          LAKBIZ_UI_QA_DIR: ${{ runner.temp }}/lakbiz-textile-ui
+
+      - name: Upload textile UI fixture screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lakbiz-textile-ui-fixtures
+          path: |
+            ${{ runner.temp }}/lakbiz-textile-ui/*.png
+            ${{ runner.temp }}/lakbiz-textile-ui/results.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Industry banner visual fixtures
+        run: node scripts/qa-industry-banners.mjs
+        env:
+          LAKBIZ_UI_QA_DIR: ${{ runner.temp }}/lakbiz-industry-banners
+
+      - name: Upload industry banner fixture screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lakbiz-industry-banner-fixtures
+          path: |
+            ${{ runner.temp }}/lakbiz-industry-banners/*.png
+            ${{ runner.temp }}/lakbiz-industry-banners/results.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Stock screen state and navigation fixtures
+        run: node scripts/qa-stock-states.mjs
+        env:
+          LAKBIZ_UI_QA_DIR: ${{ runner.temp }}/lakbiz-stock-states
+
+      - name: Upload stock screen fixture screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lakbiz-stock-state-fixtures
+          path: |
+            ${{ runner.temp }}/lakbiz-stock-states/*.png
+            ${{ runner.temp }}/lakbiz-stock-states/results.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Phase 1 workflow recovery and responsive fixtures
+        run: npm run qa:phase1
+        env:
+          LAKBIZ_UI_QA_DIR: ${{ runner.temp }}/lakbiz-phase1-workflows
+
+      - name: Upload Phase 1 workflow fixture screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lakbiz-phase1-workflow-fixtures
+          path: |
+            ${{ runner.temp }}/lakbiz-phase1-workflows/*.png
+            ${{ runner.temp }}/lakbiz-phase1-workflows/results.json
+          if-no-files-found: warn
+          retention-days: 7

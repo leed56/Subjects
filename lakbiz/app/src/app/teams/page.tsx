@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
 import { PageHeader, MetricCard, EmptyState, StatusBadge, SearchInput, FilterBar, Tabs, ActionMenu } from "@/components/ui/primitives";
@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/toast";
 import { PlusIcon } from "@/components/ui/icons";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
 import {
@@ -46,9 +47,18 @@ export default function TeamsPage() {
   const { org } = useSubscription();
   const { data: localData, ready: localReady } = useAppStore();
   const { toast } = useToast();
+  const { canWrite, disabledHint } = useWriteAccess();
+  const mutationLock = useRef(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [memberActionError, setMemberActionError] = useState<string | null>(null);
 
   const [crews, setCrews] = useState<Crew[] | null>(null);
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [jobsAttempt, setJobsAttempt] = useState(0);
+  const [membersError, setMembersError] = useState(false);
+  const [jobsError, setJobsError] = useState(false);
+  const memberRequest = useRef(0);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -78,41 +88,64 @@ export default function TeamsPage() {
       return;
     }
     let cancelled = false;
+    setLoadError(null);
+    setCrews(null);
     void Promise.all([fetchOrgCrews(orgId), fetchOrgCrewMembers(orgId)]).then(([crewsResult, membersResult]) => {
       if (cancelled) return;
-      if (crewsResult.error) setLoadError(crewsResult.error);
+      if (crewsResult.error || membersResult.error) throw new Error(crewsResult.error ?? membersResult.error!);
       setCrews(crewsResult.data);
       const counts: Record<string, number> = {};
       for (const m of membersResult.data) counts[m.crewId] = (counts[m.crewId] ?? 0) + 1;
       setMemberCounts(counts);
+    }).catch(() => {
+      if (!cancelled) { setLoadError(t("resilience.error_title")); setCrews([]); }
     });
     return () => {
       cancelled = true;
     };
-  }, [orgId]);
+  }, [orgId, loadAttempt, t]);
 
-  const reloadProfileMembers = (crewId: string) => {
-    void fetchCrewMembers(crewId).then((result) => {
+  const reloadProfileMembers = useCallback((crewId: string) => {
+    const request = ++memberRequest.current;
+    setProfileMembers(null);
+    setMembersError(false);
+    return fetchCrewMembers(crewId).then((result) => {
+      if (request !== memberRequest.current) return;
+      if (result.error) throw new Error(result.error);
       setProfileMembers(result.data);
       setMemberCounts((prev) => ({ ...prev, [crewId]: result.data.length }));
+    }).catch(() => {
+      if (request === memberRequest.current) setMembersError(true);
     });
-  };
+  }, []);
 
   useEffect(() => {
     if (!profileCrew) return;
     reloadProfileMembers(profileCrew.id);
-  }, [profileCrew]);
+    return () => { memberRequest.current += 1; };
+  }, [profileCrew, reloadProfileMembers]);
 
   useEffect(() => {
     if (!profileCrew || profileTab !== "jobs") return;
     let cancelled = false;
+    setProfileJobs(null);
+    setJobsError(false);
     void fetchCrewJobs(profileCrew.id).then((result) => {
-      if (!cancelled) setProfileJobs(result.data);
-    });
+      if (cancelled) return;
+      if (result.error) throw new Error(result.error);
+      setProfileJobs(result.data);
+    }).catch(() => { if (!cancelled) setJobsError(true); });
     return () => {
       cancelled = true;
     };
-  }, [profileCrew, profileTab]);
+  }, [profileCrew, profileTab, jobsAttempt]);
+
+  if (loadError && org.isAuthenticated) {
+    return <AppShell><ProMain><div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                    <p>{t("resilience.error_title")}</p>
+                    <button type="button" onClick={() => { setLoadError(null); setCrews(null); setLoadAttempt((n) => n + 1); }} className="mt-3 rounded-lg bg-teal-600 px-4 py-2 font-semibold text-white hover:bg-teal-700">{t("resilience.retry")}</button>
+                  </div></ProMain></AppShell>;
+  }
 
   if (!org.isAuthenticated || !localReady || !localData || crews === null) {
     return (
@@ -133,53 +166,74 @@ export default function TeamsPage() {
       : localData.contractors.find((c) => c.id === m.memberId)?.phone;
 
   const resetForm = () => {
+    setFormError(null);
     setForm(emptyForm);
     setEditing(null);
   };
 
   const openCreate = () => {
+    if (!canWrite || mutationLock.current) return;
     resetForm();
     setFormOpen(true);
   };
 
   const openEdit = (crew: Crew) => {
+    if (mutationLock.current) return;
+    setFormError(null);
     setEditing(crew);
     setForm({ name: crew.name, crewType: crew.crewType, active: crew.active, notes: crew.notes ?? "" });
     setFormOpen(true);
   };
 
   const handleSave = async () => {
-    if (saving || !form.name.trim()) return;
-    const input: CrewInput = { name: form.name, crewType: form.crewType, active: form.active, notes: form.notes };
+    if (mutationLock.current || saving || !orgId || !canWrite || !form.name.trim()) return;
+    const input: CrewInput = { name: form.name.trim(), crewType: form.crewType, active: form.active, notes: form.notes };
+    mutationLock.current = true;
     setSaving(true);
-    const result = editing ? await updateCrew(editing.id, input) : await createCrew(orgId!, input);
-    setSaving(false);
-    if (result.error || !result.data) {
-      toast({ tone: "error", title: t("common.save_failed"), description: result.error ?? undefined });
-      return;
+    setFormError(null);
+    try {
+      const result = editing ? await updateCrew(editing.id, input) : await createCrew(orgId!, input);
+      if (result.error || !result.data) {
+        setFormError(result.error ?? t("common.save_failed"));
+        return;
+      }
+      setCrews((prev) => {
+        const next = (prev ?? []).filter((c) => c.id !== result.data!.id);
+        return [result.data!, ...next];
+      });
+      if (profileCrew?.id === result.data.id) setProfileCrew(result.data);
+      toast({ tone: "success", title: editing ? t("common.update") : t("crews.added") });
+      setFormOpen(false);
+      resetForm();
+    } catch {
+      setFormError(t("common.save_failed"));
+    } finally {
+      mutationLock.current = false;
+      setSaving(false);
     }
-    setCrews((prev) => {
-      const next = (prev ?? []).filter((c) => c.id !== result.data!.id);
-      return [result.data!, ...next];
-    });
-    toast({ tone: "success", title: editing ? t("common.update") : t("crews.added") });
-    setFormOpen(false);
-    resetForm();
   };
 
   const confirmDelete = async () => {
-    if (!deleteTarget || deleting) return;
+    if (!deleteTarget || deleting || mutationLock.current || !canWrite) return;
+    mutationLock.current = true;
     setDeleting(true);
-    const result = await deleteCrew(deleteTarget.id);
-    setDeleting(false);
-    if (result.error) {
-      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
-      return;
+    try {
+      const result = await deleteCrew(deleteTarget.id);
+      if (result.error) {
+        toast({ tone: "error", title: t("common.save_failed"), description: result.error });
+        return;
+      }
+      setCrews((prev) => (prev ?? []).filter((c) => c.id !== deleteTarget.id));
+      if (profileCrew?.id === deleteTarget.id) setProfileCrew(null);
+      toast({ tone: "success", title: t("common.delete"), description: deleteTarget.name });
+      setDeleteTarget(null);
+      setMemberCounts((prev) => { const next = { ...prev }; delete next[deleteTarget.id]; return next; });
+    } catch {
+      toast({ tone: "error", title: t("common.save_failed") });
+    } finally {
+      mutationLock.current = false;
+      setDeleting(false);
     }
-    setCrews((prev) => (prev ?? []).filter((c) => c.id !== deleteTarget.id));
-    if (profileCrew?.id === deleteTarget.id) setProfileCrew(null);
-    toast({ tone: "success", title: t("common.delete"), description: deleteTarget.name });
-    setDeleteTarget(null);
   };
 
   const availableToAdd = () => {
@@ -190,38 +244,35 @@ export default function TeamsPage() {
     return localData.contractors.filter((c) => c.active && !already.has(c.id));
   };
 
-  const handleAddMember = async () => {
-    if (!profileCrew || !addMemberId || addingMember) return;
+  const runMemberAction = async (action: () => Promise<{ error: string | null }>, added = false) => {
+    if (!profileCrew || !orgId || !canWrite || mutationLock.current || !profileMembers || membersError) return;
+    const crewId = profileCrew.id;
+    mutationLock.current = true;
     setAddingMember(true);
-    const result = await addCrewMember(profileCrew.id, orgId!, addMemberType, addMemberId);
-    setAddingMember(false);
-    if (result.error) {
-      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
-      return;
+    setMemberActionError(null);
+    try {
+      const result = await action();
+      if (result.error) { setMemberActionError(result.error); return; }
+      if (added) setAddMemberId("");
+      await reloadProfileMembers(crewId);
+    } catch {
+      setMemberActionError(t("common.save_failed"));
+    } finally {
+      mutationLock.current = false;
+      setAddingMember(false);
     }
-    setAddMemberId("");
-    reloadProfileMembers(profileCrew.id);
   };
 
-  const handleRemoveMember = async (memberRowId: string) => {
-    if (!profileCrew) return;
-    const result = await removeCrewMember(memberRowId);
-    if (result.error) {
-      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
-      return;
-    }
-    reloadProfileMembers(profileCrew.id);
+  const handleAddMember = () => {
+    if (!profileCrew || !orgId || !addMemberId || !availableToAdd().some((member) => member.id === addMemberId)) return;
+    return runMemberAction(() => addCrewMember(profileCrew.id, orgId, addMemberType, addMemberId), true);
   };
 
-  const handleToggleLead = async (member: CrewMember) => {
-    if (!profileCrew) return;
-    const result = await setCrewMemberLead(member.id, !member.isLead);
-    if (result.error) {
-      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
-      return;
-    }
-    reloadProfileMembers(profileCrew.id);
-  };
+  const handleRemoveMember = (memberRowId: string) =>
+    runMemberAction(() => removeCrewMember(memberRowId));
+
+  const handleToggleLead = (member: CrewMember) =>
+    runMemberAction(() => setCrewMemberLead(member.id, !member.isLead));
 
   const query = search.trim().toLowerCase();
   const filtered = crews
@@ -246,6 +297,8 @@ export default function TeamsPage() {
           <button
             type="button"
             onClick={() => {
+              if (mutationLock.current) return;
+              setMemberActionError(null);
               setProfileCrew(c);
               setProfileTab("members");
               setProfileJobs(null);
@@ -278,7 +331,7 @@ export default function TeamsPage() {
         <ActionMenu
           items={[
             { label: t("common.edit"), onSelect: () => openEdit(c) },
-            { label: t("common.delete"), tone: "danger" as const, onSelect: () => setDeleteTarget(c) },
+            { label: t("common.delete"), disabled: !canWrite || saving || deleting || addingMember, tone: "danger" as const, onSelect: () => setDeleteTarget(c) },
           ]}
         />
       ),
@@ -294,7 +347,7 @@ export default function TeamsPage() {
           actions={
             <button
               type="button"
-              onClick={openCreate}
+              onClick={openCreate} disabled={!canWrite || saving || deleting || addingMember} title={disabledHint ?? undefined}
               className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700"
             >
               <PlusIcon className="h-4 w-4" />
@@ -309,10 +362,6 @@ export default function TeamsPage() {
             </div>
           }
         />
-
-        {loadError && (
-          <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{loadError}</div>
-        )}
 
         <FilterBar>
           <SearchInput value={search} onChange={setSearch} placeholder={t("crews.search_placeholder")} className="min-w-[220px] flex-1" />
@@ -349,17 +398,17 @@ export default function TeamsPage() {
         {/* Create / edit drawer */}
         <Drawer
           open={formOpen}
-          onClose={() => setFormOpen(false)}
+          onClose={() => { if (!saving) setFormOpen(false); }}
           title={editing ? t("common.edit") : t("crews.add")}
           footer={
             <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setFormOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => setFormOpen(false)} disabled={saving} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 {t("common.cancel")}
               </button>
               <button
                 type="button"
                 onClick={() => void handleSave()}
-                disabled={saving || !form.name.trim()}
+                disabled={saving || !canWrite || !form.name.trim()}
                 className="flex-1 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
               >
                 {saving ? t("common.saving") : editing ? t("common.update") : t("crews.add")}
@@ -367,7 +416,9 @@ export default function TeamsPage() {
             </div>
           }
         >
-          <div className="space-y-4">
+          {!canWrite && <p role="status" className="mb-4 text-sm text-amber-800">{disabledHint}</p>}
+          {formError && <p role="alert" className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{formError}</p>}
+          <fieldset disabled={saving || !canWrite} className="space-y-4">
             <FormField label={t("crews.name")}>
               <TextInput value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
             </FormField>
@@ -391,12 +442,12 @@ export default function TeamsPage() {
             <FormField label={t("common.notes")}>
               <TextInput value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
             </FormField>
-          </div>
+          </fieldset>
         </Drawer>
 
         {/* Crew profile drawer */}
         {profileCrew && (
-          <Drawer open onClose={() => setProfileCrew(null)} title={profileCrew.name || t("crews.untitled")}>
+          <Drawer open onClose={() => { if (!mutationLock.current) setProfileCrew(null); }} title={profileCrew.name || t("crews.untitled")}>
             <div className="mb-4 flex items-center gap-2">
               <StatusBadge tone={typeTone(profileCrew.crewType)}>{t(`crews.type_${profileCrew.crewType}`)}</StatusBadge>
               {!profileCrew.active && <StatusBadge tone="neutral">{t("work.inactive")}</StatusBadge>}
@@ -414,9 +465,14 @@ export default function TeamsPage() {
                 { value: "jobs", label: `${t("nav.jobs")}${profileJobs ? ` (${profileJobs.length})` : ""}` },
               ]}
             />
+            {!canWrite && <p role="status" className="mt-3 text-sm text-amber-800">{disabledHint}</p>}
+            {memberActionError && <p role="alert" className="mt-3 text-sm text-rose-700">{memberActionError}</p>}
             <div className="mt-4">
               {profileTab === "members" &&
-                (profileMembers === null ? (
+                (membersError ? (<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                    <p>{t("resilience.error_title")}</p>
+                    <button type="button" onClick={() => reloadProfileMembers(profileCrew.id)} className="mt-3 rounded-lg bg-teal-600 px-4 py-2 font-semibold text-white hover:bg-teal-700">{t("resilience.retry")}</button>
+                  </div>) : profileMembers === null ? (
                   <ProLoadingState label={t("common.loading")} />
                 ) : (
                   <div className="space-y-4">
@@ -445,8 +501,8 @@ export default function TeamsPage() {
                               />
                               <ActionMenu
                                 items={[
-                                  { label: m.isLead ? t("crews.unset_lead") : t("crews.set_lead"), onSelect: () => void handleToggleLead(m) },
-                                  { label: t("crews.remove_member"), tone: "danger" as const, onSelect: () => void handleRemoveMember(m.id) },
+                                  { label: m.isLead ? t("crews.unset_lead") : t("crews.set_lead"), disabled: !canWrite || addingMember, onSelect: () => void handleToggleLead(m) },
+                                  { label: t("crews.remove_member"), disabled: !canWrite || addingMember, tone: "danger" as const, onSelect: () => void handleRemoveMember(m.id) },
                                 ]}
                               />
                             </div>
@@ -455,7 +511,7 @@ export default function TeamsPage() {
                       </ul>
                     )}
 
-                    <div className="rounded-lg border border-slate-200 p-3">
+                    <fieldset disabled={!canWrite || addingMember} className="rounded-lg border border-slate-200 p-3">
                       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{t("crews.add_member")}</p>
                       <div className="flex flex-wrap gap-2">
                         {(["technician", "contractor"] as const).map((mt) => (
@@ -491,7 +547,7 @@ export default function TeamsPage() {
                             <button
                               type="button"
                               onClick={() => void handleAddMember()}
-                              disabled={!addMemberId || addingMember}
+                              disabled={!canWrite || !addMemberId || addingMember}
                               className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
                             >
                               {t("common.add")}
@@ -499,11 +555,14 @@ export default function TeamsPage() {
                           </>
                         )}
                       </div>
-                    </div>
+                    </fieldset>
                   </div>
                 ))}
               {profileTab === "jobs" &&
-                (profileJobs === null ? (
+                (jobsError ? (<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+                    <p>{t("resilience.error_title")}</p>
+                    <button type="button" onClick={() => { setJobsError(false); setProfileJobs(null); setJobsAttempt((n) => n + 1); }} className="mt-3 rounded-lg bg-teal-600 px-4 py-2 font-semibold text-white hover:bg-teal-700">{t("resilience.retry")}</button>
+                  </div>) : profileJobs === null ? (
                   <ProLoadingState label={t("common.loading")} />
                 ) : profileJobs.length === 0 ? (
                   <EmptyState title={t("crews.no_jobs")} description={t("crews.no_jobs_hint")} />
@@ -535,7 +594,7 @@ export default function TeamsPage() {
           cancelLabel={t("common.cancel")}
           loading={deleting}
           onConfirm={() => void confirmDelete()}
-          onClose={() => setDeleteTarget(null)}
+          onClose={() => { if (!deleting) setDeleteTarget(null); }}
         />
       </ProMain>
     </AppShell>

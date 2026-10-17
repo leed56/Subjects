@@ -112,9 +112,11 @@ export default function BillDetailPage() {
             customerAddress={customer?.address}
             customerVatNumber={customer?.vatNumber}
           />
-          <SaleTenderBreakdown saleId={sale.id} saleTotal={sale.total} />
-          <SaleInventoryTrace saleId={sale.id} />
-          <SaleReturnHistory saleId={sale.id} />
+          <div className="no-print">
+            <SaleTenderBreakdown saleId={sale.id} saleTotal={sale.total} />
+            <SaleInventoryTrace saleId={sale.id} />
+            <SaleReturnHistory saleId={sale.id} />
+          </div>
         </div>
       </ProMain>
     </AppShell>

@@ -46,6 +46,7 @@ export default function NotificationsSettingsPage() {
   const [ownerPhoneError, setOwnerPhoneError] = useState(false);
   const [technicianPhoneError, setTechnicianPhoneError] = useState(false);
   const [batchResult, setBatchResult] = useState<string | null>(null);
+  const [batchResultIsError, setBatchResultIsError] = useState(false);
   const [mounted, setMounted] = useState(false);
   const smsApiConfigured = useSmsApiConfigured();
   const apiEnabled = smsApiConfigured === true;
@@ -95,27 +96,34 @@ export default function NotificationsSettingsPage() {
         return;
       }
 
-      const err = await saveOrgNotificationSettings(org.id, next);
-      setSaving(false);
-      if (err) {
-        setCloudError(err);
-        return;
+      try {
+        const err = await saveOrgNotificationSettings(org.id, next);
+        if (err) {
+          setCloudError(err);
+          return;
+        }
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      } catch {
+        setCloudError(t("common.cloud_sync_error"));
+      } finally {
+        setSaving(false);
       }
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     },
-    [org.id],
+    [org.id, t],
   );
 
   const runBatchNow = async () => {
     setBatchRunning(true);
     setBatchResult(null);
+    setBatchResultIsError(false);
     try {
       if (org.id) {
         const syncErr = await saveOrgNotificationSettings(org.id, settings);
         if (syncErr) {
           setCloudError(syncErr);
           setBatchResult(t("msg.send_service_due_sync_failed"));
+          setBatchResultIsError(true);
           return;
         }
       }
@@ -136,6 +144,7 @@ export default function NotificationsSettingsPage() {
       };
       if (!res.ok) {
         setBatchResult(data.error ?? data.skippedReason ?? "Failed");
+        setBatchResultIsError(true);
         return;
       }
       const skipped =
@@ -164,7 +173,8 @@ export default function NotificationsSettingsPage() {
 
       setBatchResult(message);
     } catch {
-      setBatchResult("Network error");
+      setBatchResult(t("common.save_failed"));
+      setBatchResultIsError(true);
     } finally {
       setBatchRunning(false);
     }
@@ -179,21 +189,22 @@ export default function NotificationsSettingsPage() {
         <div className="mx-auto max-w-4xl">
 
         {saving && (
-          <div className="mb-4 rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">
+          <div role="status" className="mb-4 rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">
             {t("common.saving")}
           </div>
         )}
         {saved && !saving && (
-          <div className="mb-4 rounded-lg bg-teal-50 px-4 py-3 text-sm text-teal-800">
+          <div role="status" className="mb-4 rounded-lg bg-teal-50 px-4 py-3 text-sm text-teal-800">
             {t("msg.settings_saved")}
           </div>
         )}
         {cloudError && (
-          <div className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Cloud sync: {cloudError}
+          <div role="alert" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {t("common.cloud_sync_error")}: {cloudError}
           </div>
         )}
 
+        <fieldset disabled={saving || batchRunning} className="contents">
         <section className="mb-6 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
           <h2 className="font-semibold text-slate-900">{t("msg.prefs_title")}</h2>
           <div className="mt-4 space-y-4">
@@ -445,11 +456,7 @@ export default function NotificationsSettingsPage() {
                       return;
                     }
                     setOwnerPhoneError(false);
-                    setSettings((s) => {
-                      const next = { ...s, ownerPhone };
-                      void persist(next);
-                      return next;
-                    });
+                    void persist({ ...settings, ownerPhone });
                   }}
                   aria-invalid={ownerPhoneError}
                   className={`mt-1 w-full rounded-lg border px-3 py-2 ${ownerPhoneError ? "border-rose-300 focus:border-rose-400" : ""}`}
@@ -473,11 +480,7 @@ export default function NotificationsSettingsPage() {
                       return;
                     }
                     setTechnicianPhoneError(false);
-                    setSettings((s) => {
-                      const next = { ...s, technicianPhone };
-                      void persist(next);
-                      return next;
-                    });
+                    void persist({ ...settings, technicianPhone });
                   }}
                   aria-invalid={technicianPhoneError}
                   className={`mt-1 w-full rounded-lg border px-3 py-2 ${technicianPhoneError ? "border-rose-300 focus:border-rose-400" : ""}`}
@@ -545,12 +548,13 @@ export default function NotificationsSettingsPage() {
                     : t("msg.send_service_due_now")}
                 </button>
                 {batchResult && (
-                  <span className="text-sm text-slate-600">{batchResult}</span>
+                  <span role={batchResultIsError ? "alert" : "status"} className={`text-sm ${batchResultIsError ? "font-semibold text-rose-700" : "text-slate-600"}`}>{batchResult}</span>
                 )}
               </div>
             )}
           </div>
         </section>
+        </fieldset>
 
         <section className="mb-6 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
           <h2 className="font-semibold text-slate-900">{t("msg.api_title")}</h2>

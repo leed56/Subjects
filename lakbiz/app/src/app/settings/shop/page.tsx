@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/pro-shell";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { useWriteAccess } from "@/lib/subscription/use-can-write";
+import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { formatRelativeTime } from "@/lib/format";
 import type { BusinessInfo } from "@/lib/invoice";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
@@ -185,6 +187,7 @@ export default function ShopSettingsPage() {
 
   const { user } = useAuth();
   const { org } = useSubscription();
+  const { canWrite, disabledHint } = useWriteAccess();
   const { updateBusinessToCloud } = useAppStore();
   const { t } = useLocale();
   const orgIdRef = useRef(org.id);
@@ -248,6 +251,10 @@ export default function ShopSettingsPage() {
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (btnState === "saving" || !canWrite) {
+      if (!canWrite) showMsg({ ok: false, text: disabledHint ?? t("sub.read_only") }, "idle");
+      return;
+    }
     const form = e.currentTarget;
     const fd = new FormData(form);
     const rawName = String(fd.get("name") ?? "").trim();
@@ -301,15 +308,20 @@ export default function ShopSettingsPage() {
       }
     }
 
-    const result = await updateBusinessToCloud(payload);
-    if (!result.ok) {
-      showMsg(
-        {
-          ok: false,
-          text: result.error ?? `${t("vat.saved_success")} — ${t("vat.cloud_sync_note")}`,
-        },
-        "idle",
-      );
+    try {
+      const result = await updateBusinessToCloud(payload);
+      if (!result.ok) {
+        showMsg(
+          {
+            ok: false,
+            text: result.error ?? `${t("vat.saved_success")} — ${t("vat.cloud_sync_note")}`,
+          },
+          "idle",
+        );
+        return;
+      }
+    } catch {
+      showMsg({ ok: false, text: `${t("vat.saved_success")} — ${t("vat.cloud_sync_note")}` }, "idle");
       return;
     }
 
@@ -381,7 +393,9 @@ export default function ShopSettingsPage() {
           </ProCard>
 
           <ProCard title={t("vat.shop_settings")} eyebrow="Details and VAT">
-            <form ref={formRef} onSubmit={handleSubmit} noValidate>
+            <WriteDisabledHint />
+            <form ref={formRef} onSubmit={handleSubmit} noValidate aria-busy={btnState === "saving"}>
+              <fieldset disabled={!canWrite || btnState === "saving"} className="contents">
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className={`${labelClass()} sm:col-span-2`}>
                   {t("shop.logo")}
@@ -391,7 +405,12 @@ export default function ShopSettingsPage() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      setLogoDataUrl(await fileToLogoDataUrl(file));
+                      try {
+                        setLogoDataUrl(await fileToLogoDataUrl(file));
+                      } catch {
+                        showMsg({ ok: false, text: t("common.save_failed") }, "idle");
+                        e.target.value = "";
+                      }
                     }}
                     className="mt-2 block w-full text-xs font-semibold text-slate-500 file:mr-3 file:rounded-xl file:border-0 file:bg-teal-50 file:px-3 file:py-2 file:text-sm file:font-bold file:text-teal-700"
                   />
@@ -510,13 +529,14 @@ export default function ShopSettingsPage() {
               </div>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_1.2fr]">
-                <button type="submit" disabled={btnState === "saving"} className={`rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-lg transition ${btnState === "saved" ? "bg-emerald-600 shadow-emerald-700/20" : btnState === "saving" ? "cursor-wait bg-teal-600 shadow-teal-700/20" : "bg-teal-600 shadow-teal-700/20 hover:bg-teal-700"}`}>
+                <button type="submit" title={!canWrite ? disabledHint ?? undefined : undefined} className={`rounded-2xl px-5 py-3 text-sm font-bold text-white shadow-lg transition disabled:cursor-not-allowed disabled:opacity-50 ${btnState === "saved" ? "bg-emerald-600 shadow-emerald-700/20" : btnState === "saving" ? "cursor-wait bg-teal-600 shadow-teal-700/20" : "bg-teal-600 shadow-teal-700/20 hover:bg-teal-700"}`}>
                   {saveLabel}
                 </button>
                 <div ref={statusRef} role="status" aria-live="polite" className={`rounded-2xl px-4 py-3 text-sm font-bold ${msg ? (msg.ok ? "border border-teal-200 bg-teal-50 text-teal-900" : "border border-amber-200 bg-amber-50 text-amber-900") : "border border-dashed border-slate-200 bg-slate-50 text-slate-400"}`}>
                   {msg?.text ?? t("vat.save_status_hint")}
                 </div>
               </div>
+              </fieldset>
             </form>
           </ProCard>
         </section>

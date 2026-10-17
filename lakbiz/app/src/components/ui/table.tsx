@@ -15,16 +15,18 @@ export function DataTable<T extends { id: string | number }>({
   rows,
   onRowClick,
   emptyState,
+  mobileRender,
 }: {
   columns: DataTableColumn<T>[];
   rows: T[];
   onRowClick?: (row: T) => void;
   emptyState?: ReactNode;
+  mobileRender?: (row: T) => ReactNode;
 }) {
   if (rows.length === 0 && emptyState) return <>{emptyState}</>;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-[linear-gradient(180deg,#ffffff_0%,#fcfdff_100%)] shadow-[0_12px_36px_rgba(15,23,42,0.05)]">
+    <div data-ui="data-table" className="workspace-table">
       <div className="hidden overflow-x-auto sm:block">
         <table className="w-full text-sm">
           <thead>
@@ -32,7 +34,7 @@ export function DataTable<T extends { id: string | number }>({
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className={`px-5 py-3.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 ${
+                  className={`px-4 py-3 ${
                     col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : "text-left"
                   }`}
                 >
@@ -66,7 +68,7 @@ export function DataTable<T extends { id: string | number }>({
                 {columns.map((col) => (
                   <td
                     key={col.key}
-                    className={`px-5 py-[1.05rem] text-slate-700 ${
+                    className={`px-4 py-3.5 text-slate-700 ${
                       col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : "text-left"
                     }`}
                   >
@@ -98,16 +100,18 @@ export function DataTable<T extends { id: string | number }>({
             tabIndex={onRowClick ? 0 : undefined}
             className={`bg-white px-4 py-4 ${onRowClick ? "cursor-pointer active:bg-teal-50/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500" : ""}`}
           >
-            {columns
-              .filter((col) => !col.hideOnMobile)
-              .map((col, i) => (
-                <div key={col.key} className={`flex items-center justify-between gap-4 ${i > 0 ? "mt-2.5" : ""}`}>
-                  {i > 0 && <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{col.header}</span>}
-                  <span className={i === 0 ? "text-sm font-semibold text-slate-950" : "text-sm text-slate-700"}>
-                    {col.render(row)}
-                  </span>
-                </div>
-              ))}
+            {mobileRender
+              ? mobileRender(row)
+              : columns
+                  .filter((col) => !col.hideOnMobile)
+                  .map((col, i) => (
+                    <div key={col.key} className={`workspace-table-mobile-row ${i > 0 ? "mt-2.5" : ""}`}>
+                      {i > 0 && <span className="text-xs font-medium leading-5 text-slate-500">{col.header}</span>}
+                      <span className={i === 0 ? "text-sm font-semibold text-slate-950" : "text-sm text-slate-700"}>
+                        {col.render(row)}
+                      </span>
+                    </div>
+                  ))}
           </div>
         ))}
       </div>

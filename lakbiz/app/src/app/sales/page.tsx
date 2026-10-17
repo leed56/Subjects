@@ -17,6 +17,6 @@ import { TextileSalesPage } from "@/components/sales/textile-sales-page";
  */
 export default function SalesPage() {
   const { org } = useSubscription();
-  if (org.sector === "textile") return <TextileSalesPage />;
+  if (org.sector === "textile") return <TextileSalesPage key={`${org.id ?? "no-org"}:${org.role}`} />;
   return isAtomicRetailSector(org.sector) ? <AtomicRetailSalesPageV2 /> : <LegacySalesPage />;
 }

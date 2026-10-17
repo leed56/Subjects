@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Shared building blocks for Business Pulse — the owner-only, dark,
+ * Shared building blocks for Business Pulse — the owner-only, light,
  * phone-locked "what's going on with the business" view. Originally built
  * textile-only (see textile-business-pulse.tsx); extracted here once a
  * second sector (pharmacy) needed the exact same shell, hero, highlights
@@ -10,6 +10,7 @@
  * re-implementing the shell/sparkline/attention-list/highlights chrome.
  */
 import Link from "next/link";
+import { WorkspaceMetric } from "@/components/ui/workspace-surfaces";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { BellIcon, ChevronDownIcon, SignOutIcon, CheckIcon } from "@/components/ui/icons";
@@ -113,24 +114,10 @@ function smoothPath(points: { x: number; y: number }[]): string {
 }
 
 export type StatTone = "default" | "positive" | "warning" | "danger";
-const STAT_VALUE_TONE: Record<StatTone, string> = {
-  default: "text-slate-50",
-  positive: "text-emerald-400",
-  warning: "text-amber-400",
-  danger: "text-rose-400",
-};
-
-/** One card in the horizontally-scrolling stat row. Deliberately no
- * sparkline here — a fabricated trend line would misrepresent a series
- * that isn't cheaply available for most of these stats. */
-export function StatCard({ label, value, hint, tone = "default" }: { label: string; value: string; hint: string; tone?: StatTone }) {
-  return (
-    <div className="w-[13.5rem] shrink-0 snap-start rounded-2xl border border-slate-800 bg-slate-900 p-4">
-      <p className="text-xs font-semibold text-slate-400">{label}</p>
-      <p className={`mt-1.5 text-2xl font-bold tracking-[-0.02em] ${STAT_VALUE_TONE[tone]}`}>{value}</p>
-      <p className={`mt-1 text-xs font-medium ${tone === "danger" ? "text-rose-400" : "text-slate-500"}`}>{hint}</p>
-    </div>
-  );
+/** Values and hints still come from the sector's real calculations. */
+export function StatCard({ tone = "default", ...props }: { label: string; value: string; hint: string; tone?: StatTone }) {
+  const mappedTone = { default: "blue", positive: "emerald", warning: "amber", danger: "rose" } as const;
+  return <WorkspaceMetric {...props} tone={mappedTone[tone]} ui="pulse-stat-card" className="w-[82vw] max-w-[18rem] shrink-0 snap-start sm:w-[calc((100%-1.5rem)/3)] sm:max-w-none" />;
 }
 
 /** One plain-language sentence summarizing the month, the way a person
@@ -159,8 +146,8 @@ export function buildSummaryLine(locale: Locale, salesChangePct: number | null, 
  * them. Small enough to keep as a Pulse-only variant. */
 export function PulseLoadingState({ label }: { label: string }) {
   return (
-    <div role="status" aria-live="polite" aria-busy="true" className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-[0_8px_30px_rgba(0,0,0,0.2)]">
-      <div className="flex items-center gap-3 text-sm font-medium text-slate-400">
+    <div role="status" aria-live="polite" aria-busy="true" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_8px_30px_rgba(0,0,0,0.2)]">
+      <div className="flex items-center gap-3 text-sm font-medium text-slate-500">
         <span aria-hidden="true" className="h-2.5 w-2.5 animate-pulse rounded-full bg-teal-400" />
         {label}
       </div>
@@ -172,9 +159,9 @@ export function PulseLoadingState({ label }: { label: string }) {
  * PulseLoadingState above. */
 export function PulseEmptyState({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/60 px-6 py-11 text-center">
-      <p className="text-sm font-bold text-slate-100">{title}</p>
-      {description && <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate-400">{description}</p>}
+    <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-11 text-center">
+      <p className="text-sm font-bold text-slate-900">{title}</p>
+      {description && <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate-500">{description}</p>}
       {action && <div className="mt-4 flex justify-center">{action}</div>}
     </div>
   );
@@ -190,7 +177,7 @@ export function PulseEmptyState({ title, description, action }: { title: string;
  * app" feel. Language switch, sign-out and the door back to the full
  * operational app live in one account panel instead of a nav rail.
  *
- * Locked to phone width (max-w-md) and bordered on both sides — on an
+ * Locked to phone width (max-w-[650px]) and bordered on both sides — on an
  * actual phone this is invisible (the viewport IS this width), but on a
  * desktop browser it stops Pulse from stretching into a wide dashboard.
  * Dark palette built from the app's existing Tailwind slate/teal scale
@@ -227,27 +214,27 @@ export function PulseShell({
   };
 
   const accountPanel = accountOpen && (
-    <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl border border-slate-800 bg-slate-900 p-2 shadow-xl">
-      <div className="rounded-xl bg-slate-800/60 px-3 py-2.5">
-        <p className="truncate text-sm font-semibold text-slate-50">{org.name}</p>
-        <p className="truncate text-xs text-slate-400">{user?.email}</p>
+    <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+      <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+        <p className="truncate text-sm font-semibold text-slate-950">{org.name}</p>
+        <p className="truncate text-xs text-slate-500">{user?.email}</p>
       </div>
       <button
         type="button"
         onClick={() => setLocale(nextLocale(locale))}
-        className="mt-1.5 flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/60"
+        className="mt-1.5 flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
       >
         <span>{LOCALE_NAMES[locale]}</span>
-        <span className="text-xs font-semibold text-teal-300">{LOCALE_NAMES[nextLocale(locale)]} →</span>
+        <span className="text-xs font-semibold text-teal-700">{LOCALE_NAMES[nextLocale(locale)]} →</span>
       </button>
-      <Link href="/dashboard" className="flex min-h-10 w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800/60">
+      <Link href="/dashboard" className="flex min-h-10 w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
         {tt(locale, "සම්පූර්ණ dashboard", "Full dashboard", "முழு dashboard")} →
       </Link>
       {user && (
         <button
           type="button"
           onClick={() => void handleLogout()}
-          className="mt-1 flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-rose-400 hover:bg-rose-400/10"
+          className="mt-1 flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-400/10"
         >
           <SignOutIcon className="h-4 w-4" />
           {tt(locale, "පිටවන්න", "Sign out", "வெளியேறு")}
@@ -257,21 +244,21 @@ export function PulseShell({
   );
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_18%_0%,rgba(45,212,191,0.09),transparent_28rem),radial-gradient(circle_at_95%_12%,rgba(56,189,248,0.05),transparent_26rem),linear-gradient(180deg,#0a1613_0%,#070f0d_100%)] pb-24 text-slate-50 lg:pb-6">
+    <div className="min-h-screen bg-[linear-gradient(135deg,#eff7ff,#f4fbfa)] pb-24 text-slate-950 lg:pb-6">
       {/* Not sticky — a pinned header on a page this short adds a seam for
           no real benefit; Alerts/More in the bottom tab bar already cover
           the same reachability on mobile. */}
-      <div className="mx-auto max-w-md min-h-screen border-x border-slate-800/70">
-        <header className="border-b border-slate-800/70 bg-slate-900/80 backdrop-blur-xl">
+      <div className="mx-auto max-w-[650px] min-h-screen border-x border-slate-200">
+        <header className="border-b border-slate-200 bg-white/90 backdrop-blur-xl">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
             <div className="flex min-w-0 items-center gap-2.5">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-400 to-teal-600 text-xs font-bold text-white shadow-sm shadow-teal-900/20">L</span>
               <div className="min-w-0 leading-tight">
-                <p className="truncate text-sm font-bold tracking-tight text-slate-50">LakBiz</p>
+                <p className="truncate text-sm font-bold tracking-tight text-slate-950">LakBiz</p>
                 <button
                   type="button"
                   onClick={() => setAccountOpen((v) => !v)}
-                  className="flex items-center gap-0.5 truncate text-xs font-medium text-slate-400 hover:text-slate-300"
+                  className="flex items-center gap-0.5 truncate text-xs font-medium text-slate-500 hover:text-slate-600"
                 >
                   <span className="truncate">{org.name}</span>
                   <ChevronDownIcon className="h-3.5 w-3.5 shrink-0" />
@@ -283,7 +270,7 @@ export function PulseShell({
                 type="button"
                 onClick={onBellClick}
                 aria-label={tt(locale, "දැනුම්දීම්", "Notifications", "அறிவிப்புகள்")}
-                className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-slate-400 hover:border-teal-400/30 hover:bg-teal-400/10"
+                className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:border-teal-400/30 hover:bg-teal-400/10"
               >
                 <BellIcon className="h-4.5 w-4.5" />
                 {attentionCount > 0 && (
@@ -336,21 +323,21 @@ export function AttentionList({ actions }: { actions: PulseAction[] }) {
   return (
     <div className="space-y-2">
       {visible.map((action) => {
-        const tone = action.tone === "danger" ? "bg-rose-400/10 text-rose-400" : "bg-amber-400/10 text-amber-400";
+        const tone = action.tone === "danger" ? "bg-rose-400/10 text-rose-700" : "bg-amber-400/10 text-amber-700";
         return (
-          <div key={action.key} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 px-3.5 py-3">
+          <div key={action.key} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3.5 py-3">
             <div className="flex min-w-0 items-center gap-3">
               <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}>
                 <action.Icon className="h-4.5 w-4.5" />
               </span>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-100">{action.title}</p>
-                <p className="truncate text-xs text-slate-400">{action.detail}</p>
+                <p className="truncate text-sm font-semibold text-slate-900">{action.title}</p>
+                <p className="truncate text-xs text-slate-500">{action.detail}</p>
               </div>
             </div>
             <Link
               href={action.href}
-              className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-bold ${action.tone === "danger" ? "border-rose-400/30 text-rose-400 hover:bg-rose-400/10" : "border-amber-400/30 text-amber-400 hover:bg-amber-400/10"}`}
+              className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-bold ${action.tone === "danger" ? "border-rose-400/30 text-rose-700 hover:bg-rose-400/10" : "border-amber-400/30 text-amber-700 hover:bg-amber-400/10"}`}
             >
               {action.actionLabel}
             </Link>
@@ -358,7 +345,7 @@ export function AttentionList({ actions }: { actions: PulseAction[] }) {
         );
       })}
       {actions.length > 2 && (
-        <button type="button" onClick={() => setExpanded((v) => !v)} className="flex w-full items-center justify-center gap-1 pt-1 text-xs font-semibold text-teal-300 hover:underline">
+        <button type="button" onClick={() => setExpanded((v) => !v)} className="flex w-full items-center justify-center gap-1 pt-1 text-xs font-semibold text-teal-700 hover:underline">
           {expanded ? tt(locale, "අඩුවෙන් පෙන්වන්න", "Show less", "குறைவாகக் காட்டு") : tt(locale, `තව ${actions.length - 2}ක් බලන්න`, `View ${actions.length - 2} more`, `மேலும் ${actions.length - 2} பார்க்க`)}
           <ChevronDownIcon className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
         </button>
@@ -372,15 +359,15 @@ export function AttentionList({ actions }: { actions: PulseAction[] }) {
  * the caller (not rendered empty) when there's nothing genuine to show. */
 export function HighlightsCard({ title, highlights }: { title: string; highlights: { key: string; title: string }[] }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
-      <h2 className="mb-3 text-base font-bold tracking-tight text-slate-100">{title}</h2>
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
+      <h2 className="mb-3 text-base font-bold tracking-tight text-slate-900">{title}</h2>
       <div className="space-y-2">
         {highlights.map((highlight) => (
           <div key={highlight.key} className="flex items-center gap-3 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3.5 py-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-400">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-700">
               <CheckIcon className="h-4 w-4" />
             </span>
-            <p className="text-sm font-semibold text-emerald-200">{highlight.title}</p>
+            <p className="text-sm font-semibold text-emerald-800">{highlight.title}</p>
           </div>
         ))}
       </div>

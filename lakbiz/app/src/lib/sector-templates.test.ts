@@ -14,6 +14,7 @@ import { BUSINESS_TEMPLATES } from "./admin/templates";
 const EXPECTED_SECTORS: SectorId[] = [
   "grocery",
   "pharmacy",
+  "cosmetics",
   "electronics",
   "mobile_shop",
   "electricals",
@@ -22,6 +23,9 @@ const EXPECTED_SECTORS: SectorId[] = [
   "textile",
   "ac_hvac",
   "car_sales",
+  "hardware",
+  "stationery",
+  "wholesale",
 ];
 
 describe("business sector templates", () => {
@@ -59,7 +63,7 @@ describe("business sector templates", () => {
     expect(sectorFeatures("car_sales").vehicles).toBe(true);
     expect(sectorFeatures("car_sales").ac_jobs).toBe(false);
 
-    for (const sectorId of ["grocery", "pharmacy", "electronics", "mobile_shop", "electricals", "spare_parts", "footwear", "textile"] as SectorId[]) {
+    for (const sectorId of ["grocery", "pharmacy", "cosmetics", "electronics", "mobile_shop", "electricals", "spare_parts", "footwear", "textile"] as SectorId[]) {
       expect(sectorFeatures(sectorId).ac_jobs).toBe(false);
       expect(sectorFeatures(sectorId).vehicles).toBe(false);
       expect(sectorFeatures(sectorId).sales).toBe(true);

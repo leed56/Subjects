@@ -54,6 +54,8 @@ describe("Sri Lanka demo catalog normalization", () => {
     expect(product.sellPrice).toBe(250);
     expect(product.costSource).toBe("synthetic_demo");
     expect(product.category).toBe("Biscuits & Crackers");
+    expect(classifyRetailProduct("MUNCHEE Milk Shortcake 200g", "grocery").category).toBe("Biscuits & Crackers");
+    expect(classifyRetailProduct("Vanilla Cake 200g", "grocery").category).toBe("Bread & Buns");
   });
 
   it("parses SPAR public product anchors and prices", () => {

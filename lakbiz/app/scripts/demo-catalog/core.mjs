@@ -255,7 +255,9 @@ export function classifyRetailProduct(name, sector) {
   if (has(/DHAL|LENTIL|CHICKPEA|BEAN|PULSE/)) return { department: "Grocery & Staples", category: "Pulses", subcategory: "Dhal & Pulses" };
   if (has(/SUGAR|SALT|SPICE|CHILLI|CURRY|PEPPER|SEASONING|CINNAMON/)) return { department: "Grocery & Staples", category: "Spices & Seasoning", subcategory: "Staples & Seasoning" };
   if (has(/OIL|COCONUT MILK|COCONUT CREAM/)) return { department: "Grocery & Staples", category: "Oil & Fats", subcategory: "Oil & Coconut Products" };
-  if (has(/BISCUIT|CRACKER|COOKIE/)) return { department: "Packaged Food", category: "Biscuits & Crackers", subcategory: "Biscuits & Crackers" };
+  // CBL identifies Munchee Milk Short Cake as a biscuit despite its cake name:
+  // https://www.cbllk.com/cbl/public/index.php/our-history
+  if (has(/BISCUIT|CRACKER|COOKIE|\bMUNCHEE\s+MILK\s+SHORT\s*CAKE\b/)) return { department: "Packaged Food", category: "Biscuits & Crackers", subcategory: "Biscuits & Crackers" };
   if (has(/NOODLE|PASTA|MACARONI/)) return { department: "Packaged Food", category: "Noodles & Pasta", subcategory: "Noodles & Pasta" };
   if (has(/SAUCE|KETCHUP|MAYONNAISE|CHUTNEY|CONDIMENT/)) return { department: "Packaged Food", category: "Sauces & Condiments", subcategory: "Sauces & Condiments" };
   if (has(/CHIPS|SNACK|MIXTURE|NUT|CHOCOLATE|CANDY|GUM|TOFFEE/)) return { department: "Snacks & Confectionery", category: "Snacks", subcategory: "Snacks & Confectionery" };

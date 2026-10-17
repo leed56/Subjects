@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
@@ -30,6 +30,8 @@ import type { PaymentMethod } from "@/lib/types";
 import { calcInputVat } from "@/lib/vat";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { SupplierStatement } from "@/components/supplier-statement";
 
 type SupplierSection = "directory" | "orders" | "receipts";
 
@@ -43,10 +45,13 @@ export default function SuppliersPage() {
     createPurchaseOrderToCloud,
     receivePurchaseOrderToCloud,
     cancelPurchaseOrderToCloud,
+    pendingPurchaseAction,
+    retryPendingPurchaseOrderToCloud,
     recordSupplierPaymentToCloud,
   } = useAppStore();
   const { t } = useLocale();
   const { canWrite, disabledHint } = useWriteAccess();
+  const { org, orgRole } = useSubscription();
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -86,6 +91,9 @@ export default function SuppliersPage() {
   const [receiveQty, setReceiveQty] = useState<Record<string, number>>({});
   const [savingReceive, setSavingReceive] = useState(false);
   const [cancellingPoId, setCancellingPoId] = useState<string | null>(null);
+  const [purchaseError, setPurchaseError] = useState("");
+  const [checkingPurchase, setCheckingPurchase] = useState(false);
+  const purchasingLock = useRef(false);
 
   const purchaseTotal = useMemo(() => {
     if (!data) return 0;
@@ -245,7 +253,7 @@ export default function SuppliersPage() {
   };
 
   const handleCreatePo = async () => {
-    if (savingPo) return;
+    if (purchasingLock.current || savingPo) return;
     if (!poSupplierId) {
       setMessage(t("sup.select_supplier"));
       return;
@@ -258,16 +266,17 @@ export default function SuppliersPage() {
       return;
     }
     setSavingPo(true);
+    purchasingLock.current = true;
+    setPurchaseError("");
     setMessage("");
+    try {
     const result = await createPurchaseOrderToCloud({
       supplierId: poSupplierId,
       lines,
       relatedJobId: poJobId || undefined,
     });
-    setSavingPo(false);
     if (!result.ok) {
-      setMessage(result.error ?? t("sup.po_failed"));
-      setTimeout(() => setMessage(""), 4000);
+      setPurchaseError(result.error ?? t("sup.po_failed"));
       return;
     }
     setShowPo(false);
@@ -275,15 +284,18 @@ export default function SuppliersPage() {
     setPoJobId("");
     setMessage(t("sup.po_saved"));
     setTimeout(() => setMessage(""), 3000);
+    } catch (error) { setPurchaseError(error instanceof Error ? error.message : t("sup.po_failed")); }
+    finally { purchasingLock.current = false; setSavingPo(false); }
   };
 
   const openReceive = (po: PurchaseOrder) => {
+    setPurchaseError("");
     setReceivingPo(po);
     setReceiveQty({});
   };
 
   const handleReceivePo = async () => {
-    if (!receivingPo || savingReceive) return;
+    if (!receivingPo || savingReceive || purchasingLock.current) return;
     const lines = Object.entries(receiveQty)
       .filter(([, qty]) => qty > 0)
       .map(([productId, qtyReceived]) => ({ productId, qtyReceived }));
@@ -292,33 +304,53 @@ export default function SuppliersPage() {
       return;
     }
     setSavingReceive(true);
+    purchasingLock.current = true;
+    setPurchaseError("");
     setMessage("");
+    try {
     const result = await receivePurchaseOrderToCloud(receivingPo.id, lines);
-    setSavingReceive(false);
     if (!result.ok) {
-      setMessage(result.error ?? t("sup.po_receive_failed"));
-      setTimeout(() => setMessage(""), 4000);
+      setPurchaseError(result.error ?? t("sup.po_receive_failed"));
       return;
     }
     setReceivingPo(null);
     setReceiveQty({});
     setMessage(t("sup.po_receive_saved"));
     setTimeout(() => setMessage(""), 3000);
+    } catch (error) { setPurchaseError(error instanceof Error ? error.message : t("sup.po_receive_failed")); }
+    finally { purchasingLock.current = false; setSavingReceive(false); }
   };
 
   const handleCancelPo = async (po: PurchaseOrder) => {
-    if (cancellingPoId) return;
+    if (cancellingPoId || purchasingLock.current) return;
     if (!confirm(t("sup.po_cancel_confirm"))) return;
     setCancellingPoId(po.id);
+    purchasingLock.current = true;
+    setPurchaseError("");
+    try {
     const result = await cancelPurchaseOrderToCloud(po.id);
-    setCancellingPoId(null);
     if (!result.ok) {
-      setMessage(result.error ?? t("common.save_failed"));
-      setTimeout(() => setMessage(""), 4000);
+      setPurchaseError(result.error ?? t("common.save_failed"));
       return;
     }
     setMessage(t("sup.po_cancelled"));
     setTimeout(() => setMessage(""), 2500);
+    } catch (error) { setPurchaseError(error instanceof Error ? error.message : t("common.save_failed")); }
+    finally { purchasingLock.current = false; setCancellingPoId(null); }
+  };
+
+  const checkPendingPurchase = async () => {
+    if (purchasingLock.current) return;
+    purchasingLock.current = true;
+    setCheckingPurchase(true);
+    setPurchaseError("");
+    try {
+      const result = await retryPendingPurchaseOrderToCloud();
+      if (!result.ok) { setPurchaseError(result.error ?? t("common.save_failed")); return; }
+      setReceivingPo(null); setShowPo(false); setReceiveQty({}); setPoLines({});
+      setMessage("Purchase action confirmed from the server.");
+    } catch (error) { setPurchaseError(error instanceof Error ? error.message : t("common.save_failed")); }
+    finally { purchasingLock.current = false; setCheckingPurchase(false); }
   };
 
   const ledgerEntries = ledgerSupplier
@@ -378,6 +410,7 @@ export default function SuppliersPage() {
           actions={
             <>
               <ProButton href="/stock" variant="secondary">{t("nav.stock")}</ProButton>
+              <ProButton href="/suppliers/invoices" variant="secondary">Delivery invoices</ProButton>
               <Button
                 onClick={openPo}
                 disabled={data.suppliers.length === 0 || data.products.length === 0}
@@ -412,6 +445,13 @@ export default function SuppliersPage() {
         />
 
         <WriteDisabledHint className="mb-5" />
+        {pendingPurchaseAction === true && (
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950" role="status">
+            <p>A purchase action needs confirmation. Check its server result before starting another delivery.</p>
+            <button disabled={checkingPurchase || !canWrite} onClick={() => void checkPendingPurchase()} className="rounded-lg border border-amber-300 bg-white px-3 py-2 font-semibold disabled:opacity-50">{checkingPurchase ? "Checking…" : "Check pending purchase action"}</button>
+          </div>
+        )}
+        {purchaseError && !showPo && !receivingPo && <p role="alert" className="mb-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{purchaseError}</p>}
 
         {message && (
           <div className="mb-5 rounded-[1.25rem] border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900 shadow-sm">
@@ -553,9 +593,11 @@ export default function SuppliersPage() {
         {showPo && (
           <section className="mt-6">
             <ProCard eyebrow="Purchase order" title={t("sup.po_create_title")} action={<ProBadge tone="teal">{formatLkr(poExpectedTotal)}</ProBadge>}>
+              {purchaseError && <p role="alert" className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{purchaseError}</p>}
+              {pendingPurchaseAction === true && <button disabled={checkingPurchase || savingPo} onClick={() => void checkPendingPurchase()} className="mb-3 text-sm font-semibold text-teal-700">{checkingPurchase ? "Checking…" : "Check pending purchase action"}</button>}
               <p className="mb-4 rounded-2xl border border-teal-100 bg-teal-50/70 p-3 text-xs font-semibold text-teal-900">{t("sup.po_hint")}</p>
               <div className="grid gap-3 sm:grid-cols-2">
-                <select value={poSupplierId} onChange={(e) => setPoSupplierId(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
+                <select aria-label="Purchase order supplier" disabled={savingPo || pendingPurchaseAction === true} value={poSupplierId} onChange={(e) => setPoSupplierId(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100">
                   <option value="">{t("sup.select")}</option>
                   {data.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
@@ -580,8 +622,8 @@ export default function SuppliersPage() {
                         {line.qty > 0 && <ProBadge tone="teal">{formatLkr(line.qty * line.unitCost)}</ProBadge>}
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-2">
-                        <input type="number" min={0} placeholder={t("common.qty")} value={line.qty || ""} onChange={(e) => setPoLine(p.id, Number(e.target.value), line.unitCost)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-teal-300" />
-                        <input type="number" min={0} placeholder={t("sup.unit_cost")} value={line.unitCost || ""} onChange={(e) => setPoLine(p.id, line.qty, Number(e.target.value))} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-teal-300" />
+                        <input aria-label={`Order quantity ${p.name}`} disabled={savingPo || pendingPurchaseAction === true} type="number" min={0} step="0.001" placeholder={t("common.qty")} value={line.qty || ""} onChange={(e) => setPoLine(p.id, Number(e.target.value), line.unitCost)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-teal-300" />
+                        <input aria-label={`Order unit cost ${p.name}`} disabled={savingPo || pendingPurchaseAction === true} type="number" min={0} step="0.01" placeholder={t("sup.unit_cost")} value={line.unitCost || ""} onChange={(e) => setPoLine(p.id, line.qty, Number(e.target.value))} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-teal-300" />
                       </div>
                     </div>
                   );
@@ -599,7 +641,7 @@ export default function SuppliersPage() {
                 <button onClick={() => void handleCreatePo()} disabled={savingPo} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">
                   {savingPo ? t("common.saving") : t("common.save")}
                 </button>
-                <button onClick={() => setShowPo(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                <button disabled={savingPo} onClick={() => setShowPo(false)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
                   {t("common.cancel")}
                 </button>
               </div>
@@ -838,9 +880,11 @@ export default function SuppliersPage() {
                   <h3 className="mt-2 text-xl font-bold text-slate-950">{receivingPo.poNo}</h3>
                   <p className="mt-1 text-sm font-semibold text-slate-500">{receivingPo.supplierName}</p>
                 </div>
-                <button onClick={() => setReceivingPo(null)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
+                <button disabled={savingReceive} aria-label="Close receiving" onClick={() => setReceivingPo(null)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
               </div>
               <p className="mt-4 rounded-2xl border border-teal-100 bg-teal-50/70 p-3 text-xs font-semibold text-teal-900">{t("sup.po_receive_hint")}</p>
+              {purchaseError && <p role="alert" className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">{purchaseError}</p>}
+              {pendingPurchaseAction === true && <button disabled={checkingPurchase || savingReceive} onClick={() => void checkPendingPurchase()} className="mt-3 text-left text-sm font-semibold text-teal-700">{checkingPurchase ? "Checking…" : "Check pending purchase action"}</button>}
               <div className="mt-4 flex-1 space-y-3 overflow-y-auto">
                 {receivingPo.lines.map((line) => {
                   const outstanding = Math.max(0, line.qtyOrdered - line.qtyReceived);
@@ -852,6 +896,8 @@ export default function SuppliersPage() {
                         <p className="text-xs font-semibold text-slate-500">{t("sup.po_qty_received")}: {line.qtyReceived}/{line.qtyOrdered}</p>
                       </div>
                       <input
+                        aria-label={`Receive ${line.productName}`}
+                        disabled={savingReceive || pendingPurchaseAction === true}
                         type="number"
                         min={0}
                         max={outstanding}
@@ -872,7 +918,7 @@ export default function SuppliersPage() {
                 >
                   {savingReceive ? t("common.saving") : t("common.save")}
                 </button>
-                <button onClick={() => setReceivingPo(null)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                <button disabled={savingReceive} onClick={() => setReceivingPo(null)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
                   {t("common.cancel")}
                 </button>
               </div>
@@ -880,46 +926,7 @@ export default function SuppliersPage() {
           </div>
         )}
 
-        {ledgerSupplier && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-            <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-white/80 bg-white p-5 shadow-sm shadow-slate-950/20">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-600">{t("cust.ledger")}</p>
-                  <h3 className="mt-2 text-xl font-bold text-slate-950">{ledgerSupplier.name}</h3>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">{t("sup.you_owe_col")}: {formatLkr(ledgerSupplier.payableBalance)}</p>
-                </div>
-                <button onClick={() => setLedgerSupplier(null)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
-              </div>
-              <div className="mt-5 flex-1 overflow-y-auto rounded-2xl border border-slate-200">
-                {ledgerEntries.length === 0 ? (
-                  <div className="p-6"><ProEmptyState title={t("cust.ledger_empty")} /></div>
-                ) : (
-                  <table className="w-full text-left text-sm">
-                    <thead className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3">{t("common.date")}</th>
-                        <th className="px-4 py-3">{t("common.details")}</th>
-                        <th className="px-4 py-3 text-right">{t("bills.amount")}</th>
-                        <th className="px-4 py-3 text-right">{t("cust.balance")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ledgerEntries.map((e, i) => (
-                        <tr key={i} className="border-b last:border-0">
-                          <td className="px-4 py-3 font-semibold text-slate-500">{new Date(e.date).toLocaleDateString("en-LK")}</td>
-                          <td className="px-4 py-3 font-semibold text-slate-700">{e.label}</td>
-                          <td className={`px-4 py-3 text-right font-mono font-bold ${e.amount < 0 ? "text-emerald-700" : "text-slate-800"}`}>{e.amount < 0 ? "−" : "+"}{formatLkr(Math.abs(e.amount))}</td>
-                          <td className="px-4 py-3 text-right font-mono font-bold text-slate-950">{formatLkr(e.balance)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        {ledgerSupplier && <SupplierStatement key={`${org.id}:${ledgerSupplier.id}`} org={org.isAuthenticated && orgRole === "owner" ? org.id ?? undefined : undefined} supplier={ledgerSupplier} entries={ledgerEntries} onClose={() => setLedgerSupplier(null)} />}
       </ProMain>
     </AppShell>
   );

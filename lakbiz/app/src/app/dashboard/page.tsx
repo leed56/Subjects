@@ -25,6 +25,7 @@ import {
   StatusBadge,
   ActionMenu,
 } from "@/components/ui/primitives";
+import { SalesIcon, ReportsIcon, BankingIcon, JobsIcon, StockIcon } from "@/components/ui/icons";
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/ui/overlay";
 import { CallLink, NavigateLink } from "@/components/ui/field-links";
@@ -87,7 +88,7 @@ const ghostLink = "text-xs font-semibold text-teal-700 hover:underline";
  * container, replacing the old dashboard's mix of flat cards and the
  * oversized black/indigo MeterCards. */
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-xl border border-slate-200 bg-white p-4 sm:p-5 ${className}`}>{children}</div>;
+  return <div data-ui="dashboard-panel" className={`workspace-panel ${className}`}>{children}</div>;
 }
 
 /** A single compact, actionable "Needs Attention" row — never a whole card
@@ -309,7 +310,7 @@ export default function DashboardPage() {
     return (
       <AppShell>
         <ProMain>
-          <PageHeader
+          <PageHeader sector={org.sector}
             title={t("dash.tech_title")}
             description={`${dateHeading(locale)} · ${t("dash.tech_subtitle")}`}
           />
@@ -376,7 +377,7 @@ export default function DashboardPage() {
     return (
       <AppShell>
         <ProMain>
-          <PageHeader title={`${dashboardPreset.title} · ${shopName}`} description={dashboardPreset.subtitle} />
+          <PageHeader sector={org.sector} title={`${dashboardPreset.title} · ${shopName}`} description={dashboardPreset.subtitle} />
           <OfflineSyncNotice />
           <EmptyState
             title={dashboardPreset.onboardingTitle}
@@ -412,7 +413,7 @@ export default function DashboardPage() {
     return (
       <AppShell>
         <ProMain>
-          <PageHeader
+          <PageHeader sector={org.sector}
             title={`${dashboardPreset.title} · ${shopName}`}
             description={`${dashboardPreset.subtitle} · ${org.isAuthenticated ? t("dash.cloud_synced") : t("common.saved_browser")}`}
           />
@@ -630,13 +631,13 @@ export default function DashboardPage() {
   return (
     <AppShell>
       <ProMain>
-        <PageHeader
+        <PageHeader sector={org.sector}
           title={`${dashboardPreset.title} · ${shopName}`}
           description={`${dashboardPreset.subtitle} · ${dateHeading(locale)}${org.isAuthenticated ? ` · ${t("dash.cloud_synced")}` : ` · ${t("common.saved_browser")}`}${isReadOnly ? ` · ${t("sub.read_only")}` : ""}`}
           actions={
             <>
               <Link href={dashboardPrimary.href} className={primaryButton}>
-                + {textileNoTransactions
+                {textileNoTransactions
                   ? locale === "si"
                     ? "පළමු රෙදි අලෙවිය සම්පූර්ණ කරන්න"
                     : locale === "ta"
@@ -644,7 +645,7 @@ export default function DashboardPage() {
                       : "Complete first fabric sale"
                   : dashboardPrimary.label}
               </Link>
-              {canSeeJobs && <Link href="/jobs" className={primaryButton}>{t("jobs.new")}</Link>}
+              {canSeeJobs && dashboardPrimary.href !== "/jobs" && <Link href="/jobs" className={primaryButton}>{t("jobs.new")}</Link>}
               <ActionMenu
                 label={t("dash.more")}
                 items={[
@@ -714,7 +715,7 @@ export default function DashboardPage() {
               // real, correctly-computed zeros — meaningless clutter on a
               // dashboard that just finished setup. Show what's actually
               // true instead: operational roll inventory.
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <MetricCard label={tt(locale, "සක්‍රීය Rolls", "Active rolls", "செயலில் உள்ள Rolls")} value={textileRollSummary ? String(textileRollSummary.activeRolls) : "—"} hint={tt(locale, "විකිණීමට ඇති Rolls", "Available rolls", "கிடைக்கும் Rolls")} />
                 <MetricCard label={tt(locale, "මීටර් ශේෂය", "Metre balance", "மீட்டர் இருப்பு")} value={textileRollSummary ? textileRollSummary.metres.toFixed(3) : "—"} hint={tt(locale, "ඉතිරි මීටර්", "Remaining metres", "மீதமுள்ள மீட்டர்கள்")} />
                 <MetricCard label={tt(locale, "යාර්ඩ් ශේෂය", "Yard balance", "யார்டு இருப்பு")} value={textileRollSummary ? textileRollSummary.yards.toFixed(3) : "—"} hint={tt(locale, "ඉතිරි යාර්ඩ්", "Remaining yards", "மீதமுள்ள யார்டுகள்")} />
@@ -726,8 +727,9 @@ export default function DashboardPage() {
                 />
               </div>
             ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className={`grid grid-cols-1 gap-3 sm:grid-cols-3 ${canSeeJobs ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
               <MetricCard
+                icon={<SalesIcon />}
                 label={showAcJobs && canSeeFinancials ? t("dash.today_revenue") : t("dash.today_sales")}
                 value={formatLkr(combinedTodayRevenue)}
                 hint={
@@ -738,10 +740,11 @@ export default function DashboardPage() {
               />
               {canSeeFinancials ? (
                 <MetricCard
+                  icon={<ReportsIcon />}
                   label={t("dash.today_profit")}
                   value={formatLkr(combinedTodayProfit)}
                   hint={combinedTodayRevenue > 0 ? t("dash.kpi_margin").replace("{pct}", String(marginPct)) : "—"}
-                  tone="positive"
+                  tone={combinedTodayProfit < 0 ? "danger" : "positive"}
                 />
               ) : (
                 // Non-financial roles (data_entry/cashier) don't get bank
@@ -750,6 +753,7 @@ export default function DashboardPage() {
                 // real operational number every role can already see on
                 // /stock, so it fills this slot instead.
                 <MetricCard
+                  icon={<StockIcon />}
                   label={t("dash.low_stock")}
                   value={String(stats.lowStockCount)}
                   hint={t("nav.stock")}
@@ -757,12 +761,14 @@ export default function DashboardPage() {
                 />
               )}
               <MetricCard
+                icon={<BankingIcon />}
                 label={t("dash.kpi_payments_received")}
                 value={formatLkr(stats.paymentsReceivedToday)}
                 hint={t("dash.kpi_payments_count").replace("{count}", String(stats.paymentsReceivedCount))}
               />
               {canSeeJobs && (
                 <MetricCard
+                  icon={<JobsIcon />}
                   label={t("dash.kpi_jobs_today")}
                   value={String(stats.todayJobsCount)}
                   hint={t("dash.kpi_jobs_breakdown").replace("{completed}", String(stats.todayJobsCompletedCount)).replace("{remaining}", String(stats.todayJobsRemainingCount))}
@@ -893,13 +899,14 @@ export default function DashboardPage() {
             <SectionHeader
               title={t("dash.performance_title")}
               action={
-                <div className="flex gap-1 rounded-lg border border-slate-200 p-0.5">
+                <div className="flex max-w-36 flex-wrap justify-end gap-1 rounded-lg border border-slate-200 p-0.5 sm:max-w-none">
                   {(["30d", "3m", "6m", "12m"] as TrendPeriod[]).map((p) => (
                     <button
                       key={p}
                       type="button"
                       onClick={() => setTrendPeriod(p)}
-                      className={`rounded-md px-2 py-1 text-xs font-semibold ${trendPeriod === p ? "bg-teal-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}
+                      aria-pressed={trendPeriod === p}
+                      className={`rounded-md px-2 py-1 text-xs font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 ${trendPeriod === p ? "bg-teal-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}
                     >
                       {t(`dash.period_${p}`)}
                     </button>
@@ -911,14 +918,20 @@ export default function DashboardPage() {
               <EmptyState title={t("dash.performance_empty")} />
             ) : (
               <>
-                <div className="flex h-36 items-end gap-1.5">
-                  {trend.map((p) => (
-                    <div key={p.key} className="flex flex-1 flex-col items-center justify-end gap-1">
-                      <div className="flex w-full flex-1 items-end justify-center gap-0.5">
+                <div className="-mx-1 overflow-x-auto px-1 pb-1" tabIndex={trendPeriod === "30d" ? 0 : undefined} aria-label={trendPeriod === "30d" ? t("dash.performance_scroll_hint") : undefined}>
+                  <div className={`flex h-44 items-stretch gap-2 border-b border-slate-100 pt-4 ${trendPeriod === "30d" ? "min-w-[640px] lg:min-w-0" : ""}`}>
+                    {trend.map((p, index) => (
+                    <div
+                      key={p.key}
+                      role="img"
+                      aria-label={`${p.label}: ${t("dash.period_revenue")} ${formatLkr(p.revenue)}${canSeeFinancials ? `, ${t("dash.gross_profit")} ${formatLkr(p.profit)}` : ""}`}
+                      className="flex h-full min-w-0 flex-1 flex-col items-center gap-2"
+                    >
+                      <div className="flex min-h-0 w-full flex-1 items-end justify-center gap-1">
                         <div
-                          title={`${t("dash.today_sales")}: ${formatLkr(p.revenue)}`}
-                          className={canSeeFinancials ? "w-1/2 rounded-t bg-teal-500" : "w-full rounded-t bg-teal-500"}
-                          style={{ height: `${Math.max(2, (p.revenue / trendMax) * 100)}%` }}
+                          title={`${t("dash.period_revenue")}: ${formatLkr(p.revenue)}`}
+                          className={`${canSeeFinancials ? "w-[42%]" : "w-3/5"} rounded-t-md bg-gradient-to-t from-teal-600 to-teal-400 shadow-sm transition-[height] duration-300`}
+                          style={{ height: p.revenue > 0 ? `${Math.max(8, (p.revenue / trendMax) * 100)}%` : 0 }}
                         />
                         {/* Profit bar is financial data — never rendered for
                             a role canSeeFinancials excludes (see the P1
@@ -926,17 +939,18 @@ export default function DashboardPage() {
                         {canSeeFinancials && (
                           <div
                             title={`${t("dash.gross_profit")}: ${formatLkr(p.profit)}`}
-                            className="w-1/2 rounded-t bg-emerald-300"
-                            style={{ height: `${Math.max(2, (p.profit / trendMax) * 100)}%` }}
+                            className="w-[42%] rounded-t-md bg-gradient-to-t from-emerald-400 to-emerald-200 shadow-sm transition-[height] duration-300"
+                            style={{ height: p.profit > 0 ? `${Math.max(8, (p.profit / trendMax) * 100)}%` : 0 }}
                           />
                         )}
                       </div>
-                      <span className="text-[10px] text-slate-400">{p.label}</span>
+                      <span className="whitespace-nowrap text-[10px] text-slate-400">{trendPeriod !== "30d" || index === 0 || index === trend.length - 1 || index % 5 === 0 ? p.label : ""}</span>
                     </div>
                   ))}
+                  </div>
                 </div>
-                <div className="mt-3 flex items-center gap-4 text-xs">
-                  <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-teal-500" />{t("dash.today_sales")}</span>
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+                  <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-teal-500" />{t("dash.period_revenue")}</span>
                   {canSeeFinancials && (
                     <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-emerald-300" />{t("dash.gross_profit")}</span>
                   )}
@@ -945,9 +959,9 @@ export default function DashboardPage() {
                     stat row was previously unconditional, showing them to
                     every role regardless of canSeeFinancials. Only the
                     revenue stat is safe to keep for non-financial roles. */}
-                <div className={`mt-3 grid gap-2 border-t border-slate-100 pt-3 text-sm ${canSeeFinancials ? "grid-cols-3" : "grid-cols-1"}`}>
+                <div className={`mt-3 grid gap-3 border-t border-slate-100 pt-3 text-sm ${canSeeFinancials ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1"}`}>
                   <div>
-                    <p className="text-xs text-slate-500">{t("dash.today_sales")}</p>
+                    <p className="text-xs text-slate-500">{t("dash.period_revenue")}</p>
                     <p className="font-mono font-semibold text-slate-900">{formatLkr(trendRevenueTotal)}</p>
                   </div>
                   {canSeeFinancials && (
