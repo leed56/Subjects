@@ -27,11 +27,12 @@ export function allocateLandedCost(input: LandedCostInput) {
   if (fx <= zero) throw Error("Exchange rate must be greater than zero.");
   const charges = input.charges.reduce((sum, value) => sum + scaled(value, 100, "Shipment charge"), zero);
   const vat = scaled(input.recoverableVat, 100, "Recoverable VAT");
-  const divisor = BigInt(1000000000);
+  const divisor = BigInt(1000000);
   const rows = input.lines.map(line => {
     const quantity = scaled(line.quantity, 1000, "Quantity");
     if (quantity <= zero) throw Error("Shipment quantities must be greater than zero.");
-    const goods = (quantity * scaled(line.unitCost, 100, "Unit cost") * fx + divisor / BigInt(2)) / divisor;
+    const foreignMinor = (quantity * scaled(line.unitCost, 100, "Unit cost") + BigInt(500)) / BigInt(1000);
+    const goods = (foreignMinor * fx + divisor / BigInt(2)) / divisor;
     return { id: line.id, quantity, goods, weight: input.basis === "quantity" ? quantity : goods, share: zero, remainder: zero };
   });
   const weight = rows.reduce((sum, row) => sum + row.weight, zero);

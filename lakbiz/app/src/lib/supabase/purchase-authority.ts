@@ -14,7 +14,8 @@ export async function purchaseAuthority(organizationId: string): Promise<{ enabl
 type Action = { kind: "create"; input: PurchaseOrderInput } | { kind: "receive"; order: PurchaseOrder; lines: PurchaseOrderReceiveLine[] }
   | { kind: "cancel"; orderId: string } | { kind: "resume" };
 type Pending = { version: 1; intent: string; orderId: string; rpc: string; args: Record<string, unknown> };
-type Snapshot = { order: PurchaseOrder; products: { id: string; stockQty: number; buyPrice: number }[]; logs: StockLog[] };
+export type PurchaseSnapshot = { order: PurchaseOrder; products: { id: string; stockQty: number; buyPrice: number }[]; logs: StockLog[] };
+type Snapshot = PurchaseSnapshot;
 export type PurchaseActionResult = { handled: false } | { handled: true; error: string } | { handled: true; snapshot: Snapshot; acknowledge: () => void };
 const key = (org: string, user: string) => `lakbiz:purchase-command:${org}:${user}`;
 
@@ -46,8 +47,10 @@ function prepare(action: Exclude<Action, { kind: "resume" }>, org: string): Pend
   const lines = [...action.lines].sort((a, b) => a.productId.localeCompare(b.productId));
   const receiptLines = lines.map(input => {
     const line = action.order.lines.find(line => line.productId === input.productId);
-    if (!line?.id) throw new Error("Reload this purchase order to obtain its stable receipt lines before receiving.");
-    return { line_id: line.id, qty: input.qtyReceived, expected_received: line.qtyReceived };
+    const lineId = input.lineId ?? line?.id;
+    if (!line || !lineId) throw new Error("Reload this purchase order to obtain its stable receipt lines before receiving.");
+    return { line_id: lineId, qty: input.qtyReceived, expected_received: input.expectedReceived ?? line.qtyReceived,
+      ...(input.allocations ? { allocations: input.allocations.map(allocation => ({ qty: allocation.qty, variant_id: allocation.variantId, lot_id: allocation.lotId, batch_no: allocation.batchNo, expiry_date: allocation.expiryDate, manufactured_date: allocation.manufacturedDate, serial_no: allocation.serialNo, imei: allocation.imei })) } : {}) };
   });
   return { version: 1, orderId: action.order.id, intent: JSON.stringify({ kind: "receive", orderId: action.order.id, lines }), rpc: "receive_purchase_order_atomic",
     args: { p_organization_id: org, p_purchase_order_id: action.order.id, p_receipt_id: crypto.randomUUID(), p_lines: receiptLines } };
@@ -63,7 +66,7 @@ function number(value: unknown): number {
   if (value == null || !Number.isFinite(n)) throw new Error("Invalid quantity in purchasing response. Retry checking the pending action.");
   return n;
 }
-function snapshotFromResponse(value: unknown, org: string, orderId: string): Snapshot {
+export function snapshotFromResponse(value: unknown, org: string, orderId: string): Snapshot {
   const raw = record(value); const po = record(raw.order);
   if (po.organization_id !== org || po.id !== orderId || !Array.isArray(raw.lines) || !Array.isArray(raw.products) || !Array.isArray(raw.logs)
     || !["pending", "partial", "received", "cancelled"].includes(String(po.status))) throw new Error("Purchasing response does not match this organization and order.");
@@ -73,7 +76,8 @@ function snapshotFromResponse(value: unknown, org: string, orderId: string): Sna
       expectedTotal: number(po.expected_total), status: po.status as PurchaseOrder["status"], relatedJobId: po.related_job_id ? String(po.related_job_id) : undefined,
       note: po.note ? String(po.note) : undefined, receivedDate: po.received_date ? String(po.received_date) : undefined,
       lines: raw.lines.map(value => { const line = scoped(value); if (line.purchase_order_id !== orderId || !line.id) throw new Error("Invalid purchase line identity.");
-        return { id: String(line.id), productId: String(line.product_id), productName: String(line.product_name), qtyOrdered: number(line.qty_ordered), qtyReceived: number(line.qty_received), unitCost: number(line.unit_cost) }; }) },
+        if (line.length_unit != null && line.length_unit !== "metre" && line.length_unit !== "yard") throw new Error("Purchase line has an invalid fabric unit. Review the order before receiving.");
+        return { id: String(line.id), productId: String(line.product_id), productName: String(line.product_name), qtyOrdered: number(line.qty_ordered), qtyReceived: number(line.qty_received), unitCost: number(line.unit_cost), lengthUnit: line.length_unit === "metre" || line.length_unit === "yard" ? line.length_unit : undefined }; }) },
     products: raw.products.map(value => { const row = scoped(value); return { id: String(row.id), stockQty: number(row.stock_qty), buyPrice: number(row.buy_price) }; }),
     logs: raw.logs.map(value => { const row = scoped(value); return { id: String(row.id), productId: String(row.product_id), productName: String(row.product_name),
       type: "purchase", qty: number(row.qty), note: row.note ? String(row.note) : undefined, date: String(row.log_date), relatedSupplierId: row.related_supplier_id ? String(row.related_supplier_id) : undefined,
@@ -105,10 +109,16 @@ export async function performPurchaseAction(org: string, user: string, action: A
         if (existing.intent !== intended) return { handled: true, error: "Check the pending purchase action before changing its quantities or starting another order." };
       }
       if (command.args.p_organization_id !== org) throw new Error("Pending request belongs to a different organization.");
-      // Persist before the first mutation; failed storage must never send it.
-      window.localStorage.setItem(key(org, user), JSON.stringify(command));
       const db = createBrowserClient();
       if (!db) throw new Error("Cloud not connected");
+      const createInput = command.rpc === "create_purchase_order_atomic" ? command.args.p_input as PurchaseOrderInput | undefined : undefined;
+      const measuredLines = createInput?.lines?.filter(line => line.lengthUnit) ?? [];
+      if (measuredLines.length) {
+        const unitSupport = await db.from("purchase_order_lines").select("length_unit").eq("organization_id", org).limit(1);
+        if (unitSupport.error) throw new Error("Fabric measurement units are awaiting the purchasing upgrade. Your draft is preserved.");
+      }
+      // Persist before the first mutation; failed storage must never send it.
+      window.localStorage.setItem(key(org, user), JSON.stringify(command));
       const result = await db.rpc(command.rpc, command.args);
       if (result.error) {
         // These database errors guarantee this transaction failed. Unknown
@@ -119,6 +129,7 @@ export async function performPurchaseAction(org: string, user: string, action: A
       const refreshed = await db.rpc("get_purchase_order_authority_snapshot", { p_organization_id: org, p_purchase_order_id: command.orderId });
       if (refreshed.error) return { handled: true, error: `Saved on the server; checking the purchase order failed. Check the pending action again. ${refreshed.error.message}` };
       const snapshot = snapshotFromResponse(refreshed.data, org, command.orderId);
+      if (measuredLines.some(line => snapshot.order.lines.find(saved => saved.productId === line.productId)?.lengthUnit !== line.lengthUnit)) throw new Error("The order was saved but its fabric unit could not be verified. Keep the pending action and contact support.");
       return { handled: true, snapshot, acknowledge: () => window.localStorage.removeItem(key(org, user)) };
     } catch (error) { return { handled: true, error: error instanceof Error ? error.message : "Purchasing failed. Check the pending action before retrying." }; }
   };

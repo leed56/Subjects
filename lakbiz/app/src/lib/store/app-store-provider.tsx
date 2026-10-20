@@ -26,7 +26,7 @@ import { stripFinancialData } from "@/lib/org-role/strip-financials";
 import { getPlan } from "@/lib/subscription/plans";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { saveOrgShopSettings } from "@/lib/supabase/org-settings";
-import { legacySupplierWriteError } from "@/lib/supabase/invoice-settlements";
+import { legacySupplierWriteError, supplierInvoiceAuthority, saveInvoiceBankSettlement, type BankSettlementInput, type InvoiceSettlement } from "@/lib/supabase/invoice-settlements";
 import {
   pushBusinessData,
   syncCustomersSnapshot,
@@ -45,6 +45,7 @@ import {
   deleteBankAccountFromCloud,
   syncBankTransactionSnapshot,
   syncBankTransactionDeleteSnapshot,
+  isManagedBankTransaction,
   syncBankTransferSnapshot,
   syncChequeSnapshot,
   syncChequeStatusSnapshot,
@@ -73,6 +74,8 @@ import {
 } from "@/lib/supabase/sync-watermark";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { hasPendingPurchase, mergePurchaseSnapshot, performPurchaseAction } from "@/lib/supabase/purchase-authority";
+import { receiveShipment, shipmentPending, type ShipmentReceiptInput, type ShipmentSnapshot } from "@/lib/supabase/purchase-shipments";
+import { hasPendingBankCommand, mergeBankSnapshot, performBankCommand, type BankAction } from "@/lib/supabase/bank-authority";
 import { isBrowserOnline, useOnlineStatus } from "@/lib/offline/connectivity";
 import {
   bumpOfflinePendingChange,
@@ -248,6 +251,11 @@ export type AppStoreValue = {
   ) => Promise<{ ok: boolean; error?: string }>;
   pendingPurchaseAction: boolean;
   retryPendingPurchaseOrderToCloud: () => Promise<{ ok: boolean; error?: string }>;
+  receiveShipmentToCloud: (input?: ShipmentReceiptInput) => Promise<{ ok: boolean; error?: string; shipment?: ShipmentSnapshot }>;
+  pendingShipmentAction: boolean;
+  pendingBankAction: boolean;
+  retryPendingBankAction: () => Promise<{ ok: boolean; error?: string }>;
+  recordInvoiceBankSettlementToCloud: (input?: BankSettlementInput) => Promise<{ ok: boolean; error?: string; invoice?: InvoiceSettlement }>;
   recordSupplierPaymentToCloud: (
     supplierId: string,
     amount: number,
@@ -390,6 +398,8 @@ function useAppStoreState(): AppStoreValue {
   const [offlinePendingSync, setOfflinePendingSync] = useState(false);
   const [offlinePendingChangeCount, setOfflinePendingChangeCount] = useState(0);
   const [purchasePendingScope, setPurchasePendingScope] = useState("");
+  const [shipmentPendingScope, setShipmentPendingScope] = useState("");
+  const [bankPendingScope, setBankPendingScope] = useState("");
   const purchaseBusyRef = useRef(false);
   const purchaseScopeRef = useRef("");
   const purchaseScope = `${org.id ?? ""}:${user?.id ?? ""}`;
@@ -397,8 +407,14 @@ function useAppStoreState(): AppStoreValue {
     purchaseScopeRef.current = purchaseScope;
     setPurchasePendingScope(org.id && user?.id && hasPendingPurchase(org.id, user.id) ? purchaseScope : "");
     const refresh = () => setPurchasePendingScope(org.id && user?.id && hasPendingPurchase(org.id, user.id) ? purchaseScope : "");
+    const refreshShipment = () => { try { setShipmentPendingScope(org.id && user?.id && shipmentPending(org.id, user.id) ? purchaseScope : ""); } catch { setShipmentPendingScope(purchaseScope); } };
+    const refreshBank = () => setBankPendingScope(org.id && user?.id && hasPendingBankCommand(org.id, user.id) ? purchaseScope : "");
+    refreshShipment();
+    refreshBank();
     window.addEventListener("storage", refresh);
-    return () => window.removeEventListener("storage", refresh);
+    window.addEventListener("storage", refreshShipment);
+    window.addEventListener("storage", refreshBank);
+    return () => { window.removeEventListener("storage", refresh); window.removeEventListener("storage", refreshShipment); window.removeEventListener("storage", refreshBank); };
   }, [org.id, user?.id, purchaseScope]);
   const [syncConflict, setSyncConflict] = useState<{
     summary: SyncConflictSummary;
@@ -1242,6 +1258,14 @@ function useAppStoreState(): AppStoreValue {
       }
       if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
 
+      if (org.id && org.isAuthenticated) {
+        if (!isOnline) return { ok: false, error: "Connect online to verify supplier account protection." };
+        const authority = await supplierInvoiceAuthority(org.id);
+        if (authority.error) return { ok: false, error: authority.error };
+        if (authority.enabled) return { ok: false, error: "Supplier accounts cannot be deleted while invoice authority is enabled." };
+        if (purchaseScopeRef.current !== `${org.id}:${user?.id ?? ""}` || latestDataRef.current !== data) return { ok: false, error: "The company or business data changed. Reopen the supplier before deleting." };
+      }
+
       const next = deleteSupplier(data, id);
       setData(next);
       latestDataRef.current = next;
@@ -1397,6 +1421,26 @@ function useAppStoreState(): AppStoreValue {
     const result = await tryAtomicPurchasing({ kind: "resume" });
     return result.handled ? result : { ok: false, error: "Atomic purchasing is not enabled." };
   }, [tryAtomicPurchasing]);
+
+  const receiveShipmentToCloud = useCallback(async (input?: ShipmentReceiptInput): Promise<{ ok: boolean; error?: string; shipment?: ShipmentSnapshot }> => {
+    if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured() || !isOnline) return { ok: false, error: "Connect to the cloud to receive this shipment. Your draft is preserved." };
+    if (isReadOnly || !can("write") || !canUseSuppliersModule(orgRole) || !canSeeFinancials || syncConflict) return { ok: false, error: "Shipment receiving requires owner write access and a resolved sync." };
+    if (purchaseBusyRef.current) return { ok: false, error: "A purchasing action is already being checked." };
+    purchaseBusyRef.current = true;
+    const scope = purchaseScope;
+    try {
+      const result = await receiveShipment(org.id, user.id, input);
+      if (purchaseScopeRef.current !== scope || !latestDataRef.current) return { ok: false, error: "The company changed. Reopen the original company to check the pending shipment." };
+      const next = mergePurchaseSnapshot(latestDataRef.current, result.purchase);
+      saveAppData(next, org.id); latestDataRef.current = next; setData(next);
+      result.acknowledge(); setCloudSyncError(null);
+      return { ok: true, shipment: result.shipment };
+    } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Could not check shipment receiving. Retry the pending delivery." }; }
+    finally {
+      purchaseBusyRef.current = false;
+      if (purchaseScopeRef.current === scope) { try { setShipmentPendingScope(shipmentPending(org.id, user.id) ? scope : ""); } catch { setShipmentPendingScope(scope); } }
+    }
+  }, [org.id, org.isAuthenticated, user, isOnline, isReadOnly, can, orgRole, canSeeFinancials, syncConflict, purchaseScope]);
 
   const createPurchaseOrderToCloud = useCallback(
     async (input: PurchaseOrderInput): Promise<{ ok: boolean; error?: string }> => {
@@ -2142,6 +2186,48 @@ function useAppStoreState(): AppStoreValue {
     ],
   );
 
+  const tryAtomicBanking = useCallback(async (action?: BankAction, input?: object): Promise<{ handled: boolean; ok: boolean; error?: string }> => {
+    if (!org.isAuthenticated) return { handled: false, ok: false };
+    if (!org.id || !user || !isOnline || !isSupabaseConfigured()) return { handled: true, ok: false, error: "Connect to the cloud to verify banking before changing balances." };
+    if (purchaseBusyRef.current) return { handled: true, ok: false, error: "Another financial action is being checked." };
+    const scope = purchaseScope; purchaseBusyRef.current = true;
+    try {
+      const authority = await supplierInvoiceAuthority(org.id);
+      if (purchaseScopeRef.current !== scope) throw Error("The company changed. Reopen banking before continuing.");
+      if (authority.error) throw Error(authority.error);
+      if (!authority.enabled) return hasPendingBankCommand(org.id, user.id) || !action ? { handled: true, ok: false, error: "The pending banking action requires the purchasing upgrade." } : { handled: false, ok: false };
+      if (isReadOnly || !can("write") || !canUseBankingModule(orgRole) || !canSeeFinancials || syncConflict) throw Error("Banking requires owner write access and a resolved sync.");
+      const result = await performBankCommand(org.id, user.id, action, input);
+      if (purchaseScopeRef.current !== scope || !latestDataRef.current) throw Error("The company changed. Reopen the original company to check the pending banking action.");
+      const next = mergeBankSnapshot(latestDataRef.current, result.snapshot);
+      saveAppData(next, org.id); latestDataRef.current = next; setData(next); result.acknowledge(); setCloudSyncError(null);
+      return { handled: true, ok: true };
+    } catch (error) { return { handled: true, ok: false, error: error instanceof Error ? error.message : "Could not check banking. Retry the pending action." }; }
+    finally { purchaseBusyRef.current = false; if (purchaseScopeRef.current === scope) setBankPendingScope(hasPendingBankCommand(org.id, user.id) ? scope : ""); }
+  }, [org.isAuthenticated, org.id, user, isOnline, purchaseScope, isReadOnly, can, orgRole, canSeeFinancials, syncConflict]);
+
+  const retryPendingBankAction = useCallback(async () => {
+    const result = await tryAtomicBanking();
+    return result.handled ? result : { ok: false, error: "Atomic banking is unavailable." };
+  }, [tryAtomicBanking]);
+
+  const recordInvoiceBankSettlementToCloud = useCallback(async (input?: BankSettlementInput): Promise<{ ok: boolean; error?: string; invoice?: InvoiceSettlement }> => {
+    if (!org.id || !org.isAuthenticated || !user || !isOnline || !isSupabaseConfigured()) return { ok: false, error: "Connect to the cloud before recording a bank payment." };
+    if (isReadOnly || !can("write") || !canUseBankingModule(orgRole) || !canUseSuppliersModule(orgRole) || !canSeeFinancials || syncConflict) return { ok: false, error: "Recording a bank payment requires owner access and a resolved sync." };
+    if (purchaseBusyRef.current) return { ok: false, error: "Another financial action is being checked." };
+    purchaseBusyRef.current = true; const scope = purchaseScope;
+    try {
+      const result = await saveInvoiceBankSettlement(org.id, user.id, input);
+      if (purchaseScopeRef.current !== scope || !latestDataRef.current) throw Error("The company changed. Reopen the original company to check the pending payment.");
+      if (!latestDataRef.current.suppliers.some(supplier => supplier.id === result.supplier.id)) throw Error("The payment may be saved, but the supplier needs to be refreshed before confirmation.");
+      const bankData = mergeBankSnapshot(latestDataRef.current, { accounts: [result.account], transactions: [result.transaction], transfers: [], cheques: [], deleted_accounts: [] });
+      const next = { ...bankData, suppliers: bankData.suppliers.map(supplier => supplier.id === result.supplier.id ? { ...supplier, payableBalance: result.supplier.payable_balance } : supplier) };
+      saveAppData(next, org.id); latestDataRef.current = next; setData(next); result.acknowledge(); setCloudSyncError(null);
+      return { ok: true, invoice: result.invoice };
+    } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Could not confirm this payment. Check it again." }; }
+    finally { purchaseBusyRef.current = false; }
+  }, [org.id, org.isAuthenticated, user, isOnline, isReadOnly, can, orgRole, canSeeFinancials, syncConflict, purchaseScope]);
+
   const addBankAccountToCloud = useCallback(
     async (
       input: BankAccountInput,
@@ -2152,6 +2238,10 @@ function useAppStoreState(): AppStoreValue {
         return { ok: false, error: "Read-only mode" };
       }
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const atomic = await tryAtomicBanking("account_create", input);
+      if (atomic.handled) return atomic;
+      if (latestDataRef.current !== data) return { ok: false, error: "Banking data changed. Review and try again." };
 
       const prevLen = data.bankAccounts.length;
       const next = addBankAccount(data, input);
@@ -2201,6 +2291,7 @@ function useAppStoreState(): AppStoreValue {
       user,
       scheduleCloudPush,
       refreshOfflinePendingState,
+      tryAtomicBanking,
     ],
   );
 
@@ -2212,6 +2303,10 @@ function useAppStoreState(): AppStoreValue {
         return { ok: false, error: "Read-only mode" };
       }
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const atomic = await tryAtomicBanking("account_delete", { id });
+      if (atomic.handled) return atomic;
+      if (latestDataRef.current !== data) return { ok: false, error: "Banking data changed. Review and try again." };
 
       if (!data.bankAccounts.some((account) => account.id === id)) {
         return { ok: false, error: "Account not found" };
@@ -2259,6 +2354,7 @@ function useAppStoreState(): AppStoreValue {
       user,
       scheduleCloudPush,
       refreshOfflinePendingState,
+      tryAtomicBanking,
     ],
   );
 
@@ -2272,6 +2368,10 @@ function useAppStoreState(): AppStoreValue {
         return { ok: false, error: "Read-only mode" };
       }
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const atomic = await tryAtomicBanking("transaction_create", input);
+      if (atomic.handled) return atomic;
+      if (latestDataRef.current !== data) return { ok: false, error: "Banking data changed. Review and try again." };
 
       const prevLen = data.bankTransactions.length;
       const next = addBankTransaction(data, input);
@@ -2321,17 +2421,23 @@ function useAppStoreState(): AppStoreValue {
       user,
       scheduleCloudPush,
       refreshOfflinePendingState,
+      tryAtomicBanking,
     ],
   );
 
   const deleteBankTransactionToCloud = useCallback(
     async (id: string): Promise<{ ok: boolean; error?: string }> => {
       if (!data) return { ok: false, error: "Not ready" };
+      if (isManagedBankTransaction(id)) return { ok: false, error: "This bank entry belongs to another transaction. Correct it from its original record." };
       if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
       if (isReadOnly || !canUseBankingModule(orgRole)) {
         return { ok: false, error: "Read-only mode" };
       }
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const atomic = await tryAtomicBanking("transaction_reverse", { id });
+      if (atomic.handled) return atomic;
+      if (latestDataRef.current !== data) return { ok: false, error: "Banking data changed. Review and try again." };
 
       const txn = data.bankTransactions.find((row) => row.id === id);
       if (!txn) return { ok: false, error: "Transaction not found" };
@@ -2384,6 +2490,7 @@ function useAppStoreState(): AppStoreValue {
       user,
       scheduleCloudPush,
       refreshOfflinePendingState,
+      tryAtomicBanking,
     ],
   );
 
@@ -2397,6 +2504,10 @@ function useAppStoreState(): AppStoreValue {
         return { ok: false, error: "Read-only mode" };
       }
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const atomic = await tryAtomicBanking("transfer_create", input);
+      if (atomic.handled) return atomic;
+      if (latestDataRef.current !== data) return { ok: false, error: "Banking data changed. Review and try again." };
 
       const prevLen = data.bankTransfers.length;
       const next = addBankTransfer(data, input);
@@ -2446,6 +2557,7 @@ function useAppStoreState(): AppStoreValue {
       user,
       scheduleCloudPush,
       refreshOfflinePendingState,
+      tryAtomicBanking,
     ],
   );
 
@@ -2457,6 +2569,10 @@ function useAppStoreState(): AppStoreValue {
         return { ok: false, error: "Read-only mode" };
       }
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const atomic = await tryAtomicBanking("cheque_create", input);
+      if (atomic.handled) return atomic;
+      if (latestDataRef.current !== data) return { ok: false, error: "Banking data changed. Review and try again." };
 
       const prevLen = data.cheques.length;
       const next = addCheque(data, input);
@@ -2506,6 +2622,7 @@ function useAppStoreState(): AppStoreValue {
       user,
       scheduleCloudPush,
       refreshOfflinePendingState,
+      tryAtomicBanking,
     ],
   );
 
@@ -2521,6 +2638,10 @@ function useAppStoreState(): AppStoreValue {
         return { ok: false, error: "Read-only mode" };
       }
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+
+      const atomic = await tryAtomicBanking("cheque_status", { id: chequeId, status, accountId: bankAccountId, expectedStatus: data.cheques.find(cheque => cheque.id === chequeId)?.status });
+      if (atomic.handled) return atomic;
+      if (latestDataRef.current !== data) return { ok: false, error: "Banking data changed. Review and try again." };
 
       const prev = data.cheques.find((cheque) => cheque.id === chequeId);
       if (!prev || prev.status === status) {
@@ -2569,6 +2690,7 @@ function useAppStoreState(): AppStoreValue {
       user,
       scheduleCloudPush,
       refreshOfflinePendingState,
+      tryAtomicBanking,
     ],
   );
 
@@ -3837,6 +3959,11 @@ function useAppStoreState(): AppStoreValue {
       cancelPurchaseOrderToCloud,
       pendingPurchaseAction: purchasePendingScope === purchaseScope,
       retryPendingPurchaseOrderToCloud,
+      receiveShipmentToCloud,
+      pendingShipmentAction: shipmentPendingScope === purchaseScope,
+      pendingBankAction: bankPendingScope === purchaseScope,
+      retryPendingBankAction,
+      recordInvoiceBankSettlementToCloud,
       recordSupplierPaymentToCloud,
       recordCustomerPaymentToCloud,
       addBankAccountToCloud,
@@ -3900,6 +4027,11 @@ function useAppStoreState(): AppStoreValue {
     purchasePendingScope,
     purchaseScope,
     retryPendingPurchaseOrderToCloud,
+    receiveShipmentToCloud,
+    shipmentPendingScope,
+    bankPendingScope,
+    retryPendingBankAction,
+    recordInvoiceBankSettlementToCloud,
     recordSupplierPaymentToCloud,
     recordCustomerPaymentToCloud,
     saveACJobToCloud,

@@ -9,18 +9,20 @@ const {chromium}=require(process.env.LAKBIZ_QA_PLAYWRIGHT ?? 'playwright');
 const root=path.resolve(import.meta.dirname,'..');
 const out=process.env.LAKBIZ_UI_QA_DIR ?? path.join(os.tmpdir(),'lakbiz-phase1-workflows');
 fs.mkdirSync(out,{recursive:true});
-const routes=['dashboard','customers','workforce','vehicles','teams','assets','expenses','schedule','stock/advanced','stock/advanced/queue','stock/advanced/returns','banking/pos-routing','pulse','stock/imports','stock/transfers','suppliers','suppliers/invoices']
+const routes=['dashboard','customers','workforce','vehicles','teams','assets','expenses','schedule','stock/advanced','stock/advanced/queue','stock/advanced/returns','banking/pos-routing','pulse','stock/imports','stock/imports/shipments','stock/transfers','suppliers','suppliers/invoices']
  .filter(route=>!process.env.LAKBIZ_QA_ROUTES||process.env.LAKBIZ_QA_ROUTES.split(',').includes(route));
 const f='const f=window.fixture;';
 const mutate=`async function mutate(...args){f.calls.push(args);await new Promise(r=>setTimeout(r,80));if(f.rejectMutation)throw Error('Synthetic rejected request');return {ok:false,data:null,error:'Synthetic save failure'}}`;
 const stubs={
+ '@/lib/supabase/purchase-shipments':`${f}export function shipmentPendingAction(){return null}export async function listShipments(){return {items:[{id:'shipment',reference:'SHIP-001',status:'landed'}],hasMore:false}}export async function loadShipment(){return {organization_id:'fixture-org',shipment:{id:'shipment',organization_id:'fixture-org',purchase_order_id:'po',status:'landed',version:1},lines:[{line_id:'line',product_id:'p',product_name:'Fixture fabric',qty:10,received_qty:0}],receipts:[]}}export async function saveShipmentCommand(){throw Error('Synthetic save failure')}`,
+ '@/lib/supabase/purchase-receiving':`export async function loadReceivingCatalogue(){return {enabled:true,lines:[{id:'line',qty_ordered:10,qty_received:0}]}}`,
  '@/lib/supabase/invoice-settlements':`${f}${mutate}export function cashSettlementPending(){return f.pendingCash===true}export async function loadInvoiceSettlement(){return {organization_id:'fixture-org',invoice_id:'invoice',number:'INV-001',invoice_date:'2026-10-16',total_minor:1000,paid_minor:0,payable_balance:10,payments:[],userId:'owner'}}export const saveInvoiceCashSettlement=mutate;export async function loadSupplierStatement(org,supplier,page){if(f.failStatement)throw Error('Statement load failed');return {organization_id:org,supplier_id:supplier,payable_balance:10,opening_minor:0,count:51,page,entries:[{identity:'invoice:invoice',date:'2026-10-17',label:'Invoice INV-001',amount_minor:1000,balance_minor:1000}]}}`,
  '@/lib/supabase/receipt-invoices':`${f}${mutate}export function invoicePending(){return f.pendingInvoice===true}export async function loadInvoiceWorkspace(){if(f.failLoads)throw Error('Synthetic invoice load failure');return {organizationId:'fixture-org',userId:'owner',enabled:true,receipts:[{organization_id:'fixture-org',receipt_id:'receipt',purchase_order_id:'po',received_at:'2026-10-16T10:00:00Z',request_lines:[{line_id:'line',qty:2}]}],invoices:[{id:"invoice",supplier_id:"s",supplier_invoice_no:"INV-001",invoice_date:"2026-10-16",total_minor:1000,input_vat_minor:0}],billed:[]}}export const saveReceiptInvoice=mutate;`,
  '@/lib/supabase/inventory-location-client':`${f}${mutate}export async function loadInventoryLocations(){if(f.failLoads)throw Error('Synthetic load failure');return {organizationId:'fixture-org',locations:[{id:'main',name:'Main stockroom',code:'MAIN',is_default:true,active:true},{id:'branch',name:'Branch',code:'BRANCH',active:true}],balances:[{id:'balance',location_id:'main',product_id:'p',qty_on_hand:10,qty_reserved:0,variant_id:null,lot_id:null}],units:[],transfers:[],reservations:[],enabled:true}}export async function inventoryOperation(...args){await mutate(...args)}export async function createStockLocation(...args){await mutate(...args)}export async function inspectInventoryProduct(){return []}`,
  'next/link':'import React from "react";export default function Link({children,...p}){return <a {...p}>{children}</a>}',
  'next/navigation':'export function useSearchParams(){return new URLSearchParams()}export function useRouter(){return {push(){},replace(){}}}export function usePathname(){return location.pathname}',
  '@/components/shell/app-shell':'export function AppShell({children}){return <div className="min-w-0">{children}</div>}',
- '@/components/auth-provider':'export function useAuth(){return {user:{email:"owner@example.com"},logout:async()=>{}}}',
+ '@/components/auth-provider':'const user={id:"owner",email:"owner@example.com"};export function useAuth(){return {user,logout:async()=>{}}}',
  '@/lib/i18n/locale-provider':`import {translate} from ${JSON.stringify(root+'/src/lib/i18n/translations.ts')};${f}const t=k=>translate(f.locale,k);export function useLocale(){return {locale:f.locale,t}}`,
  '@/lib/subscription/use-can-write':`${f}export function useWriteAccess(){return {canWrite:!f.readOnly,disabledHint:f.readOnly?'Read only':null}}`,
  '@/components/write-disabled-hint':`${f}export function WriteDisabledHint(){return f.readOnly?<p>Read only</p>:null}`,
@@ -56,13 +58,25 @@ try{
  for(const width of [390,768,1440])for(const route of routes){
   const page=await browser.newPage({viewport:{width,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
   const customerData=route==='customers'?{customers:Array.from({length:19},(_,i)=>({id:`customer-${i}`,name:`Customer ${i+1}`,contactType:'individual',phone:`077000${String(i).padStart(4,'0')}`,address:'Colombo',creditBalance:0,creditLimit:10000}))}:{};
-  const purchasingData=route.startsWith('suppliers')?{suppliers:[{id:'s',name:'Fixture supplier',payableBalance:0}],products:[{id:'p',name:'Fixture product',category:'General',sectorId:'ac',condition:'new',customFields:{},stockQty:10,buyPrice:5,sellPrice:10,active:true}],purchaseOrders:[{id:'po',poNo:'PO-001',supplierId:'s',supplierName:'Fixture supplier',date:'2026-10-16',expectedTotal:50,status:'pending',lines:[{id:'line',productId:'p',productName:'Fixture product',qtyOrdered:10,qtyReceived:0,unitCost:5}]}]}:{};
+  const purchasingData=route.startsWith('suppliers')||route==='stock/imports/shipments'?{suppliers:[{id:'s',name:'Fixture supplier',payableBalance:0}],products:[{id:'p',name:'Fixture product',category:'General',sectorId:route==='stock/imports/shipments'?'textile':'ac',condition:'new',customFields:{},stockQty:10,buyPrice:5,sellPrice:10,active:true}],purchaseOrders:[{id:'po',poNo:'PO-001',supplierId:'s',supplierName:'Fixture supplier',date:'2026-10-16',expectedTotal:50,status:'pending',lines:[{id:'line',productId:'p',productName:'Fixture product',qtyOrdered:10,qtyReceived:0,unitCost:5,lengthUnit:'metre'}]}]}:{};
   fixture={route:routes.indexOf(route),locale:'en',data:{...customerData,...purchasingData},calls:[],toasts:[],rejectMutation:true};
   await page.goto(`http://127.0.0.1:${server.address().port}`);await page.waitForTimeout(250);
   assert(!errors.length,`${route}: ${errors.join(';')}`);
   assert(await page.locator('main').count()>0,`${route}: no main`);
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);assert(!overflow,`${route} ${width}: page overflow`);
   await page.screenshot({path:path.join(out,route.replaceAll('/','-')+'-'+width+'.png'),fullPage:true});
+  if(route==='stock/imports/shipments'){
+   await page.getByRole('button',{name:/SHIP-001/}).click();
+   await page.getByLabel('Shipment line').selectOption('line');
+   await page.getByRole('button',{name:'Add roll'}).click();
+   await page.getByLabel('Roll number').fill('QA-ROLL-01');
+   await page.getByLabel('Length (metre)').fill('4.5');
+   await page.getByRole('button',{name:'Confirm fabric receipt'}).click();
+   await page.getByRole('alert').waitFor();
+   assert(await page.getByLabel('Roll number').inputValue()==='QA-ROLL-01','Fabric roll draft lost after failed receipt');
+   assert(await page.getByLabel('Length (metre)').inputValue()==='4.5','Fabric length draft lost after failed receipt');
+   assert(!(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1)),`Fabric receipt ${width}: page overflow`);
+  }
   if(['assets','teams','expenses'].includes(route)){
    const add=page.getByRole('button',{name:route==='assets'?'Add asset':route==='teams'?'Add crew':'Add expense',exact:true}).first();await add.click();
    const dialog=page.getByRole('dialog');await dialog.waitFor();

@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProEmptyState, ProLoadingState, ProMain, ProPageHeader } from "@/components/ui/pro-shell";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { allocateLandedCost } from "@/lib/landed-cost";
+import { listShipments, type ShipmentListItem } from "@/lib/supabase/purchase-shipments";
 
 const money = (value: number) => new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR", maximumFractionDigits: 2 }).format(value);
 const card = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6";
@@ -14,7 +15,25 @@ const field = "mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-whit
 
 export default function ImportsAndLandedCostPage() {
   const { data, ready } = useAppStore();
-  const { orgRole, canSeeFinancials } = useSubscription();
+  const { org, orgRole, canSeeFinancials } = useSubscription();
+  const [shipmentPage, setShipmentPage] = useState(0);
+  const [shipmentResult, setShipmentResult] = useState<{ scope: string; items: ShipmentListItem[]; hasMore: boolean } | null>(null);
+  const [shipmentError, setShipmentError] = useState("");
+  const [shipmentLoading, setShipmentLoading] = useState(false);
+  const [shipmentRefresh, setShipmentRefresh] = useState(0);
+  useEffect(() => { setShipmentPage(0); setShipmentResult(null); setShipmentError(""); }, [org.id]);
+  useEffect(() => {
+    let active = true;
+    if (!org.id || !org.isAuthenticated || orgRole !== "owner" || !canSeeFinancials) return;
+    setShipmentLoading(true); setShipmentError("");
+    void listShipments(org.id, shipmentPage).then(result => {
+      if (active) setShipmentResult({ scope: `${org.id}:${shipmentPage}`, ...result });
+    }).catch(() => {
+      if (active) { setShipmentResult(null); setShipmentError("Shipment history is unavailable. Try again when your connection is restored or purchasing is enabled."); }
+    }).finally(() => { if (active) setShipmentLoading(false); });
+    return () => { active = false; };
+  }, [org.id, org.isAuthenticated, orgRole, canSeeFinancials, shipmentPage, shipmentRefresh]);
+  const shipments = shipmentResult?.scope === `${org.id}:${shipmentPage}` ? shipmentResult : null;
   const [orderId, setOrderId] = useState("");
   const [basis, setBasis] = useState<"value" | "quantity">("value");
   const [costs, setCosts] = useState({ fx: "1", freight: "0", duty: "0", insurance: "0", clearing: "0", vat: "0" });
@@ -66,6 +85,10 @@ export default function ImportsAndLandedCostPage() {
             </>}
           </section>
         </div>
+        <section className={`${card} mt-5`} aria-labelledby="shipment-history-title">
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-teal-700">Purchasing</p><h2 id="shipment-history-title" className="mt-1 text-lg font-bold text-slate-950">Shipment history</h2><p className="mt-1 text-sm text-slate-500">Review the status of your purchase shipments.</p></div><div className="flex gap-2"><Link href="/stock/imports/shipments" className="inline-flex min-h-10 items-center rounded-xl bg-teal-700 px-4 text-sm font-bold text-white">Manage shipments</Link><button type="button" className="min-h-10 rounded-xl border border-slate-200 px-4 text-sm font-bold text-slate-700 disabled:opacity-50" disabled={shipmentLoading || !org.isAuthenticated} onClick={() => setShipmentRefresh(value => value + 1)}>Refresh</button></div></div>
+          {!org.isAuthenticated ? <p className="mt-4 text-sm text-slate-500">Sign in to view shipment history.</p> : shipmentLoading ? <p className="mt-4 text-sm text-slate-500" role="status">Loading shipments…</p> : shipmentError ? <p className="mt-4 rounded-xl bg-amber-50 p-4 text-sm text-amber-900" role="alert">{shipmentError}</p> : shipments?.items.length ? <><div className="mt-4 overflow-x-auto rounded-xl border border-slate-200"><table className="w-full min-w-[560px] text-left text-sm"><thead className="bg-slate-50 text-xs text-slate-600"><tr><th className="px-4 py-3">Reference</th><th className="px-4 py-3">Purchase order</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Currency</th></tr></thead><tbody className="divide-y divide-slate-100">{shipments.items.map(item => <tr key={item.id}><td className="px-4 py-3 font-bold text-slate-900">{item.reference}</td><td className="px-4 py-3 text-slate-600">{data.purchaseOrders.find(po => po.id === item.purchase_order_id)?.poNo ?? "Purchase order"}</td><td className="px-4 py-3"><span className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-bold capitalize text-teal-800">{item.status.replaceAll("_", " ")}</span></td><td className="px-4 py-3 text-slate-600">{item.currency}</td></tr>)}</tbody></table></div><div className="mt-4 flex items-center justify-between gap-3"><button type="button" disabled={shipmentPage === 0} onClick={() => setShipmentPage(page => page - 1)} className="min-h-10 rounded-xl border border-slate-200 px-4 text-sm font-bold disabled:opacity-40">Previous</button><span className="text-xs font-semibold text-slate-500">Page {shipmentPage + 1}</span><button type="button" disabled={!shipments.hasMore} onClick={() => setShipmentPage(page => page + 1)} className="min-h-10 rounded-xl border border-slate-200 px-4 text-sm font-bold disabled:opacity-40">Next</button></div></> : <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">No shipments to show yet.</p>}
+        </section>
       </ProMain>
     </AppShell>
   );

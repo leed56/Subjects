@@ -32,6 +32,7 @@ import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { SupplierStatement } from "@/components/supplier-statement";
+import { purchaseAuthority } from "@/lib/supabase/purchase-authority";
 
 type SupplierSection = "directory" | "orders" | "receipts";
 
@@ -85,7 +86,7 @@ export default function SuppliersPage() {
   const [showPo, setShowPo] = useState(false);
   const [poSupplierId, setPoSupplierId] = useState("");
   const [poJobId, setPoJobId] = useState("");
-  const [poLines, setPoLines] = useState<Record<string, { qty: number; unitCost: number }>>({});
+  const [poLines, setPoLines] = useState<Record<string, { qty: number; unitCost: number; lengthUnit?: "metre" | "yard" }>>({});
   const [savingPo, setSavingPo] = useState(false);
   const [receivingPo, setReceivingPo] = useState<PurchaseOrder | null>(null);
   const [receiveQty, setReceiveQty] = useState<Record<string, number>>({});
@@ -260,7 +261,7 @@ export default function SuppliersPage() {
     }
     const lines = Object.entries(poLines)
       .filter(([, l]) => l.qty > 0)
-      .map(([productId, l]) => ({ productId, qty: l.qty, unitCost: l.unitCost }));
+      .map(([productId, l]) => ({ productId, qty: l.qty, unitCost: l.unitCost, ...(l.lengthUnit ? { lengthUnit: l.lengthUnit } : {}) }));
     if (lines.length === 0) {
       setMessage(t("sup.add_qty"));
       return;
@@ -270,6 +271,11 @@ export default function SuppliersPage() {
     setPurchaseError("");
     setMessage("");
     try {
+    if (lines.some(line => line.lengthUnit)) {
+      if (!org.id || !org.isAuthenticated) throw Error("Connect to the cloud to save fabric measurement units.");
+      const authority = await purchaseAuthority(org.id);
+      if (!authority.enabled || authority.error) throw Error("Fabric measurement units are awaiting purchasing activation. Your draft is preserved.");
+    }
     const result = await createPurchaseOrderToCloud({
       supplierId: poSupplierId,
       lines,
@@ -380,7 +386,7 @@ export default function SuppliersPage() {
   };
 
   const setPoLine = (productId: string, qty: number, unitCost: number) => {
-    setPoLines((prev) => ({ ...prev, [productId]: { qty, unitCost } }));
+    setPoLines((prev) => ({ ...prev, [productId]: { ...prev[productId], qty, unitCost } }));
   };
 
   const openPo = () => {
@@ -411,6 +417,7 @@ export default function SuppliersPage() {
             <>
               <ProButton href="/stock" variant="secondary">{t("nav.stock")}</ProButton>
               <ProButton href="/suppliers/invoices" variant="secondary">Delivery invoices</ProButton>
+              <ProButton href="/suppliers/receiving" variant="secondary">Exact receiving</ProButton>
               <Button
                 onClick={openPo}
                 disabled={data.suppliers.length === 0 || data.products.length === 0}
@@ -625,6 +632,7 @@ export default function SuppliersPage() {
                         <input aria-label={`Order quantity ${p.name}`} disabled={savingPo || pendingPurchaseAction === true} type="number" min={0} step="0.001" placeholder={t("common.qty")} value={line.qty || ""} onChange={(e) => setPoLine(p.id, Number(e.target.value), line.unitCost)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-teal-300" />
                         <input aria-label={`Order unit cost ${p.name}`} disabled={savingPo || pendingPurchaseAction === true} type="number" min={0} step="0.01" placeholder={t("sup.unit_cost")} value={line.unitCost || ""} onChange={(e) => setPoLine(p.id, line.qty, Number(e.target.value))} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold outline-none focus:border-teal-300" />
                       </div>
+                      {p.sectorId === "textile" && <label className="mt-3 block text-xs font-semibold text-slate-600">Fabric length unit<select aria-label={`Fabric length unit ${p.name}`} disabled={savingPo || pendingPurchaseAction === true} className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm" value={poLines[p.id]?.lengthUnit ?? ""} onChange={event => setPoLines(prev => ({ ...prev, [p.id]: { qty: line.qty, unitCost: line.unitCost, lengthUnit: event.target.value === "metre" || event.target.value === "yard" ? event.target.value : undefined } }))}><option value="">Not specified</option><option value="metre">Metres</option><option value="yard">Yards</option></select></label>}
                     </div>
                   );
                 })}

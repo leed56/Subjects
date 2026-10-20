@@ -12,7 +12,7 @@ vi.mock('./client',()=>({createBrowserClient:()=>({
       upsert:(rows:unknown)=>{state.writes.push({table,operation:'upsert',rows});return builder;},
       insert:(rows:unknown)=>{state.writes.push({table,operation:'insert',rows});return builder;},
       delete:()=>{operation='delete';state.writes.push({table,operation,rows:[]});return builder;},
-      then:(resolve:(result:unknown)=>unknown)=>Promise.resolve({data:operation==='select'&&offset===0?(table==='stock_logs'?[{id:'po-receipt:unknown:line'}]:table==='products'?[{id:'existing'}]:[]):[],count:1,error:null}).then(resolve),
+      then:(resolve:(result:unknown)=>unknown)=>Promise.resolve({data:operation==='select'&&offset===0?(table==='stock_logs'?[{id:'po-receipt:unknown:line'}]:table==='bank_transactions'?[{id:'purchase-bank:unknown'},{id:'sale-tender:unknown'}]:table==='products'?[{id:'existing'}]:[]):[],count:1,error:null}).then(resolve),
     };return builder;
   },
   rpc:async(name:string,args:Record<string,unknown>)=>{state.writes.push({table:name,operation:'rpc',rows:args.p_rows});return {data:1,error:null};},
@@ -21,12 +21,31 @@ const data=()=>({...emptyAppData(),purchaseOrders:[{id:'po',poNo:'PO',supplierId
   lines:[{productId:'p',productName:'Product',qtyOrdered:1,qtyReceived:0,unitCost:5}]}],stockLogs:[{id:'po-receipt:known:line',productId:'p',productName:'Product',type:'purchase' as const,qty:1,date:'2026-10-16'}]});
 beforeEach(()=>{state.enabled=true;state.invoiceEnabled=false;state.error=false;state.writes=[];});
 describe('authoritative purchasing snapshot isolation',()=>{
-  it('invoice authority blocks legacy GRN/payment and full snapshots before any stock or payable write',async()=>{
+  it('preserves managed bank ledger entries during snapshot upsert and pruning',async()=>{
+    const snapshot=data();
+    snapshot.bankTransactions=['purchase-bank:known','sale-tender:known','return:known','bank-reversal:known','bank-opening:known','manual'].map(id=>({id,accountId:'account',type:'deposit' as const,amount:1,date:'2026-10-16'}));
+    expect((await pushBusinessData('org',snapshot,{seenGeneration:0})).error).toBeNull();
+    const rows=state.writes.find(row=>row.table==='bank_transactions'&&row.operation==='upsert')?.rows as {id:string}[];
+    expect(rows.map(row=>row.id)).toEqual(['manual']);
+    expect(state.writes.filter(row=>row.table==='bank_transactions'&&row.operation==='delete')).toEqual([]);
+  });
+  it('invoice authority blocks legacy GRN/payment but allows safe background snapshots',async()=>{
     state.invoiceEnabled=true;
     expect(await syncPurchaseSnapshot('org',data(),'grn')).toMatch(/Legacy GRNs/);
     expect(await syncSupplierPaymentSnapshot('org',data(),'payment')).toMatch(/Legacy GRNs/);
-    expect((await pushBusinessData('org',data(),{seenGeneration:0})).error).toMatch(/Legacy GRNs/);
     expect(state.writes).toEqual([]);
+    const snapshot=data();snapshot.suppliers=[{id:'supplier',name:'Supplier',payableBalance:999}];
+    expect((await pushBusinessData('org',snapshot,{seenGeneration:0})).error).toBeNull();
+    expect(state.writes.some(row=>row.table==='save_purchase_supplier_metadata')).toBe(true);
+    expect(state.writes.filter(row=>['purchases','purchase_lines','supplier_payments','suppliers'].includes(row.table))).toEqual([]);
+  });
+  it('enabled invoice authority never overwrites or prunes bank balances and ledger snapshots',async()=>{
+    state.invoiceEnabled=true;
+    const snapshot=data();
+    snapshot.bankAccounts=[{id:'account',bankName:'Bank',accountName:'Account',accountNumber:'123',balance:999}];
+    snapshot.bankTransactions=[{id:'manual',accountId:'account',type:'deposit',amount:5,date:'2026-10-16'}];
+    expect((await pushBusinessData('org',snapshot,{seenGeneration:0})).error).toBeNull();
+    expect(state.writes.filter(row=>['bank_accounts','bank_transactions','bank_transfers','cheques'].includes(row.table))).toEqual([]);
   });
   it('background sync cannot replace order headers, line identities or unknown receipt logs',async()=>{
     const result=await pushBusinessData('org',data(),{seenGeneration:0});

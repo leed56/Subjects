@@ -21,7 +21,7 @@ describe("exact shipment landed cost", () => {
   });
   it("rounds fractional quantity and FX goods once to minor units", () => {
     const result = allocateLandedCost({ ...input, charges: [], exchangeRate: 2.5, lines: [{ id: "a", quantity: 0.125, unitCost: 1 }] });
-    expect(result.goodsMinor).toBe(31); expect(result.inventoryMinor).toBe(31);
+    expect(result.goodsMinor).toBe(33); expect(result.inventoryMinor).toBe(33);
     expect(allocateLandedCost({ ...input, charges: [], lines: [{ id: "half-cent", quantity: 0.5, unitCost: 0.29 }] }).goodsMinor).toBe(15);
     expect(purchaseLineMinor(0.5, 0.29)).toBe(15);
   });

@@ -642,7 +642,7 @@ export function createPurchaseOrder(
   ) return data;
 
   const lines: PurchaseOrder["lines"] = input.lines
-    .map(({ productId, qty, unitCost }) => {
+    .map(({ productId, qty, unitCost, lengthUnit }): PurchaseOrder["lines"][number] | null => {
       const product = data.products.find((p) => p.id === productId);
       if (!product || qty <= 0 || unitCost < 0) return null;
       return {
@@ -651,6 +651,7 @@ export function createPurchaseOrder(
         qtyOrdered: qty,
         qtyReceived: 0,
         unitCost,
+        lengthUnit,
       };
     })
     .filter((l): l is PurchaseOrder["lines"][number] => l !== null);

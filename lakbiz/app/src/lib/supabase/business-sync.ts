@@ -33,7 +33,7 @@ import {
 } from "@/lib/offline/sync-conflict";
 import { localDataWatermark } from "./sync-watermark";
 import { purchaseAuthority } from "./purchase-authority";
-import { legacySupplierWriteError } from "./invoice-settlements";
+import { legacySupplierWriteError, supplierInvoiceAuthority } from "./invoice-settlements";
 
 export type CloudPushResult = {
   error: string | null;
@@ -398,6 +398,7 @@ export async function pullBusinessData(
           qtyOrdered: num(line.qty_ordered),
           qtyReceived: num(line.qty_received),
           unitCost: num(line.unit_cost),
+          lengthUnit: line.length_unit === "metre" || line.length_unit === "yard" ? line.length_unit : undefined,
         }));
 
       return {
@@ -466,6 +467,7 @@ export async function pullBusinessData(
       description: row.description ?? undefined,
       reference: row.reference ?? undefined,
       date: row.txn_date,
+      reversedBy: row.reversed_by ?? undefined,
     })),
     bankTransfers: bankTransfers.map((row) => ({
       id: row.id,
@@ -683,6 +685,9 @@ async function upsertOrgRows(
   rows: Record<string, unknown>[],
 ): Promise<string | null> {
   if (table === "stock_logs") rows = rows.filter(row => !String(row.id).startsWith("po-receipt:"));
+  // These ledger entries belong to their source transactions and must never
+  // be overwritten by an older browser snapshot.
+  if (table === "bank_transactions") rows = rows.filter(row => !isManagedBankTransaction(String(row.id)));
   if (rows.length === 0) return null;
   const supabase = createBrowserClient();
   if (!supabase) return "Supabase not configured";
@@ -690,6 +695,19 @@ async function upsertOrgRows(
   // Large catalogues can contain thousands of rows. Keep every
   // PostgREST JSON request bounded instead of sending one unbounded body.
   const batchSize = 200;
+  if (table === "suppliers") {
+    const org = String(rows[0].organization_id);
+    const authority = await supplierInvoiceAuthority(org);
+    if (authority.error) return authority.error;
+    if (authority.enabled) {
+      if (rows.some(row => row.organization_id !== org)) return "Supplier metadata contains another company.";
+      for (let i = 0; i < rows.length; i += batchSize) {
+        const result = await supabase.rpc("save_purchase_supplier_metadata", { p_organization_id: org, p_rows: rows.slice(i, i + batchSize) });
+        if (result.error) return result.error.message;
+      }
+      return null;
+    }
+  }
   for (let i = 0; i < rows.length; i += batchSize) {
     const { error } = await supabase
       .from(table)
@@ -697,6 +715,10 @@ async function upsertOrgRows(
     if (error) return error.message;
   }
   return null;
+}
+
+export function isManagedBankTransaction(id: string): boolean {
+  return ["purchase-bank:", "sale-tender:", "return:", "bank-reversal:", "bank-opening:"].some(prefix => id.startsWith(prefix));
 }
 
 function customerRowsForOrg(
@@ -904,7 +926,7 @@ async function deleteOrgRowsNotIn(
   if (fetchError) return fetchError.message;
 
   const keep = new Set(keepIds);
-  const toDelete = (rows ?? []).map((row) => row.id).filter((id) => !keep.has(id) && !(table === "stock_logs" && String(id).startsWith("po-receipt:")));
+  const toDelete = (rows ?? []).map((row) => row.id).filter((id) => !keep.has(id) && !(table === "stock_logs" && String(id).startsWith("po-receipt:")) && !(table === "bank_transactions" && isManagedBankTransaction(String(id))));
   if (toDelete.length === 0) return null;
 
   const batchSize = 50;
@@ -1462,11 +1484,14 @@ export async function syncSuppliersSnapshot(
   organizationId: string,
   suppliers: AppData["suppliers"],
 ): Promise<string | null> {
+  const authority = await supplierInvoiceAuthority(organizationId);
+  if (authority.error) return authority.error;
   const upsertErr = await upsertOrgRows(
     "suppliers",
     supplierRowsForOrg(organizationId, suppliers),
   );
   if (upsertErr) return upsertErr;
+  if (authority.enabled) return null;
 
   const supabase = createBrowserClient();
   if (!supabase) return "Supabase not configured";
@@ -1641,6 +1666,7 @@ function purchaseOrderLineRowsFromPurchaseOrder(
     qty_ordered: line.qtyOrdered,
     qty_received: line.qtyReceived,
     unit_cost: line.unitCost,
+    ...(line.lengthUnit ? { length_unit: line.lengthUnit } : {}),
     line_order: index,
   }));
 }
@@ -2047,6 +2073,7 @@ export async function syncBankTransactionDeleteSnapshot(
   txnId: string,
   accountId: string,
 ): Promise<string | null> {
+  if (isManagedBankTransaction(txnId)) return "This bank entry belongs to another transaction. Correct it from its original record.";
   const supabase = createBrowserClient();
   if (!supabase) return "Supabase not configured";
 
@@ -2411,8 +2438,8 @@ export async function pushBusinessData(
 ): Promise<CloudPushResult> {
   const seenGeneration =
     options?.seenGeneration ?? (await fetchOrgSyncGeneration(organizationId));
-  const invoiceError = await legacySupplierWriteError(organizationId);
-  if (invoiceError) return { error: invoiceError, stale: false, generation: seenGeneration };
+  const invoicing = await supplierInvoiceAuthority(organizationId);
+  if (invoicing.error) return { error: invoicing.error, stale: false, generation: seenGeneration };
   const purchasing = await purchaseAuthority(organizationId);
   if (purchasing.error) return { error: purchasing.error, stale: false, generation: seenGeneration };
   const authoritativeProductIds = new Set<string>();
@@ -2814,6 +2841,7 @@ export async function pushBusinessData(
   ];
 
   for (const step of upsertSteps) {
+    if (invoicing.enabled && ["purchases", "supplier_payments", "bank_accounts", "bank_transactions", "bank_transfers", "cheques"].includes(step.table)) continue;
     if (purchasing.enabled && step.table === "purchase_orders") continue;
     if (purchasing.enabled && step.table === "stock_logs") {
       step.rows = step.rows.filter(row => !String(row.id).startsWith("po-receipt:"));
@@ -2872,7 +2900,7 @@ export async function pushBusinessData(
   );
   if (saleErr) return { error: saleErr, stale: false, generation: seenGeneration };
 
-  const purchaseErr = await replaceLinesBatch(
+  const purchaseErr = invoicing.enabled ? null : await replaceLinesBatch(
     "purchase_lines",
     organizationId,
     "purchase_id",
@@ -2960,6 +2988,7 @@ export async function pushBusinessData(
   ];
 
   for (const step of pruneSteps) {
+    if (invoicing.enabled && ["purchases", "supplier_payments", "suppliers", "bank_accounts", "bank_transactions", "bank_transfers", "cheques"].includes(step.table)) continue;
     // Never prune authoritative orders or server receipt audit from a device's
     // older snapshot. Log pruning is disabled wholesale to preserve unknown IDs.
     if (purchasing.enabled && ["purchase_orders", "stock_logs"].includes(step.table)) continue;
