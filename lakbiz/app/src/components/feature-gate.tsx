@@ -27,16 +27,21 @@ export function FeatureGate({ children, feature }: FeatureGateProps) {
     return children;
   }
 
+  const groceryPosRouting = pathname === "/banking/pos-routing" && org.sector === "grocery";
   const si = locale === "si";
   const workspaceBlocked =
     required !== "write" &&
     !sectorAllowsFeature(org.sector, required as keyof PlanFeatures);
-  const title = workspaceBlocked
+  const title = groceryPosRouting
+    ? "Bank-transfer setup isn’t enabled for this Grocery workspace"
+    : workspaceBlocked
     ? si
       ? "මෙම module එක මෙම workspace එකට සක්‍රීය කර නැහැ"
       : "This module isn’t enabled for this workspace"
     : t("sub.upgrade_required");
-  const description = workspaceBlocked
+  const description = groceryPosRouting
+    ? "Sales / POS is ready for cash and card checkout. Open it to record a sale."
+    : workspaceBlocked
     ? si
       ? "ඔබගේ දත්ත සහ දැනට සක්‍රීය අංග වෙනස් නොවේ. මෙම module එක අවශ්‍ය නම් LakBiz පරිපාලකයා අමතන්න."
       : "Your existing data and enabled features are unchanged. Contact your LakBiz administrator if this module should be enabled."
@@ -58,6 +63,14 @@ export function FeatureGate({ children, feature }: FeatureGateProps) {
                 {description}
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
+                {groceryPosRouting && (
+                  <Link
+                    href="/sales"
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl bg-teal-600 px-5 text-sm font-bold text-white shadow-lg shadow-teal-700/15 transition hover:bg-teal-700"
+                  >
+                    Open Sales / POS
+                  </Link>
+                )}
                 {!workspaceBlocked && (
                   <Link
                     href="/settings/plans"
