@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
+import { setBottomBarOccupied } from "@/components/shell/bottom-bar-overlay";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { AdvancedSaleSelector, type AdvancedSaleLineState } from "@/components/sales/advanced-sale-selector";
 import {
@@ -140,6 +141,14 @@ export function AtomicRetailSalesPage() {
         return { product, qty, unitPrice };
       });
   }, [cart, priceOverrides, data, customerId]);
+
+  // Tell the shared mobile bottom nav to step aside only while our own
+  // fixed settlement bar is actually showing (lines non-empty) — see
+  // bottom-bar-overlay.ts.
+  useEffect(() => {
+    setBottomBarOccupied(lines.length > 0);
+    return () => setBottomBarOccupied(false);
+  }, [lines.length]);
 
   const gross = lines.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
   const discountClamped = Math.min(Math.max(0, discount), gross);

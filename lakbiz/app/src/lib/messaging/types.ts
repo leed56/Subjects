@@ -1,14 +1,16 @@
 import type { ACJob } from "@/lib/store/types";
 import type { Sale } from "@/lib/store/types";
 import type { BusinessInfo } from "@/lib/invoice";
+import type { InvoiceLineItem } from "@/lib/job-invoice";
 
-export type MessageChannel = "whatsapp" | "sms" | "api_sms";
+export type MessageChannel = "whatsapp" | "sms" | "api_sms" | "api_whatsapp";
 
 export type MessageTemplateId =
   | "bill_receipt"
   | "sales_quote"
   | "credit_reminder"
   | "payment_thanks"
+  | "job_invoice"
   | "job_quote"
   | "job_deposit"
   | "job_scheduled"
@@ -45,6 +47,15 @@ export type MessageContext =
       type: "ac_job";
       job: ACJob;
       business: BusinessInfo;
+      /** Itemized invoiceable lines, when the caller already has them on
+       * hand (job-invoice-view.tsx does) -- lets the "job_invoice" template
+       * render the real per-line breakdown instead of always falling back
+       * to job.quotedAmount as one flat line. Optional: every other ac_job
+       * caller (Jobs list, Schedule, the service-due panel) doesn't fetch
+       * job_items just to open a status-update message, and the flat-total
+       * fallback in buildJobInvoiceText is still a correct invoice, just
+       * not itemized. */
+      items?: InvoiceLineItem[];
     }
   | {
       type: "custom";

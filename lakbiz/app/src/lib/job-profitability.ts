@@ -78,9 +78,24 @@ export type JobProfitability = {
   totalCost: number;
   revenue: number;
   grossProfit: number;
-  /** null when revenue is 0 — never divide by zero, never show a
-   * misleading 0%/Infinity%. */
+  /** null when revenue is 0, OR when hasCostData is false — see
+   * hasCostData below. Never divide by zero, never show a misleading
+   * 0%/Infinity%, and never show a misleading 100% either. */
   grossMarginPct: number | null;
+  /** Reported bug: a job with quotedAmount set but zero job_items,
+   * zero linked Expenses and no subcontractCost computes totalCost = 0
+   * — mathematically correct, but that 0 means "nobody has entered
+   * cost data yet," not "this job genuinely cost nothing to deliver."
+   * Every caller previously read that as a real 100% margin. False
+   * when no cost source has anything recorded at all (job_items,
+   * linkedExpenses, and — for a contractor job — subcontractCost are
+   * all empty/zero); true the moment any one of them has a real entry,
+   * even if that entry is itself legitimately zero (a conscious "$0
+   * material" line is a real record, not an absence of one). Callers
+   * should treat grossMarginPct as unassessable (show "—", not a
+   * number) whenever this is false, same as the existing revenue===0
+   * null case. */
+  hasCostData: boolean;
 };
 
 /** The only two Expense fields this function needs — kept minimal
@@ -132,9 +147,19 @@ export function computeJobProfitability(
   const totalCost = materialCost + laborCost + otherCost;
   const revenue = job.quotedAmount;
   const grossProfit = revenue - totalCost;
-  const grossMarginPct = revenue > 0 ? (grossProfit / revenue) * 100 : null;
 
-  return { materialCost, laborCost, otherCost, totalCost, revenue, grossProfit, grossMarginPct };
+  // See hasCostData's doc comment on JobProfitability: a job with no
+  // job_items, no linked Expenses and (if contractor-assigned) no
+  // subcontractCost recorded has totalCost = 0 by construction, not by
+  // genuine zero-cost delivery — grossMarginPct must not read as a real
+  // 100% margin in that case.
+  const hasCostData =
+    jobItems.length > 0 ||
+    linkedExpenses.length > 0 ||
+    (job.assigneeType === "contractor" && (job.subcontractCost ?? 0) > 0);
+  const grossMarginPct = revenue > 0 && hasCostData ? (grossProfit / revenue) * 100 : null;
+
+  return { materialCost, laborCost, otherCost, totalCost, revenue, grossProfit, grossMarginPct, hasCostData };
 }
 
 /**

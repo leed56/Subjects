@@ -255,6 +255,7 @@ export type AppStoreValue = {
     amount: number,
     method: PaymentMethod,
     note?: string,
+    bankAccountId?: string,
   ) => Promise<{ ok: boolean; error?: string }>;
   addBankAccountToCloud: (
     input: BankAccountInput,
@@ -1612,6 +1613,7 @@ function useAppStoreState(): AppStoreValue {
       amount: number,
       method: PaymentMethod,
       note?: string,
+      bankAccountId?: string,
     ): Promise<{ ok: boolean; error?: string }> => {
       if (!data) return { ok: false, error: "Not ready" };
       if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
@@ -1619,7 +1621,7 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
 
       const prevPaymentsLen = data.customerPayments.length;
-      const next = recordCustomerPayment(data, customerId, amount, method, note);
+      const next = recordCustomerPayment(data, customerId, amount, method, note, bankAccountId);
       if (next.customerPayments.length === prevPaymentsLen) {
         return { ok: false, error: "Could not record payment" };
       }

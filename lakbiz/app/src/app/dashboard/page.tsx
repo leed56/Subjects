@@ -37,61 +37,21 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { paymentLabel } from "@/lib/i18n/payment";
 import { getDashboardStats } from "@/lib/store/actions";
 import { useAppStore } from "@/lib/store/use-app-store";
-import type { ACJob, Contractor, Sale, Technician } from "@/lib/store/types";
+import type { ACJob, Contractor, Technician } from "@/lib/store/types";
 import { getVatQuarterSummary } from "@/lib/vat";
 import { getIncomeTaxYearSummary } from "@/lib/income-tax";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { canAccessShopRoute } from "@/lib/org-role/permissions";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
 import { computeJobProfitability, isLowMarginJob, type JobLinkedExpense } from "@/lib/job-profitability";
-
-type Locale = "si" | "en";
-type TrendPeriod = "30d" | "3m" | "6m" | "12m";
-type TrendPoint = { key: string; label: string; revenue: number; profit: number };
-
-/**
- * Revenue+profit trend, bucketed daily (30d) or monthly (3/6/12m). A
- * different shape than the Reports page's single-metric daily trend
- * (Phase 14) — kept local to this page rather than forcing that
- * component to support a shape it wasn't built for.
- *
- * `new Date()` is called inside this module-level function, never inline
- * in the component body — matches the codebase's established convention
- * (see Phase 4/5 notes) for keeping render bodies pure.
- */
-function getRevenueTrend(sales: Sale[], period: TrendPeriod, locale: Locale): TrendPoint[] {
-  const now = new Date();
-  if (period === "30d") {
-    return Array.from({ length: 30 }, (_, i) => {
-      const d = new Date(now);
-      d.setDate(d.getDate() - (29 - i));
-      const iso = d.toISOString().slice(0, 10);
-      // Sale.date is a full ISO timestamp (new Date().toISOString() at
-      // creation, see createSale in actions.ts), not a plain YYYY-MM-DD —
-      // startsWith, not ===, matches the convention getDashboardStats
-      // already uses for exactly this reason.
-      const daySales = sales.filter((s) => s.date.startsWith(iso));
-      return {
-        key: iso,
-        label: d.toLocaleDateString(locale === "si" ? "si-LK" : "en-LK", { day: "numeric", month: "short" }),
-        revenue: daySales.reduce((s, x) => s + x.total, 0),
-        profit: daySales.reduce((s, x) => s + x.profit, 0),
-      };
-    });
-  }
-  const months = period === "3m" ? 3 : period === "6m" ? 6 : 12;
-  return Array.from({ length: months }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (months - 1 - i), 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const monthSales = sales.filter((s) => s.date.startsWith(key));
-    return {
-      key,
-      label: d.toLocaleDateString(locale === "si" ? "si-LK" : "en-LK", { month: "short", year: "2-digit" }),
-      revenue: monthSales.reduce((s, x) => s + x.total, 0),
-      profit: monthSales.reduce((s, x) => s + x.profit, 0),
-    };
-  });
-}
+import { localizedDashboardPreset } from "@/lib/sector-dashboard";
+import {
+  fetchSectorOperationalSnapshot,
+  summarizeTextileRolls,
+  type SectorOperationalSnapshot,
+} from "@/lib/supabase/sector-dashboard-client";
+import { buildTextileAttentionActions } from "@/components/dashboard/sector-command-center";
+import { getRevenueTrend, localeTag, type Locale, type TrendPeriod } from "@/lib/revenue-trend";
 
 /** Same assignee-resolution convention as the Schedule page (Phase 7) —
  * a job's "team" is whichever technician or contractor it's assigned to,
@@ -102,8 +62,17 @@ function assigneeName(job: ACJob, technicians: Technician[], contractors: Contra
   return undefined;
 }
 
+/** Small 3-way locale pick for the handful of textile Phase-1 strings below
+ * that aren't (yet) migrated into translations.ts's keyed dictionaries —
+ * shorter than repeating nested ternaries at each call site. */
+function tt(locale: Locale, si: string, en: string, ta: string): string {
+  if (locale === "si") return si;
+  if (locale === "ta") return ta;
+  return en;
+}
+
 function dateHeading(locale: Locale): string {
-  return new Date().toLocaleDateString(locale === "si" ? "si-LK" : "en-LK", {
+  return new Date().toLocaleDateString(localeTag(locale), {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -112,8 +81,6 @@ function dateHeading(locale: Locale): string {
 
 const primaryButton =
   "inline-flex h-9 items-center gap-1.5 rounded-lg bg-teal-600 px-3.5 text-sm font-semibold text-white hover:bg-teal-700";
-const secondaryButton =
-  "inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3.5 text-sm font-medium text-slate-700 hover:bg-slate-50";
 const ghostLink = "text-xs font-semibold text-teal-700 hover:underline";
 
 /** Card shell used throughout — one consistent 10-14px-radius, subtle-border
@@ -198,6 +165,27 @@ export default function DashboardPage() {
     };
   }, [showAcJobs, canSeeFinancials, org.isAuthenticated, org.id]);
 
+  // Textile roll/quarantine/receivable snapshot — same fetch the sector
+  // command centre makes (see sector-command-center.tsx), read here too so
+  // the dashboard's own "Needs Attention" card can report the exact same
+  // exceptions (via buildTextileAttentionActions) instead of a second,
+  // independently-derived — and potentially contradictory — list. Gated
+  // identically to the command centre's own effect.
+  const [textileSnapshot, setTextileSnapshot] = useState<SectorOperationalSnapshot | null>(null);
+  useEffect(() => {
+    if (org.sector !== "textile" || !org.isAuthenticated || !org.id) {
+      setTextileSnapshot(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchSectorOperationalSnapshot(org.id, org.sector, canSeeFinancials).then((result) => {
+      if (!cancelled) setTextileSnapshot(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [canSeeFinancials, org.id, org.isAuthenticated, org.sector]);
+
   if (!ready || !data) {
     return (
       <AppShell>
@@ -244,6 +232,32 @@ export default function DashboardPage() {
   const lowMarginJobs = monthCosted
     .filter((c) => isLowMarginJob(c.profit))
     .sort((a, b) => (a.profit.grossMarginPct ?? 0) - (b.profit.grossMarginPct ?? 0));
+
+  // Today's Jobs — same "quoted revenue, real cost via
+  // computeJobProfitability" basis as monthCosted above, just scoped to
+  // today instead of this month, so the headline Today's Sales/Profit
+  // cards below can fold in AC Jobs revenue for any org with the module
+  // (showAcJobs is a capability gate, not a sector one — this isn't
+  // HVAC-only). Jobs are as much a shop's revenue as product Sales;
+  // these headline cards previously only ever summed data.sales, so a
+  // service-heavy day could show as near-zero here even with real jobs
+  // completed — the correct numbers were several clicks away on /jobs,
+  // /job-costing or the sector command-center card, never at a glance.
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayJobs =
+    showAcJobs && canSeeFinancials
+      ? data.acJobs.filter((j) => j.date.startsWith(todayKey) && j.status !== "cancelled")
+      : [];
+  const todayJobsCosted = jobLinkedExpenseTotals
+    ? todayJobs.map((j) => computeJobProfitability(j, jobItemsByJob.get(j.id) ?? [], jobLinkedExpenseTotals.get(j.id) ?? []))
+    : [];
+  const todayJobsRevenue = todayJobs.reduce((sum, j) => sum + j.quotedAmount, 0);
+  const todayJobsProfit = todayJobsCosted.reduce((sum, p) => sum + p.grossProfit, 0);
+  // Both fall back to the sales-only figures automatically: todayJobs is
+  // already [] whenever showAcJobs/canSeeFinancials is false, so these
+  // combined totals equal the plain sales totals for every non-Jobs org.
+  const combinedTodayRevenue = stats.todaySales + todayJobsRevenue;
+  const combinedTodayProfit = stats.todayProfit + todayJobsProfit;
 
   const handleReset = async () => {
     if (resetting || isReadOnly) return;
@@ -336,39 +350,75 @@ export default function DashboardPage() {
   // all. Switches to the real dashboard automatically the moment any of
   // that exists; nothing to dismiss.
   // ---------------------------------------------------------------------
+  const dashboardPreset = localizedDashboardPreset(org.sector, locale);
+  const dashboardPrimary = canAccessShopRoute(orgRole, dashboardPreset.primaryAction.href)
+    ? dashboardPreset.primaryAction
+    : { href: "/sales", label: t("dash.new_sale") };
   const hasAnyData =
-    data.customers.length > 0 || data.products.length > 0 || data.sales.length > 0 || data.acJobs.length > 0;
+    data.customers.length > 0 ||
+    data.products.length > 0 ||
+    data.sales.length > 0 ||
+    data.acJobs.length > 0 ||
+    data.vehicles.length > 0;
 
-  if (!hasAnyData) {
+  const onboardingLinks =
+    org.sector === "textile"
+      ? ["/stock", "/stock/rolls", "/textile/trade-control", "/sales"]
+      : org.sector === "car_sales"
+        ? ["/vehicles", "/customers", "/vehicles"]
+        : ["/stock", "/customers", dashboardPrimary.href];
+
+  // Textile keeps its compact command centre visible from day one because
+  // physical rolls, cuts and dispatches live in RLS-protected sector tables
+  // rather than the local-first store used by this generic empty check. Its
+  // command centre progressively removes completed setup milestones.
+  if (!hasAnyData && org.sector !== "textile") {
     return (
       <AppShell>
         <ProMain>
-          <PageHeader title={`${t("dash.title")} · ${shopName}`} />
+          <PageHeader title={`${dashboardPreset.title} · ${shopName}`} description={dashboardPreset.subtitle} />
+          <OfflineSyncNotice />
           <EmptyState
-            title={t("dash.onboarding_title")}
-            description={t("dash.onboarding_desc")}
+            title={dashboardPreset.onboardingTitle}
+            description={dashboardPreset.onboardingDescription}
             action={
-              <div className="mx-auto max-w-sm space-y-3 text-left">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700">1</span>
-                  <p className="text-sm text-slate-700">{t("dash.onboarding_step1")}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700">2</span>
-                  <p className="text-sm text-slate-700">{t("dash.onboarding_step2")}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700">3</span>
-                  <p className="text-sm text-slate-700">{t("dash.onboarding_step3")}</p>
-                </div>
-                <div className="flex flex-wrap justify-center gap-2 pt-2">
-                  <Link href="/customers" className={secondaryButton}>{t("cust.add")}</Link>
-                  <Link href="/stock" className={secondaryButton}>{t("dash.add_stock")}</Link>
-                  <Link href="/sales" className={primaryButton}>{t("dash.new_sale")}</Link>
-                </div>
+              <div className="mx-auto max-w-md space-y-2 text-left">
+                {dashboardPreset.onboardingSteps.map((step, index) => (
+                  <Link
+                    key={step}
+                    href={onboardingLinks[index] ?? dashboardPrimary.href}
+                    className="group flex min-h-11 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 transition hover:border-teal-300 hover:bg-teal-50/40"
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700">
+                      {index + 1}
+                    </span>
+                    <span className="flex-1 text-sm font-medium text-slate-700 group-hover:text-slate-950">{step}</span>
+                    <span className="text-sm font-bold text-teal-700" aria-hidden="true">→</span>
+                  </Link>
+                ))}
               </div>
             }
           />
+        </ProMain>
+      </AppShell>
+    );
+  }
+
+  // Textile starts with a focused setup workspace instead of repeating
+  // zero-value sales, finance, trend and attention panels. The live sector
+  // command centre inside OfflineSyncNotice owns these first-run steps and
+  // switches itself to operational roll intelligence as data arrives.
+  if (!hasAnyData && org.sector === "textile") {
+    return (
+      <AppShell>
+        <ProMain>
+          <PageHeader
+            title={`${dashboardPreset.title} · ${shopName}`}
+            description={`${dashboardPreset.subtitle} · ${org.isAuthenticated ? t("dash.cloud_synced") : t("common.saved_browser")}`}
+          />
+          <OfflineSyncNotice />
+          {resetFooter}
+          {resetDialog}
         </ProMain>
       </AppShell>
     );
@@ -381,16 +431,46 @@ export default function DashboardPage() {
   const incomeTax = canSeeFinancials
     ? getIncomeTaxYearSummary(data, new Date(), 0, jobLinkedExpenseTotals ?? new Map())
     : null;
-  const marginPct = stats.todaySales > 0 ? Math.round((stats.todayProfit / stats.todaySales) * 100) : 0;
-  const trend = getRevenueTrend(data.sales, trendPeriod, locale);
+  const marginPct = combinedTodayRevenue > 0 ? Math.round((combinedTodayProfit / combinedTodayRevenue) * 100) : 0;
+  const trend = getRevenueTrend(data.sales, trendPeriod, locale, new Date());
   const trendMax = Math.max(1, ...trend.map((p) => Math.max(p.revenue, p.profit)));
   const trendRevenueTotal = trend.reduce((s, p) => s + p.revenue, 0);
   const trendProfitTotal = trend.reduce((s, p) => s + p.profit, 0);
   const trendAvgMargin = trendRevenueTotal > 0 ? Math.round((trendProfitTotal / trendRevenueTotal) * 100) : 0;
 
+  // Dashboard state model (textile) — distinguishes "master data/rolls
+  // exist but nothing has actually been sold or collected yet" from real
+  // operating activity, so the top KPI row and financial snapshot below
+  // don't show a wall of meaningless zeros for an org that just finished
+  // fixture/onboarding setup. data.sales is the same source SectorCommandCenter
+  // already uses for "Complete the first fabric sale" (see its milestones),
+  // so this stays consistent with that component rather than inventing a
+  // second definition of "no transactions yet".
+  const textileHasCatalog =
+    org.sector === "textile" &&
+    (data.products.some((p) => p.sectorId === "textile" && p.active) || (textileSnapshot?.textileRolls.length ?? 0) > 0);
+  const textileNoTransactions = textileHasCatalog && data.sales.length === 0;
+  // Roll-inventory summary shown instead of the generic (and, before any
+  // sale exists, entirely-zero) sales/profit/payments KPIs — same
+  // metre/yard split SectorCommandCenter already uses, kept separate per
+  // the "never add metres and yards" rule.
+  const textileRollSummary = textileSnapshot ? summarizeTextileRolls(textileSnapshot) : null;
+
   // Needs Attention — only real, currently-true items, most severe first.
   type Alert = { key: string; title: string; description: string; actionLabel: string; actionHref: string; tone: "danger" | "warning" };
   const alerts: Alert[] = [];
+  if (org.sector === "textile" && textileSnapshot) {
+    for (const action of buildTextileAttentionActions(textileSnapshot, locale)) {
+      alerts.push({
+        key: action.key,
+        title: action.title,
+        description: action.detail,
+        actionLabel: t("dash.view"),
+        actionHref: action.href,
+        tone: action.tone,
+      });
+    }
+  }
   if (canSeeJobs && stats.todayJobsUnassignedCount > 0) {
     alerts.push({
       key: "unassigned",
@@ -551,11 +631,19 @@ export default function DashboardPage() {
     <AppShell>
       <ProMain>
         <PageHeader
-          title={`${t("dash.title")} · ${shopName}`}
-          description={`${dateHeading(locale)} · ${t("dash.live_overview")}${org.isAuthenticated ? ` · ${t("dash.cloud_synced")}` : ` · ${t("common.saved_browser")}`}${isReadOnly ? ` · ${t("sub.read_only")}` : ""}`}
+          title={`${dashboardPreset.title} · ${shopName}`}
+          description={`${dashboardPreset.subtitle} · ${dateHeading(locale)}${org.isAuthenticated ? ` · ${t("dash.cloud_synced")}` : ` · ${t("common.saved_browser")}`}${isReadOnly ? ` · ${t("sub.read_only")}` : ""}`}
           actions={
             <>
-              <Link href="/sales" className={primaryButton}>+ {t("dash.new_sale")}</Link>
+              <Link href={dashboardPrimary.href} className={primaryButton}>
+                + {textileNoTransactions
+                  ? locale === "si"
+                    ? "පළමු රෙදි අලෙවිය සම්පූර්ණ කරන්න"
+                    : locale === "ta"
+                      ? "முதல் துணி விற்பனையை முடிக்கவும்"
+                      : "Complete first fabric sale"
+                  : dashboardPrimary.label}
+              </Link>
               {canSeeJobs && <Link href="/jobs" className={primaryButton}>{t("jobs.new")}</Link>}
               <ActionMenu
                 label={t("dash.more")}
@@ -619,13 +707,40 @@ export default function DashboardPage() {
             </>
           }
           metrics={
+            textileNoTransactions ? (
+              // inventory_ready_no_transactions: rolls/products/customers
+              // exist but nothing has been sold yet, so "Today's sales",
+              // "Today's profit" and "Payments received" would all be
+              // real, correctly-computed zeros — meaningless clutter on a
+              // dashboard that just finished setup. Show what's actually
+              // true instead: operational roll inventory.
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <MetricCard label={tt(locale, "සක්‍රීය Rolls", "Active rolls", "செயலில் உள்ள Rolls")} value={textileRollSummary ? String(textileRollSummary.activeRolls) : "—"} hint={tt(locale, "විකිණීමට ඇති Rolls", "Available rolls", "கிடைக்கும் Rolls")} />
+                <MetricCard label={tt(locale, "මීටර් ශේෂය", "Metre balance", "மீட்டர் இருப்பு")} value={textileRollSummary ? textileRollSummary.metres.toFixed(3) : "—"} hint={tt(locale, "ඉතිරි මීටර්", "Remaining metres", "மீதமுள்ள மீட்டர்கள்")} />
+                <MetricCard label={tt(locale, "යාර්ඩ් ශේෂය", "Yard balance", "யார்டு இருப்பு")} value={textileRollSummary ? textileRollSummary.yards.toFixed(3) : "—"} hint={tt(locale, "ඉතිරි යාර්ඩ්", "Remaining yards", "மீதமுள்ள யார்டுகள்")} />
+                <MetricCard
+                  label={tt(locale, "ඉතිරි කැබලි", "Remnants", "மீதிகள்")}
+                  value={textileRollSummary ? String(textileRollSummary.remnants) : "—"}
+                  hint={tt(locale, "සමාලෝචනය කරන්න", "Worth reviewing", "மறுபரிசீலனை செய்யத் தகுந்தது")}
+                  tone={textileRollSummary && textileRollSummary.remnants > 0 ? "warning" : "default"}
+                />
+              </div>
+            ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard label={t("dash.today_sales")} value={formatLkr(stats.todaySales)} hint={`${stats.saleCount} ${t("dash.sales_today")}`} />
+              <MetricCard
+                label={showAcJobs && canSeeFinancials ? t("dash.today_revenue") : t("dash.today_sales")}
+                value={formatLkr(combinedTodayRevenue)}
+                hint={
+                  showAcJobs && canSeeFinancials
+                    ? t("dash.sales_jobs_hint").replace("{sales}", String(stats.saleCount)).replace("{jobs}", String(todayJobs.length))
+                    : `${stats.saleCount} ${t("dash.sales_today")}`
+                }
+              />
               {canSeeFinancials ? (
                 <MetricCard
                   label={t("dash.today_profit")}
-                  value={formatLkr(stats.todayProfit)}
-                  hint={stats.todaySales > 0 ? t("dash.kpi_margin").replace("{pct}", String(marginPct)) : "—"}
+                  value={formatLkr(combinedTodayProfit)}
+                  hint={combinedTodayRevenue > 0 ? t("dash.kpi_margin").replace("{pct}", String(marginPct)) : "—"}
                   tone="positive"
                 />
               ) : (
@@ -655,6 +770,7 @@ export default function DashboardPage() {
                 />
               )}
             </div>
+            )
           }
         />
 
@@ -695,10 +811,33 @@ export default function DashboardPage() {
 
         {/* Financial Snapshot is omitted entirely for non-financial roles —
             without it, the chart alone should take the full row, not sit
-            in a lopsided two-column grid with an empty second track. */}
-        <div className={`grid gap-4 ${canSeeFinancials && vat && incomeTax ? "lg:grid-cols-[1fr_1.3fr]" : ""}`}>
+            in a lopsided two-column grid with an empty second track. It is
+            also replaced (not just hidden) for a textile org that has no
+            genuine financial activity yet: real zero bank/receivable/VAT
+            balances are not useful before any sale or collection exists. */}
+        <div className={`grid gap-4 ${canSeeFinancials && (vat && incomeTax || textileNoTransactions) ? "lg:grid-cols-[1fr_1.3fr]" : ""}`}>
+          {canSeeFinancials && textileNoTransactions ? (
+            <Card className="flex flex-col justify-center gap-2">
+              <SectionHeader title={t("dash.financial_title")} />
+              <Link
+                href="/settings/team"
+                className="flex min-h-11 items-center justify-between rounded-lg border border-dashed border-slate-300 px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:border-teal-300 hover:bg-teal-50/40 hover:text-slate-900"
+              >
+                <span>{tt(locale, "බැංකු සහ බදු තොරතුරු සකසන්න", "Set up banking and tax", "வங்கி மற்றும் வரி தகவலை அமைக்கவும்")}</span>
+                <span aria-hidden="true">→</span>
+              </Link>
+              <p className="text-xs text-slate-400">
+                {tt(
+                  locale,
+                  "පළමු අලෙවියෙන් සහ එකතු කිරීමෙන් පසු මෙම කොටස ස්වයංක්‍රීයව සක්‍රීය වේ.",
+                  "This section activates automatically once the first sale and collection exist.",
+                  "முதல் விற்பனை மற்றும் வசூலிப்பு நடந்தவுடன் இந்தப் பகுதி தானாகவே செயல்படும்.",
+                )}
+              </p>
+            </Card>
+          ) : null}
           {/* Financial Snapshot — compact, VAT/tax no longer dominant. */}
-          {canSeeFinancials && vat && incomeTax && (
+          {canSeeFinancials && vat && incomeTax && !textileNoTransactions && (
             <Card>
               <SectionHeader title={t("dash.financial_title")} />
               <div className="grid grid-cols-2 gap-3">

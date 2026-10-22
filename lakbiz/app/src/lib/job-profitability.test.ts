@@ -215,6 +215,43 @@ describe("computeJobProfitability", () => {
     expect(profit.laborCost).toBe(0);
   });
 
+  describe("hasCostData / no-cost-data-yet vs genuinely-zero-cost (reported bug)", () => {
+    it("reports hasCostData: false and a null grossMarginPct for a quoted job with no items, expenses, or subcontractCost -- not a misleading 100%", () => {
+      const job = makeJob({ quotedAmount: 100000 });
+      const profit = computeJobProfitability(job, [], []);
+
+      expect(profit.totalCost).toBe(0);
+      expect(profit.hasCostData).toBe(false);
+      expect(profit.grossMarginPct).toBeNull();
+    });
+
+    it("reports hasCostData: true the moment a job_item exists, even one whose lineTotal is itself 0 (a real recorded entry, not an absence of one)", () => {
+      const job = makeJob({ quotedAmount: 100000 });
+      const items: JobItem[] = [makeItem({ itemType: "part", lineTotal: 0 })];
+      const profit = computeJobProfitability(job, items, []);
+
+      expect(profit.hasCostData).toBe(true);
+      expect(profit.grossMarginPct).toBeCloseTo(100, 5);
+    });
+
+    it("reports hasCostData: true for a contractor job once subcontractCost is recorded, even with no job_items/expenses", () => {
+      const job = makeJob({ quotedAmount: 100000, assigneeType: "contractor", subcontractCost: 20000 });
+      const profit = computeJobProfitability(job, [], []);
+
+      expect(profit.hasCostData).toBe(true);
+      expect(profit.grossMarginPct).toBeCloseTo(80, 5);
+    });
+
+    it("reports hasCostData: true the moment a linked Expense exists, even with no job_items", () => {
+      const job = makeJob({ quotedAmount: 100000 });
+      const expenses: JobLinkedExpense[] = [{ category: "parking", amount: 1000 }];
+      const profit = computeJobProfitability(job, [], expenses);
+
+      expect(profit.hasCostData).toBe(true);
+      expect(profit.grossMarginPct).toBeCloseTo(99, 5);
+    });
+  });
+
   it("produces a negative grossProfit (and negative margin %) when cost exceeds revenue, without clamping to zero", () => {
     const job = makeJob({ quotedAmount: 10000 });
     const items: JobItem[] = [makeItem({ itemType: "part", lineTotal: 15000 })];
@@ -247,6 +284,14 @@ describe("isLowMarginJob", () => {
     const job = makeJob({ quotedAmount: 0 });
     const items: JobItem[] = [makeItem({ itemType: "part", lineTotal: 5000 })];
     const profit = computeJobProfitability(job, items, []);
+    expect(profit.grossMarginPct).toBeNull();
+    expect(isLowMarginJob(profit)).toBe(false);
+  });
+
+  it("never flags a quoted job with no cost data entered yet -- its grossMarginPct is null (not a real 100%), so it can't read as low margin either", () => {
+    const job = makeJob({ quotedAmount: 100000 });
+    const profit = computeJobProfitability(job, [], []);
+    expect(profit.hasCostData).toBe(false);
     expect(profit.grossMarginPct).toBeNull();
     expect(isLowMarginJob(profit)).toBe(false);
   });

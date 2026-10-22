@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { SignOutButton } from "@/components/sign-out-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { LOCALE_NAMES, nextLocale } from "@/lib/i18n/translations";
 
 export function AdminNav() {
   const pathname = usePathname();
@@ -57,10 +58,10 @@ export function AdminNav() {
           </Link>
           <button
             type="button"
-            onClick={() => setLocale(locale === "si" ? "en" : "si")}
+            onClick={() => setLocale(nextLocale(locale))}
             className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"
           >
-            {t("nav.lang")}
+            {LOCALE_NAMES[nextLocale(locale)]}
           </button>
           {displayEmail && (
             <span

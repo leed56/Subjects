@@ -10,6 +10,7 @@ const ACCENTS: Record<string, string> = {
   electronics: "border-sky-300 bg-sky-50 ring-sky-500",
   electricals: "border-amber-300 bg-amber-50 ring-amber-500",
   spare_parts: "border-slate-300 bg-slate-50 ring-slate-500",
+  textile: "border-rose-300 bg-rose-50 ring-rose-500",
   ac_hvac: "border-cyan-300 bg-cyan-50 ring-cyan-500",
   car_sales: "border-violet-300 bg-violet-50 ring-violet-500",
 };

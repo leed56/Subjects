@@ -12,6 +12,7 @@ const ACCENTS: Record<string, string> = {
   spare_parts: "bg-slate-100 text-slate-700",
   ac_hvac: "bg-cyan-100 text-cyan-700",
   car_sales: "bg-violet-100 text-violet-700",
+  textile: "bg-rose-100 text-rose-700",
 };
 
 interface SectorCardProps {

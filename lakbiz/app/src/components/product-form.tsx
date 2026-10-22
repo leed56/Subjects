@@ -20,6 +20,9 @@ function unitsForSector(sectorId: SectorId): string[] {
   if (sectorId === "grocery") {
     return ["pcs", "g", "kg", "ml", "L", "pack", "bottle", "tin", "bag", "box"];
   }
+  if (sectorId === "textile") {
+    return ["m", "yd", "roll", "pcs", "bundle", "kg"];
+  }
   return ["pcs", "kg", "m", "box", "unit", "set"];
 }
 
@@ -37,7 +40,7 @@ const emptyForm = (sectorId: SectorId = "grocery"): FormState => ({
   sellPrice: 0,
   stockQty: 0,
   reorderLevel: 5,
-  unit: "pcs",
+  unit: sectorId === "textile" ? "m" : "pcs",
   active: true,
   notes: "",
   sectorCustom: Object.fromEntries(

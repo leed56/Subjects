@@ -28,6 +28,8 @@ export function OfflineBanner() {
 
   return (
     <div
+      role={hasOfflinePlan ? "status" : "alert"}
+      aria-live="polite"
       className={`border-b px-4 py-2 text-center text-sm ${
         hasOfflinePlan
           ? "border-amber-200 bg-amber-50 text-amber-900"

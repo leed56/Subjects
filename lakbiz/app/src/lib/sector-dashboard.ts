@@ -1,6 +1,6 @@
 import type { SectorId } from "@/lib/types";
 
-export type DashboardLocale = "en" | "si";
+export type DashboardLocale = "en" | "si" | "ta";
 
 export type SectorDashboardPreset = {
   titleEn: string;
@@ -11,8 +11,8 @@ export type SectorDashboardPreset = {
   onboardingTitleSi: string;
   onboardingDescriptionEn: string;
   onboardingDescriptionSi: string;
-  onboardingStepsEn: [string, string, string];
-  onboardingStepsSi: [string, string, string];
+  onboardingStepsEn: string[];
+  onboardingStepsSi: string[];
   primaryAction: { href: string; labelEn: string; labelSi: string };
 };
 
@@ -108,6 +108,19 @@ const PRESETS: Record<SectorId, SectorDashboardPreset> = {
     onboardingStepsSi: ["පාවහන් ස්ටයිල් එක් කරන්න", "ප්‍රමාණ සහ වර්ණ තොගය එක් කරන්න", "බිල් කිරීම ආරම්භ කර වේගයෙන් අලෙවි වන ප්‍රමාණ බලන්න"],
     primaryAction: { href: "/stock", labelEn: "Add footwear", labelSi: "පාවහන් එක් කරන්න" },
   },
+  textile: {
+    titleEn: "Textile trading operations",
+    titleSi: "රෙදි වෙළඳ මෙහෙයුම්",
+    subtitleEn: "Roll stock, measured sales, wholesale customers, supplier flow and credit exposure.",
+    subtitleSi: "Roll තොගය, මිනුම් අලෙවිය, තොග පාරිභෝගිකයින්, සැපයුම් සහ ණය පාලනය.",
+    onboardingTitleEn: "Open your textile counter with real roll control",
+    onboardingTitleSi: "නිවැරදි Roll පාලනය සමඟ රෙදි වෙළඳසැල ආරම්භ කරන්න",
+    onboardingDescriptionEn: "Set up the four records needed for Pettah-style wholesale rolls and retail measured cuts.",
+    onboardingDescriptionSi: "Pettah ආකාරයේ තොග Roll අලෙවිය සහ සිල්ලර මිනුම් කැපීම් සඳහා අවශ්‍ය වාර්තා හතර සකසන්න.",
+    onboardingStepsEn: ["Add fabric styles and selling units", "Receive the first physical roll", "Configure wholesale customer terms", "Create the first fabric sale"],
+    onboardingStepsSi: ["රෙදි වර්ග සහ අලෙවි ඒකක එක් කරන්න", "පළමු භෞතික Roll එක ලබාගන්න", "තොග පාරිභෝගික කොන්දේසි සකසන්න", "පළමු රෙදි අලෙවිය සාදන්න"],
+    primaryAction: { href: "/sales", labelEn: "New fabric sale", labelSi: "නව රෙදි අලෙවිය" },
+  },
   ac_hvac: {
     titleEn: "HVAC operations",
     titleSi: "HVAC මෙහෙයුම්",
@@ -130,8 +143,8 @@ const PRESETS: Record<SectorId, SectorDashboardPreset> = {
     onboardingTitleSi: "ඔබේ පළමු වාහන තොග වාර්තාව සාදන්න",
     onboardingDescriptionEn: "Add vehicles with chassis identity and selling details, then add customers and sales activity.",
     onboardingDescriptionSi: "චැසි හඳුනාගැනීම සහ අලෙවි තොරතුරු සමඟ වාහන එක් කර පාරිභෝගික හා අලෙවි ක්‍රියාකාරකම් සකස් කරන්න.",
-    onboardingStepsEn: ["Add vehicle stock", "Record vehicle/customer details", "Track enquiry, sale and finance activity"],
-    onboardingStepsSi: ["වාහන තොගය එක් කරන්න", "වාහන/පාරිභෝගික තොරතුරු සටහන් කරන්න", "විමසීම්, අලෙවිය සහ මූල්‍ය ක්‍රියාකාරකම් අනුගමනය කරන්න"],
+    onboardingStepsEn: ["Add a vehicle with chassis identity", "Record the customer and enquiry", "Complete the first vehicle sale"],
+    onboardingStepsSi: ["චැසි හඳුනාගැනීම සමඟ වාහනයක් එක් කරන්න", "පාරිභෝගිකයා සහ විමසීම සටහන් කරන්න", "පළමු වාහන අලෙවිය සම්පූර්ණ කරන්න"],
     primaryAction: { href: "/vehicles", labelEn: "Add vehicle", labelSi: "වාහනයක් එක් කරන්න" },
   },
 };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDownIcon, MoreIcon, SearchIcon, FilterIcon } from "@/components/ui/icons";
 
 type PageHeaderProps = {
@@ -100,6 +101,7 @@ type MetricCardProps = {
   hint?: string;
   icon?: ReactNode;
   tone?: "default" | "positive" | "warning" | "danger";
+  className?: string;
 };
 
 const METRIC_TONE: Record<NonNullable<MetricCardProps["tone"]>, string> = {
@@ -109,19 +111,19 @@ const METRIC_TONE: Record<NonNullable<MetricCardProps["tone"]>, string> = {
   danger: "text-rose-700",
 };
 
-export function MetricCard({ label, value, hint, icon, tone = "default" }: MetricCardProps) {
+export function MetricCard({ label, value, hint, icon, tone = "default", className = "" }: MetricCardProps) {
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.045)]">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">{label}</p>
+    <div className={`min-w-0 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:p-5 sm:shadow-[0_8px_30px_rgba(15,23,42,0.045)] ${className}`}>
+      <div className="flex items-start justify-between gap-2 sm:items-center sm:gap-3">
+        <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-400 sm:text-[11px]">{label}</p>
         {icon && (
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 text-slate-400 ring-1 ring-inset ring-slate-100">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-50 text-slate-400 ring-1 ring-inset ring-slate-100 sm:h-9 sm:w-9 sm:rounded-xl">
             {icon}
           </span>
         )}
       </div>
-      <p className={`mt-2.5 text-2xl font-bold tracking-[-0.025em] ${METRIC_TONE[tone]}`}>{value}</p>
-      {hint && <p className="mt-1.5 text-xs leading-5 text-slate-500">{hint}</p>}
+      <p className={`mt-2 break-words text-xl font-bold leading-tight tracking-[-0.025em] sm:mt-2.5 sm:text-2xl ${METRIC_TONE[tone]}`}>{value}</p>
+      {hint && <p className="mt-1 text-[11px] leading-4 text-slate-500 sm:mt-1.5 sm:text-xs sm:leading-5">{hint}</p>}
     </div>
   );
 }
@@ -287,7 +289,7 @@ export function Tabs({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(tab.value)}
-            className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium transition ${
+            className={`min-h-11 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium transition ${
               active
                 ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200/70"
                 : "text-slate-500 hover:text-slate-800"
@@ -371,7 +373,7 @@ export function IconButton({
       title={label}
       onClick={onClick}
       disabled={disabled}
-      className={`flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     >
       {icon}
     </button>
@@ -385,64 +387,170 @@ export type ActionMenuItem = {
   disabled?: boolean;
 };
 
+const ACTION_MENU_WIDTH = 192; // px, matches the menu's w-48
+
+/**
+ * Reported: opening the "..." menu on Customers (and, by the same shared
+ * component, Bills/Stock/Jobs/Banking/Teams/Assets/Dashboard) did nothing
+ * visible -- the click *was* registering (aria-expanded flipped) but the
+ * menu itself never appeared. Root cause: this component used to render
+ * its dropdown as `position: absolute` inside the row it belongs to, and
+ * every one of those rows sits inside a table wrapper with
+ * `overflow-x-auto` (DataTable's own scroll container, sometimes a second
+ * one on the row itself). Setting overflow-x to a non-visible value forces
+ * the browser to also compute overflow-y as auto, per the CSS Overflow
+ * spec -- so that ancestor became a real (if invisible, scrollbar-less at
+ * a glance) scroll clipping box, and the dropdown's painted content past
+ * the row's own height got clipped by it instead of floating over the
+ * table like it was designed to.
+ *
+ * Fixed by rendering the dropdown through a portal straight onto
+ * document.body, positioned with `fixed` coordinates read off the trigger
+ * button's own getBoundingClientRect() -- it now floats above every
+ * ancestor's overflow/clipping and stacking context entirely, the same
+ * pattern any table-safe popover needs.
+ *
+ * That first pass still shipped this menu at z-50, which is exactly the
+ * bug again one layer up: ActionMenu is also opened *from inside* the
+ * Job Detail Drawer (Drawer/Dialog render at z-[80], overlay.tsx), so the
+ * portal painted the dropdown correctly but stacked underneath the
+ * drawer's own panel -- same symptom the reporter saw ("nothing appears")
+ * for a different reason. z-[110] clears every overlay in the app today
+ * (Drawer/Dialog 80, sync-conflict 70, MessageComposer/mobile nav 60,
+ * global-search/toast 100), so this menu now always wins regardless of
+ * what it was opened from.
+ */
 export function ActionMenu({ items, label = "Actions" }: { items: ActionMenuItem[]; label?: string }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
+
+    const updatePosition = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setCoords({
+        top: rect.bottom + 8,
+        left: Math.min(
+          Math.max(8, rect.right - ACTION_MENU_WIDTH),
+          window.innerWidth - ACTION_MENU_WIDTH - 8,
+        ),
+      });
+    };
+    updatePosition();
+
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
     document.addEventListener("mousedown", onClick);
     document.addEventListener("keydown", onKey);
+    // capture:true -- a table's own overflow-x-auto wrapper is a common
+    // ancestor scroll container, and only capture-phase scroll listeners
+    // fire for scrolling inside it (it doesn't bubble like window scroll).
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
     return () => {
       document.removeEventListener("mousedown", onClick);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
     };
   }, [open]);
 
   return (
-    <div ref={ref} className="relative inline-block text-left">
+    <>
       <button
+        ref={buttonRef}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={label}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
       >
         <MoreIcon className="h-4.5 w-4.5" />
       </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.14)]"
-        >
-          {items.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              role="menuitem"
-              disabled={item.disabled}
-              onClick={() => {
-                setOpen(false);
-                item.onSelect();
-              }}
-              className={`block w-full px-3.5 py-2.5 text-left text-sm transition disabled:opacity-40 ${
-                item.tone === "danger"
-                  ? "text-rose-600 hover:bg-rose-50"
-                  : "text-slate-700 hover:bg-slate-50 hover:text-slate-950"
-              }`}
+      {open && coords && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="menu"
+              style={{ top: coords.top, left: coords.left, width: ACTION_MENU_WIDTH }}
+              className="fixed z-[110] overflow-hidden rounded-xl border border-slate-200 bg-white py-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.14)]"
             >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
+              {items.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  role="menuitem"
+                  disabled={item.disabled}
+                  onClick={() => {
+                    setOpen(false);
+                    item.onSelect();
+                  }}
+                  className={`block min-h-11 w-full px-3.5 py-2.5 text-left text-sm transition disabled:opacity-40 ${
+                    item.tone === "danger"
+                      ? "text-rose-600 hover:bg-rose-50"
+                      : "text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+
+/** Shared page-count control — "1-50 of 1,230 · 50 per page" with
+ * First/Prev/Page N of M/Next/Last. Originally built once for Stock
+ * Control (as a page-local component); Bills reuses it verbatim rather
+ * than growing its own copy, so any future page that also needs
+ * pagination has one implementation to reach for instead of a third
+ * hand-rolled version. */
+export function Pagination({
+  page,
+  totalPages,
+  start,
+  end,
+  total,
+  pageSize,
+  itemLabel = "items",
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  start: number;
+  end: number;
+  total: number;
+  pageSize: number;
+  itemLabel?: string;
+  onPageChange: (page: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-sm text-slate-600 shadow-[0_6px_20px_rgba(15,23,42,0.035)]">
+      <p>
+        <span className="font-semibold text-slate-900">{start}–{end}</span> of {total.toLocaleString()} {itemLabel}
+        <span className="ml-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">· {pageSize} per page</span>
+      </p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button type="button" disabled={page <= 1} onClick={() => onPageChange(1)} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">First</button>
+        <button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))} className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">←</button>
+        <span className="min-w-[92px] text-center text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Page {page} / {totalPages}</span>
+        <button type="button" aria-label="Next page" disabled={page >= totalPages} onClick={() => onPageChange(Math.min(totalPages, page + 1))} className="flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">→</button>
+        <button type="button" disabled={page >= totalPages} onClick={() => onPageChange(totalPages)} className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-teal-200 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-35">Last</button>
+      </div>
     </div>
   );
 }

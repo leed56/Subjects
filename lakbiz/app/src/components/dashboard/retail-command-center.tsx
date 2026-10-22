@@ -14,17 +14,19 @@ import {
   StockIcon,
   SuppliersIcon,
 } from "@/components/ui/icons";
-import { formatLkr } from "@/lib/format";
+import { formatLkr, formatLkrCompact } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { AppData } from "@/lib/store/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import {
   buildRetailDashboardIntelligence,
+  type DashboardPeriod,
   type RetailDashboardIntelligence,
   type RetailLotSnapshot,
   type RetailSector,
 } from "@/lib/dashboard/retail-intelligence";
 import { fetchRetailDashboardLots } from "@/lib/supabase/retail-dashboard-client";
+import { NEAR_EXPIRY_DAYS } from "@/lib/dashboard/pharmacy-config";
 
 const copy = {
   en: {
@@ -38,19 +40,19 @@ const copy = {
     batchControl: "Batch control",
     suppliers: "Suppliers",
     todaySales: "Today's sales",
+    vsYesterday: "vs yesterday",
     transactions: "Transactions",
     averageBasket: "Average basket",
     activeSkus: "Active SKUs",
     lowStock: "Low stock",
     outOfStock: "Out of stock",
-    nearExpiry: "Near expiry",
+    nearExpiry: `Near expiry (≤${NEAR_EXPIRY_DAYS}d)`,
     stockValue: "Stock cost value",
     sellValue: "Retail stock value",
-    thirtyDaySales: "30-day sales",
-    thirtyDayProfit: "30-day gross profit",
+    grossProfit: "Gross profit",
     margin: "Gross margin",
     performance: "Sales performance",
-    performanceHint: "Actual recorded revenue over the last seven days",
+    performanceHint: "Actual recorded revenue for the selected period; daily bars always show the last 7 days",
     attention: "Needs attention",
     attentionClear: "No urgent inventory issues are currently detected.",
     pharmacyControl: "Batch & expiry control",
@@ -81,9 +83,19 @@ const copy = {
     unitsSold: "units sold",
     inStock: "in stock",
     noSales: "No recorded sales yet",
+    // Distinct from noSales: transactions exist (Sales Performance / period
+    // totals are non-zero) but none of them carry line-item detail, so
+    // nothing can be ranked by product. Saying "no recorded sales" here
+    // would contradict the sales total sitting right next to this panel —
+    // see the pharmacy-dashboard audit's Top Movers/Sales Performance bug.
+    noLineDetail: "Sales are recorded, but item-level detail isn't available for this period",
     noRows: "Nothing to show yet",
     lotUnavailable: "Batch intelligence is temporarily unavailable; core inventory remains available.",
+    loadingBatchData: "Loading batch & expiry data…",
     operationalHealth: "Inventory readiness",
+    allClear: "All clear",
+    needsReview: "Needs review",
+    needsDisposal: "Needs disposal",
   },
   si: {
     pharmacyEyebrow: "මෙහෙයුම් වැඩබිම",
@@ -96,19 +108,19 @@ const copy = {
     batchControl: "බැච් පාලනය",
     suppliers: "සැපයුම්කරුවන්",
     todaySales: "අද විකුණුම්",
+    vsYesterday: "ඊයේට වඩා",
     transactions: "ගනුදෙනු",
     averageBasket: "සාමාන්‍ය බිල්පත",
     activeSkus: "සක්‍රීය SKU",
     lowStock: "අඩු තොග",
     outOfStock: "තොග අවසන්",
-    nearExpiry: "කල් ඉකුත් වීමට ළඟ",
+    nearExpiry: `කල් ඉකුත් වීමට ළඟ (≤${NEAR_EXPIRY_DAYS} දින)`,
     stockValue: "තොග පිරිවැය",
     sellValue: "සිල්ලර තොග වටිනාකම",
-    thirtyDaySales: "දින 30 විකුණුම්",
-    thirtyDayProfit: "දින 30 දළ ලාභය",
+    grossProfit: "දළ ලාභය",
     margin: "දළ ලාභ ප්‍රතිශතය",
     performance: "විකුණුම් කාර්යසාධනය",
-    performanceHint: "පසුගිය දින හතේ සටහන් වූ සැබෑ විකුණුම්",
+    performanceHint: "තෝරාගත් කාල පරිච්ඡේදය සඳහා සැබෑ විකුණුම්; දෛනික තීරු සැමවිටම පසුගිය දින 7 පෙන්වයි",
     attention: "අවධානය අවශ්‍යයි",
     attentionClear: "හදිසි තොග ගැටලු නොපෙනේ.",
     pharmacyControl: "බැච් සහ කල් ඉකුත් පාලනය",
@@ -139,9 +151,14 @@ const copy = {
     unitsSold: "ඒකක විකිණී ඇත",
     inStock: "තොගයේ",
     noSales: "තවම විකුණුම් සටහන් නැත",
+    noLineDetail: "විකුණුම් සටහන් වී ඇත, නමුත් මෙම කාලය සඳහා අයිතම-මට්ටමේ විස්තර නොමැත",
     noRows: "තවම දත්ත නැත",
     lotUnavailable: "බැච් තොරතුරු තාවකාලිකව ලබාගත නොහැක. මූලික තොග දත්ත ක්‍රියාත්මකයි.",
+    loadingBatchData: "බැච් සහ කල් ඉකුත් දත්ත පූරණය වෙමින්…",
     operationalHealth: "තොග සූදානම",
+    allClear: "සියල්ල පැහැදිලිය",
+    needsReview: "සමාලෝචනය අවශ්‍යයි",
+    needsDisposal: "ඉවත් කිරීම අවශ්‍යයි",
   },
 } as const;
 
@@ -155,7 +172,22 @@ function Surface({ children, className = "" }: { children: ReactNode; className?
   );
 }
 
-function KpiCard({ label, value, hint, tone = "default", icon }: { label: string; value: string; hint?: string; tone?: KpiTone; icon: ReactNode }) {
+/** Real vs. previous-period comparison only — never rendered for a metric
+ * this codebase can't actually compute historically. Today's Sales can
+ * (yesterday's total is just another `data.sales` filter); Active SKUs and
+ * Low Stock currently can't (Product/StockLog carry no history of past
+ * active-flag or stock-level state), so they don't get a `trendPct` prop
+ * rather than showing an invented number. */
+function TrendBadge({ pct }: { pct: number }) {
+  const up = pct >= 0;
+  return (
+    <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${up ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+      {up ? "▲" : "▼"} {Math.abs(pct).toFixed(0)}%
+    </span>
+  );
+}
+
+function KpiCard({ label, value, hint, tone = "default", icon, fullValue, trendPct, href }: { label: string; value: string; hint?: string; tone?: KpiTone; icon: ReactNode; fullValue?: string; trendPct?: number | null; href?: string }) {
   const tones: Record<KpiTone, string> = {
     default: "border-slate-200 bg-white text-slate-950",
     teal: "border-teal-200/80 bg-teal-50/75 text-slate-950",
@@ -164,15 +196,47 @@ function KpiCard({ label, value, hint, tone = "default", icon }: { label: string
     navy: "border-slate-800 bg-[#101d30] text-white",
   };
   const iconTone = tone === "navy" ? "bg-white/10 text-teal-300" : tone === "warning" ? "bg-amber-100 text-amber-700" : tone === "danger" ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-600";
-  return (
-    <div className={`min-w-0 rounded-2xl border p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] ${tones[tone]}`}>
+  // Danger-tone cards (blocked batches, expired lots) are the ones an
+  // owner needs to see first, not just eventually notice by their color —
+  // a stronger shadow, a visible ring and a quiet pulsing dot on the icon
+  // pull the eye there before the routine cards next to it.
+  const elevation = tone === "danger" ? "shadow-[0_14px_34px_rgba(225,29,72,0.18)] ring-1 ring-rose-300/70" : "shadow-[0_8px_24px_rgba(15,23,42,0.04)]";
+  // Only some KPI cards land somewhere real (see call sites for which
+  // route each one actually filters to) — a card that isn't clickable
+  // renders as a plain `<div>`, never a `<Link>` with nowhere honest to go.
+  const interactive = href ? "transition hover:-translate-y-0.5 hover:shadow-[0_16px_38px_rgba(15,23,42,0.1)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500" : "";
+  const content = (
+    <>
       <div className="flex items-start justify-between gap-3">
         <p className={`text-[11px] font-bold uppercase tracking-[0.13em] ${tone === "navy" ? "text-slate-400" : "text-slate-500"}`}>{label}</p>
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${iconTone}`}>{icon}</span>
+        <span className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${iconTone}`}>
+          {icon}
+          {tone === "danger" && (
+            <span className="absolute -right-1 -top-1 flex h-3 w-3" aria-hidden="true">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-500 opacity-60" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-rose-500" />
+            </span>
+          )}
+        </span>
       </div>
-      <p className="mt-4 truncate text-[1.65rem] font-semibold tracking-[-0.045em] tabular-nums">{value}</p>
+      {/* `title` carries the full, unabbreviated figure (formatLkr) so a
+          compact/abbreviated `value` (formatLkrCompact) is never the only
+          place the exact number exists — see docs on the "Stock Cost
+          Value" truncation bug this replaced. `truncate` stays as a safety
+          net for labels this abbreviation scheme doesn't anticipate, not
+          as the primary defense against clipping. */}
+      <div className="mt-4 flex items-center gap-2">
+        <p className="truncate text-[1.65rem] font-semibold tracking-[-0.045em] tabular-nums" title={fullValue}>{value}</p>
+        {trendPct != null && <TrendBadge pct={trendPct} />}
+      </div>
       {hint && <p className={`mt-1 text-xs ${tone === "navy" ? "text-slate-400" : "text-slate-500"}`}>{hint}</p>}
-    </div>
+    </>
+  );
+  const className = `relative block min-w-0 rounded-2xl border p-4 ${elevation} ${interactive} ${tones[tone]}`;
+  return href ? (
+    <Link href={href} className={className}>{content}</Link>
+  ) : (
+    <div className={className}>{content}</div>
   );
 }
 
@@ -188,14 +252,62 @@ function SectionTitle({ title, hint, action }: { title: string; hint?: string; a
   );
 }
 
-function SalesTrend({ intel, canSeeFinancials, label }: { intel: RetailDashboardIntelligence; canSeeFinancials: boolean; label: string }) {
+const PERIOD_OPTIONS: { value: Exclude<DashboardPeriod, { custom: unknown }>; labelEn: string; labelSi: string }[] = [
+  { value: "7d", labelEn: "Last 7 days", labelSi: "පසුගිය දින 7" },
+  { value: "30d", labelEn: "Last 30 days", labelSi: "පසුගිය දින 30" },
+  { value: "this_week", labelEn: "This week", labelSi: "මෙම සතිය" },
+  { value: "this_month", labelEn: "This month", labelSi: "මෙම මාසය" },
+  { value: "last_month", labelEn: "Last month", labelSi: "පසුගිය මාසය" },
+];
+
+/** Real date-range control for Sales Performance / Owner Financial
+ * Snapshot — both were hardcoded to a rolling 30-day window with no way
+ * to change it. Each option also carries its own "vs. previous period of
+ * equal length" comparison (see resolvePeriodRange in
+ * retail-intelligence.ts) — this_week -> week-over-week, this_month/
+ * last_month -> month-over-month. A true year-over-year comparison (same
+ * period, prior year) isn't wired to its own preset yet; flagging that as
+ * a fast-follow rather than building it into this pass silently. */
+function PeriodSelector({ period, onChange, locale }: { period: DashboardPeriod; onChange: (period: DashboardPeriod) => void; locale: "si" | "en" | "ta" }) {
+  return (
+    <select
+      value={typeof period === "string" ? period : "30d"}
+      onChange={(event) => onChange(event.target.value as DashboardPeriod)}
+      className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-500"
+    >
+      {PERIOD_OPTIONS.map((option) => (
+        <option key={option.value} value={option.value}>
+          {locale === "si" ? option.labelSi : option.labelEn}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function SalesTrend({ intel, canSeeFinancials }: { intel: RetailDashboardIntelligence; canSeeFinancials: boolean }) {
   const max = Math.max(1, ...intel.trend.map((point) => point.revenue));
   return (
     <div className="px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-medium text-slate-500">{label}</p>
-          <p className="mt-1 text-3xl font-semibold tracking-[-0.045em] text-slate-950">{formatLkr(intel.periodSales)}</p>
+          {/* Was a hardcoded "30-day sales" string — now reflects whatever
+              period the selector next to the section title actually
+              picked. */}
+          <p className="text-xs font-medium text-slate-500">{intel.periodLabel}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <p className="text-3xl font-semibold tracking-[-0.045em] text-slate-950">{formatLkr(intel.periodSales)}</p>
+            {intel.periodChangePct != null && (
+              <span className="flex items-center gap-1.5">
+                <TrendBadge pct={intel.periodChangePct} />
+                {/* Different screens compare growth on different bases (this
+                    rolling window vs. a calendar-month figure elsewhere) —
+                    spelling out what this badge is measured against avoids
+                    two correct numbers looking like they contradict each
+                    other. */}
+                <span className="text-[11px] font-medium text-slate-400">{intel.periodComparisonLabel}</span>
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex gap-5 text-right">
           <div>
@@ -212,15 +324,30 @@ function SalesTrend({ intel, canSeeFinancials, label }: { intel: RetailDashboard
       </div>
       <div className="flex h-44 items-end gap-2 sm:gap-3" role="img" aria-label="Seven-day sales chart">
         {intel.trend.map((point) => {
-          const height = point.revenue > 0 ? Math.max(8, (point.revenue / max) * 100) : 3;
+          // A genuinely zero-revenue day used to render as the same ~3%
+          // sliver as a real-but-tiny sale — indistinguishable from "no
+          // data yet" at a glance. Zero now gets its own dashed-outline
+          // placeholder and an explicit "0" label instead of a filled bar.
+          const isZero = point.revenue <= 0;
+          const height = isZero ? 10 : Math.max(8, (point.revenue / max) * 100);
           return (
             <div key={point.key} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-2">
               <div className="group relative flex h-32 w-full items-end justify-center rounded-xl bg-slate-50 px-1 ring-1 ring-inset ring-slate-100">
-                <div
-                  className="w-full max-w-10 rounded-lg bg-teal-500/90 shadow-[0_6px_18px_rgba(13,148,136,0.18)] transition-[height]"
-                  style={{ height: `${height}%` }}
-                  title={`${point.label}: ${formatLkr(point.revenue)}`}
-                />
+                {isZero ? (
+                  <div
+                    className="flex w-full max-w-10 items-start justify-center rounded-lg border border-dashed border-slate-300 bg-slate-100/60"
+                    style={{ height: `${height}%` }}
+                    title={`${point.label}: ${formatLkr(0)}`}
+                  >
+                    <span className="mt-1 text-[9px] font-bold text-slate-400">0</span>
+                  </div>
+                ) : (
+                  <div
+                    className="w-full max-w-10 rounded-lg bg-teal-500/90 shadow-[0_6px_18px_rgba(13,148,136,0.18)] transition-[height]"
+                    style={{ height: `${height}%` }}
+                    title={`${point.label}: ${formatLkr(point.revenue)}`}
+                  />
+                )}
               </div>
               <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{point.label}</span>
             </div>
@@ -231,7 +358,7 @@ function SalesTrend({ intel, canSeeFinancials, label }: { intel: RetailDashboard
   );
 }
 
-function AttentionPanel({ sector, intel, text }: { sector: RetailSector; intel: RetailDashboardIntelligence; text: (typeof copy)["en"] | (typeof copy)["si"] }) {
+function AttentionPanel({ sector, intel, text, lotsLoading }: { sector: RetailSector; intel: RetailDashboardIntelligence; text: (typeof copy)["en"] | (typeof copy)["si"]; lotsLoading: boolean }) {
   const rows = sector === "pharmacy"
     ? [
         { key: "expired", count: intel.expiredLotCount, title: text.expired, href: "/stock/advanced", tone: "rose" },
@@ -250,19 +377,38 @@ function AttentionPanel({ sector, intel, text }: { sector: RetailSector; intel: 
     <Surface className="overflow-hidden">
       <SectionTitle title={text.attention} />
       <div className="space-y-2 p-4 sm:p-5">
-        {visible.length === 0 ? (
+        {sector === "pharmacy" && lotsLoading ? (
+          // The pharmacy rows here (expired/quarantine/near-expiry) come
+          // from the same async lots fetch as ExpiryControl. Showing
+          // "all clear" while that fetch is still in flight would be a
+          // false negative on the exact panel this whole audit exists to
+          // make trustworthy — a loading state beats a guessed empty one.
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+            <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-slate-400" />
+            <p className="text-sm text-slate-500">{text.loadingBatchData}</p>
+          </div>
+        ) : visible.length === 0 ? (
           <div className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700"><CheckIcon className="h-4.5 w-4.5" /></span>
             <p className="pt-1 text-sm leading-6 text-emerald-900">{text.attentionClear}</p>
           </div>
         ) : visible.map((row) => {
           const dot = row.tone === "rose" ? "bg-rose-500" : row.tone === "amber" ? "bg-amber-500" : row.tone === "teal" ? "bg-teal-500" : "bg-slate-400";
+          // "rose" rows (expired lots, quarantine/recall) are the ones that
+          // must be scanned first — a plain grey row with a colored dot
+          // reads the same as every other row until you read the text.
+          // Give them a visibly different card, not just a different dot.
+          const isUrgent = row.tone === "rose";
+          const rowStyle = isUrgent
+            ? "border-rose-200 bg-rose-50/50 shadow-[0_6px_18px_rgba(225,29,72,0.1)] hover:border-rose-300 hover:bg-rose-50"
+            : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/70";
+          const badgeStyle = isUrgent ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-700";
           return (
-            <Link key={row.key} href={row.href} className="group flex items-center gap-3 rounded-xl border border-slate-200 px-3.5 py-3 transition hover:border-slate-300 hover:bg-slate-50/70">
+            <Link key={row.key} href={row.href} className={`group flex items-center gap-3 rounded-xl border px-3.5 py-3 transition ${rowStyle}`}>
               <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dot}`} />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{row.title}</span>
-              <span className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold tabular-nums text-slate-700">{row.count}</span>
-              <ChevronRightIcon className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500" />
+              <span className={`min-w-0 flex-1 truncate text-sm font-medium ${isUrgent ? "text-rose-950" : "text-slate-700"}`}>{row.title}</span>
+              <span className={`rounded-lg px-2 py-1 text-xs font-bold tabular-nums ${badgeStyle}`}>{row.count}</span>
+              <ChevronRightIcon className={`h-4 w-4 transition group-hover:translate-x-0.5 ${isUrgent ? "text-rose-300 group-hover:text-rose-500" : "text-slate-300 group-hover:text-slate-500"}`} />
             </Link>
           );
         })}
@@ -299,7 +445,9 @@ function Movers({ intel, text }: { intel: RetailDashboardIntelligence; text: (ty
     <Surface className="overflow-hidden">
       <SectionTitle title={text.topMovers} hint={text.topMoversHint} action={<Link href="/reports" className="text-xs font-semibold text-teal-700 hover:text-teal-800">{text.viewAll}</Link>} />
       <div className="divide-y divide-slate-100 px-5 sm:px-6">
-        {intel.topMovers.length === 0 ? <p className="py-6 text-sm text-slate-500">{text.noSales}</p> : intel.topMovers.slice(0, 6).map((item, index) => (
+        {intel.topMovers.length === 0 ? (
+          <p className="py-6 text-sm text-slate-500">{intel.periodTransactions > 0 ? text.noLineDetail : text.noSales}</p>
+        ) : intel.topMovers.slice(0, 6).map((item, index) => (
           <div key={item.productId} className="flex items-center gap-3 py-3.5">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xs font-bold text-slate-500">{index + 1}</span>
             <div className="min-w-0 flex-1">
@@ -324,8 +472,12 @@ function ReorderQueue({ intel, text }: { intel: RetailDashboardIntelligence; tex
     <Surface className="overflow-hidden">
       <SectionTitle title={text.replenish} hint={text.replenishHint} action={<Link href="/stock" className="text-xs font-semibold text-teal-700 hover:text-teal-800">{text.viewAll}</Link>} />
       <div className="divide-y divide-slate-100 px-5 sm:px-6">
+        {/* /stock filters by name/SKU text, not by id — a raw productId
+            here would silently match nothing on arrival, so this passes
+            the actual searchable name instead. See stock/page.tsx's `q`
+            param handling. */}
         {intel.reorderQueue.length === 0 ? <p className="py-6 text-sm text-slate-500">{text.noRows}</p> : intel.reorderQueue.slice(0, 6).map((item) => (
-          <Link href={`/stock?product=${encodeURIComponent(item.productId)}`} key={item.productId} className="group flex items-center justify-between gap-4 py-3.5">
+          <Link href={`/stock?q=${encodeURIComponent(item.name)}`} key={item.productId} className="group flex items-center justify-between gap-4 py-3.5">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-800 group-hover:text-teal-700">{item.name}</p>
               <p className="mt-0.5 truncate text-[11px] text-slate-400">{item.category}</p>
@@ -341,7 +493,7 @@ function ReorderQueue({ intel, text }: { intel: RetailDashboardIntelligence; tex
   );
 }
 
-function ExpiryControl({ intel, text, lotError }: { intel: RetailDashboardIntelligence; text: (typeof copy)["en"] | (typeof copy)["si"]; lotError: string | null }) {
+function ExpiryControl({ intel, text, lotError, loading }: { intel: RetailDashboardIntelligence; text: (typeof copy)["en"] | (typeof copy)["si"]; lotError: string | null; loading: boolean }) {
   const metrics = [
     { label: text.availableLots, value: intel.availableLotCount, tone: "text-emerald-700 bg-emerald-50" },
     { label: text.fefoProducts, value: intel.fefoProductCount, tone: "text-teal-700 bg-teal-50" },
@@ -352,36 +504,61 @@ function ExpiryControl({ intel, text, lotError }: { intel: RetailDashboardIntell
     <Surface className="overflow-hidden">
       <SectionTitle title={text.pharmacyControl} hint={text.pharmacyControlHint} action={<Link href="/stock/advanced" className="text-xs font-semibold text-teal-700 hover:text-teal-800">{text.batchControl}</Link>} />
       <div className="p-5 sm:p-6">
-        {lotError && <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">{text.lotUnavailable}</p>}
-        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-          {metrics.map((metric) => (
-            <div key={metric.label} className={`rounded-xl px-3 py-3 ${metric.tone}`}>
-              <p className="text-2xl font-semibold tracking-[-0.04em] tabular-nums">{metric.value}</p>
-              <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.09em] opacity-70">{metric.label}</p>
-            </div>
-          ))}
-        </div>
-        <div className="mt-5 border-t border-slate-100 pt-4">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">{text.expiryQueue}</p>
-            <span className="text-xs font-semibold text-slate-500">{intel.nearExpiryCount} {text.nearExpiry.toLowerCase()}</span>
-          </div>
-          {intel.expiryQueue.length === 0 ? (
-            <div className="flex items-center gap-2 py-3 text-sm text-slate-500"><CheckIcon className="h-4 w-4 text-emerald-600" /> {text.noRows}</div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {intel.expiryQueue.slice(0, 5).map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-4 py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-800">{item.productName}</p>
-                    <p className="mt-0.5 truncate text-[11px] text-slate-400">Batch {item.batchNo} · {item.expiryDate}</p>
-                  </div>
-                  <span className={`shrink-0 rounded-lg px-2 py-1 text-xs font-bold tabular-nums ${item.daysToExpiry <= 30 ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>{item.daysToExpiry} {text.days}</span>
+        {lotError && !loading && <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">{text.lotUnavailable}</p>}
+        {loading ? (
+          // A blank/empty "0" state here used to be indistinguishable from
+          // a pharmacy that genuinely has no batch data yet — this panel
+          // now says it's loading instead of silently rendering zeroes
+          // while fetchRetailDashboardLots() is still in flight.
+          <div aria-live="polite" aria-busy="true">
+            <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+              {metrics.map((metric) => (
+                <div key={metric.label} className="animate-pulse rounded-xl bg-slate-100 px-3 py-3">
+                  <div className="h-7 w-10 rounded bg-slate-200" />
+                  <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.09em] text-slate-400">{metric.label}</p>
                 </div>
               ))}
             </div>
-          )}
-        </div>
+            <p className="mt-4 text-xs font-medium text-slate-400">{text.loadingBatchData}</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+              {metrics.map((metric) => (
+                <div key={metric.label} className={`rounded-xl px-3 py-3 ${metric.tone}`}>
+                  <p className="text-2xl font-semibold tracking-[-0.04em] tabular-nums">{metric.value}</p>
+                  <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.09em] opacity-70">{metric.label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 border-t border-slate-100 pt-4">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-400">{text.expiryQueue}</p>
+                <span className="text-xs font-semibold text-slate-500">{intel.nearExpiryCount} {text.nearExpiry.toLowerCase()}</span>
+              </div>
+              {intel.expiryQueue.length === 0 ? (
+                <div className="flex items-center gap-2 py-3 text-sm text-slate-500"><CheckIcon className="h-4 w-4 text-emerald-600" /> {text.noRows}</div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {/* Deep-links straight to the affected product on the
+                      batch-disposition page (see /stock/advanced's
+                      ?product= handling) instead of leaving the owner to
+                      hunt for it in a product picker after clicking
+                      through from a count-only KPI. */}
+                  {intel.expiryQueue.slice(0, 5).map((item) => (
+                    <Link key={item.id} href={`/stock/advanced?product=${encodeURIComponent(item.productId)}`} className="group flex items-center justify-between gap-4 py-3 transition hover:bg-slate-50/70">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-800 group-hover:text-teal-700">{item.productName}</p>
+                        <p className="mt-0.5 truncate text-[11px] text-slate-400">Batch {item.batchNo} · {item.expiryDate}</p>
+                      </div>
+                      <span className={`shrink-0 rounded-lg px-2 py-1 text-xs font-bold tabular-nums ${item.daysToExpiry <= 30 ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>{item.daysToExpiry} {text.days}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </Surface>
   );
@@ -476,7 +653,10 @@ function FinancialStrip({ intel, text }: { intel: RetailDashboardIntelligence; t
           <p className="mt-1.5 text-xl font-semibold tracking-[-0.03em] tabular-nums">{formatLkr(intel.inventoryCostValue ?? 0)}</p>
         </div>
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">{text.thirtyDayProfit}</p>
+          {/* Was a hardcoded "30-day gross profit" label — now names
+              whatever period the Sales Performance selector picked, since
+              periodProfit is computed over that same range. */}
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">{text.grossProfit} · {intel.periodLabel}</p>
           <p className="mt-1.5 text-xl font-semibold tracking-[-0.03em] tabular-nums text-teal-300">{formatLkr(intel.periodProfit ?? 0)}</p>
         </div>
         <div>
@@ -491,29 +671,47 @@ function FinancialStrip({ intel, text }: { intel: RetailDashboardIntelligence; t
 export function RetailCommandCenter({ data, sector }: { data: AppData; sector: RetailSector }) {
   const { locale } = useLocale();
   const { org, canSeeFinancials, isReadOnly } = useSubscription();
-  const text = copy[locale];
+  // No Tamil copy yet for this retail (pharmacy/grocery/mobile/electronics/
+  // footwear) command centre — falls back to English rather than indexing
+  // a `ta` key that doesn't exist. Not translated to Sinhala either; this
+  // is a real, tracked coverage gap, not a silent mistranslation.
+  const text = copy[locale === "ta" ? "en" : locale];
   const [referenceDate] = useState(() => new Date());
   const [lots, setLots] = useState<RetailLotSnapshot[]>([]);
   const [lotError, setLotError] = useState<string | null>(null);
+  // Batch/expiry data used to have no loading state at all — while the
+  // fetch was in flight, ExpiryControl read an empty `lots` array and
+  // showed "0" everywhere (available lots, FEFO items, expired, expiry
+  // queue) exactly as if the pharmacy genuinely had zero batch data.
+  // Starts true for pharmacy so the first render is never mistaken for a
+  // real, confirmed "nothing here" empty state.
+  const [lotsLoading, setLotsLoading] = useState(sector === "pharmacy");
 
   useEffect(() => {
     if (sector !== "pharmacy" || !org.isAuthenticated || !org.id) {
       setLots([]);
       setLotError(null);
+      setLotsLoading(false);
       return;
     }
     let cancelled = false;
+    setLotsLoading(true);
     void fetchRetailDashboardLots(org.id).then((result) => {
       if (cancelled) return;
       setLots(result.data);
       setLotError(result.error);
+      setLotsLoading(false);
     });
     return () => { cancelled = true; };
   }, [sector, org.isAuthenticated, org.id]);
 
+  // Sales Performance / Owner Financial Snapshot used to be hardcoded to a
+  // rolling 30-day window with no way to change it. "30d" stays the
+  // default so nothing shifts under existing users on first load.
+  const [period, setPeriod] = useState<DashboardPeriod>("30d");
   const intel = useMemo(
-    () => buildRetailDashboardIntelligence(data, sector, canSeeFinancials, lots, referenceDate),
-    [data, sector, canSeeFinancials, lots, referenceDate],
+    () => buildRetailDashboardIntelligence(data, sector, canSeeFinancials, lots, referenceDate, period),
+    [data, sector, canSeeFinancials, lots, referenceDate, period],
   );
   const shopName = data.business.name || org.name || "LakBiz";
   const readiness = intel.activeSkuCount > 0 ? Math.max(0, Math.round(((intel.activeSkuCount - intel.lowStockCount) / intel.activeSkuCount) * 100)) : 100;
@@ -560,34 +758,73 @@ export function RetailCommandCenter({ data, sector }: { data: AppData; sector: R
 
       <OfflineSyncNotice />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <KpiCard label={text.todaySales} value={formatLkr(intel.todaySales)} hint={`${intel.todayTransactions} ${text.transactions.toLowerCase()}`} tone="navy" icon={<SalesIcon className="h-4 w-4" />} />
-        <KpiCard label={text.activeSkus} value={intel.activeSkuCount.toLocaleString()} hint={isPharmacy ? `${intel.medicineCount} ${text.medicines.toLowerCase()}` : text.recorded} tone="default" icon={<StockIcon className="h-4 w-4" />} />
-        <KpiCard label={text.lowStock} value={String(intel.lowStockCount)} hint={`${intel.outOfStockCount} ${text.outOfStock.toLowerCase()}`} tone={intel.lowStockCount > 0 ? "warning" : "default"} icon={<AlertTriangleIcon className="h-4 w-4" />} />
+      <div className={`grid gap-3 sm:grid-cols-2 ${isPharmacy ? "xl:grid-cols-3 2xl:grid-cols-6" : "xl:grid-cols-5"}`}>
+        <KpiCard
+          label={text.todaySales}
+          value={formatLkrCompact(intel.todaySales)}
+          fullValue={formatLkr(intel.todaySales)}
+          trendPct={intel.todaySalesChangePct}
+          hint={intel.todaySalesChangePct == null ? `${intel.todayTransactions} ${text.transactions.toLowerCase()}` : `${intel.todayTransactions} ${text.transactions.toLowerCase()} · ${text.vsYesterday}`}
+          tone="navy"
+          icon={<SalesIcon className="h-4 w-4" />}
+          href="/sales"
+        />
+        <KpiCard label={text.activeSkus} value={intel.activeSkuCount.toLocaleString()} hint={isPharmacy ? `${intel.medicineCount} ${text.medicines.toLowerCase()}` : text.recorded} tone="default" icon={<StockIcon className="h-4 w-4" />} href="/stock" />
+        <KpiCard label={text.lowStock} value={String(intel.lowStockCount)} hint={`${intel.outOfStockCount} ${text.outOfStock.toLowerCase()}`} tone={intel.lowStockCount > 0 ? "warning" : "default"} icon={<AlertTriangleIcon className="h-4 w-4" />} href="/stock?filter=low-stock" />
         {isPharmacy ? (
-          <KpiCard label={text.nearExpiry} value={String(intel.nearExpiryCount)} hint={`${intel.expiredLotCount} ${text.expired.toLowerCase()}`} tone={intel.expiredLotCount > 0 ? "danger" : intel.nearExpiryCount > 0 ? "warning" : "default"} icon={<CalendarIcon className="h-4 w-4" />} />
+          <>
+            {/* Previously one card: value = nearExpiryCount, hint =
+                "N expired lots" — two unrelated counts presented as if the
+                hint explained the headline number. Split into two cards,
+                each reporting its own metric. */}
+            <KpiCard
+              label={text.nearExpiry}
+              value={lotsLoading ? "—" : String(intel.nearExpiryCount)}
+              hint={lotsLoading ? text.loadingBatchData : intel.nearExpiryCount > 0 ? text.needsReview : text.allClear}
+              tone={lotsLoading ? "default" : intel.nearExpiryCount > 0 ? "warning" : "default"}
+              icon={<CalendarIcon className="h-4 w-4" />}
+              href="/stock/advanced"
+            />
+            <KpiCard
+              label={text.expired}
+              value={lotsLoading ? "—" : String(intel.expiredLotCount)}
+              hint={lotsLoading ? text.loadingBatchData : intel.expiredLotCount > 0 ? text.needsDisposal : text.allClear}
+              tone={lotsLoading ? "default" : intel.expiredLotCount > 0 ? "danger" : "default"}
+              icon={<CalendarIcon className="h-4 w-4" />}
+              href="/stock/advanced"
+            />
+          </>
         ) : (
-          <KpiCard label={text.averageBasket} value={formatLkr(intel.averageBasket)} hint={`${intel.periodTransactions} ${text.transactions.toLowerCase()} / 30d`} tone="teal" icon={<BillsIcon className="h-4 w-4" />} />
+          <KpiCard label={text.averageBasket} value={formatLkrCompact(intel.averageBasket)} fullValue={formatLkr(intel.averageBasket)} hint={`${intel.periodTransactions} ${text.transactions.toLowerCase()} · ${intel.periodLabel}`} tone="teal" icon={<BillsIcon className="h-4 w-4" />} />
         )}
         {canSeeFinancials ? (
-          <KpiCard label={text.stockValue} value={formatLkr(intel.inventoryCostValue ?? 0)} hint={text.financialHint} tone="teal" icon={<StockIcon className="h-4 w-4" />} />
+          <KpiCard label={text.stockValue} value={formatLkrCompact(intel.inventoryCostValue ?? 0)} fullValue={formatLkr(intel.inventoryCostValue ?? 0)} hint={text.financialHint} tone="teal" icon={<StockIcon className="h-4 w-4" />} href="/stock" />
         ) : (
-          <KpiCard label={text.sellValue} value={formatLkr(intel.inventorySellValue)} hint={`${intel.outOfStockCount} ${text.outOfStock.toLowerCase()}`} tone="teal" icon={<SalesIcon className="h-4 w-4" />} />
+          <KpiCard label={text.sellValue} value={formatLkrCompact(intel.inventorySellValue)} fullValue={formatLkr(intel.inventorySellValue)} hint={`${intel.outOfStockCount} ${text.outOfStock.toLowerCase()}`} tone="teal" icon={<SalesIcon className="h-4 w-4" />} href="/stock" />
         )}
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.75fr)]">
         <Surface className="overflow-hidden">
-          <SectionTitle title={text.performance} hint={text.performanceHint} action={<Link href="/reports" className="text-xs font-semibold text-teal-700 hover:text-teal-800">{text.viewAll}</Link>} />
-          <SalesTrend intel={intel} canSeeFinancials={canSeeFinancials} label={text.thirtyDaySales} />
+          <SectionTitle
+            title={text.performance}
+            hint={text.performanceHint}
+            action={
+              <div className="flex items-center gap-2">
+                <PeriodSelector period={period} onChange={setPeriod} locale={locale === "ta" ? "en" : locale} />
+                <Link href="/reports" className="text-xs font-semibold text-teal-700 hover:text-teal-800">{text.viewAll}</Link>
+              </div>
+            }
+          />
+          <SalesTrend intel={intel} canSeeFinancials={canSeeFinancials} />
         </Surface>
-        <AttentionPanel sector={sector} intel={intel} text={text} />
+        <AttentionPanel sector={sector} intel={intel} text={text} lotsLoading={lotsLoading} />
       </div>
 
       {isPharmacy ? (
         <>
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.7fr)]">
-            <ExpiryControl intel={intel} text={text} lotError={lotError} />
+            <ExpiryControl intel={intel} text={text} lotError={lotError} loading={lotsLoading} />
             <Assortment intel={intel} text={text} />
           </div>
           <div className="grid gap-5 xl:grid-cols-2">

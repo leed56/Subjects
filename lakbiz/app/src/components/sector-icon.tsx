@@ -20,6 +20,7 @@ const SECTOR_ICON_BY_ID: Record<SectorId, (props: IconProps) => React.ReactEleme
   electricals: BoltIcon,
   spare_parts: JobsIcon,
   footwear: ShopIcon,
+  textile: StockIcon,
   ac_hvac: AssetIcon,
   car_sales: VehiclesIcon,
 };

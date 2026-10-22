@@ -376,13 +376,15 @@ export function recordCustomerPayment(
   amount: number,
   method: PaymentMethod,
   note?: string,
+  bankAccountId?: string,
 ): AppData {
   if (amount <= 0) return data;
   const customer = data.customers.find((c) => c.id === customerId);
-  if (!customer) return data;
+  if (!customer || customer.creditBalance <= 0 || amount > customer.creditBalance) return data;
 
+  const paymentId = newId();
   const payment = {
-    id: newId(),
+    id: paymentId,
     customerId,
     customerName: customer.name,
     amount,
@@ -391,9 +393,29 @@ export function recordCustomerPayment(
     note,
   };
 
+  const account = bankAccountId
+    ? data.bankAccounts.find((row) => row.id === bankAccountId)
+    : undefined;
+  const bankTransaction: BankTransaction | undefined =
+    account && (method === "bank_transfer" || method === "card")
+      ? {
+          id: paymentId,
+          accountId: account.id,
+          type: "deposit",
+          amount,
+          description: `${customer.name} customer payment`,
+          reference: `Customer payment ${paymentId.slice(0, 8)}`,
+          date: payment.date,
+        }
+      : undefined;
+
   return {
     ...data,
     customerPayments: [payment, ...data.customerPayments],
+    bankTransactions: bankTransaction ? [bankTransaction, ...data.bankTransactions] : data.bankTransactions,
+    bankAccounts: bankTransaction
+      ? data.bankAccounts.map((row) => row.id === bankTransaction.accountId ? { ...row, balance: row.balance + amount } : row)
+      : data.bankAccounts,
     customers: data.customers.map((c) =>
       c.id === customerId
         ? { ...c, creditBalance: Math.max(0, c.creditBalance - amount) }
@@ -1460,6 +1482,11 @@ export function sellVehicle(
     return data;
   }
 
+  // A vehicle and its sale intentionally share an id. They live in separate
+  // tables, and the stable link makes retries idempotent without requiring a
+  // schema migration or relying on a mutable bill number.
+  if (data.sales.some((sale) => sale.id === vehicle.id)) return data;
+
   const customer = input.customerId
     ? data.customers.find((c) => c.id === input.customerId)
     : undefined;
@@ -1468,6 +1495,36 @@ export function sellVehicle(
     customer?.name ?? (input.customerName?.trim() || undefined);
 
   const soldDate = new Date().toISOString();
+
+  const vatSplit = isVatEnabled(data.business)
+    ? splitInclusiveTotal(input.sellPrice)
+    : { subtotal: input.sellPrice, vat: 0, total: input.sellPrice };
+  const cost = vehicleTotalCost(vehicle.purchasePrice, vehicle.reconditionCost);
+  const sale: Sale = {
+    id: vehicle.id,
+    billNo: generateBillNo(data.sales.length),
+    date: soldDate,
+    lines: [
+      {
+        // Vehicle inventory is stored separately from retail products. A null
+        // product reference keeps the invoice line valid in Supabase while the
+        // shared sale id provides the durable vehicle link.
+        productId: "",
+        productName: `${vehicle.stockId} · ${vehicle.make} ${vehicle.model} ${vehicle.year}`,
+        qty: 1,
+        unitPrice: input.sellPrice,
+        buyPrice: cost,
+      },
+    ],
+    subtotal: vatSplit.subtotal,
+    outputVat: vatSplit.vat,
+    total: vatSplit.total,
+    profit: input.sellPrice - cost,
+    paymentMethod: input.paymentMethod,
+    customerId: input.customerId,
+    customerName,
+    creditAmount: input.paymentMethod === "credit" ? input.sellPrice : 0,
+  };
 
   let customers = data.customers;
   if (input.paymentMethod === "credit" && input.customerId) {
@@ -1478,9 +1535,38 @@ export function sellVehicle(
     );
   }
 
+  const bankAccount = input.bankAccountId
+    ? data.bankAccounts.find((account) => account.id === input.bankAccountId)
+    : undefined;
+  const recordsBankDeposit =
+    (input.paymentMethod === "bank_transfer" || input.paymentMethod === "card") &&
+    bankAccount;
+  const bankTransaction: BankTransaction | undefined = recordsBankDeposit
+    ? {
+        id: vehicle.id,
+        accountId: bankAccount.id,
+        type: "deposit",
+        amount: input.sellPrice,
+        description: `${vehicle.stockId} vehicle sale`,
+        reference: sale.billNo,
+        date: soldDate,
+      }
+    : undefined;
+
   return {
     ...data,
+    sales: [sale, ...data.sales],
     customers,
+    bankTransactions: bankTransaction
+      ? [bankTransaction, ...data.bankTransactions]
+      : data.bankTransactions,
+    bankAccounts: bankTransaction
+      ? data.bankAccounts.map((account) =>
+          account.id === bankTransaction.accountId
+            ? { ...account, balance: account.balance + bankTransaction.amount }
+            : account,
+        )
+      : data.bankAccounts,
     vehicles: data.vehicles.map((v) =>
       v.id === input.vehicleId
         ? {
@@ -1829,6 +1915,22 @@ export function createSale(
     chequeId,
   };
 
+  const bankAccount = options.bankAccountId
+    ? working.bankAccounts.find((account) => account.id === options.bankAccountId)
+    : undefined;
+  const bankTransaction: BankTransaction | undefined =
+    bankAccount && (paymentMethod === "bank_transfer" || paymentMethod === "card")
+      ? {
+          id: saleId,
+          accountId: bankAccount.id,
+          type: "deposit",
+          amount: total,
+          description: `${sale.billNo ?? saleId.slice(0, 8)} sale receipt`,
+          reference: sale.billNo,
+          date: sale.date,
+        }
+      : undefined;
+
   const qtyByProduct = new Map(
     saleLines.map((l) => [l.productId, l.qty] as const),
   );
@@ -1857,6 +1959,16 @@ export function createSale(
     sales: [sale, ...working.sales],
     customers,
     cheques,
+    bankTransactions: bankTransaction
+      ? [bankTransaction, ...working.bankTransactions]
+      : working.bankTransactions,
+    bankAccounts: bankTransaction
+      ? working.bankAccounts.map((account) =>
+          account.id === bankTransaction.accountId
+            ? { ...account, balance: account.balance + bankTransaction.amount }
+            : account,
+        )
+      : working.bankAccounts,
     products: working.products.map((p) => {
       const sold = qtyByProduct.get(p.id);
       if (!sold) return p;

@@ -46,7 +46,7 @@ export type InventoryLot = {
   supplierId: string | null;
   qtyReceived: number;
   qtyOnHand: number;
-  status: "available" | "quarantine" | "expired" | "depleted" | "returned" | "recalled";
+  status: "available" | "quarantine" | "expired" | "depleted" | "returned" | "recalled" | "disposed" | "supplier_returned";
   notes: string | null;
   unitCost?: number;
   landedCost?: number | null;

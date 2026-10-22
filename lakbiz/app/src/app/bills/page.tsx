@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { ExportActions } from "@/components/export/export-actions";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { AppShell } from "@/components/shell/app-shell";
 import {
@@ -15,15 +15,23 @@ import {
   ProPageHeader,
   ProStatCard,
 } from "@/components/ui/pro-shell";
-import { BillsIcon, CostingIcon, ReportsIcon, CustomersIcon } from "@/components/ui/icons";
+import { BillsIcon, CostingIcon, ReportsIcon, CustomersIcon, FilterIcon, SearchIcon } from "@/components/ui/icons";
+import { ActionMenu, Pagination } from "@/components/ui/primitives";
 import { formatLkr } from "@/lib/format";
-import { buildInvoiceText, buildQuoteText, whatsappShareUrl } from "@/lib/invoice";
 import { exportSalesCsv, printSalesReport } from "@/lib/export";
 import { useLocale } from "@/lib/i18n/locale-provider";
-import { paymentLabel } from "@/lib/i18n/payment";
+import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { useAppStore } from "@/lib/store/use-app-store";
 import type { Sale } from "@/lib/store/types";
+import type { PaymentMethod } from "@/lib/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+
+// Same page size and pattern Stock Control already uses — see
+// Pagination in components/ui/primitives.tsx. Bills rendered its full
+// filtered invoice list in one continuously-scrolling table/card list
+// with no pagination at all; a shop with 1,200+ invoices had no way to
+// jump to a page, only to keep scrolling.
+const BILLS_PAGE_SIZE = 50;
 
 function customerPhoneForSale(
   sale: Sale,
@@ -34,18 +42,19 @@ function customerPhoneForSale(
 }
 
 export default function BillsPage() {
-  const { data, ready, updateBusinessToCloud } = useAppStore();
+  const router = useRouter();
+  const { data, ready } = useAppStore();
   const { t } = useLocale();
   const { canSeeFinancials, can, orgRole } = useSubscription();
-  const [editBiz, setEditBiz] = useState(false);
-  const [savingBiz, setSavingBiz] = useState(false);
-  const [bizMessage, setBizMessage] = useState("");
-  const [bizName, setBizName] = useState("");
-  const [bizNameSi, setBizNameSi] = useState("");
-  const [bizPhone, setBizPhone] = useState("");
-  const [bizAddress, setBizAddress] = useState("");
-  const [bizTin, setBizTin] = useState("");
   const [search, setSearch] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState<PaymentMethod | "all">("all");
+  const [invoiceType, setInvoiceType] = useState<"all" | "vehicle" | "retail">("all");
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, paymentFilter, invoiceType]);
 
   if (!ready || !data) {
     return (
@@ -57,31 +66,35 @@ export default function BillsPage() {
     );
   }
 
-  const openBizEdit = () => {
-    setBizName(data.business.name);
-    setBizNameSi(data.business.nameSi ?? "");
-    setBizPhone(data.business.phone ?? "");
-    setBizAddress(data.business.address ?? "");
-    setBizTin(data.business.tin ?? "");
-    setEditBiz(true);
-  };
-
   const salesTotal = data.sales.reduce((sum, s) => sum + s.total, 0);
   const profitTotal = data.sales.reduce((sum, s) => sum + s.profit, 0);
   const creditTotal = data.sales
     .filter((s) => s.paymentMethod === "credit")
     .reduce((sum, s) => sum + s.total, 0);
   const query = search.trim().toLowerCase();
-  const bills = query
-    ? data.sales.filter(
-        (s) =>
-          (s.billNo ?? s.id).toLowerCase().includes(query) ||
-          (s.customerName ?? "").toLowerCase().includes(query) ||
-          paymentLabel(t, s.paymentMethod).toLowerCase().includes(query),
-      )
-    : data.sales;
+  const vehicleSaleIds = new Set(data.vehicles.map((vehicle) => vehicle.id));
+  const bills = data.sales.filter((sale) => {
+    const isVehicle = vehicleSaleIds.has(sale.id);
+    if (paymentFilter !== "all" && sale.paymentMethod !== paymentFilter) return false;
+    if (invoiceType === "vehicle" && !isVehicle) return false;
+    if (invoiceType === "retail" && isVehicle) return false;
+    if (!query) return true;
+    return (
+      (sale.billNo ?? sale.id).toLowerCase().includes(query) ||
+      (sale.customerName ?? "").toLowerCase().includes(query) ||
+      paymentLabel(t, sale.paymentMethod).toLowerCase().includes(query) ||
+      sale.lines.some((line) => line.productName.toLowerCase().includes(query))
+    );
+  });
+
+  const totalPages = Math.max(1, Math.ceil(bills.length / BILLS_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * BILLS_PAGE_SIZE;
+  const pageBills = bills.slice(pageStart, pageStart + BILLS_PAGE_SIZE);
+  const pageEnd = Math.min(pageStart + BILLS_PAGE_SIZE, bills.length);
 
   const canExport = can("export");
+  const activeFilterCount = Number(paymentFilter !== "all") + Number(invoiceType !== "all");
   const salesExportLabels = {
     billNo: t("bills.bill_no"),
     date: t("common.date"),
@@ -94,6 +107,24 @@ export default function BillsPage() {
     total: t("common.total"),
     profit: t("common.profit"),
   };
+  const clearFilters = () => {
+    setSearch("");
+    setPaymentFilter("all");
+    setInvoiceType("all");
+  };
+  const exportVisibleCsv = () =>
+    exportSalesCsv(data.business, bills, {
+      includeProfit: canSeeFinancials,
+      labels: salesExportLabels,
+      paymentLabel: (method) => paymentLabel(t, method),
+    });
+  const printVisibleReport = () =>
+    printSalesReport(data.business, bills, {
+      includeProfit: canSeeFinancials,
+      labels: salesExportLabels,
+      reportTitle: t("export.sales_report"),
+      paymentLabel: (method) => paymentLabel(t, method),
+    });
 
   return (
     <AppShell>
@@ -104,139 +135,64 @@ export default function BillsPage() {
           description={`${t("bills.subtitle")} · ${data.sales.length} ${t("bills.count")}`}
           actions={
             <>
-              {canExport && (
-                <ExportActions
-                  disabled={bills.length === 0}
-                  onExportCsv={() =>
-                    exportSalesCsv(data.business, bills, {
-                      includeProfit: canSeeFinancials,
-                      labels: salesExportLabels,
-                      paymentLabel: (m) => paymentLabel(t, m),
-                    })
-                  }
-                  onPrintPdf={() =>
-                    printSalesReport(data.business, bills, {
-                      includeProfit: canSeeFinancials,
-                      labels: salesExportLabels,
-                      reportTitle: t("export.sales_report"),
-                      paymentLabel: (m) => paymentLabel(t, m),
-                    })
-                  }
-                />
-              )}
+              <ProButton href="/sales">{t("bills.create_sale")}</ProButton>
               {orgRole === "owner" && (
                 <ProButton href="/returns" variant="secondary">Returns control</ProButton>
               )}
-              <ProButton href="/sales">{t("bills.create_sale")}</ProButton>
-              <button
-                type="button"
-                onClick={openBizEdit}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98]"
-              >
-                {t("bills.shop_details")}
-              </button>
+              <ActionMenu
+                label={t("common.actions")}
+                items={[
+                  ...(canExport
+                    ? [
+                        { label: bills.length === 0 ? `${t("export.csv")} · ${t("sales.no_match")}` : t("export.csv"), onSelect: exportVisibleCsv, disabled: bills.length === 0 },
+                        { label: bills.length === 0 ? `${t("export.pdf")} · ${t("sales.no_match")}` : t("export.pdf"), onSelect: printVisibleReport, disabled: bills.length === 0 },
+                      ]
+                    : []),
+                  { label: t("bills.shop_details"), onSelect: () => router.push("/settings/shop") },
+                ]}
+              />
             </>
           }
         />
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <ProStatCard label={t("bills.count")} value={String(data.sales.length)} hint={t("bills.invoices_issued")} icon={<BillsIcon className="h-5 w-5" />} tone="teal" />
-          <ProStatCard label={t("common.total")} value={formatLkr(salesTotal)} hint={t("bills.total_billed")} icon={<CostingIcon className="h-5 w-5" />} tone="emerald" />
-          {canSeeFinancials && (
-            <ProStatCard label={t("common.profit")} value={formatLkr(profitTotal)} hint={t("bills.recorded_profit")} icon={<ReportsIcon className="h-5 w-5" />} tone="blue" />
-          )}
-          {canSeeFinancials && (
-            <ProStatCard label={t("bills.credit_bills")} value={formatLkr(creditTotal)} hint={t("bills.credit_sales")} icon={<CustomersIcon className="h-5 w-5" />} tone="amber" />
-          )}
-        </section>
-
-        {editBiz && (
-          <section className="mt-6">
-            <ProCard eyebrow={t("bills.invoice_branding_eyebrow")} title={t("bills.shop_header")}>
-              {bizMessage && (
-                <div className="mb-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
-                  {bizMessage}
-                </div>
-              )}
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (savingBiz) return;
-                  setSavingBiz(true);
-                  setBizMessage("");
-                  const result = await updateBusinessToCloud({
-                    ...data.business,
-                    name: bizName,
-                    nameSi: bizNameSi,
-                    phone: bizPhone,
-                    address: bizAddress,
-                    tin: bizTin,
-                  });
-                  setSavingBiz(false);
-                  if (!result.ok) {
-                    setBizMessage(result.error ?? t("common.save_failed"));
-                    return;
-                  }
-                  setEditBiz(false);
-                }}
+        {data.sales.length > 0 && (
+          <section>
+            <ProCard title={t("bills.find_invoices")} eyebrow={t("bills.search_archive_eyebrow")} action={<ProBadge tone={bills.length === data.sales.length ? "slate" : "teal"}>{bills.length} {t("bills.shown")}</ProBadge>}>
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_12rem]">
+              <div className="relative">
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t("bills.search_placeholder")}
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pl-11 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                />
+                <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMobileFilters((value) => !value)}
+                aria-expanded={showMobileFilters}
+                className="flex h-12 items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-800 lg:hidden"
               >
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <input required placeholder={t("bills.shop_name")} value={bizName} onChange={(e) => setBizName(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input placeholder={t("bills.shop_name_si")} value={bizNameSi} onChange={(e) => setBizNameSi(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input placeholder={t("bills.phone_wa")} value={bizPhone} onChange={(e) => setBizPhone(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input placeholder={t("bills.tin")} value={bizTin} onChange={(e) => setBizTin(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
-                  <input placeholder={t("common.address")} value={bizAddress} onChange={(e) => setBizAddress(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 sm:col-span-2" />
-                </div>
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button
-                    type="submit"
-                    disabled={savingBiz}
-                    className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {savingBiz ? t("common.saving") : t("common.save")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditBiz(false)}
-                    disabled={savingBiz}
-                    className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {t("common.cancel")}
-                  </button>
-                </div>
-              </form>
+                <span className="flex items-center gap-2"><FilterIcon className="h-4 w-4" />{t("jobs.filters")}</span>
+                <span>{activeFilterCount > 0 ? activeFilterCount : "+"}</span>
+              </button>
+              <select value={invoiceType} onChange={(event) => setInvoiceType(event.target.value as typeof invoiceType)} className={`${showMobileFilters ? "block" : "hidden"} h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-800 outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100 lg:block`}>
+                <option value="all">{t("bills.all_invoice_types")}</option>
+                <option value="vehicle">{t("bills.vehicle_invoices")}</option>
+                <option value="retail">{t("bills.retail_service")}</option>
+              </select>
+              <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value as PaymentMethod | "all")} className={`${showMobileFilters ? "block" : "hidden"} h-12 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-800 outline-none focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100 lg:block`}>
+                <option value="all">{t("bills.all_payment_methods")}</option>
+                {PAYMENT_OPTIONS.map((method) => <option key={method} value={method}>{paymentLabel(t, method)}</option>)}
+              </select>
+            </div>
             </ProCard>
           </section>
         )}
 
-        <section className="mt-6 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-          <ProCard eyebrow={t("bills.invoice_identity_eyebrow")} title={data.business.name || "LakBiz"} action={<ProBadge tone={data.business.tin ? "emerald" : "slate"}>{data.business.tin ? t("bills.tin_ready") : t("bills.basic")}</ProBadge>}>
-            <div className="space-y-3 text-sm font-semibold text-slate-600">
-              {data.business.nameSi && <p>{data.business.nameSi}</p>}
-              {data.business.phone && <p>{t("bills.tel")}: {data.business.phone}</p>}
-              {data.business.address && <p>{data.business.address}</p>}
-              {data.business.tin && <p>{t("bills.tin")}: {data.business.tin}</p>}
-              {!data.business.phone && !data.business.address && !data.business.tin && (
-                <p className="text-slate-500">Add shop contact, address and TIN to make printed invoices look more professional.</p>
-              )}
-            </div>
-          </ProCard>
-
-          <ProCard title={t("bills.find_invoices")} eyebrow={t("bills.search_archive_eyebrow")} action={<ProBadge tone={bills.length === data.sales.length ? "slate" : "teal"}>{bills.length} {t("bills.shown")}</ProBadge>}>
-            <div className="relative">
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t("bills.search_placeholder")}
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pl-11 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
-              />
-              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
-            </div>
-          </ProCard>
-        </section>
-
-        <section className="mt-6">
+        <section className={data.sales.length > 0 ? "mt-5" : ""}>
           {data.sales.length === 0 ? (
             <ProCard>
               <ProEmptyState
@@ -247,10 +203,26 @@ export default function BillsPage() {
             </ProCard>
           ) : bills.length === 0 ? (
             <ProCard>
-              <ProEmptyState title={t("sales.no_match")} description={t("bills.search_no_match_desc")} />
+              <ProEmptyState
+                title={t("sales.no_match")}
+                description={t("bills.search_no_match_desc")}
+                action={<button type="button" onClick={clearFilters} className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">{t("common.clear")}</button>}
+              />
             </ProCard>
           ) : (
             <ProCard title={t("bills.invoice_history")} action={<ProBadge tone="teal">{bills.length} {t("bills.invoices_count")}</ProBadge>}>
+              <div className="mb-3">
+                <Pagination
+                  page={currentPage}
+                  totalPages={totalPages}
+                  start={pageStart + 1}
+                  end={pageEnd}
+                  total={bills.length}
+                  pageSize={BILLS_PAGE_SIZE}
+                  itemLabel={t("bills.invoices_count")}
+                  onPageChange={setPage}
+                />
+              </div>
               <div className="hidden overflow-hidden rounded-2xl border border-slate-200 lg:block">
                 <table className="w-full text-left text-sm">
                   <thead className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
@@ -264,49 +236,51 @@ export default function BillsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {bills.map((s) => {
+                    {pageBills.map((s) => {
+                      const isVehicle = vehicleSaleIds.has(s.id);
                       const phone = customerPhoneForSale(s, data.customers);
-                      const invoiceWa = whatsappShareUrl(
-                        buildInvoiceText(s, data.business, t),
-                        phone,
-                      );
-                      const quoteWa = whatsappShareUrl(
-                        buildQuoteText(s, data.business, t),
-                        phone,
-                      );
                       return (
                       <tr key={s.id} className="border-b last:border-0">
-                        <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">{s.billNo ?? s.id.slice(0, 8)}</td>
+                        <td className="px-4 py-3">
+                          <p className="font-mono text-xs font-bold text-slate-700">{s.billNo ?? s.id.slice(0, 8)}</p>
+                          {isVehicle && <span className="mt-1 inline-flex rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-teal-700">{t("nav.vehicles")}</span>}
+                        </td>
                         <td className="px-4 py-3 font-semibold text-slate-600">{new Date(s.date).toLocaleString("en-LK")}</td>
                         <td className="px-4 py-3 font-bold text-slate-900">{s.customerName || "—"}</td>
                         <td className="px-4 py-3 font-mono font-bold text-slate-950">{formatLkr(s.total)}</td>
                         <td className="px-4 py-3"><ProBadge tone="slate">{paymentLabel(t, s.paymentMethod)}</ProBadge></td>
                         <td className="px-4 py-3 text-right">
+                          {/* Was three separate WhatsApp entry points -- a raw
+                              "WA" deep link with the full receipt text, a
+                              second raw deep link with the quote text, and
+                              this same Message button, all doing overlapping
+                              jobs. The two deep links could never reach a
+                              phone the caller didn't already have (no way to
+                              add one for a walk-in with no saved number,
+                              unlike Message's own editable phone field) and
+                              never got the Auto WhatsApp option once
+                              configured. Down to two Message buttons -- one
+                              per intent (receipt, quote) -- same pattern
+                              already established on the invoice detail page
+                              itself (invoice-view.tsx). */}
                           <div className="flex flex-wrap items-center justify-end gap-2">
                             <Link href={`/bills/${s.id}`} className="font-bold text-teal-700 hover:underline">{t("common.view_print")}</Link>
-                            <a
-                              href={invoiceWa}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="rounded-lg bg-green-600 px-2 py-1 text-xs font-bold text-white hover:bg-green-700"
-                            >
-                              {t("bills.wa_short")}
-                            </a>
-                            <a
-                              href={quoteWa}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="rounded-lg border border-green-600 px-2 py-1 text-xs font-bold text-green-700 hover:bg-green-50"
-                            >
-                              {t("bills.quote_whatsapp")}
-                            </a>
                             <MessageSendButton
                               phone={phone}
                               recipientName={s.customerName ?? t("common.customer")}
                               context={{ type: "sale", sale: s, business: data.business }}
                               defaultTemplate="bill_receipt"
                               contextId={s.id}
-                              variant="icon"
+                              variant="compact"
+                            />
+                            <MessageSendButton
+                              phone={phone}
+                              recipientName={s.customerName ?? t("common.customer")}
+                              context={{ type: "sale", sale: s, business: data.business }}
+                              defaultTemplate="sales_quote"
+                              contextId={s.id}
+                              variant="compact"
+                              label={t("bills.quote_whatsapp")}
                             />
                           </div>
                         </td>
@@ -318,11 +292,14 @@ export default function BillsPage() {
               </div>
 
               <div className="grid gap-3 lg:hidden">
-                {bills.map((s) => (
+                {pageBills.map((s) => (
                   <Link key={s.id} href={`/bills/${s.id}`} className="block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-white">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-mono text-xs font-bold uppercase tracking-wide text-teal-700">{s.billNo ?? s.id.slice(0, 8)}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-mono text-xs font-bold uppercase tracking-wide text-teal-700">{s.billNo ?? s.id.slice(0, 8)}</p>
+                          {vehicleSaleIds.has(s.id) && <ProBadge tone="teal">{t("nav.vehicles")}</ProBadge>}
+                        </div>
                         <p className="mt-2 text-base font-bold text-slate-950">{s.customerName || t("bills.walk_in_customer")}</p>
                         <p className="mt-1 text-xs font-semibold text-slate-500">{new Date(s.date).toLocaleString("en-LK")}</p>
                       </div>
@@ -335,9 +312,37 @@ export default function BillsPage() {
                   </Link>
                 ))}
               </div>
+
+              {bills.length > BILLS_PAGE_SIZE && (
+                <div className="mt-3">
+                  <Pagination
+                    page={currentPage}
+                    totalPages={totalPages}
+                    start={pageStart + 1}
+                    end={pageEnd}
+                    total={bills.length}
+                    pageSize={BILLS_PAGE_SIZE}
+                    itemLabel={t("bills.invoices_count")}
+                    onPageChange={setPage}
+                  />
+                </div>
+              )}
             </ProCard>
           )}
         </section>
+
+        {data.sales.length > 0 && (
+          <section className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4" aria-label={t("bills.archive_eyebrow")}>
+            <ProStatCard label={t("bills.count")} value={String(data.sales.length)} hint={t("bills.invoices_issued")} icon={<BillsIcon className="h-5 w-5" />} tone="teal" />
+            <ProStatCard label={t("common.total")} value={formatLkr(salesTotal)} hint={t("bills.total_billed")} icon={<CostingIcon className="h-5 w-5" />} tone="emerald" />
+            {canSeeFinancials && (
+              <ProStatCard label={t("common.profit")} value={formatLkr(profitTotal)} hint={t("bills.recorded_profit")} icon={<ReportsIcon className="h-5 w-5" />} tone="blue" />
+            )}
+            {canSeeFinancials && (
+              <ProStatCard label={t("bills.credit_bills")} value={formatLkr(creditTotal)} hint={t("bills.credit_sales")} icon={<CustomersIcon className="h-5 w-5" />} tone="amber" />
+            )}
+          </section>
+        )}
       </ProMain>
     </AppShell>
   );

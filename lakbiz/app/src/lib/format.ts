@@ -2,6 +2,20 @@ export function formatLkr(amount: number): string {
   return `Rs. ${amount.toLocaleString("en-LK", { maximumFractionDigits: 0 })}`;
 }
 
+/** Abbreviated form for currency figures shown inside fixed-width KPI
+ * cards (e.g. "Rs. 43.7M"), so a large stock-cost or turnover value never
+ * gets clipped by a `truncate` class the way the full `formatLkr()` string
+ * can be. Callers should still pass the full `formatLkr()` value as a
+ * `title`/tooltip so the exact figure is one hover away, never only
+ * available in abbreviated form. Same notation pulse-shared.tsx's
+ * formatCompactLkr() already uses for the owner Business Pulse view —
+ * duplicated here (not imported) because that helper lives in a
+ * pulse-specific module and this one needs to be dashboard-wide. */
+export function formatLkrCompact(amount: number): string {
+  const compact = new Intl.NumberFormat("en-LK", { notation: "compact", maximumFractionDigits: 1 }).format(amount);
+  return `Rs. ${compact}`;
+}
+
 /** Global premium UI phase — Part 4/9's "avatar initials, no profile
  * photography required": 1-2 uppercase letters for a compact avatar
  * badge. Prefers the first letter of up to two words in `name` (an org
@@ -85,4 +99,24 @@ export function newId(): string {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/** "Just now" / "5 minutes ago" / "3 hours ago" / "2 days ago", falling
+ * back to a plain date once it's old enough that a relative phrase stops
+ * being useful (e.g. Shop Settings' "Saved — synced to cloud" message —
+ * a returning user couldn't tell if that sync happened moments ago or
+ * days ago with no timestamp at all). `now` is an explicit parameter so
+ * this stays a pure function callers can re-run on a timer without
+ * `new Date()` living inside the formatter itself. */
+export function formatRelativeTime(thenMs: number, now: Date = new Date()): string {
+  const diffSec = Math.max(0, Math.round((now.getTime() - thenMs) / 1000));
+  if (diffSec < 30) return "Just now";
+  if (diffSec < 60) return `${diffSec} seconds ago`;
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? "" : "s"} ago`;
+  const diffDay = Math.round(diffHr / 24);
+  if (diffDay < 7) return `${diffDay} day${diffDay === 1 ? "" : "s"} ago`;
+  return new Date(thenMs).toLocaleDateString("en-LK", { day: "numeric", month: "short", year: "numeric" });
 }

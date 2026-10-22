@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { requirePlatformAdmin } from "@/lib/admin/auth";
 import { provisionShop } from "@/lib/admin/provision-shop";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { PlanId } from "@/lib/subscription/types";
 
 export async function GET() {
@@ -11,8 +10,21 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: admin.error }, { status: admin.status });
   }
 
-  const supabase = await createServerSupabaseClient();
-  const { data: orgs, error } = await supabase
+  const service = createAdminSupabaseClient();
+  if (!service) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Admin service is not configured. Add SUPABASE_SERVICE_ROLE_KEY to this deployment before loading shops.",
+      },
+      { status: 503 },
+    );
+  }
+
+  // The requester's platform-admin role is checked above. This server-only client
+  // intentionally bypasses tenant RLS so the platform panel can list every shop.
+  const { data: orgs, error } = await service
     .from("organizations")
     .select(
       `
@@ -31,10 +43,9 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  const service = createAdminSupabaseClient();
   const ownerEmails = new Map<string, string>();
 
-  if (service && orgs?.length) {
+  if (orgs?.length) {
     const userIds = orgs.flatMap((o) => {
       const members = Array.isArray(o.org_members) ? o.org_members : [o.org_members];
       return members.filter((m) => m?.role === "owner").map((m) => m.user_id);

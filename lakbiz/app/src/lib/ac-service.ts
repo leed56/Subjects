@@ -98,7 +98,7 @@ export const DEFAULT_SERVICE_DUE_REMIND_DAYS: number[] = [14, 7, 2, 0];
 
 export function serviceDueLabel(
   serviceDueDate: string | undefined,
-  locale: "si" | "en",
+  locale: "si" | "en" | "ta",
 ): string {
   if (!serviceDueDate) return "";
   const days = daysUntilDate(serviceDueDate);
