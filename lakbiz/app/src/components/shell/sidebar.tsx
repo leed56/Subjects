@@ -8,6 +8,7 @@ import { LOCALE_NAMES, nextLocale } from "@/lib/i18n/translations";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useShopNav } from "@/components/shell/use-shop-nav";
 import { NAV_ICON_BY_HREF } from "@/components/shell/nav-icons";
+import { GroceryRetailNavigation } from "@/components/shell/grocery-retail-navigation";
 import { SettingsIcon, SignOutIcon, BellIcon } from "@/components/ui/icons";
 import { initialsFor } from "@/lib/format";
 import type { NavItem } from "@/lib/nav-sections";
@@ -64,13 +65,13 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/[0.06] bg-[#08111f] lg:flex">
+    <aside className={`sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/[0.06] lg:flex ${org.sector === "grocery" ? "bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.24),transparent_30%),linear-gradient(160deg,#071327,#08111f_55%,#111239)]" : "bg-[#08111f]"}`}>
       <div className="flex h-20 items-center gap-2 border-b border-white/[0.06] px-5">
         <Link href={isPlatformAdmin ? "/admin" : "/dashboard"} className="flex min-w-0 flex-1 items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-400 to-teal-600 text-sm font-bold text-white shadow-lg shadow-teal-950/30">L</span>
           <div className="min-w-0 leading-tight">
             <span className="block truncate text-lg font-bold tracking-tight text-white">LakBiz</span>
-            <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Business workspace</span>
+            <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{org.sector === "grocery" ? "Grocery retail POS" : "Business workspace"}</span>
           </div>
         </Link>
         {/* Persistent, header-level alert badge — expired lots, blocked
@@ -110,6 +111,9 @@ export function Sidebar() {
           lands past the viewport (reported: "Inventory" cut off at some
           viewport heights). `overflow-y-auto` alone does nothing until
           the flex item is allowed to be smaller than its content. */}
+      {org.sector === "grocery" ? (
+        <GroceryRetailNavigation items={allItems} activeHref={activeHref} locale={locale} t={t} />
+      ) : (
       <nav
         className="min-h-0 flex-1 overflow-y-auto px-3.5 py-5 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.14)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/[0.14]"
         aria-label="Primary"
@@ -138,6 +142,7 @@ export function Sidebar() {
           </div>
         )}
       </nav>
+      )}
 
       <div className="border-t border-white/[0.06] p-3.5">
         <div className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-3">
