@@ -1,6 +1,7 @@
 export type SectorId =
   | "grocery"
   | "pharmacy"
+  | "cosmetics"
   | "electronics"
   | "mobile_shop"
   | "electricals"
@@ -8,7 +9,10 @@ export type SectorId =
   | "footwear"
   | "textile"
   | "ac_hvac"
-  | "car_sales";
+  | "car_sales"
+  | "hardware"
+  | "stationery"
+  | "wholesale";
 
 export type UserRole = "owner" | "manager" | "cashier" | "technician";
 

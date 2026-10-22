@@ -630,8 +630,19 @@ export function createPurchaseOrder(
   const supplier = data.suppliers.find((s) => s.id === input.supplierId);
   if (!supplier) return data;
 
+  // Receipts identify lines by product; reject ambiguous orders as a whole.
+  const productIds = new Set(input.lines.map((line) => line.productId));
+  if (
+    productIds.size !== input.lines.length ||
+    input.lines.some((line) =>
+      !Number.isFinite(line.qty) || line.qty <= 0 ||
+      !Number.isFinite(line.unitCost) || line.unitCost < 0 ||
+      !data.products.some((product) => product.id === line.productId),
+    )
+  ) return data;
+
   const lines: PurchaseOrder["lines"] = input.lines
-    .map(({ productId, qty, unitCost }) => {
+    .map(({ productId, qty, unitCost, lengthUnit }): PurchaseOrder["lines"][number] | null => {
       const product = data.products.find((p) => p.id === productId);
       if (!product || qty <= 0 || unitCost < 0) return null;
       return {
@@ -640,6 +651,7 @@ export function createPurchaseOrder(
         qtyOrdered: qty,
         qtyReceived: 0,
         unitCost,
+        lengthUnit,
       };
     })
     .filter((l): l is PurchaseOrder["lines"][number] => l !== null);
@@ -685,6 +697,24 @@ export function receivePurchaseOrder(
 ): AppData {
   const po = data.purchaseOrders.find((p) => p.id === purchaseOrderId);
   if (!po || po.status === "cancelled" || po.status === "received") return data;
+
+  const orderedIds = new Set(po.lines.map((line) => line.productId));
+  const requestedIds = new Set(receiveLines.map((line) => line.productId));
+  if (
+    orderedIds.size !== po.lines.length ||
+    requestedIds.size !== receiveLines.length ||
+    receiveLines.some((line) =>
+      !Number.isFinite(line.qtyReceived) || line.qtyReceived < 0 ||
+      !orderedIds.has(line.productId),
+    ) ||
+    po.lines.some((line) =>
+      !Number.isFinite(line.qtyOrdered) || line.qtyOrdered <= 0 ||
+      !Number.isFinite(line.qtyReceived) || line.qtyReceived < 0 ||
+      line.qtyReceived > line.qtyOrdered ||
+      !Number.isFinite(line.unitCost) || line.unitCost < 0 ||
+      !data.products.some((product) => product.id === line.productId),
+    )
+  ) return data;
 
   const receiveByProduct = new Map(
     receiveLines

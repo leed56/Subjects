@@ -46,7 +46,9 @@ export default function TeamSettingsPage() {
   const { toast } = useToast();
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageIsError, setMessageIsError] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -67,11 +69,23 @@ export default function TeamSettingsPage() {
 
   const load = useCallback(() => {
     setLoading(true);
+    setLoadFailed(false);
+    setMessage("");
+    setMessageIsError(false);
     void fetch("/api/settings/team")
       .then((r) => r.json())
       .then((json: { ok?: boolean; members?: MemberRow[]; error?: string }) => {
         if (json.ok && json.members) setMembers(json.members);
-        else setMessage(json.error ?? t("team.load_error"));
+        else {
+          setMessage(json.error ?? t("team.load_error"));
+          setMessageIsError(true);
+          setLoadFailed(true);
+        }
+      })
+      .catch(() => {
+        setMessage(t("team.load_error"));
+        setMessageIsError(true);
+        setLoadFailed(true);
       })
       .finally(() => setLoading(false));
   }, [t]);
@@ -82,6 +96,7 @@ export default function TeamSettingsPage() {
 
   const handleCreateUser = async (e: FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     // Credentials for this login are handed to the staff member off-screen
     // (there's no "reset password" flow yet) — a typo here silently hands
     // them a login they can't use, with no way for either side to notice
@@ -89,63 +104,82 @@ export default function TeamSettingsPage() {
     // sent is the whole point; the server never sees a typo'd password.
     if (password !== confirmPassword) {
       setMessage(t("team.password_mismatch"));
+      setMessageIsError(true);
       return;
     }
     setSubmitting(true);
     setMessage("");
-    const res = await fetch("/api/settings/team", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, role }),
-    });
-    const json = (await res.json()) as { ok?: boolean; error?: string };
-    setSubmitting(false);
-    if (!json.ok) {
-      setMessage(json.error ?? t("team.create_failed"));
-      return;
+    setMessageIsError(false);
+    try {
+      const res = await fetch("/api/settings/team", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password, role }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        setMessage(json.error ?? t("team.create_failed"));
+        setMessageIsError(true);
+        return;
+      }
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      load();
+      setMessage(t("team.create_ok"));
+    } catch {
+      setMessage(t("team.create_failed"));
+      setMessageIsError(true);
+    } finally {
+      setSubmitting(false);
     }
-    setMessage(t("team.create_ok"));
-    setEmail("");
-    setPassword("");
-    setConfirmPassword("");
-    load();
   };
 
   const handleRoleChange = async (memberUserId: string, nextRole: OrgRole) => {
     if (updatingUserId) return;
     setUpdatingUserId(memberUserId);
-    const res = await fetch("/api/settings/team", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "update_role", userId: memberUserId, role: nextRole }),
-    });
-    const json = (await res.json()) as { ok?: boolean; error?: string };
-    setUpdatingUserId(null);
-    if (!json.ok) {
-      toast({ tone: "error", title: t("common.save_failed"), description: json.error });
-      return;
+    try {
+      const res = await fetch("/api/settings/team", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_role", userId: memberUserId, role: nextRole }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        toast({ tone: "error", title: t("common.save_failed"), description: json.error });
+        return;
+      }
+      setMembers((prev) => prev.map((m) => (m.userId === memberUserId ? { ...m, role: nextRole } : m)));
+      toast({ tone: "success", title: t("common.update") });
+    } catch {
+      toast({ tone: "error", title: t("common.save_failed") });
+    } finally {
+      setUpdatingUserId(null);
     }
-    setMembers((prev) => prev.map((m) => (m.userId === memberUserId ? { ...m, role: nextRole } : m)));
-    toast({ tone: "success", title: t("common.update") });
   };
 
   const confirmRemove = async () => {
     if (!removeTarget || removing) return;
     setRemoving(true);
-    const res = await fetch("/api/settings/team", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "remove_member", userId: removeTarget.userId }),
-    });
-    const json = (await res.json()) as { ok?: boolean; error?: string };
-    setRemoving(false);
-    if (!json.ok) {
-      toast({ tone: "error", title: t("common.save_failed"), description: json.error });
-      return;
+    try {
+      const res = await fetch("/api/settings/team", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "remove_member", userId: removeTarget.userId }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        toast({ tone: "error", title: t("common.save_failed"), description: json.error });
+        return;
+      }
+      setMembers((prev) => prev.filter((m) => m.userId !== removeTarget.userId));
+      toast({ tone: "success", title: t("common.delete"), description: removeTarget.email ?? undefined });
+      setRemoveTarget(null);
+    } catch {
+      toast({ tone: "error", title: t("common.save_failed") });
+    } finally {
+      setRemoving(false);
     }
-    setMembers((prev) => prev.filter((m) => m.userId !== removeTarget.userId));
-    toast({ tone: "success", title: t("common.delete"), description: removeTarget.email ?? undefined });
-    setRemoveTarget(null);
   };
 
   const openReset = (m: MemberRow) => {
@@ -167,19 +201,24 @@ export default function TeamSettingsPage() {
     }
     setResettingPassword(true);
     setResetError("");
-    const res = await fetch("/api/settings/team", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "reset_password", email: resetTarget.email, password: resetPassword }),
-    });
-    const json = (await res.json()) as { ok?: boolean; error?: string };
-    setResettingPassword(false);
-    if (!json.ok) {
-      setResetError(json.error ?? t("common.save_failed"));
-      return;
+    try {
+      const res = await fetch("/api/settings/team", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset_password", email: resetTarget.email, password: resetPassword }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        setResetError(json.error ?? t("common.save_failed"));
+        return;
+      }
+      toast({ tone: "success", title: t("team.reset_ok"), description: resetTarget.email ?? undefined });
+      setResetTarget(null);
+    } catch {
+      setResetError(t("common.save_failed"));
+    } finally {
+      setResettingPassword(false);
     }
-    toast({ tone: "success", title: t("team.reset_ok"), description: resetTarget.email ?? undefined });
-    setResetTarget(null);
   };
 
   if (!canManageTeam) {
@@ -208,7 +247,7 @@ export default function TeamSettingsPage() {
         <SettingsNav />
 
         {message && (
-          <div className="mb-5 rounded-2xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900">
+          <div role={messageIsError ? "alert" : "status"} className={`mb-5 rounded-2xl border px-4 py-3 text-sm font-semibold ${messageIsError ? "border-rose-200 bg-rose-50 text-rose-800" : "border-teal-100 bg-teal-50 text-teal-900"}`}>
             {message}
           </div>
         )}
@@ -284,13 +323,19 @@ export default function TeamSettingsPage() {
           <ProCard title={t("team.members_title")} eyebrow={t("team.members_eyebrow")}>
             {loading ? (
               <ProLoadingState label={t("common.loading")} />
+            ) : loadFailed ? (
+              <button type="button" onClick={load} className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-bold text-white hover:bg-teal-700">
+                {t("resilience.retry")}
+              </button>
+            ) : members.length === 0 ? (
+              <p className="py-6 text-center text-sm font-semibold text-slate-500">{t("common.no_data")}</p>
             ) : (
               <ul className="divide-y divide-slate-100">
                 {members.map((m) => {
                   const isSelf = m.userId === user?.id;
                   const isOwner = m.role === "owner";
                   return (
-                    <li key={m.userId} className="flex items-center justify-between gap-3 py-3 text-sm">
+                    <li key={m.userId} className="flex flex-col gap-3 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <p className="truncate font-bold text-slate-900">{m.email ?? m.userId.slice(0, 8)}</p>
                         {(isSelf || isOwner) && (
@@ -298,7 +343,7 @@ export default function TeamSettingsPage() {
                         )}
                       </div>
                       {!isSelf && !isOwner && (
-                        <div className="flex shrink-0 items-center gap-2">
+                        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:shrink-0 sm:justify-end">
                           <select
                             value={m.role}
                             disabled={updatingUserId === m.userId}

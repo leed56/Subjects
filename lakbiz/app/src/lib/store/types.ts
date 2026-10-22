@@ -505,6 +505,7 @@ export interface BankTransaction {
   description?: string;
   reference?: string;
   date: string;
+  reversedBy?: string;
 }
 
 export interface BankTransfer {
@@ -575,6 +576,8 @@ export interface Purchase {
 export type PurchaseOrderStatus = "pending" | "partial" | "received" | "cancelled";
 
 export interface PurchaseOrderLine {
+  /** Stable cloud identity used by atomic partial receiving. */
+  id?: string;
   productId: string;
   productName: string;
   qtyOrdered: number;
@@ -582,6 +585,8 @@ export interface PurchaseOrderLine {
    * qtyOrdered. Only qtyReceived (not qtyOrdered) ever moves stock. */
   qtyReceived: number;
   unitCost: number;
+  /** Original measured unit, when supplied by the purchasing authority. */
+  lengthUnit?: "metre" | "yard";
 }
 
 export interface PurchaseOrder {
@@ -606,14 +611,15 @@ export interface PurchaseOrder {
 
 export type PurchaseOrderInput = {
   supplierId: string;
-  lines: { productId: string; qty: number; unitCost: number }[];
+  lines: { productId: string; qty: number; unitCost: number; lengthUnit?: "metre" | "yard" }[];
   relatedJobId?: string;
   note?: string;
 };
 
 /** One line's newly-received quantity for a single receiving event — not
  * the cumulative total, the delta being added now. */
-export type PurchaseOrderReceiveLine = { productId: string; qtyReceived: number };
+export type PurchaseReceiptAllocation = { qty: number; variantId?: string; lotId?: string; batchNo?: string; expiryDate?: string; manufacturedDate?: string; serialNo?: string; imei?: string };
+export type PurchaseOrderReceiveLine = { productId: string; qtyReceived: number; lineId?: string; expectedReceived?: number; allocations?: PurchaseReceiptAllocation[] };
 
 export interface SupplierPayment {
   id: string;

@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { setBottomBarOccupied } from "@/components/shell/bottom-bar-overlay";
-import { ProBadge, ProButton, ProCard, ProEmptyState, ProLoadingState, ProMain, ProPageHeader } from "@/components/ui/pro-shell";
+import { ProBadge, ProButton, ProCard, ProEmptyState, ProLoadingState, ProMain, ProPageHeader, ProStatCard } from "@/components/ui/pro-shell";
+import { TextileRollCatalogue, TextileAllocationCart, TextileBillSummary, textileMoney } from "@/components/sales/textile-pos-surfaces";
+import { SearchIcon, StockIcon, SalesIcon } from "@/components/ui/icons";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { LK_BANKS } from "@/lib/banks";
-import { formatLkr } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { buildQuoteTextFromLines, whatsappShareUrl } from "@/lib/invoice";
 import { sendApiWhatsApp } from "@/lib/messaging";
@@ -32,6 +33,8 @@ const primary = "inline-flex min-h-11 items-center justify-center rounded-xl bg-
 
 const TEXTILE_POS_COPY = {
   en: {
+    loadFailed: "Fabric rolls could not be loaded", retry: "Retry", catalogue: "Available fabric rolls", selected: "Selected", reservationLocked: "This order is reserved against a specific roll. Clear the reserved order to choose another roll.",
+    matchingRolls: "Matching rolls", metresAvailable: "Available metres", yardsAvailable: "Available yards", unreservedStock: "Unreserved stock in this selection", cartTotal: "Current bill", subtotal: "Subtotal", checkoutType: "Roll-based checkout",
     loading: "Loading Textile POS…", eyebrow: "Textile POS", title: "Wholesale & retail fabric sale",
     description: "Sell a complete roll or an exact measured cut. Invoice, payment and roll balance commit in one transaction.", atomic: "Atomic roll checkout", rolls: "Fabric rolls",
     noRolls: "No physical rolls available", noRollsHint: "Receive fabric rolls before creating a measured Textile sale.", receive: "Receive first roll",
@@ -49,6 +52,8 @@ const TEXTILE_POS_COPY = {
     metre: "metre", yard: "yard", retailCut: "retail cut", wholesaleCut: "wholesale cut", fullRollMode: "full roll",
   },
   si: {
+    loadFailed: "රෙදි රෝල් පූරණය කළ නොහැකි විය", retry: "නැවත උත්සාහ කරන්න", catalogue: "ලබා ගත හැකි රෙදි රෝල්", selected: "තෝරා ඇත", reservationLocked: "මෙම ඇණවුම නිශ්චිත රෝලකට වෙන් කර ඇත. වෙනත් රෝලක් තේරීමට වෙන් කළ ඇණවුම ඉවත් කරන්න.",
+    matchingRolls: "ගැළපෙන රෝල්", metresAvailable: "ලබා ගත හැකි මීටර්", yardsAvailable: "ලබා ගත හැකි යාර", unreservedStock: "මෙම තේරීමේ වෙන් නොකළ තොග", cartTotal: "වත්මන් බිල", subtotal: "උප එකතුව", checkoutType: "රෝල් අනුව අලෙවිය",
     loading: "රෙදිපිළි POS පූරණය වෙමින්…", eyebrow: "රෙදිපිළි POS", title: "තොග සහ සිල්ලර රෙදි අලෙවිය",
     description: "සම්පූර්ණ රෝලක් හෝ නිශ්චිතව මැනූ කොටසක් විකුණන්න. ඉන්වොයිසිය, ගෙවීම සහ රෝල් ශේෂය එකම ගනුදෙනුවකින් සුරැකේ.", atomic: "ආරක්ෂිත රෝල් checkout", rolls: "රෙදි රෝල්",
     noRolls: "විකිණීමට රෙදි රෝල් නැත", noRollsHint: "මැනූ රෙදි අලෙවියක් කිරීමට පෙර රෝල් භාරගන්න.", receive: "පළමු රෝල භාරගන්න",
@@ -65,6 +70,8 @@ const TEXTILE_POS_COPY = {
     metre: "මීටර්", yard: "යාර", retailCut: "සිල්ලර කැපුම", wholesaleCut: "තොග කැපුම", fullRollMode: "සම්පූර්ණ රෝල",
   },
   ta: {
+    loadFailed: "துணி Rolls-ஐ ஏற்ற முடியவில்லை", retry: "மீண்டும் முயற்சி", catalogue: "கிடைக்கும் துணி Rolls", selected: "தேர்ந்தெடுக்கப்பட்டது", reservationLocked: "இந்த ஆர்டர் ஒரு குறிப்பிட்ட Roll-க்கு ஒதுக்கப்பட்டுள்ளது. வேறு Roll-ஐத் தேர்வுசெய்ய ஒதுக்கப்பட்ட ஆர்டரை நீக்கவும்.",
+    matchingRolls: "பொருந்தும் Rolls", metresAvailable: "கிடைக்கும் மீட்டர்கள்", yardsAvailable: "கிடைக்கும் யார்டுகள்", unreservedStock: "இந்தத் தேர்வில் ஒதுக்கப்படாத சரக்கு", cartTotal: "தற்போதைய பில்", subtotal: "கூட்டுத்தொகை", checkoutType: "Roll அடிப்படையிலான விற்பனை",
     loading: "துணி POS ஏற்றப்படுகிறது…", eyebrow: "துணி POS", title: "மொத்த & சில்லறை துணி விற்பனை",
     description: "முழு Roll ஒன்றை அல்லது துல்லியமாக அளவிடப்பட்ட வெட்டை விற்கவும். இன்வாய்ஸ், கட்டணம் மற்றும் Roll இருப்பு ஒரே பரிவர்த்தனையில் உறுதிப்படுத்தப்படும்.", atomic: "பாதுகாப்பான Roll checkout", rolls: "துணி Rolls",
     noRolls: "விற்பனைக்கு துணி Rolls இல்லை", noRollsHint: "அளவிடப்பட்ட துணி விற்பனையை உருவாக்குவதற்கு முன் துணி Rolls-ஐப் பெறவும்.", receive: "முதல் Roll-ஐப் பெறவும்",
@@ -144,6 +151,8 @@ export function TextileSalesPage() {
   const [rolls, setRolls] = useState<TextileRollRecord[]>([]);
   const [reservations, setReservations] = useState<TextileReservation[]>([]);
   const [loadingRolls, setLoadingRolls] = useState(true);
+  const [rollLoadError, setRollLoadError] = useState("");
+  const [rollReload, setRollReload] = useState(0);
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [customerId, setCustomerId] = useState("");
@@ -153,6 +162,7 @@ export function TextileSalesPage() {
   const [productId, setProductId] = useState("");
   const [rollId, setRollId] = useState("");
   const [rollSearch, setRollSearch] = useState("");
+  const scannerRef = useRef<HTMLInputElement>(null);
   const [reservationId, setReservationId] = useState("");
   const [quantity, setQuantity] = useState("");
   const [fullRoll, setFullRoll] = useState(false);
@@ -180,18 +190,24 @@ export function TextileSalesPage() {
     if (!org.id) return;
     let cancelled = false;
     setLoadingRolls(true);
+    setRollLoadError("");
+    setRolls([]); setReservations([]);
     void Promise.all([fetchTextileRolls(org.id, false, { sellableOnly: true }), fetchTextileReservations(org.id, true)]).then(([result, reservationResult]) => {
       if (cancelled) return;
       setLoadingRolls(false);
-      if (result.error) setMessage(result.error);
-      else if (reservationResult.error) setMessage(reservationResult.error);
+      if (result.error) setRollLoadError(result.error);
+      else if (reservationResult.error) setRollLoadError(reservationResult.error);
       else { setRolls(result.data); setReservations(reservationResult.data); }
+    }).catch(() => {
+      if (cancelled) return;
+      setLoadingRolls(false); setRollLoadError(copy.loadFailed);
     });
     return () => { cancelled = true; };
-  }, [org.id]);
+  }, [org.id, rollReload, copy.loadFailed]);
 
   const products = useMemo(() => (data?.products ?? []).filter((p) => p.active && p.sectorId === "textile"), [data?.products]);
-  const sellableRolls = rolls.filter((r) => r.custodyStatus === "available" && !["quarantined", "returned", "exhausted"].includes(r.status) && r.remainingLength - r.reservedLength > 0 && (!productId || r.productId === productId));
+  const allSellableRolls = rolls.filter((r) => r.custodyStatus === "available" && !["quarantined", "returned", "exhausted"].includes(r.status) && r.remainingLength - r.reservedLength > 0);
+  const sellableRolls = allSellableRolls.filter((roll) => !productId || roll.productId === productId);
   const normalizedRollSearch = rollSearch.trim().toLowerCase();
   const visibleSellableRolls = normalizedRollSearch
     ? sellableRolls.filter((roll) =>
@@ -235,6 +251,7 @@ export function TextileSalesPage() {
       unit: selectedRoll.lengthUnit, priceSource: priceResolution.source, reservationId: selectedReservation?.id,
     }]);
     setQuantity(""); setManualPrice(""); setFullRoll(false); setReservationId(""); setRollSearch(""); setMessage("");
+    if (window.matchMedia("(min-width: 1280px)").matches) scannerRef.current?.focus();
   }
 
   async function checkout() {
@@ -312,36 +329,44 @@ export function TextileSalesPage() {
 
   const chequeUsed = payment === "cheque" || (split && secondaryPayment === "cheque");
   return <AppShell><ProMain>
-    <ProPageHeader eyebrow={copy.eyebrow} title={copy.title} description={copy.description} actions={<><ProBadge tone="emerald">{copy.atomic}</ProBadge><ProButton href="/stock/rolls" variant="secondary">{copy.rolls}</ProButton></>} />
+    <ProPageHeader sector="textile" eyebrow={copy.eyebrow} title={copy.title} description={copy.description} actions={<><ProBadge tone="emerald">{copy.checkoutType}</ProBadge><ProButton href="/stock/rolls" variant="secondary">{copy.rolls}</ProButton></>} />
     <WriteDisabledHint className="mb-5" />
     {message && <div role={message.startsWith(copy.completed) ? "status" : "alert"} className={`mb-5 rounded-xl border px-4 py-3 text-sm font-semibold ${message.startsWith(copy.completed) ? "border-teal-200 bg-teal-50 text-teal-900" : "border-amber-200 bg-amber-50 text-amber-950"}`}>{message}</div>}
 
-    {rolls.length === 0 ? <ProCard><ProEmptyState title={copy.noRolls} description={copy.noRollsHint} action={<ProButton href="/stock/rolls">{copy.receive}</ProButton>} /></ProCard> :
-    <div className="grid gap-6 xl:grid-cols-[1.2fr_.8fr]">
+    {rolls.length > 0 && <section className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label={copy.selection}>
+      <ProStatCard label={copy.matchingRolls} value={String(visibleSellableRolls.length)} hint={copy.catalogue} icon={<StockIcon />} tone="blue" />
+      <ProStatCard label={copy.metresAvailable} value={visibleSellableRolls.filter((roll) => roll.lengthUnit === "metre").reduce((sum, roll) => sum + roll.remainingLength - roll.reservedLength, 0).toFixed(3)} hint={copy.unreservedStock} tone="teal" />
+      <ProStatCard label={copy.yardsAvailable} value={visibleSellableRolls.filter((roll) => roll.lengthUnit === "yard").reduce((sum, roll) => sum + roll.remainingLength - roll.reservedLength, 0).toFixed(3)} hint={copy.unreservedStock} tone="slate" />
+      <ProStatCard label={copy.cartTotal} value={textileMoney(total)} hint={`${cart.length} ${copy.allocations}`} icon={<SalesIcon />} tone="emerald" />
+    </section>}
+    {rollLoadError ? <ProCard><div role="alert"><ProEmptyState title={copy.loadFailed} description={rollLoadError} action={<button type="button" className={primary} onClick={() => setRollReload((version) => version + 1)}>{copy.retry}</button>} /></div></ProCard> : rolls.length === 0 ? <ProCard><ProEmptyState title={copy.noRolls} description={copy.noRollsHint} action={<ProButton href="/stock/rolls">{copy.receive}</ProButton>} /></ProCard> :
+    <div className="textile-pos-layout">
       <div className="space-y-5">
+        <ProCard title={copy.selection}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className={`${field} md:col-span-2`}>{copy.reservedOrder}<select className={input} value={reservationId} onChange={(e) => { const id=e.target.value; setReservationId(id); const reserved=reservations.find((r)=>r.id===id); setCustomerId(reserved?.customerId ?? ""); setWalkInName(reserved?.customerName ?? ""); if (reserved) { setFullRoll(false); setRollId(reserved.rollId); setProductId(reserved.productId); setQuantity(String(reserved.quantity)); } }}><option value="">{copy.walkInSale}</option>{reservations.map((r)=><option key={r.id} value={r.id}>{r.orderReference} · {productByIdSafe(products, r.productId, copy.fabric)} · {r.quantity.toFixed(3)} {unitLabel(r.lengthUnit)} · {copy.dye} {r.dyeLot || copy.unrecorded}</option>)}</select></label>
+            <label className={`${field} md:col-span-2`}>{copy.scan}<span className="relative block"><SearchIcon className="pointer-events-none absolute left-3.5 top-5 h-4 w-4 text-slate-400" /><input ref={scannerRef} disabled={Boolean(selectedReservation)} className={`${input} pl-10`} value={rollSearch} onChange={(e) => { const value=e.target.value; setRollSearch(value); const exact=value.trim() ? allSellableRolls.find((roll)=>roll.rollNo.toLowerCase()===value.trim().toLowerCase()||(roll.barcode??"").toLowerCase()===value.trim().toLowerCase()) : undefined; if(exact){if(exact.reservedLength>0)setFullRoll(false);setRollId(exact.id);setProductId(exact.productId);} }} placeholder={copy.scanHint} autoComplete="off" /></span></label>
+            <label className={field}>{copy.fabric}<select disabled={Boolean(selectedReservation)} className={input} value={productId} onChange={(e) => { setProductId(e.target.value); setRollId(""); }}><option value="">{copy.allFabrics}</option>{products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+          </div>
+        </ProCard>
+        <TextileRollCatalogue copy={copy} selectedId={rollId} locked={Boolean(selectedReservation)} busy={saving}
+          rolls={(selectedReservation ? rolls.filter((roll) => roll.id === selectedReservation.rollId) : visibleSellableRolls).map((roll) => ({ ...roll, productName: productByIdSafe(products, roll.productId, copy.fabric), availableLength: selectedReservation ? selectedReservation.quantity : roll.remainingLength - roll.reservedLength }))}
+          onSelect={(id) => {
+            if (saving) return;
+            const roll = visibleSellableRolls.find((row) => row.id === id);
+            if (!roll) return;
+            if (roll.reservedLength > 0) setFullRoll(false);
+            setRollId(id);
+          }} />
         <ProCard title={copy.build} eyebrow={copy.selection}>
-          <div className="mb-5 grid grid-cols-3 gap-2" aria-label={copy.mode}>
+          <div className="mb-5 grid grid-cols-3 gap-2" role="group" aria-label={copy.mode}>
             <button type="button" aria-pressed={!fullRoll && channel === "retail"} className={`min-h-11 rounded-xl px-2 py-2 text-sm font-semibold ${!fullRoll && channel === "retail" ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-700"}`} onClick={() => { setFullRoll(false); setChannel("retail"); }}>{copy.retail}</button>
             <button type="button" aria-pressed={!fullRoll && channel === "wholesale"} className={`min-h-11 rounded-xl px-2 py-2 text-sm font-semibold ${!fullRoll && channel === "wholesale" ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-700"}`} onClick={() => { setFullRoll(false); setChannel("wholesale"); }}>{copy.wholesale}</button>
             <button type="button" aria-pressed={fullRoll} disabled={Boolean(selectedRoll?.reservedLength)} title={selectedRoll?.reservedLength ? copy.fullBlocked : undefined} className={`min-h-11 rounded-xl px-2 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45 ${fullRoll ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-700"}`} onClick={() => { setFullRoll(true); setChannel("wholesale"); }}>{copy.full}</button>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            {/* Reported/found in the Textile screen sweep: switching from
-                a reservation with a customer attached to one without
-                (or back to "walk-in sale") never cleared customerId/
-                walkInName -- only ever set them, never reset. A cashier
-                picking reservation A (customer X), then reservation B
-                (no customer on file), silently kept customer X attached
-                to B's sale: wrong customer credited/charged, wrong
-                credit-ledger entry. Now always resets both fields to
-                match whatever the newly selected reservation (or none)
-                actually carries, instead of only ever adding to stale
-                state from a previous selection. */}
-            <label className={`${field} md:col-span-2`}>{copy.reservedOrder}<select className={input} value={reservationId} onChange={(e) => { const id=e.target.value; setReservationId(id); const reserved=reservations.find((r)=>r.id===id); setCustomerId(reserved?.customerId ?? ""); setWalkInName(reserved?.customerName ?? ""); if (reserved) { setFullRoll(false); setRollId(reserved.rollId); setProductId(reserved.productId); setQuantity(String(reserved.quantity)); } }}><option value="">{copy.walkInSale}</option>{reservations.map((r)=><option key={r.id} value={r.id}>{r.orderReference} · {productByIdSafe(products, r.productId, copy.fabric)} · {r.quantity.toFixed(3)} {unitLabel(r.lengthUnit)} · {copy.dye} {r.dyeLot || copy.unrecorded}</option>)}</select></label>
-            <label className={`${field} md:col-span-2`}>{copy.scan}<input className={input} value={rollSearch} onChange={(e) => { const value=e.target.value; setRollSearch(value); const exact=sellableRolls.find((roll)=>roll.rollNo.toLowerCase()===value.trim().toLowerCase()||(roll.barcode??"").toLowerCase()===value.trim().toLowerCase()); if(exact){if(exact.reservedLength>0)setFullRoll(false);setRollId(exact.id);setProductId(exact.productId);} }} placeholder={copy.scanHint} autoComplete="off" /></label>
-            <label className={field}>{copy.fabric}<select className={input} value={productId} onChange={(e) => { setProductId(e.target.value); setRollId(""); }}><option value="">{copy.allFabrics}</option>{products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
             <label className={field}>{copy.physicalRoll}<select disabled={Boolean(selectedReservation)} className={input} value={rollId} onChange={(e) => { const id = e.target.value; setRollId(id); const roll = rolls.find((r) => r.id === id); if (roll) { if(roll.reservedLength>0)setFullRoll(false); setProductId(roll.productId); setRollSearch(roll.rollNo); } }}><option value="">{visibleSellableRolls.length ? copy.selectRoll : copy.noMatch}</option>{(selectedReservation ? rolls.filter((r)=>r.id===selectedReservation.rollId) : visibleSellableRolls).map((r) => <option key={r.id} value={r.id}>{r.rollNo} · {(selectedReservation ? selectedReservation.quantity : r.remainingLength-r.reservedLength).toFixed(3)} {r.lengthUnit === "metre" ? "m" : "yd"}{r.dyeLot ? ` · ${copy.dye} ${r.dyeLot}` : ""}</option>)}</select></label>
-            {selectedRoll && <div className="md:col-span-2 rounded-xl border border-teal-100 bg-teal-50/70 px-4 py-3 text-sm text-teal-950"><span className="font-semibold">{copy.rolls} {selectedRoll.rollNo}</span> · {available.toFixed(3)} {selectedRoll.lengthUnit} {copy.available}{selectedRoll.dyeLot ? ` · ${copy.dye} ${selectedRoll.dyeLot}` : ""}{selectedRoll.shade ? ` · ${copy.shade} ${selectedRoll.shade}` : ""}{selectedRoll.rackLocation ? ` · ${selectedRoll.rackLocation}` : ""}</div>}
+            {selectedRoll && <div className="md:col-span-2 rounded-xl border border-teal-100 bg-teal-50/70 px-4 py-3 text-sm text-teal-950"><span className="font-semibold">{copy.rolls} {selectedRoll.rollNo}</span> · {available.toFixed(3)} {unitLabel(selectedRoll.lengthUnit)} {copy.available}{selectedRoll.dyeLot ? ` · ${copy.dye} ${selectedRoll.dyeLot}` : ""}{selectedRoll.shade ? ` · ${copy.shade} ${selectedRoll.shade}` : ""}{selectedRoll.rackLocation ? ` · ${selectedRoll.rackLocation}` : ""}</div>}
             <label className={field}>{copy.customer}<select className={input} value={customerId} onChange={(e) => setCustomerId(e.target.value)}><option value="">{copy.walkInCustomer}</option>{data.customers.map((c) => <option key={c.id} value={c.id}>{c.name}{c.contactType === "company" ? ` · ${copy.company}` : ""}</option>)}</select></label>
             {!customerId && <label className={field}>{copy.walkInName}<input className={input} value={walkInName} onChange={(e) => setWalkInName(e.target.value)} /></label>}
             {!customerId && (
@@ -355,23 +380,28 @@ export function TextileSalesPage() {
             )}
             <label className={field}>{fullRoll ? copy.fullQty : copy.measuredQty}<input disabled={fullRoll} type="number" min="0.001" max={available || undefined} step="0.001" className={input} value={fullRoll ? available.toFixed(3) : quantity} onChange={(e) => setQuantity(e.target.value)} /></label>
             {canOverride && <label className={field}>{copy.managerPrice}<input type="number" min="0" step="0.01" className={input} value={manualPrice} onChange={(e) => setManualPrice(e.target.value)} placeholder={priceResolution ? String(priceResolution.price) : ""} /></label>}
-            <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-semibold text-slate-500">{copy.appliedPrice}</p><p className="mt-1 text-xl font-bold text-slate-950">{formatLkr(priceResolution?.price ?? 0)}</p><p className="text-xs text-teal-700">{priceSourceLabel(priceResolution?.source)}</p></div>
+            <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-semibold text-slate-500">{copy.appliedPrice}</p><p className="mt-1 text-xl font-bold text-slate-950">{priceResolution ? textileMoney(priceResolution.price) : "—"}</p><p className="text-xs text-teal-700">{priceResolution ? priceSourceLabel(priceResolution.source) : copy.selectRoll}</p></div>
           </div>
           <div className="mt-4 flex justify-end"><button type="button" className={primary} disabled={!selectedRoll || saleQty <= 0} onClick={addLine}>{copy.addAllocation}</button></div>
         </ProCard>
-        <ProCard title={copy.allocated} eyebrow={copy.cart} action={<ProBadge tone={cart.length ? "teal" : "slate"}>{cart.length} {cart.length === 1 ? copy.line : copy.lines} · {formatLkr(total)}</ProBadge>}>
-          {cart.length === 0 ? <p className="text-sm text-slate-500">{copy.noCuts}</p> : <div className="divide-y divide-slate-100">{cart.map((line) => <div key={line.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="font-semibold text-slate-900">{line.productName} · {copy.rolls} {line.rollNo}</p><p className="text-xs text-slate-500">{saleModeLabel(line.saleMode)} · {line.quantity.toFixed(3)} {unitLabel(line.unit)} × {formatLkr(line.unitPrice)} · {priceSourceLabel(line.priceSource)}</p></div><div className="flex items-center gap-3"><span className="font-bold">{formatLkr(line.quantity*line.unitPrice)}</span><button type="button" aria-label={copy.removeLabel.replace("{fabric}", line.productName).replace("{roll}", line.rollNo)} className="min-h-11 rounded-xl px-3 text-sm font-semibold text-rose-700 hover:bg-rose-50" onClick={() => setCart((rows) => rows.filter((r) => r.id !== line.id))}>{copy.remove}</button></div></div>)}</div>}
-        </ProCard>
       </div>
-      <div id="textile-settlement" className="xl:sticky xl:top-24 xl:self-start">
+      <aside className="textile-checkout-sidebar" aria-label={copy.paymentCheckout}>
+      <TextileAllocationCart busy={saving} lines={cart} copy={copy} unitLabel={unitLabel} modeLabel={saleModeLabel} priceLabel={(source) => priceSourceLabel(source as "manual" | "customer" | "wholesale" | "retail")}
+        onRemove={(id) => { if (!saving) setCart((rows) => rows.filter((line) => line.id !== id)); }} />
+      <div id="textile-settlement">
       <ProCard title={copy.paymentCheckout} eyebrow={copy.settlement}>
         <div className="space-y-4">
           <label className={field}>{copy.discount}<input type="number" min="0" max={gross} step="0.01" className={input} value={discount} onChange={(e) => setDiscount(Number(e.target.value))} /></label>
-          <label className={field}>{copy.primaryPayment}<select className={input} value={payment} onChange={(e) => setPayment(e.target.value as CheckoutTenderKind)}>{["cash","card","bank_transfer","cheque","credit"].map((p) => <option key={p} value={p}>{tenderLabel(p)}</option>)}</select></label>
+          <fieldset disabled={saving}>
+            <legend className={`${field} mb-2`}>{copy.primaryPayment}</legend>
+            <div className="textile-payment-options">
+              {(["cash", "card", "bank_transfer", "cheque", "credit"] as const).map((kind) => <button key={kind} type="button" aria-pressed={payment === kind} className="textile-payment-option" onClick={() => setPayment(kind)}>{tenderLabel(kind)}</button>)}
+            </div>
+          </fieldset>
           <label className={`${field} flex items-center gap-3 rounded-xl border border-slate-200 p-3.5`}><input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} /><span>{copy.split}</span></label>
           {split && <><label className={field}>{copy.secondPayment}<select className={input} value={secondaryPayment} onChange={(e) => setSecondaryPayment(e.target.value as CheckoutTenderKind)}>{["cash","card","bank_transfer","cheque","credit"].map((p) => <option key={p} value={p}>{tenderLabel(p)}</option>)}</select></label><label className={field}>{copy.secondAmount}<input type="number" min="0.01" max={total} step="0.01" className={input} value={secondaryAmount} onChange={(e) => setSecondaryAmount(e.target.value)} /></label></>}
           {chequeUsed && <div className="space-y-3 rounded-xl bg-slate-50 p-4"><label className={field}>{copy.chequeNo}<input className={input} value={chequeNo} onChange={(e) => setChequeNo(e.target.value)} /></label><label className={field}>{copy.bank}<select className={input} value={chequeBank} onChange={(e) => setChequeBank(e.target.value)}>{LK_BANKS.map((bank) => <option key={bank}>{bank}</option>)}</select></label><label className={field}>{copy.chequeDate}<input type="date" className={input} value={chequeDate} onChange={(e) => setChequeDate(e.target.value)} /></label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={postDated} onChange={(e) => setPostDated(e.target.checked)} /> {copy.postDated}</label></div>}
-          <div className="rounded-2xl bg-slate-950 p-5 text-white"><p className="text-xs uppercase tracking-wider text-slate-400">{copy.amountDue}</p><p className="mt-1 text-3xl font-bold">{formatLkr(total)}</p></div>
+          <TextileBillSummary gross={gross} discount={discountValue} total={total} copy={copy} />
           {cart.length > 0 && (
             <div className="space-y-2">
               <div className="flex gap-2">
@@ -414,8 +444,9 @@ export function TextileSalesPage() {
         </div>
       </ProCard>
       </div>
+      </aside>
     </div>}
-    {cart.length > 0 && <><div className="h-20 xl:hidden" aria-hidden="true" /><div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_30px_rgba(15,23,42,0.12)] backdrop-blur xl:hidden"><div className="mx-auto flex max-w-xl items-center justify-between gap-3"><div><p className="text-[11px] font-semibold text-slate-500">{cart.length} {copy.allocations}</p><p className="font-mono text-xl font-bold text-slate-950">{formatLkr(total)}</p></div><button type="button" className={primary} onClick={() => document.getElementById("textile-settlement")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{copy.reviewPayment}</button></div></div></>}
+    {cart.length > 0 && <><div className="h-28 xl:hidden" aria-hidden="true" /><div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_30px_rgba(15,23,42,0.12)] backdrop-blur xl:hidden"><div className="mx-auto grid max-w-xl grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] items-center gap-3"><div><p className="text-[11px] font-semibold text-slate-500">{cart.length} {copy.allocations}</p><p className="textile-mobile-total">{textileMoney(total)}</p></div><button type="button" className={primary} onClick={() => document.getElementById("textile-settlement")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{copy.reviewPayment}</button></div></div></>}
     <div className="mt-5 text-sm text-slate-500">{copy.reviewSales} <Link href="/bills" className="font-semibold text-teal-700">{copy.openBills}</Link>.</div>
   </ProMain></AppShell>;
 }

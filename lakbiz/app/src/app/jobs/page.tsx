@@ -27,7 +27,7 @@ import { Drawer, DrawerFooter, Dialog, ConfirmDialog } from "@/components/ui/ove
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
 import { FormField, TextInput, SelectInput, MoneyInput, DateInput } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
-import { AssetIcon, PlusIcon, FilterIcon, CloseIcon } from "@/components/ui/icons";
+import { AssetIcon, FilterIcon, CloseIcon } from "@/components/ui/icons";
 import {
   AC_BRANDS,
   AC_BTU_OPTIONS,
@@ -77,12 +77,23 @@ const UNIT_TYPES = ["Wall mounted", "Cassette", "Ducted", "Ceiling suspended", "
 
 export default function JobsPage() {
   const router = useRouter();
-  const { data, ready, saveACJobToCloud, updateACJobToCloud, deleteACJobToCloud, recordACServiceToCloud, addJobItemToCloud, deleteJobItemToCloud } = useAppStore();
+  const {
+    data,
+    ready,
+    saveACJobToCloud,
+    updateACJobToCloud,
+    deleteACJobToCloud,
+    recordACServiceToCloud,
+    addJobItemToCloud,
+    deleteJobItemToCloud,
+  } = useAppStore();
   const { t, locale } = useLocale();
   const { org, orgRole, canSeeFinancials } = useSubscription();
   const canManageJobs = canManageAcJobs(orgRole);
   const canOperateJobs = canOperateAcJobs(orgRole);
   const { canWrite, disabledHint } = useWriteAccess();
+  const mutationLock = useRef(false);
+  const [jobFormError, setJobFormError] = useState<string | null>(null);
   const notificationLogs = useNotificationLogs(org.id);
   const { markAllSeen, enabled: alertsFeatureEnabled } = useAcInAppAlerts();
   // Part 11 — detailed reminder config lives behind a compact trigger,
@@ -110,7 +121,10 @@ export default function JobsPage() {
   // completion, just make sure it wasn't an oversight. Holds the exact
   // status-update call so confirming re-issues the same input, not a
   // hardcoded one.
-  const [pendingComplete, setPendingComplete] = useState<{ jobId: string; input: Partial<ACJobInput> } | null>(null);
+  const [pendingComplete, setPendingComplete] = useState<{
+    jobId: string;
+    input: Partial<ACJobInput>;
+  } | null>(null);
   const [customerId, setCustomerId] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
@@ -157,10 +171,29 @@ export default function JobsPage() {
   // drawer only prompts before closing if something actually changed.
   const formSnapshotRef = useRef<string>("");
   const formSnapshot = JSON.stringify([
-    customerId, customerName, phone, address, brand, btu, unitType, unitCount,
-    quotedAmount, depositAmount, pipeMeters, status, scheduledDate, serviceIntervalDays,
-    serviceDueManual, serviceDueDate, amcContract, notes, complaint, diagnosis, jobType,
-    assigneeKey, subcontractCost,
+    customerId,
+    customerName,
+    phone,
+    address,
+    brand,
+    btu,
+    unitType,
+    unitCount,
+    quotedAmount,
+    depositAmount,
+    pipeMeters,
+    status,
+    scheduledDate,
+    serviceIntervalDays,
+    serviceDueManual,
+    serviceDueDate,
+    amcContract,
+    notes,
+    complaint,
+    diagnosis,
+    jobType,
+    assigneeKey,
+    subcontractCost,
   ]);
   useEffect(() => {
     if (formOpen) formSnapshotRef.current = formSnapshot;
@@ -181,7 +214,10 @@ export default function JobsPage() {
   // drawer itself already use for job-linked Expenses (cloud-only, not
   // part of the local-first store), lifted to the list level so every
   // JobCard can use the real calculation instead of a second one.
-  const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<string, JobLinkedExpense[]> | null>(null);
+  const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<
+    string,
+    JobLinkedExpense[]
+  > | null>(null);
   useEffect(() => {
     if (!org.id || !canSeeFinancials) {
       setJobLinkedExpenseTotals(new Map());
@@ -207,18 +243,39 @@ export default function JobsPage() {
   if (!ready || !data) {
     return (
       <AppShell>
-        <ProMain><ProLoadingState label={t("common.loading")} /></ProMain>
+        <ProMain>
+          <ProLoadingState label={t("common.loading")} />
+        </ProMain>
       </AppShell>
     );
   }
 
   const resetForm = () => {
-    setCustomerId(""); setCustomerName(""); setPhone(""); setAddress(""); setBrand(AC_BRANDS[0]);
-    setBtu(18000); setUnitType(UNIT_TYPES[0]); setUnitCount(1); setDescription("");
-    setQuotedAmount(""); setDepositAmount(""); setPipeMeters(4); setStatus("quote"); setScheduledDate("");
-    setServiceIntervalDays(180); setServiceDueManual(false); setServiceDueDate(""); setAmcContract(false);
-    setJobType("installation"); setAssigneeKey(""); setSubcontractCost(""); setNotes("");
-    setComplaint(""); setDiagnosis(""); setEditing(null);
+    setCustomerId("");
+    setCustomerName("");
+    setPhone("");
+    setAddress("");
+    setBrand(AC_BRANDS[0]);
+    setBtu(18000);
+    setUnitType(UNIT_TYPES[0]);
+    setUnitCount(1);
+    setDescription("");
+    setQuotedAmount("");
+    setDepositAmount("");
+    setPipeMeters(4);
+    setStatus("quote");
+    setScheduledDate("");
+    setServiceIntervalDays(180);
+    setServiceDueManual(false);
+    setServiceDueDate("");
+    setAmcContract(false);
+    setJobType("installation");
+    setAssigneeKey("");
+    setSubcontractCost("");
+    setNotes("");
+    setComplaint("");
+    setDiagnosis("");
+    setEditing(null);
   };
 
   const openCreate = () => {
@@ -227,22 +284,41 @@ export default function JobsPage() {
   };
 
   const loadJob = (job: ACJob) => {
-    setEditing(job); setCustomerId(job.customerId ?? ""); setCustomerName(job.customerName); setPhone(job.phone ?? "");
-    setAddress(job.address); setBrand(job.brand ?? AC_BRANDS[0]); setBtu(job.btu ?? 18000);
-    setUnitType(job.unitType ?? UNIT_TYPES[0]); setUnitCount(job.unitCount); setDescription(job.description);
-    setQuotedAmount(String(job.quotedAmount || "")); setDepositAmount(String(job.depositAmount || "")); setPipeMeters(job.pipeMeters ?? 4);
-    setStatus(job.status); setScheduledDate(job.scheduledDate ?? ""); setServiceIntervalDays(resolveServiceIntervalDays(job));
-    setServiceDueManual(job.serviceDueManual ?? false); setServiceDueDate(job.serviceDueDate ?? "");
-    setAmcContract(job.amcContract ?? false); setJobType(job.jobType ?? "installation");
+    setEditing(job);
+    setCustomerId(job.customerId ?? "");
+    setCustomerName(job.customerName);
+    setPhone(job.phone ?? "");
+    setAddress(job.address);
+    setBrand(job.brand ?? AC_BRANDS[0]);
+    setBtu(job.btu ?? 18000);
+    setUnitType(job.unitType ?? UNIT_TYPES[0]);
+    setUnitCount(job.unitCount);
+    setDescription(job.description);
+    setQuotedAmount(String(job.quotedAmount || ""));
+    setDepositAmount(String(job.depositAmount || ""));
+    setPipeMeters(job.pipeMeters ?? 4);
+    setStatus(job.status);
+    setScheduledDate(job.scheduledDate ?? "");
+    setServiceIntervalDays(resolveServiceIntervalDays(job));
+    setServiceDueManual(job.serviceDueManual ?? false);
+    setServiceDueDate(job.serviceDueDate ?? "");
+    setAmcContract(job.amcContract ?? false);
+    setJobType(job.jobType ?? "installation");
     setAssigneeKey(job.assigneeId ? `${job.assigneeType}:${job.assigneeId}` : "");
-    setSubcontractCost(String(job.subcontractCost ?? "")); setNotes(job.notes ?? "");
-    setComplaint(job.complaint ?? ""); setDiagnosis(job.diagnosis ?? ""); setFormOpen(true);
+    setSubcontractCost(String(job.subcontractCost ?? ""));
+    setNotes(job.notes ?? "");
+    setComplaint(job.complaint ?? "");
+    setDiagnosis(job.diagnosis ?? "");
+    setFormOpen(true);
   };
 
   const autoServiceDuePreview = (): string | undefined => {
     const interval = serviceIntervalDays || DEFAULT_SERVICE_INTERVAL_DAYS;
     const today = new Date().toISOString().slice(0, 10);
-    const base = jobType === "installation" ? editing?.installedDate ?? (status === "installed" ? today : scheduledDate || today) : scheduledDate || today;
+    const base =
+      jobType === "installation"
+        ? (editing?.installedDate ?? (status === "installed" ? today : scheduledDate || today))
+        : scheduledDate || today;
     if (jobType === "installation" && status !== "installed" && !scheduledDate) return undefined;
     return computeServiceDueFromDays(base, interval);
   };
@@ -262,7 +338,8 @@ export default function JobsPage() {
       assignedTechnician: assigneeName,
       assigneeType: aType,
       assigneeId: aId,
-      subcontractCost: canManageJobs && aType === "contractor" ? Number(subcontractCost) || 0 : undefined,
+      subcontractCost:
+        canManageJobs && aType === "contractor" ? Number(subcontractCost) || 0 : undefined,
       serviceDueManual,
       serviceDueDate: serviceDueManual ? serviceDueDate || undefined : autoServiceDuePreview(),
       serviceIntervalDays,
@@ -281,7 +358,10 @@ export default function JobsPage() {
       status,
       scheduledDate: scheduledDate || undefined,
       amcContract,
-      installedDate: status === "installed" && !editing?.installedDate ? new Date().toISOString().slice(0, 10) : editing?.installedDate,
+      installedDate:
+        status === "installed" && !editing?.installedDate
+          ? new Date().toISOString().slice(0, 10)
+          : editing?.installedDate,
       notes,
       complaint: complaint || undefined,
       diagnosis: diagnosis || undefined,
@@ -290,26 +370,45 @@ export default function JobsPage() {
 
   const handleJobSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!address.trim() || savingJob) return;
-    const input = buildInput();
-    setSavingJob(true);
-    const result = await saveACJobToCloud(input, editing?.id);
-    setSavingJob(false);
-    if (!result.ok) {
-      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
-      return;
+    if (!canWrite || !canOperateJobs || mutationLock.current) return;
+    mutationLock.current = true;
+    try {
+      if (!address.trim() || savingJob) return;
+      setJobFormError(null);
+      const input = buildInput();
+      setSavingJob(true);
+      const result = await saveACJobToCloud(input, editing?.id);
+      setSavingJob(false);
+      if (!result.ok) {
+        setJobFormError(result.error ?? t("common.save_failed"));
+        return;
+      }
+      toast({ tone: "success", title: editing ? t("jobs.updated") : t("jobs.created") });
+      setFormOpen(false);
+      resetForm();
+    } catch {
+      setJobFormError(t("common.save_failed"));
+    } finally {
+      setSavingJob(false);
+      mutationLock.current = false;
     }
-    toast({ tone: "success", title: editing ? t("jobs.updated") : t("jobs.created") });
-    setFormOpen(false);
-    resetForm();
   };
 
   const applyJobStatusUpdate = async (jobId: string, input: Partial<ACJobInput>) => {
-    setUpdatingJobId(jobId);
-    const result = await updateACJobToCloud(jobId, input);
-    setUpdatingJobId(null);
-    if (!result.ok) {
-      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
+    if (!canWrite || !canOperateJobs || mutationLock.current) return;
+    mutationLock.current = true;
+    try {
+      setUpdatingJobId(jobId);
+      const result = await updateACJobToCloud(jobId, input);
+      setUpdatingJobId(null);
+      if (!result.ok) {
+        toast({ tone: "error", title: t("common.save_failed"), description: result.error });
+      }
+    } catch {
+      toast({ tone: "error", title: t("common.save_failed") });
+    } finally {
+      setUpdatingJobId(null);
+      mutationLock.current = false;
     }
   };
 
@@ -335,19 +434,31 @@ export default function JobsPage() {
   };
 
   const confirmDeleteJob = async () => {
-    if (!deleteTarget || deletingJobId) return;
-    setDeletingJobId(deleteTarget.id);
-    const result = await deleteACJobToCloud(deleteTarget.id);
-    setDeletingJobId(null);
-    if (!result.ok) {
-      toast({ tone: "error", title: t("common.save_failed"), description: result.error });
-      return;
+    if (!canWrite || !canManageJobs || mutationLock.current) return;
+    mutationLock.current = true;
+    try {
+      if (!deleteTarget || deletingJobId) return;
+      setDeletingJobId(deleteTarget.id);
+      const result = await deleteACJobToCloud(deleteTarget.id);
+      setDeletingJobId(null);
+      if (!result.ok) {
+        toast({ tone: "error", title: t("common.save_failed"), description: result.error });
+        return;
+      }
+      if (editing?.id === deleteTarget.id) {
+        resetForm();
+        setFormOpen(false);
+      }
+      if (serviceDoneJob?.id === deleteTarget.id) setServiceDoneJob(null);
+      if (sheetJob?.id === deleteTarget.id) setSheetJob(null);
+      toast({ tone: "success", title: t("common.delete"), description: deleteTarget.jobNo });
+      setDeleteTarget(null);
+    } catch {
+      toast({ tone: "error", title: t("common.save_failed") });
+    } finally {
+      setDeletingJobId(null);
+      mutationLock.current = false;
     }
-    if (editing?.id === deleteTarget.id) { resetForm(); setFormOpen(false); }
-    if (serviceDoneJob?.id === deleteTarget.id) setServiceDoneJob(null);
-    if (sheetJob?.id === deleteTarget.id) setSheetJob(null);
-    toast({ tone: "success", title: t("common.delete"), description: deleteTarget.jobNo });
-    setDeleteTarget(null);
   };
 
   // Same authoritative-calculation fix as above -- built once here
@@ -362,8 +473,12 @@ export default function JobsPage() {
   const query = search.trim().toLowerCase();
   const teamOptions = [
     { value: "all", label: t("jobs.all_types") },
-    ...data.technicians.filter((x) => x.active).map((x) => ({ value: `team:${x.id}`, label: x.name })),
-    ...data.contractors.filter((x) => x.active).map((x) => ({ value: `contractor:${x.id}`, label: x.name })),
+    ...data.technicians
+      .filter((x) => x.active)
+      .map((x) => ({ value: `team:${x.id}`, label: x.name })),
+    ...data.contractors
+      .filter((x) => x.active)
+      .map((x) => ({ value: `contractor:${x.id}`, label: x.name })),
   ];
   const jobs = data.acJobs
     .filter((j) => {
@@ -387,8 +502,12 @@ export default function JobsPage() {
       if (!b.scheduledDate) return -1;
       return a.scheduledDate < b.scheduledDate ? -1 : 1;
     });
-  const activeFilterCount = [typeFilter !== "all", filter !== "all", teamFilter !== "all"].filter(Boolean).length;
-  const pending = data.acJobs.filter((j) => ["quote", "deposit_received", "scheduled"].includes(j.status));
+  const activeFilterCount = [typeFilter !== "all", filter !== "all", teamFilter !== "all"].filter(
+    Boolean,
+  ).length;
+  const pending = data.acJobs.filter((j) =>
+    ["quote", "deposit_received", "scheduled"].includes(j.status),
+  );
   const scheduled = data.acJobs.filter((j) => j.status === "scheduled");
   const serviceDue = data.acJobs.filter((j) => canMarkServiceDone(j));
   const quoteTotal = data.acJobs.reduce((sum, j) => sum + j.quotedAmount, 0);
@@ -402,7 +521,9 @@ export default function JobsPage() {
       render: (job) => (
         <div className="min-w-0">
           <p className="font-mono text-xs font-semibold text-teal-700">{job.jobNo}</p>
-          <p className="truncate text-xs text-slate-500">{jobTypeLabel(job.jobType ?? "installation", locale)}</p>
+          <p className="truncate text-xs text-slate-500">
+            {jobTypeLabel(job.jobType ?? "installation", locale)}
+          </p>
         </div>
       ),
     },
@@ -437,7 +558,9 @@ export default function JobsPage() {
       key: "status",
       header: t("common.status"),
       render: (job) => (
-        <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${jobStatusClass(job.status)}`}>
+        <span
+          className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${jobStatusClass(job.status)}`}
+        >
           {jobStatusLabel(job.status, locale)}
         </span>
       ),
@@ -470,10 +593,20 @@ export default function JobsPage() {
             <ActionMenu
               label={t("jobs.more_actions")}
               items={[
-                { label: t("jinv.view_invoice"), onSelect: () => router.push(`/jobs/${job.id}/invoice`) },
+                {
+                  label: t("jinv.view_invoice"),
+                  onSelect: () => router.push(`/jobs/${job.id}/invoice`),
+                },
                 { label: t("common.edit"), onSelect: () => loadJob(job), disabled: !canWrite },
                 ...(canManageJobs
-                  ? [{ label: t("common.delete"), onSelect: () => setDeleteTarget(job), tone: "danger" as const, disabled: !canWrite }]
+                  ? [
+                      {
+                        label: t("common.delete"),
+                        onSelect: () => setDeleteTarget(job),
+                        tone: "danger" as const,
+                        disabled: !canWrite,
+                      },
+                    ]
                   : []),
               ]}
             />
@@ -494,21 +627,43 @@ export default function JobsPage() {
               <button
                 type="button"
                 disabled={!canWrite}
-                title={!canWrite ? disabledHint ?? undefined : undefined}
+                title={!canWrite ? (disabledHint ?? undefined) : undefined}
                 onClick={openCreate}
                 className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <PlusIcon className="h-4 w-4" />
                 {t("jobs.new")}
               </button>
             ) : undefined
           }
           metrics={
-            <div className={`grid gap-3 sm:grid-cols-2 ${canOperateJobs ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
-              <MetricCard label={t("jobs.pending")} value={String(pending.length)} hint={t("jobs.stat_pending_hint")} tone={pending.length ? "warning" : "default"} />
-              <MetricCard label={t("jobs.schedule")} value={String(scheduled.length)} hint={t("jobs.stat_scheduled_hint")} />
-              <MetricCard label={t("jobs.service_due_section")} value={String(serviceDue.length)} hint={t("jobs.stat_service_due_hint")} tone={serviceDue.length ? "warning" : "default"} />
-              {canOperateJobs && <MetricCard label={t("jobs.quote_label")} value={formatLkr(quoteTotal)} hint={t("jobs.stat_quote_total_hint")} tone="positive" />}
+            <div
+              className={`grid gap-3 sm:grid-cols-2 ${canOperateJobs ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}
+            >
+              <MetricCard
+                label={t("jobs.pending")}
+                value={String(pending.length)}
+                hint={t("jobs.stat_pending_hint")}
+                tone={pending.length ? "warning" : "default"}
+              />
+              <MetricCard
+                label={t("jobs.schedule")}
+                value={String(scheduled.length)}
+                hint={t("jobs.stat_scheduled_hint")}
+              />
+              <MetricCard
+                label={t("jobs.service_due_section")}
+                value={String(serviceDue.length)}
+                hint={t("jobs.stat_service_due_hint")}
+                tone={serviceDue.length ? "warning" : "default"}
+              />
+              {canOperateJobs && (
+                <MetricCard
+                  label={t("jobs.quote_label")}
+                  value={formatLkr(quoteTotal)}
+                  hint={t("jobs.stat_quote_total_hint")}
+                  tone="positive"
+                />
+              )}
             </div>
           }
         />
@@ -516,7 +671,9 @@ export default function JobsPage() {
 
         {canOperateJobs && (
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="flex-1"><AcRemindersBanner /></div>
+            <div className="flex-1">
+              <AcRemindersBanner />
+            </div>
             {alertsFeatureEnabled && (
               <button
                 type="button"
@@ -529,7 +686,12 @@ export default function JobsPage() {
           </div>
         )}
 
-        <Dialog open={alertSettingsOpen} onClose={() => setAlertSettingsOpen(false)} title={t("ac_alerts.settings_title")} size="sm">
+        <Dialog
+          open={alertSettingsOpen}
+          onClose={() => setAlertSettingsOpen(false)}
+          title={t("ac_alerts.settings_title")}
+          size="sm"
+        >
           <AcInAppAlertSettings />
         </Dialog>
 
@@ -538,7 +700,12 @@ export default function JobsPage() {
             a "Filters" sheet below md so the bar itself stays to search +
             the view toggle on mobile. */}
         <div className="mb-4 flex flex-wrap items-center gap-2.5 rounded-xl border border-slate-200 bg-white p-2.5">
-          <SearchInput value={search} onChange={setSearch} placeholder={t("cust.search_placeholder")} className="min-w-[180px] flex-1" />
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder={t("cust.search_placeholder")}
+            className="min-w-[180px] flex-1"
+          />
 
           <div className="hidden items-center gap-2 md:flex">
             <SelectInput
@@ -548,7 +715,10 @@ export default function JobsPage() {
               className="w-auto"
               options={[
                 { value: "all", label: t("jobs.all_types") },
-                ...AC_JOB_TYPES.map((tpe) => ({ value: tpe.value, label: locale === "si" ? tpe.labelSi : tpe.labelEn })),
+                ...AC_JOB_TYPES.map((tpe) => ({
+                  value: tpe.value,
+                  label: locale === "si" ? tpe.labelSi : tpe.labelEn,
+                })),
               ]}
             />
             <SelectInput
@@ -558,7 +728,10 @@ export default function JobsPage() {
               className="w-auto"
               options={[
                 { value: "all", label: `${t("jobs.all")} (${data.acJobs.length})` },
-                ...AC_JOB_STATUSES.map((s) => ({ value: s.value, label: locale === "si" ? s.labelSi : s.labelEn })),
+                ...AC_JOB_STATUSES.map((s) => ({
+                  value: s.value,
+                  label: locale === "si" ? s.labelSi : s.labelEn,
+                })),
               ]}
             />
             <SelectInput
@@ -566,7 +739,10 @@ export default function JobsPage() {
               value={teamFilter}
               onChange={setTeamFilter}
               className="w-auto"
-              options={[{ value: "all", label: t("jobs.filter_all_teams") }, ...teamOptions.slice(1)]}
+              options={[
+                { value: "all", label: t("jobs.filter_all_teams") },
+                ...teamOptions.slice(1),
+              ]}
             />
             <SelectInput
               ariaLabel={t("jobs.sort")}
@@ -635,18 +811,37 @@ export default function JobsPage() {
               <SelectInput
                 value={typeFilter}
                 onChange={(v) => setTypeFilter(v as ACJobType | "all")}
-                options={[{ value: "all", label: t("jobs.all_types") }, ...AC_JOB_TYPES.map((tpe) => ({ value: tpe.value, label: locale === "si" ? tpe.labelSi : tpe.labelEn }))]}
+                options={[
+                  { value: "all", label: t("jobs.all_types") },
+                  ...AC_JOB_TYPES.map((tpe) => ({
+                    value: tpe.value,
+                    label: locale === "si" ? tpe.labelSi : tpe.labelEn,
+                  })),
+                ]}
               />
             </FormField>
             <FormField label={t("jobs.filter_status")}>
               <SelectInput
                 value={filter}
                 onChange={(v) => setFilter(v as ACJobStatus | "all")}
-                options={[{ value: "all", label: `${t("jobs.all")} (${data.acJobs.length})` }, ...AC_JOB_STATUSES.map((s) => ({ value: s.value, label: locale === "si" ? s.labelSi : s.labelEn }))]}
+                options={[
+                  { value: "all", label: `${t("jobs.all")} (${data.acJobs.length})` },
+                  ...AC_JOB_STATUSES.map((s) => ({
+                    value: s.value,
+                    label: locale === "si" ? s.labelSi : s.labelEn,
+                  })),
+                ]}
               />
             </FormField>
             <FormField label={t("jobs.filter_team")}>
-              <SelectInput value={teamFilter} onChange={setTeamFilter} options={[{ value: "all", label: t("jobs.filter_all_teams") }, ...teamOptions.slice(1)]} />
+              <SelectInput
+                value={teamFilter}
+                onChange={setTeamFilter}
+                options={[
+                  { value: "all", label: t("jobs.filter_all_teams") },
+                  ...teamOptions.slice(1),
+                ]}
+              />
             </FormField>
             <FormField label={t("jobs.sort")}>
               <SelectInput
@@ -668,7 +863,13 @@ export default function JobsPage() {
             description={t("jobs.no_jobs_hint")}
             action={
               data.acJobs.length === 0 && canWrite && canOperateJobs ? (
-                <button type="button" onClick={openCreate} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700">{t("jobs.new")}</button>
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
+                >
+                  {t("jobs.new")}
+                </button>
               ) : undefined
             }
           />
@@ -684,8 +885,18 @@ export default function JobsPage() {
               <JobCard
                 key={job.id}
                 job={job}
-                profit={computeJobProfitability(job, jobItemsByJob.get(job.id) ?? [], jobLinkedExpenseTotals?.get(job.id) ?? [])}
-                assigneePhone={job.assigneeType === "team" ? data.technicians.find((x) => x.id === job.assigneeId)?.phone : job.assigneeType === "contractor" ? data.contractors.find((x) => x.id === job.assigneeId)?.phone : undefined}
+                profit={computeJobProfitability(
+                  job,
+                  jobItemsByJob.get(job.id) ?? [],
+                  jobLinkedExpenseTotals?.get(job.id) ?? [],
+                )}
+                assigneePhone={
+                  job.assigneeType === "team"
+                    ? data.technicians.find((x) => x.id === job.assigneeId)?.phone
+                    : job.assigneeType === "contractor"
+                      ? data.contractors.find((x) => x.id === job.assigneeId)?.phone
+                      : undefined
+                }
                 locale={locale}
                 business={data.business}
                 notificationLogs={notificationLogs}
@@ -699,7 +910,12 @@ export default function JobsPage() {
                 onJobSheet={() => setSheetJob(job)}
                 onEdit={() => loadJob(job)}
                 onSchedule={() => void handleJobStatusUpdate(job.id, { status: "scheduled" })}
-                onInstalled={() => void handleJobStatusUpdate(job.id, { status: "installed", installedDate: new Date().toISOString().slice(0, 10) })}
+                onInstalled={() =>
+                  void handleJobStatusUpdate(job.id, {
+                    status: "installed",
+                    installedDate: new Date().toISOString().slice(0, 10),
+                  })
+                }
                 onComplete={() => void handleJobStatusUpdate(job.id, { status: "completed" })}
                 onDelete={() => setDeleteTarget(job)}
                 deleting={deletingJobId === job.id}
@@ -716,14 +932,20 @@ export default function JobsPage() {
           scrollable body, so Save is never scrolled out of view. */}
       <Drawer
         open={formOpen}
-        onClose={() => setFormOpen(false)}
+        onClose={() => {
+          if (!savingJob) setFormOpen(false);
+        }}
         title={editing ? `${t("jobs.edit_job")} ${editing.jobNo}` : t("jobs.new_job")}
         size="lg"
         unsavedChanges={formDirty}
         footer={
           <DrawerFooter
-            onCancel={() => setFormOpen(false)}
-            primaryLabel={savingJob ? t("common.saving") : editing ? t("jobs.update_job") : t("jobs.create")}
+            onCancel={() => {
+              if (!savingJob) setFormOpen(false);
+            }}
+            primaryLabel={
+              savingJob ? t("common.saving") : editing ? t("jobs.update_job") : t("jobs.create")
+            }
             primaryType="submit"
             primaryForm="job-form"
             primaryDisabled={!canWrite || savingJob}
@@ -731,36 +953,63 @@ export default function JobsPage() {
           />
         }
       >
+        {jobFormError && (
+          <p
+            role="alert"
+            className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800"
+          >
+            {jobFormError}
+          </p>
+        )}
         <form id="job-form" onSubmit={handleJobSubmit} className="space-y-5">
-          <FormSection title={t("jobs.section_job_type")}>
-            <div className="flex flex-wrap gap-2">
-              {AC_JOB_TYPES.map((tpe) => (
-                <button key={tpe.value} type="button" onClick={() => { setJobType(tpe.value); if (!editing) setStatus(defaultStatusForJobType(tpe.value)); }} className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${jobType === tpe.value ? "bg-teal-600 text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
-                  {locale === "si" ? tpe.labelSi : tpe.labelEn}
-                </button>
-              ))}
-            </div>
-          </FormSection>
+          <fieldset disabled={savingJob || !canWrite} className="contents">
+            <FormSection title={t("jobs.section_job_type")}>
+              <div className="flex flex-wrap gap-2">
+                {AC_JOB_TYPES.map((tpe) => (
+                  <button
+                    key={tpe.value}
+                    type="button"
+                    onClick={() => {
+                      setJobType(tpe.value);
+                      if (!editing) setStatus(defaultStatusForJobType(tpe.value));
+                    }}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${jobType === tpe.value ? "bg-teal-600 text-white" : "border border-slate-300 bg-white text-slate-600"}`}
+                  >
+                    {locale === "si" ? tpe.labelSi : tpe.labelEn}
+                  </button>
+                ))}
+              </div>
+            </FormSection>
 
-          <FormSection title={t("jobs.section_customer_site")}>
-            <FormField label={t("jobs.customer_opt")}>
-              <SelectInput
-                value={customerId}
-                onChange={(v) => {
-                  setCustomerId(v);
-                  const c = data.customers.find((x) => x.id === v);
-                  if (c) { setCustomerName(c.name); setPhone(c.phone ?? ""); setAddress(c.address ?? ""); }
-                }}
-                options={[{ value: "", label: t("jobs.customer_opt") }, ...data.customers.map((c) => ({ value: c.id, label: c.name }))]}
-              />
-            </FormField>
-            <div className="grid grid-cols-2 gap-3">
-              <FormField label={t("jobs.customer_name")}>
-                <TextInput value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
+            <FormSection title={t("jobs.section_customer_site")}>
+              <FormField label={t("jobs.customer_opt")}>
+                <SelectInput
+                  value={customerId}
+                  onChange={(v) => {
+                    setCustomerId(v);
+                    const c = data.customers.find((x) => x.id === v);
+                    if (c) {
+                      setCustomerName(c.name);
+                      setPhone(c.phone ?? "");
+                      setAddress(c.address ?? "");
+                    }
+                  }}
+                  options={[
+                    { value: "", label: t("jobs.customer_opt") },
+                    ...data.customers.map((c) => ({ value: c.id, label: c.name })),
+                  ]}
+                />
               </FormField>
-              <FormField label={t("common.phone")}>
-                <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} />
-                {/* Reported: editing a customer's phone on /customers left this
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label={t("jobs.customer_name")}>
+                  <TextInput
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                  />
+                </FormField>
+                <FormField label={t("common.phone")}>
+                  <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} />
+                  {/* Reported: editing a customer's phone on /customers left this
                     job showing the old number -- expected, not a bug. A job's
                     contact fields are a snapshot copied in the moment a
                     customer is picked above (site phone can legitimately
@@ -770,141 +1019,220 @@ export default function JobsPage() {
                     the drift instead of silently re-syncing it -- opt-in,
                     one click, only shown once the two numbers actually
                     differ. */}
-                {customerId && (() => {
-                  const linkedCustomer = data.customers.find((x) => x.id === customerId);
-                  if (!linkedCustomer || (linkedCustomer.phone ?? "") === phone) return null;
-                  return (
-                    <button
-                      type="button"
-                      onClick={() => setPhone(linkedCustomer.phone ?? "")}
-                      className="mt-1 text-left text-xs font-semibold text-teal-700 hover:underline"
-                    >
-                      {locale === "si"
-                        ? `පාරිභෝගිකයාගේ දැනට ඇති දුරකථනය භාවිත කරන්න (${linkedCustomer.phone || "—"})`
-                        : `Use customer's current phone (${linkedCustomer.phone || "—"})`}
-                    </button>
-                  );
-                })()}
+                  {customerId &&
+                    (() => {
+                      const linkedCustomer = data.customers.find((x) => x.id === customerId);
+                      if (!linkedCustomer || (linkedCustomer.phone ?? "") === phone) return null;
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => setPhone(linkedCustomer.phone ?? "")}
+                          className="mt-1 text-left text-xs font-semibold text-teal-700 hover:underline"
+                        >
+                          {locale === "si"
+                            ? `පාරිභෝගිකයාගේ දැනට ඇති දුරකථනය භාවිත කරන්න (${linkedCustomer.phone || "—"})`
+                            : `Use customer's current phone (${linkedCustomer.phone || "—"})`}
+                        </button>
+                      );
+                    })()}
+                </FormField>
+              </div>
+              <FormField label={t("jobs.site_address")} required>
+                <TextInput required value={address} onChange={(e) => setAddress(e.target.value)} />
               </FormField>
-            </div>
-            <FormField label={t("jobs.site_address")} required>
-              <TextInput required value={address} onChange={(e) => setAddress(e.target.value)} />
-            </FormField>
-          </FormSection>
+            </FormSection>
 
-          <FormSection title={t("jobs.section_equipment")}>
-            <div className="grid grid-cols-3 gap-3">
-              <FormField label="Brand">
-                <SelectInput value={brand} onChange={setBrand} options={AC_BRANDS.map((b) => ({ value: b, label: b }))} />
-              </FormField>
-              <FormField label="BTU">
-                <SelectInput value={String(btu)} onChange={(v) => setBtu(Number(v))} options={AC_BTU_OPTIONS.map((b) => ({ value: String(b), label: `${b} BTU` }))} />
-              </FormField>
-              <FormField label={t("jobs.units")}>
-                <TextInput type="number" min={1} value={String(unitCount)} onChange={(e) => setUnitCount(Number(e.target.value))} />
-              </FormField>
-            </div>
-            <FormField label="Unit type">
-              <SelectInput value={unitType} onChange={setUnitType} options={UNIT_TYPES.map((u) => ({ value: u, label: u }))} />
-            </FormField>
-            {jobType === "installation" && (
-              <FormField label={t("jobs.pipe_est")}>
-                <TextInput type="number" value={String(pipeMeters)} onChange={(e) => setPipeMeters(Number(e.target.value))} />
-              </FormField>
-            )}
-          </FormSection>
-
-          <FormSection title={t("jobs.section_commercial")}>
-            <div className="grid grid-cols-2 gap-3">
-              <FormField label={t("jobs.quote")}>
-                <MoneyInput value={quotedAmount} onChange={setQuotedAmount} />
+            <FormSection title={t("jobs.section_equipment")}>
+              <div className="grid grid-cols-3 gap-3">
+                <FormField label="Brand">
+                  <SelectInput
+                    value={brand}
+                    onChange={setBrand}
+                    options={AC_BRANDS.map((b) => ({ value: b, label: b }))}
+                  />
+                </FormField>
+                <FormField label="BTU">
+                  <SelectInput
+                    value={String(btu)}
+                    onChange={(v) => setBtu(Number(v))}
+                    options={AC_BTU_OPTIONS.map((b) => ({ value: String(b), label: `${b} BTU` }))}
+                  />
+                </FormField>
+                <FormField label={t("jobs.units")}>
+                  <TextInput
+                    type="number"
+                    min={1}
+                    value={String(unitCount)}
+                    onChange={(e) => setUnitCount(Number(e.target.value))}
+                  />
+                </FormField>
+              </div>
+              <FormField label="Unit type">
+                <SelectInput
+                  value={unitType}
+                  onChange={setUnitType}
+                  options={UNIT_TYPES.map((u) => ({ value: u, label: u }))}
+                />
               </FormField>
               {jobType === "installation" && (
-                <FormField label={t("jobs.deposit")}>
-                  <MoneyInput value={depositAmount} onChange={setDepositAmount} />
+                <FormField label={t("jobs.pipe_est")}>
+                  <TextInput
+                    type="number"
+                    value={String(pipeMeters)}
+                    onChange={(e) => setPipeMeters(Number(e.target.value))}
+                  />
                 </FormField>
               )}
-            </div>
-            <FormField label={t("jobs.assignee")}>
-              <SelectInput
-                value={assigneeKey}
-                onChange={setAssigneeKey}
-                options={[
-                  { value: "", label: t("jobs.assignee_unassigned") },
-                  ...data.technicians.filter((x) => x.active).map((x) => ({ value: `team:${x.id}`, label: `${x.name} (${t("work.team")})` })),
-                  ...data.contractors.filter((x) => x.active).map((x) => ({ value: `contractor:${x.id}`, label: `${x.name}${x.company ? ` (${x.company})` : ""} (${t("work.contractors")})` })),
-                ]}
-              />
-            </FormField>
-            {canManageJobs && assigneeKey.startsWith("contractor:") && (
-              <FormField label={t("jobs.subcontract_cost")}>
-                <MoneyInput value={subcontractCost} onChange={setSubcontractCost} />
-              </FormField>
-            )}
-          </FormSection>
+            </FormSection>
 
-          <FormSection title={t("jobs.section_schedule")}>
-            <div className="grid grid-cols-2 gap-3">
-              <FormField label={t("common.status")}>
-                <SelectInput value={status} onChange={(v) => setStatus(v as ACJobStatus)} options={AC_JOB_STATUSES.map((s) => ({ value: s.value, label: locale === "si" ? s.labelSi : s.labelEn }))} />
-              </FormField>
-              <FormField label={t("jobs.install_label")}>
-                <DateInput value={scheduledDate} onChange={setScheduledDate} />
-              </FormField>
-            </div>
-          </FormSection>
-
-          <FormSection title={t("jobs.section_work_details")}>
-            <FormField label={t("jobs.complaint")} hint={t("jobs.complaint_hint")}>
-              <TextInput value={complaint} onChange={(e) => setComplaint(e.target.value)} placeholder={t("jobs.complaint_ph")} />
-            </FormField>
-            <FormField label={t("jobs.diagnosis")} hint={t("jobs.diagnosis_hint")}>
-              <TextInput value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} placeholder={t("jobs.diagnosis_ph")} />
-            </FormField>
-            <FormField label={t("jobs.job_notes")}>
-              <TextInput value={notes} onChange={(e) => setNotes(e.target.value)} />
-            </FormField>
-          </FormSection>
-
-          <FormSection
-            title={t("jobs.section_advanced")}
-            hint={t("jobs.section_advanced_hint")}
-            collapsible
-            defaultOpen={false}
-          >
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs font-semibold uppercase text-slate-500">{t("jobs.service_interval_days")}</p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {SERVICE_INTERVAL_DAY_PRESETS.map((d) => (
-                  <button key={d} type="button" onClick={() => setServiceIntervalDays(d)} className={`rounded-md px-2.5 py-1 text-xs font-semibold ${serviceIntervalDays === d ? "bg-teal-600 text-white" : "border border-slate-300 bg-white text-slate-600"}`}>
-                    {d} {t("jobs.days")}
-                  </button>
-                ))}
+            <FormSection title={t("jobs.section_commercial")}>
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label={t("jobs.quote")}>
+                  <MoneyInput value={quotedAmount} onChange={setQuotedAmount} />
+                </FormField>
+                {jobType === "installation" && (
+                  <FormField label={t("jobs.deposit")}>
+                    <MoneyInput value={depositAmount} onChange={setDepositAmount} />
+                  </FormField>
+                )}
               </div>
-            </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs font-semibold uppercase text-slate-500">{t("jobs.service_due_section")}</p>
-              <div className="mt-2 flex flex-wrap gap-3 text-sm">
-                <label className="flex items-center gap-1.5 font-medium text-slate-700">
-                  <input type="radio" checked={!serviceDueManual} onChange={() => { setServiceDueManual(false); setServiceDueDate(""); }} />
-                  {t("jobs.service_due_auto")}
-                </label>
-                <label className="flex items-center gap-1.5 font-medium text-slate-700">
-                  <input type="radio" checked={serviceDueManual} onChange={() => { setServiceDueManual(true); setServiceDueDate(serviceDueDate || autoServiceDuePreview() || ""); }} />
-                  {t("jobs.service_due_manual")}
-                </label>
-              </div>
-              {serviceDueManual ? (
-                <DateInput value={serviceDueDate} onChange={setServiceDueDate} className="mt-2" />
-              ) : (
-                <p className="mt-2 text-sm font-medium text-teal-800">{autoServiceDuePreview() ? `${t("jobs.service_due_label")}: ${autoServiceDuePreview()}` : t("jobs.service_due_auto_hint")}</p>
+              <FormField label={t("jobs.assignee")}>
+                <SelectInput
+                  value={assigneeKey}
+                  onChange={setAssigneeKey}
+                  options={[
+                    { value: "", label: t("jobs.assignee_unassigned") },
+                    ...data.technicians
+                      .filter((x) => x.active)
+                      .map((x) => ({
+                        value: `team:${x.id}`,
+                        label: `${x.name} (${t("work.team")})`,
+                      })),
+                    ...data.contractors
+                      .filter((x) => x.active)
+                      .map((x) => ({
+                        value: `contractor:${x.id}`,
+                        label: `${x.name}${x.company ? ` (${x.company})` : ""} (${t("work.contractors")})`,
+                      })),
+                  ]}
+                />
+              </FormField>
+              {canManageJobs && assigneeKey.startsWith("contractor:") && (
+                <FormField label={t("jobs.subcontract_cost")}>
+                  <MoneyInput value={subcontractCost} onChange={setSubcontractCost} />
+                </FormField>
               )}
-            </div>
-            <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700">
-              <input type="checkbox" checked={amcContract} onChange={(e) => setAmcContract(e.target.checked)} />
-              {t("jobs.amc")}
-            </label>
-          </FormSection>
+            </FormSection>
+
+            <FormSection title={t("jobs.section_schedule")}>
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label={t("common.status")}>
+                  <SelectInput
+                    value={status}
+                    onChange={(v) => setStatus(v as ACJobStatus)}
+                    options={AC_JOB_STATUSES.map((s) => ({
+                      value: s.value,
+                      label: locale === "si" ? s.labelSi : s.labelEn,
+                    }))}
+                  />
+                </FormField>
+                <FormField label={t("jobs.install_label")}>
+                  <DateInput value={scheduledDate} onChange={setScheduledDate} />
+                </FormField>
+              </div>
+            </FormSection>
+
+            <FormSection title={t("jobs.section_work_details")}>
+              <FormField label={t("jobs.complaint")} hint={t("jobs.complaint_hint")}>
+                <TextInput
+                  value={complaint}
+                  onChange={(e) => setComplaint(e.target.value)}
+                  placeholder={t("jobs.complaint_ph")}
+                />
+              </FormField>
+              <FormField label={t("jobs.diagnosis")} hint={t("jobs.diagnosis_hint")}>
+                <TextInput
+                  value={diagnosis}
+                  onChange={(e) => setDiagnosis(e.target.value)}
+                  placeholder={t("jobs.diagnosis_ph")}
+                />
+              </FormField>
+              <FormField label={t("jobs.job_notes")}>
+                <TextInput value={notes} onChange={(e) => setNotes(e.target.value)} />
+              </FormField>
+            </FormSection>
+
+            <FormSection
+              title={t("jobs.section_advanced")}
+              hint={t("jobs.section_advanced_hint")}
+              collapsible
+              defaultOpen={false}
+            >
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase text-slate-500">
+                  {t("jobs.service_interval_days")}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {SERVICE_INTERVAL_DAY_PRESETS.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setServiceIntervalDays(d)}
+                      className={`rounded-md px-2.5 py-1 text-xs font-semibold ${serviceIntervalDays === d ? "bg-teal-600 text-white" : "border border-slate-300 bg-white text-slate-600"}`}
+                    >
+                      {d} {t("jobs.days")}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase text-slate-500">
+                  {t("jobs.service_due_section")}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-3 text-sm">
+                  <label className="flex items-center gap-1.5 font-medium text-slate-700">
+                    <input
+                      type="radio"
+                      checked={!serviceDueManual}
+                      onChange={() => {
+                        setServiceDueManual(false);
+                        setServiceDueDate("");
+                      }}
+                    />
+                    {t("jobs.service_due_auto")}
+                  </label>
+                  <label className="flex items-center gap-1.5 font-medium text-slate-700">
+                    <input
+                      type="radio"
+                      checked={serviceDueManual}
+                      onChange={() => {
+                        setServiceDueManual(true);
+                        setServiceDueDate(serviceDueDate || autoServiceDuePreview() || "");
+                      }}
+                    />
+                    {t("jobs.service_due_manual")}
+                  </label>
+                </div>
+                {serviceDueManual ? (
+                  <DateInput value={serviceDueDate} onChange={setServiceDueDate} className="mt-2" />
+                ) : (
+                  <p className="mt-2 text-sm font-medium text-teal-800">
+                    {autoServiceDuePreview()
+                      ? `${t("jobs.service_due_label")}: ${autoServiceDuePreview()}`
+                      : t("jobs.service_due_auto_hint")}
+                  </p>
+                )}
+              </div>
+              <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={amcContract}
+                  onChange={(e) => setAmcContract(e.target.checked)}
+                />
+                {t("jobs.amc")}
+              </label>
+            </FormSection>
+          </fieldset>
         </form>
       </Drawer>
 
@@ -938,8 +1266,14 @@ export default function JobsPage() {
           canWrite={canWrite}
           onAddItem={addJobItemToCloud}
           onDeleteItem={deleteJobItemToCloud}
-          onEdit={() => { setSheetJob(null); loadJob(sheetJob); }}
-          onDelete={() => { setSheetJob(null); setDeleteTarget(sheetJob); }}
+          onEdit={() => {
+            setSheetJob(null);
+            loadJob(sheetJob);
+          }}
+          onDelete={() => {
+            setSheetJob(null);
+            setDeleteTarget(sheetJob);
+          }}
           onClose={() => setSheetJob(null)}
         />
       )}
@@ -1643,7 +1977,7 @@ function MaterialsTable({
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
+        <table className="mobile-card-table w-full text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-500">
             <tr>
               <th className="px-3 py-2">{t("jobs.item_name")}</th>
@@ -1659,42 +1993,44 @@ function MaterialsTable({
           <tbody className="divide-y divide-slate-100">
             {items.map((i) => (
               <tr key={i.id}>
-                <td className="px-3 py-2 font-medium text-slate-900">
-                  {i.name}
-                  {i.isReplacement && (
-                    <span className="ml-1.5 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
-                      {t("jobs.item.replacement")}
-                    </span>
-                  )}
-                  {i.source && (
-                    <p className="mt-0.5 text-xs font-normal text-slate-400">
-                      {sourceLabels[i.source]}
-                      {i.purchasedForJob && ` · ${t("jobs.purchased_for_job")}`}
-                    </p>
-                  )}
-                  {i.technicianId && (
-                    <p className="mt-0.5 text-xs font-normal text-slate-400">
-                      {technicians.find((tc) => tc.id === i.technicianId)?.name ?? t("jobs.no_technician")}
-                    </p>
-                  )}
-                  {i.purchaseRef && <p className="mt-0.5 text-xs font-normal text-slate-400">{i.purchaseRef}</p>}
+                <td data-label={t("jobs.item_name")} className="px-3 py-2 font-medium text-slate-900">
+                  <div>
+                    {i.name}
+                    {i.isReplacement && (
+                      <span className="ml-1.5 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                        {t("jobs.item.replacement")}
+                      </span>
+                    )}
+                    {i.source && (
+                      <p className="mt-0.5 text-xs font-normal text-slate-400">
+                        {sourceLabels[i.source]}
+                        {i.purchasedForJob && ` · ${t("jobs.purchased_for_job")}`}
+                      </p>
+                    )}
+                    {i.technicianId && (
+                      <p className="mt-0.5 text-xs font-normal text-slate-400">
+                        {technicians.find((tc) => tc.id === i.technicianId)?.name ?? t("jobs.no_technician")}
+                      </p>
+                    )}
+                    {i.purchaseRef && <p className="mt-0.5 text-xs font-normal text-slate-400">{i.purchaseRef}</p>}
+                  </div>
                 </td>
-                <td className="px-3 py-2 text-slate-600">
+                <td data-label={t("bank.type")} className="px-3 py-2 text-slate-600">
                   {itemTypeLabels[i.itemType]}
                   {i.unit && <span className="text-slate-400"> · {i.unit}</span>}
                 </td>
-                <td className="px-3 py-2 text-right font-mono">{i.qty}</td>
-                {canSeeFinancials && <td className="px-3 py-2 text-right font-mono">{formatLkr(i.unitPrice)}</td>}
+                <td data-label={t("jobs.qty")} className="px-3 py-2 text-right font-mono">{i.qty}</td>
+                {canSeeFinancials && <td data-label={t("jobs.cost_label")} className="px-3 py-2 text-right font-mono">{formatLkr(i.unitPrice)}</td>}
                 {canSeeFinancials && (
-                  <td className="px-3 py-2 text-right font-mono">{i.customerPrice != null ? formatLkr(i.customerPrice) : "—"}</td>
+                  <td data-label={t("jobs.field.customer_price")} className="px-3 py-2 text-right font-mono">{i.customerPrice != null ? formatLkr(i.customerPrice) : "—"}</td>
                 )}
                 {canSeeFinancials && (
-                  <td className="px-3 py-2 text-right font-mono font-semibold">
+                  <td data-label={t("jobs.customer_total")} className="px-3 py-2 text-right font-mono font-semibold">
                     {lineCustomerTotal(i) != null ? formatLkr(lineCustomerTotal(i)!) : "—"}
                   </td>
                 )}
-                <td className="px-3 py-2 text-xs text-slate-600">{warrantyLabel(i)}</td>
-                <td className="px-3 py-2 text-right">
+                <td data-label={t("jobs.warranty_type")} className="px-3 py-2 text-xs text-slate-600">{warrantyLabel(i)}</td>
+                <td data-label={t("common.actions")} className="px-3 py-2 text-right">
                   {canOperateJobs && (
                     <button
                       disabled={deletingItemId === i.id}
@@ -1710,7 +2046,7 @@ function MaterialsTable({
             ))}
           </tbody>
           {canSeeFinancials && (
-            <tfoot className="border-t border-slate-200 bg-slate-50 text-sm font-semibold text-slate-900">
+            <tfoot className="hidden border-t border-slate-200 bg-slate-50 text-sm font-semibold text-slate-900 sm:table-footer-group">
               <tr>
                 <td className="px-3 py-2" colSpan={3}>{t("jobs.materials_totals")}</td>
                 <td className="px-3 py-2 text-right font-mono">{formatLkr(totalInternalCost)}</td>
@@ -1724,6 +2060,22 @@ function MaterialsTable({
           )}
         </table>
       </div>
+      {canSeeFinancials && (
+        <div className="grid gap-2 border-t border-slate-200 bg-slate-50 p-3 text-sm sm:hidden">
+          <div className="flex items-center justify-between gap-3 text-slate-600">
+            <span>{t("jobs.cost_label")}</span>
+            <span className="font-mono font-semibold text-slate-900">{formatLkr(totalInternalCost)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3 text-slate-600">
+            <span>{t("jobs.customer_total")}</span>
+            <span className="font-mono font-semibold text-slate-900">{formatLkr(totalCustomerValue)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-2 font-semibold text-emerald-700">
+            <span>{t("jobs.parts_gross_profit")}</span>
+            <span className="font-mono">{formatLkr(totalCustomerValue - totalInternalCost)}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

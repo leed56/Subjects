@@ -248,20 +248,22 @@ export function classifyRetailProduct(name, sector) {
   // Grocery classification must prioritize non-food identities before broad
   // food tokens. Otherwise names such as "hair oil" or "tea tree face wash"
   // are incorrectly captured by Oil & Fats / Beverages.
-  if (has(/FABRIC CONDITIONER|LAUNDRY|WASHING POWDER|DETERGENT|DISH[ -]?WASH|FLOOR CLEAN|TOILET CLEAN|BLEACH|SURFACE CLEAN|CLEANER|AIR FRESH|PEST|INSECTICIDE|TISSUE|PAPER TOWEL|TOILET ROLL|GARBAGE BAG|\bVIM\b|\bSURF\b/)) return { department: "Household", category: "Cleaning", subcategory: "Household" };
-  if (has(/FACE WASH|BODY WASH|SHOWER GEL|SHAMPOO|CONDITIONER|HAIR OIL|HAIR GEL|DEODORANT|BODY SPRAY|COLOGNE|PERFUME|EAU DE|HAND ?WASH|BEAUTY BAR|TOOTHPASTE|TOOTHBRUSH|MOUTHWASH|LOTION|SERUM|MOISTUR|SUNSCREEN|SUN SCREEN|ALOE VERA GEL|\bSOAP\b|SANITARY|PANTY LINER|DIAPER|NAPPY|BABY WIPES?|FACE CREAM|BODY CREAM|HAND CREAM|SKIN CREAM|BEAUTY CREAM|FACE SCRUB|FACIAL|LIP BALM|NAIL POLISH|RAZOR|SHAVING|\bBABY\b/)) return { department: "Personal & Baby", category: "Personal Care", subcategory: "Personal & Baby" };
-  if (has(/\bPET\b|\bDOG\b|\bCAT\b/)) return { department: "Pet Care", category: "Pet Food & Care", subcategory: "Pet Care" };
+  if (has(/FABRIC CONDITIONER|LAUNDRY|WASHING POWDER|DETERGENT|DISH[ -]?WASH|FLOOR CLEAN|TOILET CLEAN|BLEACH|SURFACE CLEAN|CLEANER|DISINFECT|AIR FRESH|PEST|INSECTICIDE|TISSUE|PAPER TOWEL|TOILET ROLL|GARBAGE BAG|\bVIM\b|\bSURF\b/)) return { department: "Household", category: "Cleaning", subcategory: "Household" };
+  if (has(/FACE WASH|CREAMY WASH|BODY WASH|SHOWER GEL|SHAMPOO|CONDITIONER|HAIR OIL|HAIR GEL|DEODORANT|BODY SPRAY|COLOGNE|PERFUME|EAU DE|HAND ?WASH|BEAUTY BAR|TOOTHPASTE|TOOTHBRUSH|MOUTHWASH|LOTION|SERUM|MOISTUR|SUNSCREEN|SUN SCREEN|ALOE VERA GEL|\bSOAP\b|SANITARY|PANTY LINER|\bWINGS?\b|DIAPER|NAPPY|BABY WIPES?|FACE CREAM|FOOT CREAM|BODY CREAM|HAND CREAM|SKIN CREAM|BEAUTY CREAM|FACE SCRUB|FACIAL|LIP BALM|NAIL POLISH|RAZOR|SHAVING|\bBABY\b/)) return { department: "Personal & Baby", category: "Personal Care", subcategory: "Personal & Baby" };
   if (has(/RICE|ATTA|FLOUR|OATS|CEREAL|GRAIN/)) return { department: "Grocery & Staples", category: "Rice, Flour & Grains", subcategory: "Rice, Flour & Grains" };
   if (has(/DHAL|LENTIL|CHICKPEA|BEAN|PULSE/)) return { department: "Grocery & Staples", category: "Pulses", subcategory: "Dhal & Pulses" };
+  if (has(/YOGURT|YOGHURT|CURD|CHEESE|BUTTER|FRESH MILK/)) return { department: "Chilled & Dairy", category: "Milk & Dairy", subcategory: "Dairy" };
+  if (has(/WATER|JUICE|DRINK|PEPSI|COCA|7\s*UP|SPRITE|TEA|COFFEE|MILK POWDER|MALT/)) return { department: "Beverages", category: "Water & Soft Drinks", subcategory: "Beverages" };
   if (has(/SUGAR|SALT|SPICE|CHILLI|CURRY|PEPPER|SEASONING|CINNAMON/)) return { department: "Grocery & Staples", category: "Spices & Seasoning", subcategory: "Staples & Seasoning" };
-  if (has(/OIL|COCONUT MILK|COCONUT CREAM/)) return { department: "Grocery & Staples", category: "Oil & Fats", subcategory: "Oil & Coconut Products" };
-  if (has(/BISCUIT|CRACKER|COOKIE/)) return { department: "Packaged Food", category: "Biscuits & Crackers", subcategory: "Biscuits & Crackers" };
+  if (has(/\bOIL\b|COCONUT MILK|COCONUT CREAM/)) return { department: "Grocery & Staples", category: "Oil & Fats", subcategory: "Oil & Coconut Products" };
+  // CBL identifies Munchee Milk Short Cake as a biscuit despite its cake name:
+  // https://www.cbllk.com/cbl/public/index.php/our-history
+  if (has(/BISCUIT|CRACKER|COOKIE|\bMUNCHEE\s+MILK\s+SHORT\s*CAKE\b/)) return { department: "Packaged Food", category: "Biscuits & Crackers", subcategory: "Biscuits & Crackers" };
   if (has(/NOODLE|PASTA|MACARONI/)) return { department: "Packaged Food", category: "Noodles & Pasta", subcategory: "Noodles & Pasta" };
   if (has(/SAUCE|KETCHUP|MAYONNAISE|CHUTNEY|CONDIMENT/)) return { department: "Packaged Food", category: "Sauces & Condiments", subcategory: "Sauces & Condiments" };
-  if (has(/CHIPS|SNACK|MIXTURE|NUT|CHOCOLATE|CANDY|GUM|TOFFEE/)) return { department: "Snacks & Confectionery", category: "Snacks", subcategory: "Snacks & Confectionery" };
-  if (has(/WATER|JUICE|DRINK|PEPSI|COCA|7\s*UP|SPRITE|TEA|COFFEE|MILK POWDER|MALT/)) return { department: "Beverages", category: "Water & Soft Drinks", subcategory: "Beverages" };
+  if (has(/CHIPS|SNACK|MIXTURE|NUT|CHOCOLATE|CANDY|JELLY|GUM|TOFFEE/)) return { department: "Snacks & Confectionery", category: "Snacks", subcategory: "Snacks & Confectionery" };
+  if (has(/\b(?:PET FOOD|DOG|CAT|LITTER|KENNEL|AQUARIUM)\b/)) return { department: "Pet Care", category: "Pet Food & Care", subcategory: "Pet Care" };
   if (has(/ONION|CARROT|POTATO|BEANS|CABBAGE|TOMATO|VEGETABLE|BANANA|APPLE|ORANGE|MANGO|PAPAYA/)) return { department: "Fresh Food", category: "Vegetables", subcategory: "Fresh Produce" };
-  if (has(/YOGURT|YOGHURT|CURD|CHEESE|BUTTER|FRESH MILK/)) return { department: "Chilled & Dairy", category: "Milk & Dairy", subcategory: "Dairy" };
   if (has(/FROZEN|ICE CREAM/)) return { department: "Frozen", category: "Frozen Foods", subcategory: "Frozen" };
   if (has(/BREAD|BUN|CAKE/)) return { department: "Bakery", category: "Bread & Buns", subcategory: "Bakery" };
   return { department: "Packaged Food", category: "Packaged Food", subcategory: "General Grocery" };

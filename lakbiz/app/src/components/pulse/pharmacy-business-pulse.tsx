@@ -1,5 +1,7 @@
 "use client";
 
+import { IndustryHeaderImages } from "@/components/ui/industry-imagery";
+
 /**
  * Business Pulse — pharmacy variant. See pulse-shared.tsx for the shell,
  * hero primitives and the Needs attention / Highlights list components
@@ -239,19 +241,21 @@ export function PharmacyBusinessPulse() {
   return (
     <PulseShell attentionCount={allAttentionActions.length} onBellClick={scrollToAttention}>
       {/* Title row + period switch. */}
+      <div className="live-industry-header live-pulse-heading">
+        <IndustryHeaderImages sector={org.sector} />
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-[-0.02em] text-slate-50">{tt(locale, "හිමිකරු දළ විශ්ලේෂණය", "Owner overview", "உரிமையாளர் கண்ணோட்டம்")}</h1>
+        <h1 className="text-2xl font-bold tracking-[-0.02em] text-slate-950">{tt(locale, "හිමිකරු දළ විශ්ලේෂණය", "Owner overview", "உரிமையாளர் கண்ணோட்டம்")}</h1>
         <div className="relative shrink-0" ref={periodRef}>
           <button
             type="button"
             onClick={() => setPeriodOpen((v) => !v)}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-300 shadow-sm hover:bg-slate-800/60"
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-50"
           >
             {period === "this_month" ? tt(locale, "මෙම මාසය", "This month", "இந்த மாதம்") : tt(locale, "පසුගිය මාසය", "Last month", "கடந்த மாதம்")}
-            <ChevronDownIcon className="h-4 w-4 text-slate-500" />
+            <ChevronDownIcon className="h-4 w-4 text-slate-9500" />
           </button>
           {periodOpen && (
-            <div className="absolute right-0 top-full z-20 mt-1.5 w-40 overflow-hidden rounded-xl border border-slate-800 bg-slate-900 py-1 shadow-lg">
+            <div className="absolute right-0 top-full z-20 mt-1.5 w-40 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
               {(["this_month", "last_month"] as const).map((p) => (
                 <button
                   key={p}
@@ -260,7 +264,7 @@ export function PharmacyBusinessPulse() {
                     setPeriod(p);
                     setPeriodOpen(false);
                   }}
-                  className={`flex w-full items-center px-3 py-2 text-left text-sm font-medium ${period === p ? "bg-teal-400/10 text-teal-200" : "text-slate-300 hover:bg-slate-800/60"}`}
+                  className={`flex w-full items-center px-3 py-2 text-left text-sm font-medium ${period === p ? "bg-teal-400/10 text-teal-800" : "text-slate-600 hover:bg-slate-50"}`}
                 >
                   {p === "this_month" ? tt(locale, "මෙම මාසය", "This month", "இந்த மாதம்") : tt(locale, "පසුගිය මාසය", "Last month", "கடந்த மாதம்")}
                 </button>
@@ -269,11 +273,12 @@ export function PharmacyBusinessPulse() {
           )}
         </div>
       </div>
+      </div>
       {!noTransactionsYet && (
-        <p className="-mt-2 text-sm text-slate-300">{buildSummaryLine(locale, salesChangePct, allAttentionActions.length)}</p>
+        <p className="-mt-2 text-sm text-slate-600">{buildSummaryLine(locale, salesChangePct, allAttentionActions.length)}</p>
       )}
       {org.isAuthenticated && (
-        <p className="-mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+        <p className="-mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-700">
           <SyncIcon className="h-3.5 w-3.5" />
           {t("dash.cloud_synced")}
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
@@ -300,41 +305,41 @@ export function PharmacyBusinessPulse() {
       )}
 
       {/* Hero — Business pulse. */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-slate-400">{tt(locale, "ව්‍යාපාර ස්පන්දනය", "Business pulse", "வணிக துடிப்பு")}</p>
-            <p className="mt-1.5 text-[2.1rem] font-bold leading-none tracking-[-0.03em] text-slate-50 sm:text-4xl">
+            <p className="text-xs font-semibold text-slate-500">{tt(locale, "ව්‍යාපාර ස්පන්දනය", "Business pulse", "வணிக துடிப்பு")}</p>
+            <p className="mt-1.5 text-[2.1rem] font-bold leading-none tracking-[-0.03em] text-slate-950 sm:text-4xl">
               {formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.netSales : selected.revenue)}
             </p>
-            <p className="mt-1.5 text-xs font-medium text-slate-400">{tt(locale, "නිකුත් අලෙවිය", "Net sales", "நிகர விற்பனை")}</p>
+            <p className="mt-1.5 text-xs font-medium text-slate-500">{tt(locale, "නිකුත් අලෙවිය", "Net sales", "நிகர விற்பனை")}</p>
             {(noTransactionsYet || salesChangePct != null) && (
-              <p className={`mt-2 flex items-center gap-1 text-sm font-bold ${noTransactionsYet || salesUp ? "text-emerald-400" : "text-rose-400"}`}>
+              <p className={`mt-2 flex items-center gap-1 text-sm font-bold ${noTransactionsYet || salesUp ? "text-emerald-700" : "text-rose-700"}`}>
                 ↑ {Math.abs(noTransactionsYet ? SAMPLE_PULSE.salesChangePct : (salesChangePct ?? 0))}%
-                <span className="font-medium text-slate-500">{tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}</span>
+                <span className="font-medium text-slate-9500">{tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}</span>
               </p>
             )}
           </div>
           <Sparkline values={noTransactionsYet ? SAMPLE_PULSE.sparkline : sparklineValues} stroke="#2dd4bf" />
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-4 border-t border-slate-800 pt-4">
+        <div className="mt-4 grid grid-cols-2 gap-4 border-t border-slate-200 pt-4">
           <div>
-            <p className="text-xs font-semibold text-slate-400">{tt(locale, "දළ ලාභය", "Gross profit", "மொத்த லாபம்")}</p>
-            <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-50">
+            <p className="text-xs font-semibold text-slate-500">{tt(locale, "දළ ලාභය", "Gross profit", "மொத்த லாபம்")}</p>
+            <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-950">
               {formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.grossProfit : selected.profit)}
             </p>
-            <p className="mt-0.5 text-xs font-medium text-emerald-400">
+            <p className="mt-0.5 text-xs font-medium text-emerald-700">
               {noTransactionsYet ? SAMPLE_PULSE.marginPct : marginPct}% {tt(locale, "ආන්තිකය", "margin", "லாப வரம்பு")}
             </p>
           </div>
-          <div className="border-l border-slate-800 pl-4">
-            <p className="text-xs font-semibold text-slate-400">{tt(locale, "එකතු කළ මුදල්", "Cash collected", "வசூலிக்கப்பட்ட பணம்")}</p>
-            <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-50">
+          <div className="border-l border-slate-200 pl-4">
+            <p className="text-xs font-semibold text-slate-500">{tt(locale, "එකතු කළ මුදල්", "Cash collected", "வசூலிக்கப்பட்ட பணம்")}</p>
+            <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-slate-950">
               {formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.cashCollected : cashCollected)}
             </p>
             {(noTransactionsYet || cashChangePct != null) && (
-              <p className="mt-0.5 text-xs font-medium text-emerald-400">
+              <p className="mt-0.5 text-xs font-medium text-emerald-700">
                 ↑ {Math.abs(noTransactionsYet ? SAMPLE_PULSE.cashChangePct : (cashChangePct ?? 0))}% {tt(locale, "පසුගිය මාසයට වඩා", "vs last month", "கடந்த மாதத்தை விட")}
               </p>
             )}
@@ -385,15 +390,15 @@ export function PharmacyBusinessPulse() {
       {/* Needs attention — real medicines going out of date (expiryQueue)
           and real low-stock products (reorderQueue), same single source
           buildRetailDashboardIntelligence already computes. */}
-      <div ref={attentionSectionRef} className="scroll-mt-20 rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
+      <div ref={attentionSectionRef} className="scroll-mt-20 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
         <div className="mb-3 flex items-center gap-2">
-          <h2 className="text-base font-bold tracking-tight text-slate-100">{tt(locale, "අවධානය අවශ්‍යයි", "Needs attention", "கவனம் தேவை")}</h2>
+          <h2 className="text-base font-bold tracking-tight text-slate-900">{tt(locale, "අවධානය අවශ්‍යයි", "Needs attention", "கவனம் தேவை")}</h2>
           {allAttentionActions.length > 0 && (
             <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[11px] font-bold text-white">{allAttentionActions.length}</span>
           )}
         </div>
         {allAttentionActions.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-slate-800 bg-slate-800/40 px-4 py-3 text-sm text-slate-400">
+          <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
             {tt(locale, "සියල්ල පැහැදිලිය — කිසිවක් ඔබේ තීරණය අවශ්‍ය නොවේ.", "Everything is clear — nothing needs your decision right now.", "அனைத்தும் தெளிவாக உள்ளது — தற்போது எதுவும் உங்கள் முடிவுக்குத் தேவையில்லை.")}
           </p>
         ) : (
@@ -407,44 +412,44 @@ export function PharmacyBusinessPulse() {
 
       {/* Medicine stock — real counts from buildRetailDashboardIntelligence,
           the pharmacy analog of textile's Roll inventory tile. */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-bold tracking-tight text-slate-100">{tt(locale, "භාණ්ඩ තොගය", "Medicine stock", "மருந்து கையிருப்பு")}</h2>
-          <Link href="/stock" className="text-xs font-semibold text-teal-300 hover:underline">
+          <h2 className="text-base font-bold tracking-tight text-slate-900">{tt(locale, "භාණ්ඩ තොගය", "Medicine stock", "மருந்து கையிருப்பு")}</h2>
+          <Link href="/stock" className="text-xs font-semibold text-teal-700 hover:underline">
             {tt(locale, "සියලු තොග බලන්න →", "View all stock →", "அனைத்து கையிருப்பையும் பார்க்க →")}
           </Link>
         </div>
-        <div className="grid grid-cols-2 divide-x divide-y divide-slate-800 overflow-hidden rounded-xl border border-slate-800">
+        <div className="grid grid-cols-2 divide-x divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200">
           <div className="p-3.5">
-            <p className="text-xl font-bold text-slate-50">{intel.activeSkuCount}</p>
-            <p className="text-xs text-slate-400">{tt(locale, "සක්‍රීය භාණ්ඩ", "Active products", "செயலில் உள்ள பொருட்கள்")}</p>
+            <p className="text-xl font-bold text-slate-950">{intel.activeSkuCount}</p>
+            <p className="text-xs text-slate-500">{tt(locale, "සක්‍රීය භාණ්ඩ", "Active products", "செயலில் உள்ள பொருட்கள்")}</p>
           </div>
           <div className="p-3.5">
-            <p className="text-xl font-bold text-slate-50">{intel.outOfStockCount}</p>
-            <p className="text-xs text-slate-400">{tt(locale, "තොගයේ නැති", "Out of stock", "கையிருப்பு இல்லை")}</p>
+            <p className="text-xl font-bold text-slate-950">{intel.outOfStockCount}</p>
+            <p className="text-xs text-slate-500">{tt(locale, "තොගයේ නැති", "Out of stock", "கையிருப்பு இல்லை")}</p>
           </div>
           <div className="p-3.5">
-            <p className="text-xl font-bold text-slate-50">{intel.expiredLotCount}</p>
-            <p className="text-xs text-slate-400">{tt(locale, "කල් ඉකුත් වූ", "Expired lots", "காலாவதியான தொகுதிகள்")}</p>
+            <p className="text-xl font-bold text-slate-950">{intel.expiredLotCount}</p>
+            <p className="text-xs text-slate-500">{tt(locale, "කල් ඉකුත් වූ", "Expired lots", "காலாவதியான தொகுதிகள்")}</p>
           </div>
           <div className="p-3.5">
-            <p className="text-xl font-bold text-slate-50">{intel.quarantineLotCount}</p>
-            <p className="text-xs text-slate-400">{tt(locale, "රඳවා ඇති", "Quarantined lots", "தனிமைப்படுத்தப்பட்டவை")}</p>
+            <p className="text-xl font-bold text-slate-950">{intel.quarantineLotCount}</p>
+            <p className="text-xs text-slate-500">{tt(locale, "රඳවා ඇති", "Quarantined lots", "தனிமைப்படுத்தப்பட்டவை")}</p>
           </div>
         </div>
       </div>
 
       {/* Stock & spending. */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
-        <h2 className="mb-3 text-base font-bold tracking-tight text-slate-100">{tt(locale, "තොගය සහ වියදම්", "Stock & spending", "கையிருப்பு & செலவு")}</h2>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
+        <h2 className="mb-3 text-base font-bold tracking-tight text-slate-900">{tt(locale, "තොගය සහ වියදම්", "Stock & spending", "கையிருப்பு & செலவு")}</h2>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <p className="text-lg font-bold text-slate-50">{formatCompactLkr(stockValueLkr)}</p>
-            <p className="text-xs text-slate-400">{tt(locale, "තොග වටිනාකම", "Stock value", "கையிருப்பு மதிப்பு")}</p>
+            <p className="text-lg font-bold text-slate-950">{formatCompactLkr(stockValueLkr)}</p>
+            <p className="text-xs text-slate-500">{tt(locale, "තොග වටිනාකම", "Stock value", "கையிருப்பு மதிப்பு")}</p>
           </div>
           <div>
-            <p className="text-lg font-bold text-slate-50">{expensesTotal != null ? formatCompactLkr(expensesTotal) : "—"}</p>
-            <p className="text-xs text-slate-400">
+            <p className="text-lg font-bold text-slate-950">{expensesTotal != null ? formatCompactLkr(expensesTotal) : "—"}</p>
+            <p className="text-xs text-slate-500">
               {period === "this_month" ? tt(locale, "මෙම මාසයේ වියදම්", "Expenses this month", "இந்த மாத செலவுகள்") : tt(locale, "පසුගිය මාසයේ වියදම්", "Expenses last month", "கடந்த மாத செலவுகள்")}
             </p>
           </div>
@@ -452,15 +457,15 @@ export function PharmacyBusinessPulse() {
 
         {expensesByCategory.length > 0 && (
           <>
-            <p className="mb-2 mt-4 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+            <p className="mb-2 mt-4 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-9500">
               {tt(locale, "මෙහෙයුම් වියදම්", "Operating costs", "செயல்பாட்டு செலவுகள்")}
             </p>
             <div className="flex flex-wrap gap-2">
               {expensesByCategory.map(({ category, amount }) => (
-                <div key={category} className="flex min-w-[7.5rem] flex-1 items-center gap-2 rounded-xl border border-slate-800 bg-slate-800/40 px-3 py-2">
+                <div key={category} className="flex min-w-[7.5rem] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-semibold text-slate-300">{t(`expenses.cat_${category}`)}</p>
-                    <p className="text-sm font-bold text-slate-50">{formatCompactLkr(amount)}</p>
+                    <p className="truncate text-xs font-semibold text-slate-600">{t(`expenses.cat_${category}`)}</p>
+                    <p className="text-sm font-bold text-slate-950">{formatCompactLkr(amount)}</p>
                   </div>
                 </div>
               ))}
@@ -470,20 +475,20 @@ export function PharmacyBusinessPulse() {
       </div>
 
       {/* Today at a glance. */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
-        <h2 className="mb-3 text-base font-bold tracking-tight text-slate-100">{tt(locale, "අද දිනය", "Today at a glance", "இன்று ஒரு பார்வையில்")}</h2>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.03)] sm:p-6">
+        <h2 className="mb-3 text-base font-bold tracking-tight text-slate-900">{tt(locale, "අද දිනය", "Today at a glance", "இன்று ஒரு பார்வையில்")}</h2>
         <div className="grid grid-cols-3 gap-3">
           <div>
-            <p className="text-lg font-bold text-slate-50">{noTransactionsYet ? SAMPLE_PULSE.todaySaleCount : stats.saleCount}</p>
-            <p className="text-xs text-slate-400">{tt(locale, "අද අලෙවි", "Sales today", "இன்று விற்பனை")}</p>
+            <p className="text-lg font-bold text-slate-950">{noTransactionsYet ? SAMPLE_PULSE.todaySaleCount : stats.saleCount}</p>
+            <p className="text-xs text-slate-500">{tt(locale, "අද අලෙවි", "Sales today", "இன்று விற்பனை")}</p>
           </div>
           <div>
-            <p className="text-lg font-bold text-slate-50">{formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.todaySalesValue : stats.todaySales)}</p>
-            <p className="text-xs text-slate-400">{tt(locale, "අද අලෙවි අගය", "Sales value", "விற்பனை மதிப்பு")}</p>
+            <p className="text-lg font-bold text-slate-950">{formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.todaySalesValue : stats.todaySales)}</p>
+            <p className="text-xs text-slate-500">{tt(locale, "අද අලෙවි අගය", "Sales value", "விற்பனை மதிப்பு")}</p>
           </div>
           <div>
-            <p className="text-lg font-bold text-slate-50">{formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.todayCollected : stats.paymentsReceivedToday)}</p>
-            <p className="text-xs text-slate-400">{tt(locale, "අද එකතු කළ", "Collected today", "இன்று வசூலிக்கப்பட்டது")}</p>
+            <p className="text-lg font-bold text-slate-950">{formatCompactLkr(noTransactionsYet ? SAMPLE_PULSE.todayCollected : stats.paymentsReceivedToday)}</p>
+            <p className="text-xs text-slate-500">{tt(locale, "අද එකතු කළ", "Collected today", "இன்று வசூலிக்கப்பட்டது")}</p>
           </div>
         </div>
       </div>
@@ -498,7 +503,7 @@ export function PharmacyBusinessPulse() {
         </Link>
         <Link
           href="/stock/advanced/receive"
-          className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900 px-4 text-sm font-semibold text-slate-300 hover:bg-slate-800/60"
+          className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50"
         >
           {tt(locale, "තොගය ලබාගන්න", "Receive stock", "கையிருப்பு பெறவும்")}
         </Link>
@@ -507,21 +512,21 @@ export function PharmacyBusinessPulse() {
       {/* Mobile-only quick nav. */}
       <nav
         aria-label={tt(locale, "ඉක්මන් සංචලනය", "Quick navigation", "விரைவு வழிசெலுத்தல்")}
-        className="fixed inset-x-0 bottom-0 z-30 mx-auto grid h-[4.25rem] max-w-md grid-cols-5 border-x border-t border-slate-800 bg-slate-900/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 mx-auto grid h-[4.25rem] max-w-[650px] grid-cols-5 border-x border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden"
       >
-        <span className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-teal-300" aria-current="page">
+        <span className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-teal-700" aria-current="page">
           <HomeIcon className="h-5 w-5" />
           {tt(locale, "මුල් පිටුව", "Home", "முகப்பு")}
         </span>
-        <Link href="/sales" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-400">
+        <Link href="/sales" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-500">
           <SalesIcon className="h-5 w-5" />
           {tt(locale, "අලෙවි", "Sales", "விற்பனை")}
         </Link>
-        <Link href="/stock" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-400">
+        <Link href="/stock" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-500">
           <StockIcon className="h-5 w-5" />
           {tt(locale, "තොගය", "Stock", "கையிருப்பு")}
         </Link>
-        <button type="button" onClick={scrollToAttention} className="relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-400">
+        <button type="button" onClick={scrollToAttention} className="relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-500">
           <BellIcon className="h-5 w-5" />
           {tt(locale, "ඇඟවීම්", "Alerts", "எச்சரிக்கைகள்")}
           {allAttentionActions.length > 0 && (
@@ -530,7 +535,7 @@ export function PharmacyBusinessPulse() {
             </span>
           )}
         </button>
-        <Link href="/dashboard" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-400">
+        <Link href="/dashboard" className="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-slate-500">
           <MoreIcon className="h-5 w-5" />
           {tt(locale, "තව", "More", "மேலும்")}
         </Link>

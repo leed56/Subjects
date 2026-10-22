@@ -86,6 +86,7 @@ export default function CustomersPage() {
   const [savingPriceProductId, setSavingPriceProductId] = useState<string | null>(null);
 
   const [typeFilter, setTypeFilter] = useState<ContactFilter>("all");
+  const [page, setPage] = useState(1);
   // Global search (Cmd/Ctrl+K) links a customer result here with ?q=<name>
   // — same seeded-once-at-mount pattern as /stock's own ?q= handling.
   const searchParams = useSearchParams();
@@ -194,6 +195,10 @@ export default function CustomersPage() {
           (c.vatNumber ?? "").toLowerCase().includes(query),
       )
     : typeFiltered;
+  const pageSize = 10;
+  const pageCount = Math.max(1, Math.ceil(customers.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const visibleCustomers = customers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const canExport = can("export");
   const canBulkMessaging = can("bulk_messaging");
@@ -230,7 +235,7 @@ export default function CustomersPage() {
             className="flex flex-wrap items-center gap-2 text-left font-semibold text-slate-900 hover:text-teal-700 hover:underline"
           >
             {c.name}
-            <ContactTypeBadge type={c.contactType} />
+            <span className="sm:hidden"><ContactTypeBadge type={c.contactType} /></span>
           </button>
           {c.contactType === "company" && c.contactPerson && (
             <p className="mt-0.5 text-xs text-slate-500">{c.contactPerson}</p>
@@ -372,7 +377,7 @@ export default function CustomersPage() {
         ) : (
           <>
             <FilterBar>
-              <SearchInput value={search} onChange={setSearch} placeholder={t("cust.search_placeholder")} className="min-w-[220px] flex-1" />
+              <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("cust.search_placeholder")} className="min-w-[220px] flex-1" />
               <div className="grid w-full grid-cols-3 gap-1.5 sm:flex sm:w-auto">
                 {(
                   [
@@ -384,7 +389,7 @@ export default function CustomersPage() {
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => setTypeFilter(tab.id)}
+                    onClick={() => { setTypeFilter(tab.id); setPage(1); }}
                     aria-pressed={typeFilter === tab.id}
                     className={`min-h-11 rounded-lg px-2 py-2 text-sm font-medium transition sm:px-3 ${
                       typeFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
@@ -398,7 +403,7 @@ export default function CustomersPage() {
 
             <DataTable
               columns={columns}
-              rows={customers}
+              rows={visibleCustomers}
               emptyState={
                 <EmptyState
                   size="compact"
@@ -419,6 +424,19 @@ export default function CustomersPage() {
                 />
               }
             />
+
+            {customers.length > pageSize && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
+                <p className="font-semibold text-slate-500">
+                  {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, customers.length)} of {customers.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button type="button" disabled={currentPage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="min-h-9 rounded-lg border border-slate-200 px-3 font-semibold text-slate-600 disabled:opacity-40">← Previous</button>
+                  <span className="min-w-20 text-center text-xs font-bold uppercase tracking-wide text-slate-500">Page {currentPage} / {pageCount}</span>
+                  <button type="button" disabled={currentPage === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))} className="min-h-9 rounded-lg border border-slate-200 px-3 font-semibold text-slate-600 disabled:opacity-40">Next →</button>
+                </div>
+              </div>
+            )}
 
             {hasCreditActivity && (
               <section className="mt-5" aria-label={t("cust.credit_owed")}>
@@ -819,7 +837,7 @@ function CustomerProfileDrawer({
             <EmptyState title={t("cust.ledger_empty")} />
           ) : (
             <div className="overflow-hidden rounded-lg border border-slate-200">
-              <table className="w-full text-left text-sm">
+              <table className="mobile-card-table w-full text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-500">
                   <tr>
                     <th className="px-3 py-2">{t("common.date")}</th>
@@ -830,9 +848,9 @@ function CustomerProfileDrawer({
                 <tbody className="divide-y divide-slate-100">
                   {ledgerEntries.map((entry, i) => (
                     <tr key={i}>
-                      <td className="px-3 py-2 text-slate-500">{new Date(entry.date).toLocaleDateString("en-LK")}</td>
-                      <td className="px-3 py-2 text-slate-700">{entry.label}</td>
-                      <td className="px-3 py-2 text-right font-mono font-semibold text-slate-900">{formatLkr(entry.balance)}</td>
+                      <td data-label={t("common.date")} className="px-3 py-2 text-slate-500">{new Date(entry.date).toLocaleDateString("en-LK")}</td>
+                      <td data-label={t("common.details")} className="px-3 py-2 text-slate-700">{entry.label}</td>
+                      <td data-label={t("cust.balance")} className="px-3 py-2 text-right font-mono font-semibold text-slate-900">{formatLkr(entry.balance)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -920,7 +938,7 @@ function WholesalePricingModal({
       {filtered.length === 0 ? (
         <EmptyState title={t("sales.no_match")} />
       ) : (
-        <table className="w-full text-left text-sm">
+        <table className="mobile-card-table w-full text-left text-sm">
           <thead className="sticky top-0 border-b border-slate-200 bg-white text-xs font-semibold uppercase text-slate-500">
             <tr>
               <th className="py-2">{t("common.name")}</th>
@@ -971,12 +989,14 @@ function WholesalePriceRow({
 
   return (
     <tr>
-      <td className="py-2.5">
-        <p className="font-medium text-slate-900">{product.name}</p>
-        <p className="text-xs text-slate-400">{product.category}</p>
+      <td data-label={t("common.name")} className="py-2.5">
+        <div>
+          <p className="font-medium text-slate-900">{product.name}</p>
+          <p className="text-xs text-slate-400">{product.category}</p>
+        </div>
       </td>
-      <td className="py-2.5 text-right font-mono text-slate-500">{formatLkr(product.sellPrice)}</td>
-      <td className="py-2.5 text-right">
+      <td data-label={t("sales.retail_price")} className="py-2.5 text-right font-mono text-slate-500">{formatLkr(product.sellPrice)}</td>
+      <td data-label={t("cust.wholesale_price")} className="py-2.5 text-right">
         <input
           type="number"
           min={0}
@@ -987,7 +1007,7 @@ function WholesalePriceRow({
           className="w-24 rounded-lg border border-slate-300 px-2 py-1.5 text-right text-xs font-semibold text-slate-900 outline-none focus:border-teal-500 disabled:opacity-50"
         />
       </td>
-      <td className="py-2.5 text-right">
+      <td data-label={t("common.actions")} className="py-2.5 text-right">
         <div className="flex justify-end gap-1.5">
           <button
             type="button"

@@ -13,6 +13,7 @@ const ACCENTS: Record<string, string> = {
   ac_hvac: "bg-cyan-100 text-cyan-700",
   car_sales: "bg-violet-100 text-violet-700",
   textile: "bg-rose-100 text-rose-700",
+  cosmetics: "bg-fuchsia-100 text-fuchsia-700",
 };
 
 interface SectorCardProps {
@@ -21,7 +22,7 @@ interface SectorCardProps {
 
 export function SectorCard({ sector }: SectorCardProps) {
   const { locale, t } = useLocale();
-  const name = locale === "si" ? sector.nameSi : sector.nameEn;
+  const name = locale === "si" ? sector.nameSi : locale === "ta" ? sector.nameTa : sector.nameEn;
   const accent = ACCENTS[sector.id] ?? "bg-teal-100 text-teal-700";
 
   return (

@@ -235,6 +235,20 @@ async function capture(page, user, route, suffix = "desktop") {
   const actualPath = new URL(page.url()).pathname;
   assert(actualPath === route, `${user.sector}/${user.role}: ${route} redirected to ${actualPath}`);
   await assertClientSurface(page, user);
+  const verticalLayout = await page.evaluate(() => {
+    const main = document.querySelector("main");
+    const contentBottom = main ? Math.ceil(main.getBoundingClientRect().bottom + window.scrollY) : 0;
+    return {
+      contentBottom,
+      viewportHeight: window.innerHeight,
+      documentHeight: document.documentElement.scrollHeight,
+    };
+  });
+  const expectedBottom = Math.max(verticalLayout.contentBottom, verticalLayout.viewportHeight);
+  assert(
+    verticalLayout.documentHeight <= expectedBottom + 2,
+    `${user.sector}/${user.role}: ${route} has ${verticalLayout.documentHeight - expectedBottom}px of blank document space below the workspace`,
+  );
   const file = `${screenshotDir}/${safeName(`${user.sector}-${user.role}-${route === "/" ? "home" : route}-${suffix}`)}.png`;
   await page.screenshot({ path: file, fullPage: true });
   screenshots.push(file);

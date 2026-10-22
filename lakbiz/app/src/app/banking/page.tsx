@@ -44,6 +44,8 @@ type TransactionRow = {
   label: string;
   detail: string;
   signed: number;
+  protected: boolean;
+  reversed: boolean;
 };
 
 type TransferRow = {
@@ -66,6 +68,8 @@ export default function BankingPage() {
     addBankTransferToCloud,
     addChequeToCloud,
     updateChequeStatusToCloud,
+    pendingBankAction,
+    retryPendingBankAction,
   } = useAppStore();
   const { t } = useLocale();
   const { canWrite } = useWriteAccess();
@@ -116,6 +120,7 @@ export default function BankingPage() {
 
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [formMessage, setFormMessage] = useState("");
+  const [checkingBankAction, setCheckingBankAction] = useState(false);
   const [trFrom, setTrFrom] = useState("");
   const [trTo, setTrTo] = useState("");
   const [trAmount, setTrAmount] = useState(0);
@@ -156,6 +161,8 @@ export default function BankingPage() {
       label: txnTypeLabels[tx.type],
       detail: `${accountLabel(tx.accountId)}${tx.description ? ` · ${tx.description}` : ""}`,
       signed: tx.type === "withdrawal" || tx.type === "fee" ? -tx.amount : tx.amount,
+      protected: /^(purchase-bank:|sale-tender:|return:|bank-reversal:|bank-opening:)/.test(tx.id),
+      reversed: Boolean(tx.reversedBy),
     }))
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 
@@ -223,11 +230,11 @@ export default function BankingPage() {
           label={t("common.actions")}
           items={[
             {
-              label: deletingTxnId === row.id ? t("common.saving") : t("common.delete"),
+              label: deletingTxnId === row.id ? t("common.saving") : row.reversed ? "Already reversed" : row.protected ? "Correct at source" : "Delete or reverse",
               tone: "danger",
-              disabled: !!deletingTxnId || !canWrite,
+              disabled: !!deletingTxnId || !canWrite || row.protected || row.reversed,
               onSelect: async () => {
-                if (deletingTxnId || !confirm(t("bank.delete_txn"))) return;
+                if (deletingTxnId || !confirm("Correct this bank entry? Depending on your company settings, it will be deleted or a reversal will be recorded.")) return;
                 setDeletingTxnId(row.id);
                 setFormMessage("");
                 const result = await deleteBankTransactionToCloud(row.id);
@@ -489,6 +496,8 @@ export default function BankingPage() {
         />
 
         <WriteDisabledHint className="mb-5" />
+
+        {pendingBankAction && <section className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950" aria-live="polite"><p className="font-bold">A banking action needs confirmation</p><p className="mt-1">Check the original action before entering another banking change.</p><Button className="mt-3" disabled={checkingBankAction || !canWrite} onClick={async () => { setCheckingBankAction(true); setFormMessage(""); try { const result = await retryPendingBankAction(); if (!result.ok) setFormMessage(result.error ?? t("common.save_failed")); } finally { setCheckingBankAction(false); } }}>{checkingBankAction ? "Checking…" : "Check pending banking action"}</Button></section>}
 
         {formMessage &&
           !showBankModal &&

@@ -46,6 +46,7 @@ export const NAV_ICON_BY_HREF: Record<string, (props: IconProps) => React.ReactE
   "/teams": CrewIcon,
   "/workforce": WorkforceIcon,
   "/banking": BankingIcon,
+  "/accounting": BankingIcon,
   "/vat": VatIcon,
   "/expenses": ExpenseIcon,
   "/returns": BillsIcon,

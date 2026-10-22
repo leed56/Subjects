@@ -17,6 +17,7 @@ const SHOP_PREFIXES = [
   "/bills",
   "/customers",
   "/banking",
+  "/accounting",
   "/assets",
   "/teams",
   "/job-costing",

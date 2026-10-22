@@ -14,6 +14,7 @@ export function ProductReferenceCombobox({
   label,
   placeholder = "Start typing a product name…",
   autoFocus = false,
+  error,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -21,6 +22,7 @@ export function ProductReferenceCombobox({
   label: string;
   placeholder?: string;
   autoFocus?: boolean;
+  error?: string;
 }) {
   const { locale } = useLocale();
   const si = locale === "si";
@@ -102,6 +104,8 @@ export function ProductReferenceCombobox({
             aria-expanded={open}
             aria-controls={listboxId}
             aria-busy={loading}
+            aria-invalid={!!error}
+            aria-describedby={error ? `${listboxId}-error` : undefined}
             value={value}
             onFocus={() => {
               if (value.trim()) setOpen(true);
@@ -128,7 +132,7 @@ export function ProductReferenceCombobox({
               }
             }}
             placeholder={placeholder}
-            className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 pr-24 text-sm text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.025)] outline-none transition placeholder:text-slate-400 focus:border-teal-400 focus:ring-4 focus:ring-teal-100/70"
+            className={`min-h-11 w-full rounded-xl border bg-white px-3.5 py-2.5 pr-24 text-sm text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.025)] outline-none transition placeholder:text-slate-400 focus:ring-4 ${error ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100" : "border-slate-200 focus:border-teal-400 focus:ring-teal-100/70"}`}
           />
           <span
             className={`pointer-events-none absolute inset-y-0 right-3 flex items-center text-[11px] font-semibold ${
@@ -138,6 +142,7 @@ export function ProductReferenceCombobox({
             {statusText}
           </span>
         </div>
+        {error && <p id={`${listboxId}-error`} role="alert" className="mt-1.5 text-xs font-medium text-rose-700">{error}</p>}
       </label>
 
       {open && value.trim() && (
