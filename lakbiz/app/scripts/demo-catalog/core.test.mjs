@@ -97,8 +97,15 @@ describe("Sri Lanka demo catalog normalization", () => {
     expect(classifyRetailProduct("4 EVER Aloe Vera Gel 90%, 100g", "grocery")).toMatchObject({ category: "Personal Care" });
     expect(classifyRetailProduct("Tea Tree Face Wash, 100ml", "grocery")).toMatchObject({ category: "Personal Care" });
     expect(classifyRetailProduct("Herbal Hair Oil, 200ml", "grocery")).toMatchObject({ category: "Personal Care" });
+    expect(classifyRetailProduct("4EVER Foot Cream, 100g", "grocery")).toMatchObject({ category: "Personal Care" });
+    expect(classifyRetailProduct("Aarya Silk Dry Wings, 10's", "grocery")).toMatchObject({ category: "Personal Care" });
+    expect(classifyRetailProduct("ACNES Creamy Wash, 100g", "grocery")).toMatchObject({ category: "Personal Care" });
     expect(classifyRetailProduct("Comfort Lily Fresh Fabric Conditioner, 860ml", "grocery")).toMatchObject({ category: "Cleaning" });
+    expect(classifyRetailProduct("ALLEGRINI Disinfectant, 500ml", "grocery")).toMatchObject({ category: "Cleaning" });
     expect(classifyRetailProduct("Coconut Cooking Oil, 1L", "grocery")).toMatchObject({ category: "Oil & Fats" });
     expect(classifyRetailProduct("Ceylon Tea, 100g", "grocery")).toMatchObject({ category: "Water & Soft Drinks" });
+    expect(classifyRetailProduct("7Up Pet, 500ml", "grocery")).toMatchObject({ category: "Water & Soft Drinks" });
+    expect(classifyRetailProduct("Ahmad Tea Cinnamon Haze 20 Foil, 40g", "grocery")).toMatchObject({ category: "Water & Soft Drinks" });
+    expect(classifyRetailProduct("Ambewela Butter Salted, 200g", "grocery")).toMatchObject({ category: "Milk & Dairy" });
   });
 });
