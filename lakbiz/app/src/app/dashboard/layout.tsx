@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { GroceryCommandCenter } from "@/components/dashboard/grocery-command-center";
 import { RetailCommandCenter } from "@/components/dashboard/retail-command-center";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProLoadingState, ProMain } from "@/components/ui/pro-shell";
@@ -48,7 +49,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <AppShell>
       <ProMain>
-        <RetailCommandCenter data={data} sector={retailSector} />
+        {retailSector === "grocery" ? <GroceryCommandCenter data={data} /> : <RetailCommandCenter data={data} sector={retailSector} />}
       </ProMain>
     </AppShell>
   );
