@@ -1,0 +1,208 @@
+/*
+ * Final authenticated-workspace precision pass.
+ * This file intentionally contains only scoped overrides for the live app.
+ * The public marketing page is unaffected.
+ */
+
+/* --------------------------------------------------------------------------
+ * Stock
+ * ----------------------------------------------------------------------- */
+
+/* The drawer header already says “Add item”; the small ADD NEW ITEM badge in
+   the first form section repeats the same information and adds visual noise. */
+body:has(aside a[href="/stock"][aria-current="page"])
+  [data-product-form="true"] > section:first-child > div:first-child > span:last-child {
+  display: none;
+}
+
+/* The form used to reserve 96px of padding after its sticky action bar. At the
+   bottom of the drawer that became a large blank white block below Save/Cancel.
+   The footer already participates in normal flow, so no trailing reserve is
+   needed once the user reaches the end of the form. */
+body:has(aside a[href="/stock"][aria-current="page"])
+  [data-product-form="true"] {
+  padding-bottom: 0 !important;
+}
+
+/* Keep the sticky drawer footer visually separate from the scroll content. */
+body:has(aside a[href="/stock"][aria-current="page"])
+  [data-product-form="true"] > div.sticky {
+  background: #ffffff !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: 0 -12px 30px rgba(15, 23, 42, 0.07) !important;
+  isolation: isolate;
+}
+
+/* Low stock should earn more attention only when the metric is actually in a
+   warning state. Keep the rest of the KPI row quiet. */
+body:has(aside a[href="/stock"][aria-current="page"])
+  main > div:first-child > .mt-5 > .grid > div:nth-child(2):has(> p.text-amber-700) {
+  border-color: #f4cf87 !important;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(245, 158, 11, 0.10), transparent 55%),
+    linear-gradient(180deg, #fffdf8 0%, #fffaf0 100%) !important;
+  box-shadow:
+    0 1px 2px rgba(120, 53, 15, 0.03),
+    0 12px 30px rgba(120, 53, 15, 0.06) !important;
+}
+
+/* Disabled stock-out remains visibly a real control rather than fading into
+   the table background. */
+body:has(aside a[href="/stock"][aria-current="page"])
+  main table button:disabled[class*="bg-amber-50"] {
+  opacity: 1 !important;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc !important;
+  color: #94a3b8 !important;
+  box-shadow: none !important;
+}
+
+body:has(aside a[href="/stock"][aria-current="page"])
+  main table td:last-child button[aria-haspopup="menu"] {
+  border: 1px solid transparent;
+}
+
+body:has(aside a[href="/stock"][aria-current="page"])
+  main table td:last-child button[aria-haspopup="menu"]:hover {
+  border-color: #dbe5ed;
+  background: #f8fafc;
+}
+
+/* --------------------------------------------------------------------------
+ * Sales / POS
+ * ----------------------------------------------------------------------- */
+
+/* ProPageHeader is the first direct child on this route. Hide only its Stock
+   link so the central empty-state CTA remains the one primary next step. */
+body:has(aside a[href="/sales"][aria-current="page"])
+  main > :first-child a[href="/stock"] {
+  display: none !important;
+}
+
+/* ProCard renders as a div in the live app. When its empty state is present,
+   hide the three zero-value KPIs and collapse the page into an onboarding
+   state. */
+body:has(aside a[href="/sales"][aria-current="page"])
+  main:has(> section.mt-6 > div div[class*="border-dashed"])
+  > section.grid.gap-4 {
+  display: none !important;
+}
+
+body:has(aside a[href="/sales"][aria-current="page"])
+  main > section.mt-6:has(> div div[class*="border-dashed"]) {
+  margin-top: 1.25rem !important;
+}
+
+body:has(aside a[href="/sales"][aria-current="page"])
+  main > section.mt-6:has(> div div[class*="border-dashed"]) > div {
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+body:has(aside a[href="/sales"][aria-current="page"])
+  main > section.mt-6 div[class*="border-dashed"] {
+  min-height: 0 !important;
+  padding: 2.25rem 1.5rem !important;
+  border-color: #d8e4ec;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(20, 184, 166, 0.075), transparent 48%),
+    linear-gradient(180deg, #fbfdff 0%, #f7fafc 100%);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.035);
+}
+
+/* --------------------------------------------------------------------------
+ * Owner dashboard
+ * ----------------------------------------------------------------------- */
+
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main div[class*="border-dashed"] {
+  min-height: 0 !important;
+  padding: 0.9rem 1.15rem !important;
+}
+
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main div[class*="border-dashed"] p[class*="max-w-sm"] {
+  margin-top: 0.25rem;
+  line-height: 1.45;
+}
+
+/* Card() renders div, not section. Remove empty Today's Operations and Teams
+   Today cards completely; they return automatically when real records exist. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div:has(a[href="/schedule"]):has(div[class*="border-dashed"]),
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div:has(a[href="/teams"]):has(div[class*="border-dashed"]) {
+  display: none !important;
+}
+
+/* Business Performance is also Card() => div. When it contains an EmptyState,
+   remove it and collapse the financial row to one intentional panel. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div.grid.gap-4:has(> div:nth-child(2) div[class*="border-dashed"])
+  > div:nth-child(2) {
+  display: none !important;
+}
+
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div.grid.gap-4:has(> div:nth-child(2) div[class*="border-dashed"]) {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+/* Low stock is already an actionable Needs Attention row. If it is the sole
+   bottom summary card, suppress the duplicate panel. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div.mt-4.grid:has(> div:only-child a[href="/stock"]) {
+  display: none !important;
+}
+
+/* Needs-attention rows get one quiet severity rail. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main div:has(> div > span.bg-amber-500),
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main div:has(> div > span.bg-rose-500) {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+/* System maintenance is not dashboard content. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div.mt-8.flex.flex-col.items-center.justify-between {
+  margin-top: 1.25rem;
+  border: 0;
+  background: transparent;
+  padding: 0.25rem;
+  box-shadow: none;
+  color: #94a3b8;
+}
+
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div.mt-8.flex.flex-col.items-center.justify-between button {
+  border: 1px solid transparent;
+  color: #94a3b8;
+}
+
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div.mt-8.flex.flex-col.items-center.justify-between button:hover {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+@media (min-width: 1024px) {
+  /* With the chart hidden, spread the four financial values across one row so
+     the remaining panel feels intentionally composed rather than stretched. */
+  body:has(aside a[href="/dashboard"][aria-current="page"])
+    main > div.grid.gap-4:has(> div:nth-child(2) div[class*="border-dashed"])
+    > div:first-child > div.grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  body:has(aside a[href="/sales"][aria-current="page"])
+    main > section.mt-6 div[class*="border-dashed"] {
+    padding: 1.75rem 1rem !important;
+  }
+}

@@ -47,7 +47,7 @@ export function generateJobNo(count: number): string {
 
 export function jobStatusLabel(
   status: ACJobStatus,
-  locale: "si" | "en" = "si",
+  locale: "si" | "en" | "ta" = "si",
 ): string {
   const row = AC_JOB_STATUSES.find((s) => s.value === status);
   if (!row) return status;

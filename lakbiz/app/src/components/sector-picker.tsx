@@ -2,6 +2,7 @@
 
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { sectors } from "@/lib/sectors";
+import { SectorIcon } from "@/components/sector-icon";
 import type { SectorId } from "@/lib/types";
 
 const ACCENTS: Record<string, string> = {
@@ -9,6 +10,7 @@ const ACCENTS: Record<string, string> = {
   electronics: "border-sky-300 bg-sky-50 ring-sky-500",
   electricals: "border-amber-300 bg-amber-50 ring-amber-500",
   spare_parts: "border-slate-300 bg-slate-50 ring-slate-500",
+  textile: "border-rose-300 bg-rose-50 ring-rose-500",
   ac_hvac: "border-cyan-300 bg-cyan-50 ring-cyan-500",
   car_sales: "border-violet-300 bg-violet-50 ring-violet-500",
 };
@@ -44,7 +46,7 @@ export function SectorPicker({ value, onChange }: SectorPickerProps) {
                   : "border-slate-200 bg-white hover:border-slate-300"
               }`}
             >
-              <span className="text-xl">{sector.icon}</span>
+              <SectorIcon sectorId={sector.id} className="h-5 w-5 text-slate-600" />
               <span className="mt-1 block text-xs font-semibold leading-snug text-slate-900">
                 {name}
               </span>

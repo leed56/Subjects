@@ -3,6 +3,13 @@
 import { useAcInAppAlerts } from "@/hooks/use-ac-in-app-alerts";
 import { useLocale } from "@/lib/i18n/locale-provider";
 
+/** Global premium UI phase, Part 11 — "move detailed reminder
+ * configuration out of the main page." Used to render inline on AC Jobs
+ * permanently (its own bordered card, always taking main-page space
+ * whenever the feature was on); now pure content meant to be opened from
+ * a compact trigger + Dialog (see JobsPage) instead. Kept as its own
+ * component — the checkbox/preference logic didn't need to change, only
+ * where it's mounted. */
 export function AcInAppAlertSettings() {
   const { t } = useLocale();
   const { enabled, prefs, updatePrefs } = useAcInAppAlerts();
@@ -10,9 +17,8 @@ export function AcInAppAlertSettings() {
   if (!enabled) return null;
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="text-sm font-black text-slate-900">{t("ac_alerts.settings_title")}</h2>
-      <p className="mt-1 text-xs font-medium text-slate-500">
+    <div>
+      <p className="text-xs font-medium text-slate-500">
         {t("ac_alerts.settings_hint")}
       </p>
 
@@ -95,6 +101,6 @@ export function AcInAppAlertSettings() {
           </span>
         </label>
       </div>
-    </section>
+    </div>
   );
 }

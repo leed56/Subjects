@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ProductForm } from "@/components/product-form";
+import { StockCommandHeader } from "@/components/stock/stock-command-header";
 import { ExportActions } from "@/components/export/export-actions";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain, ProLoadingState } from "@/components/ui/pro-shell";
-import { PageHeader, MetricCard, EmptyState, StatusBadge, SearchInput, FilterBar, ActionMenu } from "@/components/ui/primitives";
+import { EmptyState, StatusBadge, SearchInput, FilterBar, ActionMenu, Pagination } from "@/components/ui/primitives";
 import { Drawer, Dialog, ConfirmDialog } from "@/components/ui/overlay";
 import { FormField, TextInput } from "@/components/ui/form";
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
@@ -26,6 +28,8 @@ import type { Product, ProductCondition } from "@/lib/types";
 
 type ConditionFilter = "all" | ProductCondition;
 
+const STOCK_PAGE_SIZE = 50;
+
 export default function StockPage() {
   const {
     data,
@@ -41,6 +45,7 @@ export default function StockPage() {
   const { canWrite, disabledHint } = useWriteAccess();
   const { t } = useLocale();
   const { toast } = useToast();
+  const conditionFilterRelevant = org.sector !== "pharmacy" && org.sector !== "grocery";
 
   // Create/edit drawer — form only exists in the DOM while open.
   const [formOpen, setFormOpen] = useState(false);
@@ -73,7 +78,15 @@ export default function StockPage() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
-  const [search, setSearch] = useState("");
+  // The pharmacy/grocery dashboard's "Low stock" KPI card and Replenishment
+  // Queue rows link here with ?filter=low-stock and ?q=<product name>
+  // respectively — before this, both links landed on an unfiltered list
+  // (the dashboard promised a filtered detail view; this page never read
+  // either param, so a "clickable" KPI card wasn't actually clickable in
+  // any meaningful sense). Seeded once at mount, same pattern as
+  // stock/rolls/page.tsx's `?receive=1`.
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
   // Discontinued items default to hidden — matches getLowStockProducts/the
   // sale picker, which already ignore inactive items — with an explicit
@@ -81,7 +94,26 @@ export default function StockPage() {
   const [showInactive, setShowInactive] = useState(false);
   // HVAC platform Phase 12 — a real filtered view of exactly what needs
   // reordering, not just the metric-card count that existed before.
-  const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+  const [showLowStockOnly, setShowLowStockOnly] = useState(() => searchParams.get("filter") === "low-stock");
+  // Round 2 Section 8 — the product form has never required a non-zero
+  // price (only the name field is `required`; buy/sell price both default
+  // to and accept 0), so a Rs. 0 item isn't necessarily a demo-seed
+  // artifact — the same gap exists for real data entry today, most easily
+  // hit by a role that never sees the buy-price field at all (see
+  // `canSeeFinancials` below) leaving it at its 0 default. This filter is
+  // the data-quality view requested: a zero sell price (or, for financial
+  // roles, a zero buy price) silently breaks margin math on that item.
+  const [showZeroPriceOnly, setShowZeroPriceOnly] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, conditionFilter, showInactive, showLowStockOnly, showZeroPriceOnly, categoryFilter]);
+
+  useEffect(() => {
+    if (!conditionFilterRelevant && conditionFilter !== "all") setConditionFilter("all");
+  }, [conditionFilterRelevant, conditionFilter]);
 
   if (!ready || !data) {
     return (
@@ -102,19 +134,38 @@ export default function StockPage() {
           p.category.toLowerCase().includes(query),
       )
     : data.products;
-  const byCondition = conditionFilter === "all" ? searched : searched.filter((p) => p.condition === conditionFilter);
+  const byCondition = !conditionFilterRelevant || conditionFilter === "all"
+    ? searched
+    : searched.filter((p) => p.condition === conditionFilter);
   const byActive = showInactive ? byCondition : byCondition.filter((p) => p.active);
+  const byCategory = categoryFilter === "all" ? byActive : byActive.filter((p) => p.category === categoryFilter);
   const lowStock = getLowStockProducts(data.products);
   const lowStockIds = new Set(lowStock.map((p) => p.id));
-  const products = showLowStockOnly ? byActive.filter((p) => lowStockIds.has(p.id)) : byActive;
+  const isZeroPriced = (p: Product) => p.sellPrice <= 0 || (canSeeFinancials && p.buyPrice <= 0);
+  const zeroPriced = data.products.filter((p) => p.active && isZeroPriced(p));
+  const zeroPricedIds = new Set(zeroPriced.map((p) => p.id));
+  const byLowStock = showLowStockOnly ? byCategory.filter((p) => lowStockIds.has(p.id)) : byCategory;
+  const products = showZeroPriceOnly ? byLowStock.filter((p) => zeroPricedIds.has(p.id)) : byLowStock;
+  const totalPages = Math.max(1, Math.ceil(products.length / STOCK_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * STOCK_PAGE_SIZE;
+  const pageProducts = products.slice(pageStart, pageStart + STOCK_PAGE_SIZE);
   const reorderSuggestions = showLowStockOnly ? getReorderSuggestions(data) : [];
   const reorderByProductId = new Map(reorderSuggestions.map((r) => [r.product.id, r] as const));
 
   const newCount = data.products.filter((p) => p.condition === "new").length;
   const usedCount = data.products.filter((p) => p.condition === "used").length;
   const inactiveCount = data.products.filter((p) => !p.active).length;
+  const outOfStockCount = data.products.filter((p) => p.active && p.stockQty <= 0).length;
   const inventoryValue = data.products.reduce((sum, p) => sum + p.stockQty * p.buyPrice, 0);
   const sellValue = data.products.reduce((sum, p) => sum + p.stockQty * p.sellPrice, 0);
+  const categoryCounts = [...new Set(data.products.filter((p) => p.active).map((p) => p.category || "Other"))]
+    .map((name) => ({
+      name,
+      count: data.products.filter((p) => p.active && (p.category || "Other") === name).length,
+    }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, 10);
   const stockInProduct = stockInId ? data.products.find((p) => p.id === stockInId) : null;
   const stockOutProduct = stockOutId ? data.products.find((p) => p.id === stockOutId) : null;
   const stockInQtyNumber = Number(stockInQty) || 0;
@@ -262,7 +313,7 @@ export default function StockPage() {
               <button type="button" onClick={() => openEdit(p)} className={`font-semibold hover:text-teal-700 hover:underline ${p.active ? "text-slate-900" : "text-slate-400"}`}>
                 {p.name}
               </button>
-              <ProductConditionBadge condition={p.condition} />
+              {conditionFilterRelevant && <ProductConditionBadge condition={p.condition} />}
               {!p.active && <StatusBadge tone="neutral">{t("stock.inactive_badge")}</StatusBadge>}
             </div>
             <p className="mt-0.5 text-xs text-slate-500">
@@ -308,7 +359,16 @@ export default function StockPage() {
             header: t("stock.buy_price"),
             align: "right" as const,
             hideOnMobile: true,
-            render: (p: Product) => formatLkr(p.buyPrice),
+            render: (p: Product) => (
+              <div className="text-right">
+                <span>{formatLkr(p.buyPrice)}</span>
+                {p.buyPrice <= 0 && (
+                  <div className="mt-0.5">
+                    <StatusBadge tone="danger">{t("stock.zero_price_badge")}</StatusBadge>
+                  </div>
+                )}
+              </div>
+            ),
           },
         ]
       : []),
@@ -316,7 +376,16 @@ export default function StockPage() {
       key: "sell",
       header: t("stock.sell_price"),
       align: "right",
-      render: (p) => <span className="font-mono font-semibold text-teal-700">{formatLkr(p.sellPrice)}</span>,
+      render: (p) => (
+        <div className="text-right">
+          <span className="font-mono font-semibold text-teal-700">{formatLkr(p.sellPrice)}</span>
+          {p.sellPrice <= 0 && (
+            <div className="mt-0.5">
+              <StatusBadge tone="danger">{t("stock.zero_price_badge")}</StatusBadge>
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       key: "actions",
@@ -353,9 +422,19 @@ export default function StockPage() {
   return (
     <AppShell>
       <ProMain>
-        <PageHeader
-          title={t("stock.title")}
-          description={`${products.length} ${t("common.items")} · ${t(org.isAuthenticated ? "common.saved_cloud" : "common.saved_browser")}`}
+        <StockCommandHeader
+          sector={org.sector}
+          shopName={data.business.name || org.name || "LakBiz"}
+          itemCount={data.products.length}
+          lowStockCount={lowStock.length}
+          outOfStockCount={outOfStockCount}
+          costValue={inventoryValue}
+          sellValue={sellValue}
+          canSeeFinancials={canSeeFinancials}
+          filteredCount={products.length}
+          categories={categoryCounts}
+          selectedCategory={categoryFilter}
+          onCategoryChange={setCategoryFilter}
           actions={
             <>
               {canExport && (
@@ -376,25 +455,12 @@ export default function StockPage() {
                 disabled={!canWrite}
                 title={!canWrite ? disabledHint ?? undefined : undefined}
                 onClick={openCreate}
-                className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-teal-500 px-4 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(20,184,166,0.2)] transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <PlusIcon className="h-4 w-4" />
                 {t("stock.add_item")}
               </button>
             </>
-          }
-          metrics={
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard label={t("common.items")} value={String(data.products.length)} icon={<StockIcon className="h-4 w-4" />} />
-              <MetricCard
-                label={t("dash.low_stock")}
-                value={String(lowStock.length)}
-                hint={lowStock.length > 0 ? t("dash.low_stock_alert") : t("dash.all_good_stock")}
-                tone={lowStock.length > 0 ? "warning" : "default"}
-              />
-              {canSeeFinancials && <MetricCard label={t("stock.cost_value")} value={formatLkr(inventoryValue)} hint={t("stock.buy_price")} />}
-              <MetricCard label={t("stock.sell_value")} value={formatLkr(sellValue)} hint={t("stock.sell_price")} tone="positive" />
-            </div>
           }
         />
 
@@ -402,26 +468,28 @@ export default function StockPage() {
 
         <FilterBar>
           <SearchInput value={search} onChange={setSearch} placeholder={t("stock.search_placeholder")} className="min-w-[220px] flex-1" />
-          <div className="flex gap-1.5">
-            {(
-              [
-                { id: "all" as const, label: t("stock.filter_all"), count: data.products.length },
-                { id: "new" as const, label: t("stock.condition_new"), count: newCount },
-                { id: "used" as const, label: t("stock.condition_used"), count: usedCount },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setConditionFilter(tab.id)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                  conditionFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
-                }`}
-              >
-                {tab.label} <span className="opacity-70">({tab.count})</span>
-              </button>
-            ))}
-          </div>
+          {conditionFilterRelevant && (
+            <div className="flex gap-1.5">
+              {(
+                [
+                  { id: "all" as const, label: t("stock.filter_all"), count: data.products.length },
+                  { id: "new" as const, label: t("stock.condition_new"), count: newCount },
+                  { id: "used" as const, label: t("stock.condition_used"), count: usedCount },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setConditionFilter(tab.id)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                    conditionFilter === tab.id ? "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
+                  }`}
+                >
+                  {tab.label} <span className="opacity-70">({tab.count})</span>
+                </button>
+              ))}
+            </div>
+          )}
           {lowStock.length > 0 && (
             <button
               type="button"
@@ -444,6 +512,17 @@ export default function StockPage() {
               {t("stock.filter_inactive")} <span className="opacity-70">({inactiveCount})</span>
             </button>
           )}
+          {canSeeFinancials && zeroPriced.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowZeroPriceOnly((v) => !v)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                showZeroPriceOnly ? "bg-rose-600 text-white" : "border border-rose-200 bg-rose-50 text-rose-800 hover:border-rose-300"
+              }`}
+            >
+              {t("stock.zero_price_filter")} <span className="opacity-70">({zeroPriced.length})</span>
+            </button>
+          )}
         </FilterBar>
 
         {data.products.length === 0 ? (
@@ -458,17 +537,44 @@ export default function StockPage() {
             }
           />
         ) : (
-          <DataTable columns={columns} rows={products} emptyState={<EmptyState title={t("sales.no_match")} description={t("stock.search_no_match_desc")} />} />
+          <>
+            <div className="mb-3">
+              <Pagination
+                page={currentPage}
+                totalPages={totalPages}
+                start={pageStart + 1}
+                end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
+                total={products.length}
+                pageSize={STOCK_PAGE_SIZE}
+                onPageChange={setPage}
+              />
+            </div>
+            <DataTable columns={columns} rows={pageProducts} emptyState={<EmptyState title={t("sales.no_match")} description={t("stock.search_no_match_desc")} />} />
+            {products.length > STOCK_PAGE_SIZE && (
+              <div className="mt-3">
+                <Pagination
+                  page={currentPage}
+                  totalPages={totalPages}
+                  start={pageStart + 1}
+                  end={Math.min(pageStart + STOCK_PAGE_SIZE, products.length)}
+                  total={products.length}
+                  pageSize={STOCK_PAGE_SIZE}
+                  onPageChange={setPage}
+                />
+              </div>
+            )}
+          </>
         )}
 
         {/* Create / edit drawer — always opens immediately. */}
         <Drawer
           open={formOpen}
           onClose={() => setFormOpen(false)}
+          size="lg"
           title={editing ? editing.name : t("stock.add_item")}
           description={editing ? t("stock.edit_inventory_eyebrow") : t("stock.create_inventory_eyebrow")}
         >
-          {editing ? (
+          {formOpen && (editing ? (
             <ProductForm
               initial={editing}
               lockedSectorId={org.isAuthenticated ? org.sector : undefined}
@@ -511,7 +617,7 @@ export default function StockPage() {
                 toast({ tone: "success", title: t("stock.added"), description: input.name });
               }}
             />
-          )}
+          ))}
         </Drawer>
 
         {/* Stock in */}

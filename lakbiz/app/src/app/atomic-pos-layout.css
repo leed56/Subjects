@@ -1,0 +1,12 @@
+/*
+ * Atomic retail POS desktop containment.
+ *
+ * CSS Grid items default to min-width:auto, so the fast-retail catalogue's
+ * horizontally scrollable category/content area can contribute a large
+ * min-content width and force the checkout column beyond the viewport. Keep
+ * both grid children shrinkable within the declared 1.45fr / 0.85fr tracks.
+ * The selector is intentionally limited to the atomic POS grid token.
+ */
+section[class~="xl:grid-cols-[1.45fr_0.85fr]"] > * {
+  min-width: 0;
+}

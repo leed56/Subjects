@@ -7,7 +7,6 @@ import {
   composeFromContext,
   defaultTemplateForContext,
   dispatchMessage,
-  formatSlPhoneDisplay,
   isValidSlMobile,
   loadNotificationSettings,
   appendNotificationLog,
@@ -17,7 +16,8 @@ import {
   type MessageContext,
   type MessageTemplateId,
 } from "@/lib/messaging";
-import { useSmsApiConfigured } from "@/lib/messaging/use-sms-api-configured";
+import { useSmsApiConfigured, useWhatsAppApiConfigured } from "@/lib/messaging/use-sms-api-configured";
+import { sectorAllowsApiWhatsApp } from "@/lib/messaging/wasender-sectors";
 
 type MessageComposerProps = {
   open: boolean;
@@ -53,6 +53,12 @@ const CHANNELS: {
     icon: "⚡",
     color: "from-violet-500 to-purple-600",
   },
+  {
+    id: "api_whatsapp",
+    labelKey: "msg.api_whatsapp",
+    icon: "🚀",
+    color: "from-green-600 to-teal-700",
+  },
 ];
 
 export function MessageComposer({
@@ -65,8 +71,12 @@ export function MessageComposer({
   contextId,
 }: MessageComposerProps) {
   const { t } = useLocale();
-  const { can, refreshOrg } = useSubscription();
+  const { can, refreshOrg, org } = useSubscription();
   const canApiSms = can("bulk_messaging");
+  // WhatsApp API sending is a rollout pilot, not yet every sector (see
+  // wasender-sectors.ts for why — one connected number, shared by whichever
+  // sectors are listed there). Same bulk_messaging plan gate as SMS API.
+  const canApiWhatsApp = can("bulk_messaging") && sectorAllowsApiWhatsApp(org.sector);
   const settings = loadNotificationSettings();
   const [channel, setChannel] = useState<MessageChannel>(settings.defaultChannel);
   const [templateId, setTemplateId] = useState<MessageTemplateId>(
@@ -78,11 +88,37 @@ export function MessageComposer({
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  // Reported live: this dialog only ever displayed the phone it was
+  // handed -- no way to add or fix one when it was missing/invalid, on
+  // any sector (pharmacy Sales quote, HVAC Jobs, Textile, Vehicle...),
+  // short of closing the composer and hunting for a phone field
+  // elsewhere on the page (one doesn't always exist for every caller).
+  // Editable here, for this send only -- it does not write back to the
+  // underlying customer/job record, the same scope the pharmacy
+  // walk-in-phone field already established for the Sales page.
+  const [editablePhone, setEditablePhone] = useState(phone ?? "");
 
   const templates = templatesForContext(context.type);
   const smsApiConfigured = useSmsApiConfigured();
   const apiEnabled = smsApiConfigured === true;
+  const whatsappApiConfigured = useWhatsAppApiConfigured();
+  const whatsappApiEnabled = whatsappApiConfigured === true;
 
+  // Reported live: picking a different template card (e.g. "Job
+  // completed") while the composer was open kept snapping back to
+  // whatever defaultTemplate opened it with. Root cause: `context` is a
+  // fresh object literal built by every caller on every one of *their*
+  // renders (e.g. job-invoice-view.tsx's `context={{ type: "ac_job", job,
+  // business, items }}`) -- a new reference regardless of whether the
+  // job/sale/customer it describes actually changed. This effect had
+  // `context` in its dependency array, so any unrelated re-render of the
+  // page this composer lives on (which happens on every state update
+  // anywhere upstream, template selection included once it round-trips
+  // through React) re-ran it and reset templateId back to defaultTemplate
+  // -- overwriting the user's own pick before they could even send it.
+  // `contextId` is the actual identity signal here: a plain string prop
+  // that only changes when this composer is really being pointed at a
+  // different record, unlike `context` itself.
   useEffect(() => {
     if (!open) return;
     void refreshOrg();
@@ -90,23 +126,32 @@ export function MessageComposer({
     setChannel(
       settings.defaultChannel === "api_sms" && !canApiSms
         ? "whatsapp"
-        : settings.defaultChannel,
+        : settings.defaultChannel === "api_whatsapp" && !canApiWhatsApp
+          ? "whatsapp"
+          : settings.defaultChannel,
     );
     setMessageLang(settings.preferredLanguage);
+    setEditablePhone(phone ?? "");
     setFeedback(null);
-  }, [open, defaultTemplate, context, settings.defaultChannel, settings.preferredLanguage, canApiSms, refreshOrg]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, contextId, defaultTemplate, settings.defaultChannel, settings.preferredLanguage, canApiSms, canApiWhatsApp, refreshOrg]);
 
+  // Same unstable-`context`-reference issue as the effect above, and
+  // arguably worse here: without this, a manually edited message body
+  // could get silently overwritten back to the template text by an
+  // unrelated re-render, not just a template switch getting reverted.
   useEffect(() => {
     if (!open) return;
     setBody(composeFromContext(context, templateId, messageLang));
-  }, [open, context, templateId, messageLang]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, contextId, templateId, messageLang]);
 
   const segment = useMemo(
     () => smsSegmentInfo(body, messageLang),
     [body, messageLang],
   );
 
-  const phoneOk = isValidSlMobile(phone);
+  const phoneOk = isValidSlMobile(editablePhone);
 
   if (!open) return null;
 
@@ -115,7 +160,7 @@ export function MessageComposer({
     setSending(true);
     setFeedback(null);
 
-    const result = await dispatchMessage(channel, body, phone, {
+    const result = await dispatchMessage(channel, body, editablePhone, {
       templateId,
       contextType: context.type,
       contextId,
@@ -125,13 +170,13 @@ export function MessageComposer({
     appendNotificationLog({
       channel,
       templateId,
-      recipientPhone: phone ?? "",
+      recipientPhone: editablePhone,
       recipientName,
       messageBody: body,
       contextType: context.type,
       contextId,
       delivery: result.ok
-        ? channel === "api_sms"
+        ? channel === "api_sms" || channel === "api_whatsapp"
           ? "api_sent"
           : "opened"
         : "api_failed",
@@ -163,14 +208,24 @@ export function MessageComposer({
                 {t("msg.compose_title")}
               </p>
               <h2 className="text-lg font-bold">{recipientName}</h2>
-              <p className="text-sm text-teal-50">
-                {formatSlPhoneDisplay(phone)}
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  value={editablePhone}
+                  onChange={(e) => setEditablePhone(e.target.value)}
+                  placeholder={messageLang === "si" ? "දුරකථන අංකය" : "07XXXXXXXX"}
+                  aria-label={t("msg.phone_invalid")}
+                  className={`w-40 rounded-lg border px-2 py-1 text-sm font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-white/70 ${
+                    phoneOk ? "border-white/40 bg-white" : "border-amber-300 bg-amber-50"
+                  }`}
+                />
                 {!phoneOk && (
-                  <span className="ml-2 rounded bg-amber-400/30 px-1.5 py-0.5 text-xs text-amber-100">
+                  <span className="rounded bg-amber-400/30 px-1.5 py-0.5 text-xs text-amber-100">
                     {t("msg.phone_invalid")}
                   </span>
                 )}
-              </p>
+              </div>
             </div>
             <button
               type="button"
@@ -185,9 +240,11 @@ export function MessageComposer({
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5 sm:flex-row">
           <div className="flex-1 space-y-4">
             <div className="flex gap-2">
-              {CHANNELS.filter(
-                (c) => c.id !== "api_sms" || (apiEnabled && canApiSms),
-              ).map(
+              {CHANNELS.filter((c) => {
+                if (c.id === "api_sms") return apiEnabled && canApiSms;
+                if (c.id === "api_whatsapp") return whatsappApiEnabled && canApiWhatsApp;
+                return true;
+              }).map(
                 (c) => (
                   <button
                     key={c.id}
@@ -310,9 +367,11 @@ export function MessageComposer({
               ? t("msg.sending")
               : channel === "api_sms"
                 ? t("msg.send_api")
-                : channel === "whatsapp"
-                  ? t("msg.send_whatsapp")
-                  : t("msg.send_sms")}
+                : channel === "api_whatsapp"
+                  ? t("msg.send_api_whatsapp")
+                  : channel === "whatsapp"
+                    ? t("msg.send_whatsapp")
+                    : t("msg.send_sms")}
           </button>
         </div>
       </div>

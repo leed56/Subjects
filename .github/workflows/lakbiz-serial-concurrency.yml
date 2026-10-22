@@ -1,0 +1,72 @@
+name: LakBiz Serial Concurrency QA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/global-premium-ui
+    paths:
+      - lakbiz/app/scripts/qa-serial-concurrency.mjs
+      - .github/workflows/lakbiz-serial-concurrency.yml
+  pull_request:
+    paths:
+      - lakbiz/app/scripts/qa-serial-concurrency.mjs
+      - .github/workflows/lakbiz-serial-concurrency.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lakbiz-serial-concurrency-qa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  serial-race:
+    name: True two-client last-serial race
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: lakbiz/app
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://zestppstpwjxriwcuykc.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Check secure QA capability
+        id: capability
+        shell: bash
+        run: |
+          if [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "Service-role secret is configured; running disposable concurrency QA."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "CONCURRENCY_QA_SKIPPED: SUPABASE_SERVICE_ROLE_KEY is not configured in GitHub Actions."
+          fi
+
+      - name: Race the same last serialized unit from two authenticated clients
+        if: steps.capability.outputs.available == 'true'
+        run: node scripts/qa-serial-concurrency.mjs
+
+      - name: Publish release-gate result
+        if: always()
+        shell: bash
+        run: |
+          echo "## LakBiz serial concurrency release gate" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.capability.outputs.available }}" = "true" ]; then
+            echo "A disposable two-client race was attempted against the verified LakBiz Supabase project. Check the test step result above; the script deletes its QA organization/users in a finally block." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Not executed because the service-role secret is unavailable to this workflow. No database changes were attempted." >> "$GITHUB_STEP_SUMMARY"
+          fi

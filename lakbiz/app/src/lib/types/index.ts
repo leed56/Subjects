@@ -1,8 +1,12 @@
 export type SectorId =
   | "grocery"
+  | "pharmacy"
   | "electronics"
+  | "mobile_shop"
   | "electricals"
   | "spare_parts"
+  | "footwear"
+  | "textile"
   | "ac_hvac"
   | "car_sales";
 
@@ -13,7 +17,9 @@ export type PaymentMethod =
   | "bank_transfer"
   | "card"
   | "cheque"
-  | "credit";
+  | "credit"
+  /** Display/read value for invoices finalized through the normalized tender ledger. */
+  | "mixed";
 
 /** Inventory lane: new stock vs used/refurbished (Phase A). */
 export type ProductCondition = "new" | "used";
@@ -32,8 +38,8 @@ export interface SectorTemplate {
   id: SectorId;
   nameEn: string;
   nameSi: string;
+  nameTa: string;
   description: string;
-  icon: string;
   extraFields: string[];
   reports: string[];
 }
@@ -78,6 +84,46 @@ export interface Product {
   /** Free-text notes (storage/handling caveats, discontinued reason, etc.) — generic across every sector, not sector-specific like customFields. */
   notes?: string;
   customFields: Record<string, string | number | boolean>;
+}
+
+export type TextileLengthUnit = "metre" | "yard";
+
+export type TextileRollStatus =
+  | "unopened"
+  | "opened"
+  | "reserved"
+  | "exhausted"
+  | "quarantined"
+  | "returned";
+
+/** Physical fabric identity. Aggregate Product.stockQty remains available for
+ * legacy catalogue views; roll-ledger availability becomes authoritative when
+ * Textile roll tracking is enabled. */
+export interface TextileRoll {
+  id: string;
+  organizationId: string;
+  productId: string;
+  rollNo: string;
+  barcode?: string;
+  supplierId?: string;
+  supplierLot?: string;
+  dyeLot?: string;
+  shade?: string;
+  width?: number;
+  widthUnit?: "inch" | "centimetre";
+  lengthUnit: TextileLengthUnit;
+  receivedLength: number;
+  remainingLength: number;
+  reservedLength: number;
+  damagedLength: number;
+  weightKg?: number;
+  grade?: string;
+  sourceReference?: string;
+  unitCost?: number;
+  rackLocation?: string;
+  status: TextileRollStatus;
+  receivedAt: string;
+  notes?: string;
 }
 
 export interface VehicleUnit {

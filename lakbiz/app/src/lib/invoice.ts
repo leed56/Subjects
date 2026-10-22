@@ -58,24 +58,28 @@ export function formatPaymentLabel(
   method: Sale["paymentMethod"],
   t?: (key: string) => string,
 ): string {
+  // `mixed` is produced by the normalized tender ledger. Keep it display-only
+  // until the mixed-payment POS is wired to the atomic database finalizer.
+  if (method === "mixed") return "Mixed payment";
+
   if (t) {
-    const keys: Record<Sale["paymentMethod"], string> = {
+    const keys: Partial<Record<Sale["paymentMethod"], string>> = {
       cash: "pay.cash",
       bank_transfer: "pay.bank",
       card: "pay.card",
       cheque: "pay.cheque",
       credit: "pay.credit",
     };
-    return t(keys[method]);
+    return t(keys[method] ?? "pay.cash");
   }
-  const labels: Record<Sale["paymentMethod"], string> = {
+  const labels: Partial<Record<Sale["paymentMethod"], string>> = {
     cash: "Cash / මුදල්",
     bank_transfer: "Bank Transfer",
     card: "Card",
     cheque: "Cheque / චෙක්",
     credit: "Credit / ණය",
   };
-  return labels[method];
+  return labels[method] ?? "Mixed payment";
 }
 
 export function taxInvoiceAmounts(sale: Sale, business: BusinessInfo) {

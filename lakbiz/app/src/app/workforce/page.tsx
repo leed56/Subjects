@@ -17,6 +17,7 @@ import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
+import { WorkforceIcon, SuppliersIcon, ExpenseIcon, ReportsIcon } from "@/components/ui/icons";
 import type {
   Contractor,
   ContractorRateType,
@@ -46,7 +47,7 @@ function SpecialtyPicker({
             key={s}
             type="button"
             onClick={() => onChange(on ? value.filter((x) => x !== s) : [...value, s])}
-            className={`rounded-full px-3 py-1.5 text-xs font-black transition ${
+            className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
               on
                 ? "bg-teal-600 text-white"
                 : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200"
@@ -196,7 +197,7 @@ export default function WorkforcePage() {
                 onClick={openTechModal}
                 disabled={!canWrite}
                 title={!canWrite ? (disabledHint ?? undefined) : undefined}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 shadow-sm transition hover:border-teal-200 hover:text-teal-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("work.add_tech")}
               </button>
@@ -205,7 +206,7 @@ export default function WorkforcePage() {
                 onClick={openConModal}
                 disabled={!canWrite}
                 title={!canWrite ? (disabledHint ?? undefined) : undefined}
-                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-700/20 transition hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t("work.add_contractor")}
               </button>
@@ -222,12 +223,12 @@ export default function WorkforcePage() {
         )}
 
         <section className={`grid gap-4 sm:grid-cols-2 ${canSeeFinancials ? "xl:grid-cols-4" : ""}`}>
-          <ProStatCard label={t("work.team")} value={String(data.technicians.length)} hint={t("work.in_house")} icon="🧑‍🔧" tone="teal" />
-          <ProStatCard label={t("work.contractors")} value={String(data.contractors.length)} hint={`${activeContractors.length} ${t("work.active")}`} icon="🤝" tone="blue" />
+          <ProStatCard label={t("work.team")} value={String(data.technicians.length)} hint={t("work.in_house")} icon={<WorkforceIcon className="h-5 w-5" />} tone="teal" />
+          <ProStatCard label={t("work.contractors")} value={String(data.contractors.length)} hint={`${activeContractors.length} ${t("work.active")}`} icon={<SuppliersIcon className="h-5 w-5" />} tone="blue" />
           {canSeeFinancials && (
             <>
-              <ProStatCard label={t("work.outstanding_payout")} value={formatLkr(outstandingPayout)} hint={t("work.owed_contractors")} icon="💸" tone="amber" />
-              <ProStatCard label={t("work.total_margin")} value={formatLkr(totalMargin)} hint={t("work.margin_hint")} icon="📈" tone="emerald" />
+              <ProStatCard label={t("work.outstanding_payout")} value={formatLkr(outstandingPayout)} hint={t("work.owed_contractors")} icon={<ExpenseIcon className="h-5 w-5" />} tone="amber" />
+              <ProStatCard label={t("work.total_margin")} value={formatLkr(totalMargin)} hint={t("work.margin_hint")} icon={<ReportsIcon className="h-5 w-5" />} tone="emerald" />
             </>
           )}
         </section>
@@ -243,7 +244,7 @@ export default function WorkforcePage() {
                     <button
                       type="button"
                       onClick={openTechModal}
-                      className="rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-black text-white hover:bg-teal-700"
+                      className="rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-teal-700"
                     >
                       {t("work.add_tech")}
                     </button>
@@ -253,10 +254,10 @@ export default function WorkforcePage() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {data.technicians.map((tch) => (
-                  <article key={tch.id} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 ring-1 ring-slate-100">
+                  <article key={tch.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4 ring-1 ring-slate-100">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h2 className="truncate text-base font-black text-slate-950">{tch.name}</h2>
+                        <h2 className="truncate text-base font-bold text-slate-950">{tch.name}</h2>
                         <p className="mt-1 text-xs font-semibold text-slate-500">{tch.phone || "—"}</p>
                       </div>
                       <ProBadge tone={tch.active ? "emerald" : "slate"}>{tch.active ? t("work.active") : t("work.inactive")}</ProBadge>
@@ -265,12 +266,12 @@ export default function WorkforcePage() {
                       {tch.specialties.length === 0 ? (
                         <span className="text-xs font-semibold text-slate-400">—</span>
                       ) : (
-                        tch.specialties.map((s) => <span key={s} className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-black text-teal-700">{specialtyLabels[s]}</span>)
+                        tch.specialties.map((s) => <span key={s} className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-bold text-teal-700">{specialtyLabels[s]}</span>)
                       )}
                     </div>
                     {canSeeFinancials && (
                       <p className="mt-3 border-t border-slate-200 pt-3 text-xs font-bold text-slate-500">
-                        {t("work.hourly_rate")}: <span className="font-black text-slate-900">{tch.hourlyRate ? formatLkr(tch.hourlyRate) : "—"}</span>
+                        {t("work.hourly_rate")}: <span className="font-bold text-slate-900">{tch.hourlyRate ? formatLkr(tch.hourlyRate) : "—"}</span>
                       </p>
                     )}
                     <div className="mt-4 flex gap-2">
@@ -284,7 +285,7 @@ export default function WorkforcePage() {
                           setUpdatingTechId(null);
                           if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
                         }}
-                        className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                        className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
                       >
                         {updatingTechId === tch.id ? t("common.saving") : tch.active ? t("work.deactivate") : t("work.activate")}
                       </button>
@@ -298,7 +299,7 @@ export default function WorkforcePage() {
                           setDeletingTechId(null);
                           if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
                         }}
-                        className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                        className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
                       >
                         {deletingTechId === tch.id ? t("common.saving") : t("common.delete")}
                       </button>
@@ -321,7 +322,7 @@ export default function WorkforcePage() {
                     <button
                       type="button"
                       onClick={openConModal}
-                      className="rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-black text-white hover:bg-teal-700"
+                      className="rounded-2xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-teal-700"
                     >
                       {t("work.add_contractor")}
                     </button>
@@ -333,35 +334,35 @@ export default function WorkforcePage() {
                 {data.contractors.map((c) => {
                   const stats = contractorJobStats(c.id);
                   return (
-                  <article key={c.id} className="rounded-[1.5rem] border border-slate-200 bg-white p-4 ring-1 ring-slate-100">
+                  <article key={c.id} className="rounded-xl border border-slate-200 bg-white p-4 ring-1 ring-slate-100">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h2 className="truncate text-base font-black text-slate-950">{c.name}</h2>
+                        <h2 className="truncate text-base font-bold text-slate-950">{c.name}</h2>
                         <p className="mt-1 text-xs font-semibold text-slate-500">{c.company || "—"}{c.phone ? ` · ${c.phone}` : ""}</p>
                       </div>
                       <ProBadge tone={c.active ? "emerald" : "slate"}>{c.active ? t("work.active") : t("work.inactive")}</ProBadge>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-1.5">
-                      {c.specialties.map((s) => <span key={s} className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-black text-amber-700">{specialtyLabels[s]}</span>)}
+                      {c.specialties.map((s) => <span key={s} className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">{specialtyLabels[s]}</span>)}
                     </div>
                     {canSeeFinancials && (
                       <>
                         <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-sm">
                           <div>
-                            <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t("work.rate")}</p>
-                            <p className="font-black text-slate-900">{c.rateAmount > 0 ? `${formatLkr(c.rateAmount)} · ${rateLabels[c.rateType]}` : "—"}</p>
+                            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("work.rate")}</p>
+                            <p className="font-bold text-slate-900">{c.rateAmount > 0 ? `${formatLkr(c.rateAmount)} · ${rateLabels[c.rateType]}` : "—"}</p>
                           </div>
                           <div>
-                            <p className="text-xs font-black uppercase tracking-wide text-slate-400">{t("work.payable")}</p>
-                            <p className={`font-mono font-black ${c.payableBalance > 0 ? "text-rose-600" : "text-slate-900"}`}>{formatLkr(c.payableBalance)}</p>
+                            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("work.payable")}</p>
+                            <p className={`font-mono font-bold ${c.payableBalance > 0 ? "text-rose-600" : "text-slate-900"}`}>{formatLkr(c.payableBalance)}</p>
                           </div>
                         </div>
-                        <p className="mt-3 text-xs font-bold text-slate-500">{t("work.jobs_done")}: {stats.count} · {t("work.margin")}: <span className="font-black text-emerald-700">{formatLkr(stats.margin)}</span></p>
+                        <p className="mt-3 text-xs font-bold text-slate-500">{t("work.jobs_done")}: {stats.count} · {t("work.margin")}: <span className="font-bold text-emerald-700">{formatLkr(stats.margin)}</span></p>
                       </>
                     )}
                     <div className="mt-4 flex flex-wrap gap-2">
                       {canSeeFinancials && c.payableBalance > 0 && (
-                        <button onClick={() => { setPayContractor(c); setPayAmount(c.payableBalance); setPayMethod("cash"); setPayNote(""); }} className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700 hover:bg-emerald-100">
+                        <button onClick={() => { setPayContractor(c); setPayAmount(c.payableBalance); setPayMethod("cash"); setPayNote(""); }} className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100">
                           {t("work.pay")}
                         </button>
                       )}
@@ -375,7 +376,7 @@ export default function WorkforcePage() {
                           setUpdatingConId(null);
                           if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
                         }}
-                        className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                        className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200 disabled:opacity-50"
                       >
                         {updatingConId === c.id ? t("common.saving") : c.active ? t("work.deactivate") : t("work.activate")}
                       </button>
@@ -389,7 +390,7 @@ export default function WorkforcePage() {
                           setDeletingConId(null);
                           if (!result.ok) setFormMessage(result.error ?? t("common.save_failed"));
                         }}
-                        className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                        className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
                       >
                         {deletingConId === c.id ? t("common.saving") : t("common.delete")}
                       </button>
@@ -407,7 +408,7 @@ export default function WorkforcePage() {
             <ProCard title={t("work.payouts")} eyebrow={t("work.contractors")} action={<ProBadge tone="emerald">{data.contractorPayments.length}</ProBadge>}>
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <table className="w-full text-left text-sm">
-                  <thead className="border-b bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+                  <thead className="border-b bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500">
                     <tr>
                       <th className="px-4 py-3">{t("common.date")}</th>
                       <th className="px-4 py-3">{t("work.contractors")}</th>
@@ -419,9 +420,9 @@ export default function WorkforcePage() {
                     {data.contractorPayments.slice(0, 20).map((p) => (
                       <tr key={p.id} className="border-b last:border-0">
                         <td className="px-4 py-3 font-semibold text-slate-600">{p.date.slice(0, 10)}</td>
-                        <td className="px-4 py-3 font-black text-slate-950">{p.contractorName}</td>
+                        <td className="px-4 py-3 font-bold text-slate-950">{p.contractorName}</td>
                         <td className="px-4 py-3 font-semibold text-slate-600">{methodLabel(p.method)}</td>
-                        <td className="px-4 py-3 text-right font-mono font-black text-emerald-600">{formatLkr(p.amount)}</td>
+                        <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600">{formatLkr(p.amount)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -434,11 +435,11 @@ export default function WorkforcePage() {
 
       {showTechModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-white/80 bg-white p-5 shadow-sm shadow-slate-950/20">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">{t("work.in_house")}</p>
-                <h3 className="mt-2 text-xl font-black text-slate-950">{t("work.add_tech_title")}</h3>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-600">{t("work.in_house")}</p>
+                <h3 className="mt-2 text-xl font-bold text-slate-950">{t("work.add_tech_title")}</h3>
               </div>
               <button type="button" onClick={() => setShowTechModal(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
             </div>
@@ -469,12 +470,12 @@ export default function WorkforcePage() {
                 <input placeholder={t("work.phone")} value={techPhone} onChange={(e) => setTechPhone(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
               </div>
               <div className="mt-3">
-                <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">{t("work.specialties")}</p>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">{t("work.specialties")}</p>
                 <SpecialtyPicker value={techSpecs} onChange={setTechSpecs} labels={specialtyLabels} />
               </div>
               {canSeeFinancials && (
                 <div className="mt-3">
-                  <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">{t("work.hourly_rate")}</p>
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">{t("work.hourly_rate")}</p>
                   <input
                     type="number"
                     min={0}
@@ -487,8 +488,8 @@ export default function WorkforcePage() {
               )}
               {formMessage && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <button type="submit" disabled={savingTech} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingTech ? t("common.saving") : t("common.save")}</button>
-                <button type="button" onClick={() => setShowTechModal(false)} disabled={savingTech} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
+                <button type="submit" disabled={savingTech} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingTech ? t("common.saving") : t("common.save")}</button>
+                <button type="button" onClick={() => setShowTechModal(false)} disabled={savingTech} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
               </div>
             </form>
           </div>
@@ -497,11 +498,11 @@ export default function WorkforcePage() {
 
       {showConModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-white/80 bg-white p-5 shadow-sm shadow-slate-950/20">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-teal-600">{t("work.contractors")}</p>
-                <h3 className="mt-2 text-xl font-black text-slate-950">{t("work.add_contractor_title")}</h3>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-600">{t("work.contractors")}</p>
+                <h3 className="mt-2 text-xl font-bold text-slate-950">{t("work.add_contractor_title")}</h3>
               </div>
               <button type="button" onClick={() => setShowConModal(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
             </div>
@@ -547,13 +548,13 @@ export default function WorkforcePage() {
                 )}
               </div>
               <div className="mt-3">
-                <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">{t("work.specialties")}</p>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">{t("work.specialties")}</p>
                 <SpecialtyPicker value={conSpecs} onChange={setConSpecs} labels={specialtyLabels} />
               </div>
               {formMessage && <p className="mt-3 text-sm font-semibold text-amber-700">{formMessage}</p>}
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <button type="submit" disabled={savingCon} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingCon ? t("common.saving") : t("common.save")}</button>
-                <button type="button" onClick={() => setShowConModal(false)} disabled={savingCon} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
+                <button type="submit" disabled={savingCon} className="rounded-2xl bg-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-teal-700/20 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50">{savingCon ? t("common.saving") : t("common.save")}</button>
+                <button type="button" onClick={() => setShowConModal(false)} disabled={savingCon} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
               </div>
             </form>
           </div>
@@ -562,11 +563,11 @@ export default function WorkforcePage() {
 
       {payContractor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[2rem] border border-white/80 bg-white p-5 shadow-2xl shadow-slate-950/20">
+          <div className="w-full max-w-md rounded-xl border border-white/80 bg-white p-5 shadow-sm shadow-slate-950/20">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">{t("work.pay")}</p>
-                <h3 className="mt-2 text-xl font-black text-slate-950">{payContractor.name}</h3>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-600">{t("work.pay")}</p>
+                <h3 className="mt-2 text-xl font-bold text-slate-950">{payContractor.name}</h3>
                 <p className="mt-1 text-sm font-semibold text-slate-500">{t("work.payable")}: {formatLkr(payContractor.payableBalance)}</p>
               </div>
               <button onClick={() => setPayContractor(null)} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200">✕</button>
@@ -593,14 +594,14 @@ export default function WorkforcePage() {
               }}
             >
               {payMessage && <p className="text-sm font-semibold text-rose-700">{payMessage}</p>}
-              <input type="number" required min={1} placeholder={t("bank.amount")} value={payAmount || ""} onChange={(e) => setPayAmount(Number(e.target.value))} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" />
+              <input type="number" required min={1} placeholder={t("bank.amount")} value={payAmount || ""} onChange={(e) => setPayAmount(Number(e.target.value))} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" />
               <select value={payMethod} onChange={(e) => setPayMethod(e.target.value as PaymentMethod)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-emerald-300">
                 {PAY_METHODS.map((m) => <option key={m} value={m}>{methodLabel(m)}</option>)}
               </select>
               <input placeholder={t("work.note")} value={payNote} onChange={(e) => setPayNote(e.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-emerald-300" />
               <div className="flex flex-col gap-2 sm:flex-row">
-                <button type="submit" disabled={savingPayment || payAmount <= 0} className="flex-1 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-lg shadow-emerald-700/20 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{savingPayment ? t("common.saving") : t("work.record_payout")}</button>
-                <button type="button" onClick={() => setPayContractor(null)} disabled={savingPayment} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
+                <button type="submit" disabled={savingPayment || payAmount <= 0} className="flex-1 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-700/20 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{savingPayment ? t("common.saving") : t("work.record_payout")}</button>
+                <button type="button" onClick={() => setPayContractor(null)} disabled={savingPayment} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{t("common.cancel")}</button>
               </div>
             </form>
           </div>

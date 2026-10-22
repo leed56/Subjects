@@ -26,8 +26,8 @@ export function TrialBanner() {
 
   if (subscription.status === "trialing" && daysLeftInTrial != null) {
     return (
-      <div className="border-b border-teal-200 bg-teal-50 px-4 py-2 text-center text-sm text-teal-900">
-        {t("sub.trial_banner")} {daysLeftInTrial}.{" "}
+      <div className="border-b border-teal-200 bg-teal-50 px-4 py-1.5 text-center text-xs font-medium text-teal-950 sm:text-sm">
+        {t("sub.trial_days_left").replace("{days}", String(daysLeftInTrial))}.{" "}
         <Link href="/settings/plans" className="font-semibold underline">
           {t("sub.choose_plan")}
         </Link>

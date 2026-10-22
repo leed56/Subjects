@@ -10,7 +10,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run lint && npm run typecheck && npm run test && npm run build"
+    "qa:roles": "node scripts/qa-owner-financial-isolation.mjs",
+    "qa:textile:seed": "node scripts/seed-textile-certification.mjs",
+    "qa:textile:verify": "node scripts/verify-textile-certification.mjs",
+    "check:i18n": "node scripts/check-i18n-parity.mjs",
+    "verify": "npm run lint && npm run typecheck && npm run check:i18n && npm run test && npm run build"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
@@ -26,6 +30,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "playwright": "^1.55.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.11"

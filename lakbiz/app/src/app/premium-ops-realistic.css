@@ -1,0 +1,181 @@
+/*
+ * Realistic-data density pass.
+ *
+ * These rules target the populated operational states that do not appear in
+ * an empty demo: long product lists, tall checkout summaries, busy job days,
+ * many alerts and many field teams. They deliberately do not change business
+ * logic or the public marketing page.
+ */
+
+/* --------------------------------------------------------------------------
+ * Sales / POS — realistic populated state
+ * ----------------------------------------------------------------------- */
+
+/* The header Stock shortcut is useful once inventory exists. The earlier
+   empty-state pass hid it globally; restore it by default, then hide it only
+   when the central no-stock EmptyState is present. */
+body:has(aside a[href="/sales"][aria-current="page"])
+  main > :first-child a[href="/stock"] {
+  display: inline-flex !important;
+}
+
+body:has(aside a[href="/sales"][aria-current="page"])
+  main:has(> section.mt-6 [data-ui="pro-empty-state"])
+  > :first-child a[href="/stock"] {
+  display: none !important;
+}
+
+/* Empty inventory should read as one deliberate next-step state. */
+body:has(aside a[href="/sales"][aria-current="page"])
+  main:has(> section.mt-6 [data-ui="pro-empty-state"])
+  > section.grid.gap-4:has([data-ui="pro-stat-card"]) {
+  display: none !important;
+}
+
+/* Product cards keep an even rhythm when names, SKU/category metadata and
+   wholesale pricing vary in length. */
+body:has(aside a[href="/sales"][aria-current="page"])
+  main > section.mt-6.grid > div:first-child > div.grid > article {
+  min-height: 10.5rem;
+  height: 100%;
+}
+
+/* Dense product catalog: keep search + condition filters reachable while a
+   cashier scrolls through dozens of products. This activates only in the
+   two-column desktop checkout layout. */
+@media (min-width: 1280px) {
+  body:has(aside a[href="/sales"][aria-current="page"])
+    main > section.mt-6.grid > div:first-child > [data-ui="pro-card"]:first-child {
+    position: sticky;
+    top: 1rem;
+    z-index: 20;
+    border-color: #d8e4ec;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 14px 30px rgba(15, 23, 42, 0.08);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  /* A real bill summary can contain 8–12 cart lines plus AC buyer details,
+     payment controls, VAT and cash/cheque fields. Give the sticky checkout a
+     viewport-bounded scroll area so its bottom action can never become
+     unreachable on a laptop. */
+  body:has(aside a[href="/sales"][aria-current="page"])
+    main > section.mt-6.grid > aside {
+    max-height: calc(100vh - 7rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 0.3rem;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  body:has(aside a[href="/sales"][aria-current="page"])
+    main > section.mt-6.grid > aside::-webkit-scrollbar {
+    width: 7px;
+  }
+
+  body:has(aside a[href="/sales"][aria-current="page"])
+    main > section.mt-6.grid > aside::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: #cbd5e1;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Owner dashboard — realistic populated state
+ * ----------------------------------------------------------------------- */
+
+/* A busy service day can contain many jobs. Keep Today's Operations glanceable
+   instead of allowing the table to push the whole command center below the
+   fold. All rows remain available in the scroll region and Schedule remains
+   the drill-through route. */
+@media (min-width: 640px) {
+  body:has(aside a[href="/dashboard"][aria-current="page"])
+    main > div:has(a[href="/schedule"])
+    > div:last-child > div.hidden.overflow-x-auto {
+    max-height: 28rem;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  body:has(aside a[href="/dashboard"][aria-current="page"])
+    main > div:has(a[href="/schedule"])
+    > div:last-child > div.hidden.overflow-x-auto thead {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    box-shadow: 0 1px 0 #e2e8f0;
+  }
+}
+
+/* A real business can generate several simultaneous exceptions. Keep Needs
+   Attention compact and scrollable after roughly six rows rather than turning
+   alerts into another full-page report. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div:has(span.bg-amber-500, span.bg-rose-500) > div.space-y-2 {
+  max-height: 19rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.25rem;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+/* Many technicians/contractors should not make the dashboard vertically
+   unbounded. The Field Teams page remains the full-detail destination. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div:has(a[href="/teams"]) > div.grid {
+  max-height: 24rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.25rem;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+/* When the performance chart has real data, keep its visual footprint modest
+   relative to the command-center actions and exception list. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  main > div.grid.gap-4 > div:has(.h-36.items-end) {
+  align-self: start;
+}
+
+/* Long Sinhala/English labels and large LKR values should wrap inside their
+   metric, never force a horizontal page scroll. */
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  [data-ui="metric-card"],
+body:has(aside a[href="/sales"][aria-current="page"])
+  [data-ui="pro-stat-card"] {
+  min-width: 0;
+}
+
+body:has(aside a[href="/dashboard"][aria-current="page"])
+  [data-ui="metric-card"] p,
+body:has(aside a[href="/sales"][aria-current="page"])
+  [data-ui="pro-stat-card"] p {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1279px) {
+  /* On tablet/laptop widths the checkout sits below products; internal sticky
+     scrolling would create an unnecessary nested scroll area. */
+  body:has(aside a[href="/sales"][aria-current="page"])
+    main > section.mt-6.grid > aside {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body:has(aside a[href="/sales"][aria-current="page"]) article,
+  body:has(aside a[href="/dashboard"][aria-current="page"]) article {
+    scroll-behavior: auto;
+  }
+}

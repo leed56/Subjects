@@ -10,6 +10,8 @@ import {
   formatAdminDate,
 } from "@/lib/admin/admin-labels";
 import { sectorById } from "@/lib/sectors";
+import { SectorIcon } from "@/components/sector-icon";
+import { ShopIcon } from "@/components/ui/icons";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { Locale } from "@/lib/i18n/translations";
 import type { SectorId } from "@/lib/types";
@@ -173,7 +175,9 @@ export default function AdminShopsPage() {
                       <p className="text-xs text-slate-500">{shop.phone ?? t("admin.trial_none")}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="mr-1">{sector?.icon ?? "🏪"}</span>
+                      <span className="mr-1.5 inline-flex align-text-bottom">
+                        {sector ? <SectorIcon sectorId={sector.id} className="h-4 w-4" /> : <ShopIcon className="h-4 w-4" />}
+                      </span>
                       {adminSectorLabel(locale, shop.sector)}
                     </td>
                     <td className="px-4 py-3 text-slate-300">

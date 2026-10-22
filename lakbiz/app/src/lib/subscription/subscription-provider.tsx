@@ -91,7 +91,7 @@ export function SubscriptionProvider({
   children: React.ReactNode;
 }) {
   const { user, loading: authLoading } = useAuth();
-  const [ready] = useState(true);
+  const [ready, setReady] = useState(false);
   const [subscription, setSubscription] = useState<SubscriptionState>(() => ({
     ...defaultTrialSubscription(),
     isDemo: true,
@@ -163,19 +163,40 @@ export function SubscriptionProvider({
   }, [user]);
 
   useEffect(() => {
-    if (authLoading) return;
+    let cancelled = false;
 
+    if (authLoading) {
+      setReady(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setReady(false);
     if (!user) {
       setIsPlatformAdmin(false);
       setSubscription(loadDemoSubscription());
       setOrg(loadDemoOrg());
-      return;
+      setReady(true);
+      return () => {
+        cancelled = true;
+      };
     }
 
-    void loadFromCloud().catch(() => {
-      setSubscription(loadDemoSubscription());
-      setOrg(loadDemoOrg());
-    });
+    void loadFromCloud()
+      .then(() => {
+        if (!cancelled) setReady(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSubscription(loadDemoSubscription());
+        setOrg(loadDemoOrg());
+        setReady(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [user, authLoading, loadFromCloud]);
 
   useEffect(() => {
@@ -211,6 +232,7 @@ export function SubscriptionProvider({
 
   const value = useMemo<SubscriptionContextValue>(
     () => ({
+      ready,
       org,
       subscription,
       isPlatformAdmin,
@@ -227,6 +249,7 @@ export function SubscriptionProvider({
       refreshOrg: loadFromCloud,
     }),
     [
+      ready,
       org,
       subscription,
       isPlatformAdmin,
@@ -253,6 +276,7 @@ export function useSubscription(): SubscriptionContextValue {
     const trial = defaultTrialSubscription();
     const sub: SubscriptionState = { ...trial, isDemo: true };
     return {
+      ready: true,
       org: { id: null, name: "Demo Shop", sector: "grocery", isAuthenticated: false, role: "owner" },
       subscription: sub,
       isPlatformAdmin: false,

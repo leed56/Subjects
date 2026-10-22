@@ -67,6 +67,7 @@ export interface OrganizationState {
 }
 
 export interface SubscriptionContextValue {
+  ready: boolean;
   org: OrganizationState;
   subscription: SubscriptionState;
   isPlatformAdmin: boolean;

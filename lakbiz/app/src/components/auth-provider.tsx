@@ -58,22 +58,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    refresh();
+    void refresh();
     const supabase = createBrowserClient();
     if (!supabase) return;
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      refresh();
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Do not call another Supabase Auth API from inside this callback.
+      // supabase-js can hold the auth lock while notifying subscribers, so a
+      // re-entrant getUser()/getSession() may deadlock login or token refresh.
+      // The event already carries the session user; RLS remains the authority
+      // for all organization/data authorization after this UI state update.
+      //
+      // supabase-js re-validates the session (and fires this callback with a
+      // freshly-deserialized session/user object) whenever the tab regains
+      // visibility/focus, not just on real sign-in/sign-out — e.g. switching
+      // to another app and back triggers a TOKEN_REFRESHED event for the
+      // *same* signed-in user. Reported bug: every consumer keyed off `user`
+      // by object identity (subscription-provider.tsx, app-store-provider.tsx)
+      // treated that new-but-equivalent object as a real change and re-ran
+      // their "reload everything" effect, which briefly drops the whole app
+      // back to the full-page Loading screen. Keep the previous object when
+      // the signed-in user hasn't actually changed so identity-sensitive
+      // effects downstream don't re-fire on a routine token refresh.
+      const nextUser = session?.user ?? null;
+      setUser((prev) => (prev?.id === nextUser?.id ? prev : nextUser));
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    await signInWithEmail(email, password);
-    await refresh();
+    const data = await signInWithEmail(email, password);
+    setUser(data.user ?? null);
+    setLoading(false);
   };
 
   const signUp = async (input: {

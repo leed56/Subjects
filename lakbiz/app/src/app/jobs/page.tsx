@@ -2,6 +2,7 @@
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AcJobReminderTimeline } from "@/components/ac-job-reminder-timeline";
 import { AcRemindersBanner } from "@/components/ac-reminders-banner";
 import { AcInAppAlertSettings } from "@/components/ac-in-app-alert-settings";
@@ -68,13 +69,14 @@ import { canManageAcJobs, canOperateAcJobs } from "@/lib/org-role/permissions";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { fetchAsset, fetchCustomerAssets, fetchJobAssetId, linkJobAsset, type AcAsset } from "@/lib/supabase/ac-assets-client";
-import { computeJobProfitability, type JobLinkedExpense } from "@/lib/job-profitability";
+import { computeJobProfitability, type JobLinkedExpense, type JobProfitability } from "@/lib/job-profitability";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
 import { invoiceableLinesTotal } from "@/lib/job-invoice";
 
 const UNIT_TYPES = ["Wall mounted", "Cassette", "Ducted", "Ceiling suspended", "Portable", "Window"];
 
 export default function JobsPage() {
+  const router = useRouter();
   const { data, ready, saveACJobToCloud, updateACJobToCloud, deleteACJobToCloud, recordACServiceToCloud, addJobItemToCloud, deleteJobItemToCloud } = useAppStore();
   const { t, locale } = useLocale();
   const { org, orgRole, canSeeFinancials } = useSubscription();
@@ -82,7 +84,11 @@ export default function JobsPage() {
   const canOperateJobs = canOperateAcJobs(orgRole);
   const { canWrite, disabledHint } = useWriteAccess();
   const notificationLogs = useNotificationLogs(org.id);
-  const { markAllSeen } = useAcInAppAlerts();
+  const { markAllSeen, enabled: alertsFeatureEnabled } = useAcInAppAlerts();
+  // Part 11 — detailed reminder config lives behind a compact trigger,
+  // not permanently inline on the main page (see AcInAppAlertSettings's
+  // own header comment).
+  const [alertSettingsOpen, setAlertSettingsOpen] = useState(false);
   const notifySettings = loadNotificationSettings();
   const { toast } = useToast();
 
@@ -162,6 +168,41 @@ export default function JobsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formOpen]);
   const formDirty = formOpen && formSnapshot !== formSnapshotRef.current;
+
+  // Round 5 finding: JobCard's "Margin" figure (contractor-assigned jobs
+  // only) was its own simplified quotedAmount - subcontractCost formula,
+  // entirely bypassing computeJobProfitability -- the "one authoritative
+  // job-cost/profit calculation" this codebase explicitly established
+  // (see job-profitability.ts's own header comment, and Round 2's fix
+  // for the same class of cross-page mismatch on Dashboard/Reports/VAT).
+  // A contractor job that also has material/other costs recorded showed
+  // a Margin here that didn't match Net Profit in the Job Sheet a click
+  // away. Same fetch-on-mount pattern job-costing/reports/the Job Sheet
+  // drawer itself already use for job-linked Expenses (cloud-only, not
+  // part of the local-first store), lifted to the list level so every
+  // JobCard can use the real calculation instead of a second one.
+  const [jobLinkedExpenseTotals, setJobLinkedExpenseTotals] = useState<Map<string, JobLinkedExpense[]> | null>(null);
+  useEffect(() => {
+    if (!org.id || !canSeeFinancials) {
+      setJobLinkedExpenseTotals(new Map());
+      return;
+    }
+    let cancelled = false;
+    void fetchOrgExpenses(org.id).then((result) => {
+      if (cancelled) return;
+      const totals = new Map<string, JobLinkedExpense[]>();
+      for (const e of result.data) {
+        if (!e.jobId) continue;
+        const list = totals.get(e.jobId) ?? [];
+        list.push({ category: e.category, amount: e.amount });
+        totals.set(e.jobId, list);
+      }
+      setJobLinkedExpenseTotals(totals);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [org.id, canSeeFinancials]);
 
   if (!ready || !data) {
     return (
@@ -309,6 +350,15 @@ export default function JobsPage() {
     setDeleteTarget(null);
   };
 
+  // Same authoritative-calculation fix as above -- built once here
+  // rather than re-filtering data.jobItems per card.
+  const jobItemsByJob = new Map<string, typeof data.jobItems>();
+  for (const item of data.jobItems) {
+    const list = jobItemsByJob.get(item.jobId) ?? [];
+    list.push(item);
+    jobItemsByJob.set(item.jobId, list);
+  }
+
   const query = search.trim().toLowerCase();
   const teamOptions = [
     { value: "all", label: t("jobs.all_types") },
@@ -362,6 +412,16 @@ export default function JobsPage() {
       render: (job) => <span className="font-medium text-slate-900">{job.customerName}</span>,
     },
     {
+      key: "equipment",
+      header: t("jobs.col_equipment"),
+      hideOnMobile: true,
+      render: (job) => (
+        <span className="truncate text-slate-600">
+          {[job.description, job.btu ? `${job.btu} BTU` : null].filter(Boolean).join(" · ") || "—"}
+        </span>
+      ),
+    },
+    {
       key: "scheduled",
       header: t("jobs.install_label"),
       hideOnMobile: true,
@@ -410,6 +470,7 @@ export default function JobsPage() {
             <ActionMenu
               label={t("jobs.more_actions")}
               items={[
+                { label: t("jinv.view_invoice"), onSelect: () => router.push(`/jobs/${job.id}/invoice`) },
                 { label: t("common.edit"), onSelect: () => loadJob(job), disabled: !canWrite },
                 ...(canManageJobs
                   ? [{ label: t("common.delete"), onSelect: () => setDeleteTarget(job), tone: "danger" as const, disabled: !canWrite }]
@@ -453,8 +514,24 @@ export default function JobsPage() {
         />
         <WriteDisabledHint className="mb-4" />
 
-        {canOperateJobs && <div className="mb-4"><AcRemindersBanner /></div>}
-        <div className="mb-4"><AcInAppAlertSettings /></div>
+        {canOperateJobs && (
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex-1"><AcRemindersBanner /></div>
+            {alertsFeatureEnabled && (
+              <button
+                type="button"
+                onClick={() => setAlertSettingsOpen(true)}
+                className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 sm:self-auto"
+              >
+                {t("ac_alerts.settings_title")}
+              </button>
+            )}
+          </div>
+        )}
+
+        <Dialog open={alertSettingsOpen} onClose={() => setAlertSettingsOpen(false)} title={t("ac_alerts.settings_title")} size="sm">
+          <AcInAppAlertSettings />
+        </Dialog>
 
         {/* Simplified toolbar (Part 5): search + one dropdown per filter
             instead of ~13 individual pill buttons. Dropdowns collapse into
@@ -607,6 +684,7 @@ export default function JobsPage() {
               <JobCard
                 key={job.id}
                 job={job}
+                profit={computeJobProfitability(job, jobItemsByJob.get(job.id) ?? [], jobLinkedExpenseTotals?.get(job.id) ?? [])}
                 assigneePhone={job.assigneeType === "team" ? data.technicians.find((x) => x.id === job.assigneeId)?.phone : job.assigneeType === "contractor" ? data.contractors.find((x) => x.id === job.assigneeId)?.phone : undefined}
                 locale={locale}
                 business={data.business}
@@ -682,6 +760,31 @@ export default function JobsPage() {
               </FormField>
               <FormField label={t("common.phone")}>
                 <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} />
+                {/* Reported: editing a customer's phone on /customers left this
+                    job showing the old number -- expected, not a bug. A job's
+                    contact fields are a snapshot copied in the moment a
+                    customer is picked above (site phone can legitimately
+                    diverge from the customer's registered one), not a live
+                    join, so a later edit on the customer record never
+                    reaches jobs that already captured their own copy. Surface
+                    the drift instead of silently re-syncing it -- opt-in,
+                    one click, only shown once the two numbers actually
+                    differ. */}
+                {customerId && (() => {
+                  const linkedCustomer = data.customers.find((x) => x.id === customerId);
+                  if (!linkedCustomer || (linkedCustomer.phone ?? "") === phone) return null;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setPhone(linkedCustomer.phone ?? "")}
+                      className="mt-1 text-left text-xs font-semibold text-teal-700 hover:underline"
+                    >
+                      {locale === "si"
+                        ? `පාරිභෝගිකයාගේ දැනට ඇති දුරකථනය භාවිත කරන්න (${linkedCustomer.phone || "—"})`
+                        : `Use customer's current phone (${linkedCustomer.phone || "—"})`}
+                    </button>
+                  );
+                })()}
               </FormField>
             </div>
             <FormField label={t("jobs.site_address")} required>
@@ -874,14 +977,11 @@ export default function JobsPage() {
  * Only one primary action per context: the status-workflow action
  * (Schedule/Mark installed/Complete) when one applies, otherwise "Open"
  * is promoted to primary so the card never has zero primary actions. */
-function JobCard({ job, assigneePhone, locale, business, notificationLogs, notifySettings, canManageJobs, canOperateJobs, canSeeFinancials, canWrite, disabledHint, onServiceDone, onJobSheet, onEdit, onSchedule, onInstalled, onComplete, onDelete, deleting }: { job: ACJob; assigneePhone?: string; locale: Locale; business: BusinessInfo; notificationLogs: ReturnType<typeof useNotificationLogs>; notifySettings: ReturnType<typeof loadNotificationSettings>; canManageJobs: boolean; canOperateJobs: boolean; canSeeFinancials: boolean; canWrite: boolean; disabledHint: string | null; onServiceDone: () => void; onJobSheet: () => void; onEdit: () => void; onSchedule: () => void; onInstalled: () => void; onComplete: () => void; onDelete: () => void; deleting?: boolean }) {
+function JobCard({ job, profit, assigneePhone, locale, business, notificationLogs, notifySettings, canManageJobs, canOperateJobs, canSeeFinancials, canWrite, disabledHint, onServiceDone, onJobSheet, onEdit, onSchedule, onInstalled, onComplete, onDelete, deleting }: { job: ACJob; profit: JobProfitability; assigneePhone?: string; locale: Locale; business: BusinessInfo; notificationLogs: ReturnType<typeof useNotificationLogs>; notifySettings: ReturnType<typeof loadNotificationSettings>; canManageJobs: boolean; canOperateJobs: boolean; canSeeFinancials: boolean; canWrite: boolean; disabledHint: string | null; onServiceDone: () => void; onJobSheet: () => void; onEdit: () => void; onSchedule: () => void; onInstalled: () => void; onComplete: () => void; onDelete: () => void; deleting?: boolean }) {
   const { t } = useLocale();
+  const router = useRouter();
   const balance = job.quotedAmount - job.depositAmount;
   const isContractor = job.assigneeType === "contractor";
-  const margin =
-    isContractor && job.subcontractCost != null
-      ? job.quotedAmount - job.subcontractCost
-      : null;
   const [messageTarget, setMessageTarget] = useState<"customer" | "assignee" | null>(null);
 
   const statusAction =
@@ -902,6 +1002,9 @@ function JobCard({ job, assigneePhone, locale, business, notificationLogs, notif
       ? [{ label: t("jobs.service_done"), onSelect: onServiceDone, disabled: !canWrite }]
       : []),
     ...(statusAction ? [{ label: t("jobs.open"), onSelect: onJobSheet }] : []),
+    // Part 12's overflow list includes Invoice directly from the card —
+    // previously only reachable by first opening the Job Sheet drawer.
+    { label: t("jinv.view_invoice"), onSelect: () => router.push(`/jobs/${job.id}/invoice`) },
     ...(canOperateJobs ? [{ label: t("common.edit"), onSelect: onEdit, disabled: !canWrite }] : []),
     ...(canManageJobs
       ? [{ label: deleting ? t("common.saving") : t("common.delete"), onSelect: onDelete, tone: "danger" as const, disabled: !canWrite || deleting }]
@@ -947,8 +1050,15 @@ function JobCard({ job, assigneePhone, locale, business, notificationLogs, notif
           {canSeeFinancials && isContractor && job.subcontractCost != null && (
             <Metric label={t("jobs.subcontract_cost")} value={formatLkr(job.subcontractCost)} />
           )}
-          {canSeeFinancials && margin != null && (
-            <Metric label={t("jobs.margin")} value={formatLkr(margin)} />
+          {/* Round 5 finding: this used to be its own quotedAmount -
+              subcontractCost shortcut, bypassing computeJobProfitability
+              entirely -- wrong the moment a contractor job also has
+              material/other costs recorded, and a real cross-page
+              mismatch against the Job Sheet's Net Profit. Now the same
+              authoritative figure, with the same "—" until hasCostData
+              is true as everywhere else it's shown. */}
+          {canSeeFinancials && isContractor && job.subcontractCost != null && (
+            <Metric label={t("jobs.margin")} value={profit.hasCostData ? formatLkr(profit.grossProfit) : "—"} />
           )}
         </div>
         {(job.scheduledDate || job.serviceDueDate) && <div className="mt-3 flex flex-wrap gap-1.5 text-xs font-semibold">{job.scheduledDate && <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700">{t("jobs.install_label")}: {job.scheduledDate}</span>}{job.serviceDueDate && <span className={`rounded-md border px-2 py-1 ${serviceDueUrgencyClass(serviceDueUrgency(job.serviceDueDate))}`}>{t("jobs.service_due_label")}: {job.serviceDueDate} ({serviceDueLabel(job.serviceDueDate, locale)}){job.serviceDueManual && ` · ${t("jobs.service_due_manual_short")}`}</span>}</div>}
@@ -1852,7 +1962,12 @@ function JobSheetDrawer({ job, locale, business, items, history, products, suppl
           <Metric label={t("jobs.quote_label")} value={formatLkr(job.quotedAmount)} />
           <Metric label={t("jobs.collected_label")} value={formatLkr(job.depositAmount)} />
           <Metric label={t("jobs.cost_label")} value={formatLkr(profit.totalCost)} />
-          <Metric label={t("jobs.net_profit")} value={formatLkr(profit.grossProfit)} />
+          {/* Round 5 finding, same root cause as Job Costing's misleading
+              100%: a job with no costs recorded yet has grossProfit equal
+              to its full quoted amount by construction, not because it
+              genuinely cost nothing -- show "—" here too until
+              hasCostData is true (see job-profitability.ts). */}
+          <Metric label={t("jobs.net_profit")} value={profit.hasCostData ? formatLkr(profit.grossProfit) : "—"} />
           <Metric label={t("jobs.balance_label")} value={formatLkr(balance)} />
         </div>
       )}
@@ -2103,7 +2218,15 @@ function JobSheetDrawer({ job, locale, business, items, history, products, suppl
               </tr>
               <tr className="bg-slate-50">
                 <td className="px-3 py-2 font-semibold text-slate-900">{t("jobs.economics_gross_profit")}</td>
-                <td className={`px-3 py-2 text-right font-mono font-semibold ${profit.grossProfit < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatLkr(profit.grossProfit)}</td>
+                {/* Same fix as the Margin row below (and the Net Profit
+                    quick-metric above): a job with no cost data has
+                    grossProfit === its full quoted amount by construction,
+                    not a real profit -- match Margin's existing "—" until
+                    hasCostData is true instead of showing that number
+                    bolded in profit-green. */}
+                <td className={`px-3 py-2 text-right font-mono font-semibold ${!profit.hasCostData ? "text-slate-400" : profit.grossProfit < 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                  {profit.hasCostData ? formatLkr(profit.grossProfit) : "—"}
+                </td>
               </tr>
               <tr>
                 <td className="px-3 py-2 text-slate-600">{t("jobs.economics_margin")}</td>

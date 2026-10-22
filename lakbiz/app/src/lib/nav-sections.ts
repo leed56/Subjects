@@ -1,20 +1,25 @@
 /**
- * Shared navigation model for the authenticated shop shell (Phase 1).
- *
- * Single source of truth for both the desktop Sidebar and the mobile nav —
- * previously each of the app's 16 shop/settings pages independently rendered
- * <SiteHeader /> with its own inline nav array. Grouping follows the target
- * structure in the product spec, trimmed to routes that actually exist today
- * (no "Invoices"/"Payments"/"Installations"/"AC Assets"/"Schedule" — those
- * are later-phase pages; adding them here would produce dead links).
+ * Shared navigation model for the authenticated shop shell.
+ * Desktop and mobile consume the same structure so routes, role gates and
+ * sector-specific workspaces cannot drift apart.
  */
-import type { FeatureKey } from "@/lib/subscription/types";
+import type { OrgRole, FeatureKey } from "@/lib/subscription/types";
+import type { SectorId } from "@/lib/types";
 
 export type NavItem = {
   href: string;
-  labelKey: string;
+  /** Normal translated label. Optional when a sector-specific direct label is supplied. */
+  labelKey?: string;
+  /** Direct labels are useful for new vertical workspaces without forcing a giant translation-file edit. */
+  labelEn?: string;
+  labelSi?: string;
+  labelTa?: string;
   /** Feature gate key, if this route is plan/addon-gated (see ROUTE_FEATURES). */
   feature?: FeatureKey;
+  /** Show this navigation item only for these provisioned business sectors. */
+  sectorOnly?: SectorId[];
+  /** Additional presentation gate for operational workspaces with stricter roles than their parent route. */
+  roleOnly?: OrgRole[];
 };
 
 export type NavSection = {
@@ -26,7 +31,17 @@ export type NavSection = {
 export const NAV_SECTIONS: NavSection[] = [
   {
     labelKey: null,
-    items: [{ href: "/dashboard", labelKey: "nav.dashboard" }],
+    items: [
+      { href: "/dashboard", labelKey: "nav.dashboard" },
+      {
+        href: "/pulse",
+        labelEn: "Business Pulse",
+        labelSi: "ව්‍යාපාර ස්පන්දනය",
+        labelTa: "வணிக துடிப்பு",
+        sectorOnly: ["textile", "pharmacy"],
+        roleOnly: ["owner"],
+      },
+    ],
   },
   {
     labelKey: "nav.section.sales",
@@ -40,6 +55,43 @@ export const NAV_SECTIONS: NavSection[] = [
     labelKey: "nav.section.inventory",
     items: [
       { href: "/stock", labelKey: "nav.stock" },
+      {
+        href: "/stock/rolls",
+        labelEn: "Fabric rolls",
+        labelSi: "රෙදි roll තොගය",
+        sectorOnly: ["textile"],
+      },
+      {
+        href: "/stock/cutting",
+        labelEn: "Cutting & reservations",
+        labelSi: "කැපීම් සහ වෙන්කිරීම්",
+        sectorOnly: ["textile"],
+      },
+      {
+        href: "/stock/dispatch",
+        labelEn: "Warehouse & dispatch",
+        labelSi: "ගබඩා සහ බෙදාහැරීම්",
+        sectorOnly: ["textile"],
+      },
+      {
+        href: "/stock/advanced",
+        labelEn: "Inventory control",
+        labelSi: "උසස් තොග පාලනය",
+        sectorOnly: ["pharmacy", "electronics", "mobile_shop", "footwear"],
+      },
+      {
+        href: "/stock/advanced/queue",
+        labelEn: "Receiving queue",
+        labelSi: "ලැබුණු තොග පෝලිම",
+        sectorOnly: ["pharmacy", "electronics", "mobile_shop", "footwear"],
+      },
+      {
+        href: "/stock/advanced/returns",
+        labelEn: "Return inspection",
+        labelSi: "ආපසු භාණ්ඩ පරීක්ෂාව",
+        sectorOnly: ["pharmacy", "electronics", "mobile_shop", "footwear"],
+        roleOnly: ["owner", "manager"],
+      },
       { href: "/suppliers", labelKey: "nav.suppliers", feature: "suppliers" },
       { href: "/vehicles", labelKey: "nav.vehicles", feature: "vehicles" },
     ],
@@ -58,10 +110,37 @@ export const NAV_SECTIONS: NavSection[] = [
     labelKey: "nav.section.finance",
     items: [
       { href: "/banking", labelKey: "nav.banking", feature: "banking" },
+      {
+        href: "/banking/pos-routing",
+        labelEn: "POS payment routing",
+        labelSi: "POS ගෙවීම් මාර්ගය",
+        feature: "banking",
+        roleOnly: ["owner"],
+      },
       { href: "/vat", labelKey: "nav.vat" },
       { href: "/expenses", labelKey: "expenses.title" },
+      {
+        href: "/returns",
+        labelEn: "Returns control",
+        labelSi: "ආපසු භාණ්ඩ පාලනය",
+        roleOnly: ["owner"],
+      },
       { href: "/job-costing", labelKey: "costing.title", feature: "ac_jobs" },
       { href: "/reports", labelKey: "reports.title" },
+      {
+        href: "/textile/trade-control",
+        labelEn: "Textile trade control",
+        labelSi: "රෙදි වෙළඳ පාලනය",
+        sectorOnly: ["textile"],
+        roleOnly: ["owner", "manager"],
+      },
+      {
+        href: "/textile/owner-intelligence",
+        labelEn: "Textile owner intelligence",
+        labelSi: "රෙදි හිමිකරු විශ්ලේෂණ",
+        sectorOnly: ["textile"],
+        roleOnly: ["owner"],
+      },
     ],
   },
 ];

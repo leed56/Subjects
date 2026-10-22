@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { AppShell } from "@/components/shell/app-shell";
+import { SettingsNav } from "@/components/settings/settings-nav";
 import {
   ProBadge,
   ProButton,
@@ -46,8 +47,15 @@ export default function PlansPage() {
             </ProButton>
           }
         />
+        <SettingsNav />
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        {/* Real content here — a plan name, a shop name like "LakBiz
+            Pharmacy Demo" — is longer than the numeric/short-label values
+            other ProStatCard grids in this app usually carry. Jumping
+            straight from 2 to 5 columns left each card ~180px wide at the
+            xl breakpoint; a 3-column step in between gives long values
+            room to wrap across a couple of lines before 5-up. */}
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
           <ProStatCard
             label={t("sub.plans_stat_plan")}
             value={planName}
@@ -57,10 +65,10 @@ export default function PlansPage() {
           />
           <ProStatCard
             label={t("sub.plans_stat_status")}
-            value={subscription.status.replace("_", " ")}
+            value={t(`sub.status_${subscription.status}`)}
             hint={
               daysLeftInTrial != null
-                ? `${daysLeftInTrial} days left`
+                ? `${daysLeftInTrial} day${daysLeftInTrial === 1 ? "" : "s"} left`
                 : t("sub.plans_managed_account")
             }
             icon="OK"
@@ -115,10 +123,10 @@ export default function PlansPage() {
 
           <ProCard title={t("sub.plans_current_eyebrow")} eyebrow={t("sub.current_plan")}>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
                 {planName}
               </p>
-              <p className="mt-2 text-3xl font-black text-slate-950">
+              <p className="mt-2 text-3xl font-bold text-slate-950">
                 {formatLkrPrice(currentPrice)}
               </p>
               <p className="mt-1 text-sm font-semibold text-slate-500">
@@ -159,17 +167,20 @@ export default function PlansPage() {
                     key={plan.id}
                     className={`rounded-[1.25rem] border p-4 ${
                       plan.id === subscription.planId
-                        ? "border-teal-200 bg-teal-50"
+                        ? "border-teal-300 bg-teal-50 ring-2 ring-teal-500 ring-offset-2"
                         : "border-slate-200 bg-white"
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-lg font-black text-slate-950">{name}</p>
+                      <p className="text-lg font-bold text-slate-950">{name}</p>
                       {plan.id === subscription.planId && (
-                        <ProBadge tone="teal">{t("sub.plans_current_badge")}</ProBadge>
+                        <ProBadge tone="teal">
+                          <span className="mr-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-teal-600 text-[8px] text-white">✓</span>
+                          {t("sub.plans_current_badge")}
+                        </ProBadge>
                       )}
                     </div>
-                    <p className="mt-2 font-mono text-xl font-black text-teal-700">
+                    <p className="mt-2 font-mono text-xl font-bold text-teal-700">
                       {formatLkrPrice(monthly)}
                       <span className="text-sm font-semibold text-slate-500">
                         /{t("sub.month")}
@@ -200,15 +211,28 @@ export default function PlansPage() {
                     key={addon.id}
                     className="rounded-2xl border border-slate-200 bg-white p-4 text-sm"
                   >
-                    <p className="font-black text-slate-950">
+                    <p className="font-bold text-slate-950">
                       {locale === "si" ? addon.nameSi : addon.nameEn}
                     </p>
-                    <p className="mt-1 font-mono font-black text-teal-700">
+                    <p className="mt-1 font-mono font-bold text-teal-700">
                       {formatLkrPrice(addon.priceMonthlyLkr)}/{t("sub.month")}
                     </p>
                     <p className="mt-2 text-xs font-semibold text-slate-500">
                       {t("sub.plans_contact_activate")}
                     </p>
+                    {/* "Contact LakBiz to activate" had no actual contact
+                        mechanism anywhere on the page — per your decision,
+                        a direct mailto link, reusing the same support
+                        address the marketing site already uses everywhere
+                        (hello@lakbiz.app), not a new one invented here. */}
+                    <a
+                      href={`mailto:hello@lakbiz.app?subject=${encodeURIComponent(
+                        `Activate ${locale === "si" ? addon.nameSi : addon.nameEn} — ${org.name}`,
+                      )}`}
+                      className="mt-3 inline-flex min-h-9 items-center justify-center rounded-lg border border-teal-200 bg-teal-50 px-3 text-xs font-bold text-teal-800 hover:bg-teal-100"
+                    >
+                      {t("sub.plans_contact_support")}
+                    </a>
                   </div>
                 ))}
               </div>

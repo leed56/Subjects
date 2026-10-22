@@ -1,0 +1,126 @@
+name: LakBiz Demo Catalog Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/global-premium-ui
+    paths:
+      - "lakbiz/app/scripts/demo-catalog/**"
+      - "lakbiz/app/scripts/fetch-sri-lanka-demo-catalog.mjs"
+      - "lakbiz/app/scripts/import-demo-businesses.mjs"
+      - "lakbiz/app/src/lib/sector-category-blueprints.ts"
+      - ".github/workflows/lakbiz-demo-catalog.yml"
+  pull_request:
+    paths:
+      - "lakbiz/app/scripts/demo-catalog/**"
+      - "lakbiz/app/scripts/fetch-sri-lanka-demo-catalog.mjs"
+      - "lakbiz/app/scripts/import-demo-businesses.mjs"
+      - "lakbiz/app/src/lib/sector-category-blueprints.ts"
+      - ".github/workflows/lakbiz-demo-catalog.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lakbiz-demo-catalog-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  acquire:
+    name: Public Sri Lanka catalog audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: lakbiz/app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Acquire public factual catalog
+        run: |
+          node scripts/fetch-sri-lanka-demo-catalog.mjs \
+            --verify-regulatory \
+            --out=/tmp/lakbiz-sri-lanka-demo-catalog.json \
+            --max-grocery=1600 \
+            --max-pharmacy-retail=900 \
+            --delay-ms=350
+
+      - name: Validate coverage, quality and provenance
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+          const catalog = JSON.parse(await readFile("/tmp/lakbiz-sri-lanka-demo-catalog.json", "utf8"));
+          const allRows = [...catalog.pharmacy, ...catalog.grocery];
+          const medicineCount = catalog.pharmacy.filter((p) => p.productKind === "medicine").length;
+          const nonMedicineCount = catalog.pharmacy.length - medicineCount;
+          const pharmacyCategories = new Set(catalog.pharmacy.map((p) => `${p.department} > ${p.category} > ${p.subcategory}`));
+          const groceryCategories = new Set(catalog.grocery.map((p) => `${p.department} > ${p.category} > ${p.subcategory}`));
+          const syntheticCosts = allRows.filter((p) => p.costSource === "synthetic_demo").length;
+          const factualSpcCosts = catalog.pharmacy.filter((p) => p.costSource === "spc_wholesale").length;
+          const regulatory = catalog.pharmacy.filter((p) => p.registrationNumber).length;
+          const priceOnlyNames = catalog.pharmacy.filter((p) => /^[-–—\s]*LKR\s*[0-9]/i.test(String(p.productName ?? ""))).length;
+          const obviousFoodSkin = catalog.pharmacy.filter((p) => p.source === "spar2u" && p.category === "Skin Care" && /\b(?:FULL CREAM MILK|MILK POWDER|YOGHURT|YOGURT|CHEESE|BUTTER|COCONUT CREAM|CREAMER)\b/i.test(String(p.productName ?? ""))).length;
+          const truncatedNames = allRows.filter((p) => String(p.productName ?? "").includes("...")).length;
+          const duplicateSourceIds = (rows) => {
+            const keys = rows.map((p) => `${p.source}:${p.sourceProductId}`);
+            return keys.length - new Set(keys).size;
+          };
+          const duplicateIds = (rows) => rows.length - new Set(rows.map((p) => p.id)).size;
+          const summary = {
+            generatedAt: catalog.generatedAt,
+            pharmacy: catalog.pharmacy.length,
+            medicineCount,
+            nonMedicineCount,
+            pharmacyCategoryPaths: pharmacyCategories.size,
+            grocery: catalog.grocery.length,
+            groceryCategoryPaths: groceryCategories.size,
+            sourceCounts: catalog.sourceCounts,
+            factualSpcCosts,
+            syntheticCosts,
+            regulatoryConservativeMatches: regulatory,
+            priceOnlyNames,
+            obviousFoodSkin,
+            truncatedNames,
+            pharmacyDuplicateSourceIds: duplicateSourceIds(catalog.pharmacy),
+            groceryDuplicateSourceIds: duplicateSourceIds(catalog.grocery),
+            pharmacyDuplicateIds: duplicateIds(catalog.pharmacy),
+            groceryDuplicateIds: duplicateIds(catalog.grocery),
+          };
+          console.log(JSON.stringify(summary, null, 2));
+          await import("node:fs/promises").then(({ appendFile }) => appendFile(process.env.GITHUB_STEP_SUMMARY, `## LakBiz demo catalog acquisition\n\n\`\`\`json\n${JSON.stringify(summary, null, 2)}\n\`\`\`\n`));
+          if (catalog.sourceCounts.spc < 150) throw new Error(`SPC coverage too small: ${catalog.sourceCounts.spc}`);
+          if ((catalog.sourceCounts.healthguard ?? 0) < 500) throw new Error(`Healthguard coverage too small: ${catalog.sourceCounts.healthguard ?? 0}`);
+          if (catalog.grocery.length < 1000) throw new Error(`Grocery coverage too small: ${catalog.grocery.length}`);
+          if (catalog.pharmacy.length < 1000) throw new Error(`Pharmacy coverage too small: ${catalog.pharmacy.length}`);
+          if (medicineCount < 100) throw new Error(`Medicine coverage too small: ${medicineCount}`);
+          if (nonMedicineCount < 500) throw new Error(`Modern pharmacy non-medicine coverage too small: ${nonMedicineCount}`);
+          if (pharmacyCategories.size < 15) throw new Error(`Pharmacy taxonomy too narrow: ${pharmacyCategories.size}`);
+          if (regulatory < 1) throw new Error("Regulatory enrichment produced zero conservative exact matches");
+          if (priceOnlyNames) throw new Error(`Price-only pseudo-products detected: ${priceOnlyNames}`);
+          if (obviousFoodSkin) throw new Error(`Obvious grocery products misclassified as Skin Care: ${obviousFoodSkin}`);
+          if (truncatedNames) throw new Error(`Truncated product names remain after hydration: ${truncatedNames}`);
+          if (summary.pharmacyDuplicateSourceIds || summary.groceryDuplicateSourceIds || summary.pharmacyDuplicateIds || summary.groceryDuplicateIds) {
+            throw new Error("Duplicate catalog identities detected");
+          }
+          NODE
+
+      - name: Dry-run importer contract
+        run: node scripts/import-demo-businesses.mjs --catalog=/tmp/lakbiz-sri-lanka-demo-catalog.json
+
+      - name: Upload normalized catalog artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lakbiz-sri-lanka-demo-catalog
+          path: /tmp/lakbiz-sri-lanka-demo-catalog.json
+          if-no-files-found: error
+          retention-days: 7

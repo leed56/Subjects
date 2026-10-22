@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import type { BusinessTemplate } from "@/lib/admin/templates";
 import { BUSINESS_TEMPLATES } from "@/lib/admin/templates";
 import { adminPlanLabel, adminSectorLabel, adminTemplateLabel } from "@/lib/admin/admin-labels";
+import { SectorIcon } from "@/components/sector-icon";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { PlanId } from "@/lib/subscription/types";
 
@@ -179,7 +180,7 @@ export default function AdminCreateShopPage() {
                     : "border-slate-700 bg-slate-900 hover:border-slate-600"
                 }`}
               >
-                <span className="text-xl">{template.icon}</span>
+                <SectorIcon sectorId={template.sectorId} className="h-5 w-5 text-teal-400" />
                 <span className="mt-1 block text-xs font-semibold text-white">
                   {adminTemplateLabel(template, locale)}
                 </span>
