@@ -645,6 +645,26 @@ export async function pullBusinessData(
   return data;
 }
 
+/**
+ * Postgres rejects a single ON CONFLICT statement when its payload contains
+ * the same primary key more than once. Local-first data can briefly contain
+ * a duplicate after a reconnect merges a pending change with a cloud pull, so
+ * normalize every write payload at the boundary before it reaches PostgREST.
+ *
+ * Keep the first row: AppData collections are newest-first, which preserves
+ * the local value a user just saved while the next pull reconciles it with
+ * the server's canonical record.
+ */
+export function dedupeRowsById<T extends Record<string, unknown>>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const id = String(row.id ?? "");
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
 async function upsertOrgRows(
   table:
     | "products"
@@ -675,17 +695,18 @@ async function upsertOrgRows(
     | "purchase_order_lines",
   rows: Record<string, unknown>[],
 ): Promise<string | null> {
-  if (rows.length === 0) return null;
+  const uniqueRows = dedupeRowsById(rows);
+  if (uniqueRows.length === 0) return null;
   const supabase = createBrowserClient();
   if (!supabase) return "Supabase not configured";
 
   // Large catalogues can contain thousands of rows. Keep every
   // PostgREST JSON request bounded instead of sending one unbounded body.
   const batchSize = 200;
-  for (let i = 0; i < rows.length; i += batchSize) {
+  for (let i = 0; i < uniqueRows.length; i += batchSize) {
     const { error } = await supabase
       .from(table)
-      .upsert(rows.slice(i, i + batchSize), { onConflict: "id" });
+      .upsert(uniqueRows.slice(i, i + batchSize), { onConflict: "id" });
     if (error) return error.message;
   }
   return null;
@@ -748,11 +769,12 @@ async function upsertMaskedViewRows(
   organizationId: string,
   rows: Record<string, unknown>[],
 ): Promise<string | null> {
-  if (rows.length === 0) return null;
+  const uniqueRows = dedupeRowsById(rows);
+  if (uniqueRows.length === 0) return null;
   const supabase = createBrowserClient();
   if (!supabase) return "Supabase not configured";
 
-  const ids = rows.map((row) => String(row.id));
+  const ids = uniqueRows.map((row) => String(row.id));
   // `.in()` is encoded in the request URL. A 1,000–1,600 SKU catalogue can
   // exceed gateway/query-string limits and surface only as HTTP 400 / Bad
   // Request. Resolve existing ids in bounded URL-sized chunks instead.
@@ -766,8 +788,8 @@ async function upsertMaskedViewRows(
     if (fetchErr) return fetchErr.message;
     for (const row of existing ?? []) existingIds.add(String(row.id));
   }
-  const toInsert = rows.filter((row) => !existingIds.has(String(row.id)));
-  const toUpdate = rows.filter((row) => existingIds.has(String(row.id)));
+  const toInsert = uniqueRows.filter((row) => !existingIds.has(String(row.id)));
+  const toUpdate = uniqueRows.filter((row) => existingIds.has(String(row.id)));
 
   for (const rowBatch of chunk(toInsert, BULK_UPDATE_BATCH_SIZE)) {
     const { error } = await supabase.from(table).insert(rowBatch);
