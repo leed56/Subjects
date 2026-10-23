@@ -6,7 +6,8 @@ import { AppShell } from "@/components/shell/app-shell";
 import { setBottomBarOccupied } from "@/components/shell/bottom-bar-overlay";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { AdvancedSaleSelector, type AdvancedSaleLineState } from "@/components/sales/advanced-sale-selector";
-import { GroceryCategoryArt, GroceryProductArt, GroceryStarterShelf } from "@/components/sales/grocery-product-art";
+import { GroceryCategoryArt, GroceryProductArt } from "@/components/sales/grocery-product-art";
+import { GroceryStarterCatalogueButton } from "@/components/grocery/starter-catalogue-button";
 import {
   ProBadge,
   ProButton,
@@ -23,6 +24,7 @@ import { LK_BANKS } from "@/lib/banks";
 import { customerPrimaryLabel } from "@/lib/contact-type";
 import { effectiveUnitPrice } from "@/lib/company-pricing";
 import { formatLkr } from "@/lib/format";
+import { buildRetailDashboardIntelligence } from "@/lib/dashboard/retail-intelligence";
 import { buildQuoteTextFromLines, whatsappShareUrl } from "@/lib/invoice";
 import { sendApiWhatsApp } from "@/lib/messaging";
 import { useWhatsAppApiConfigured } from "@/lib/messaging/use-sms-api-configured";
@@ -163,6 +165,16 @@ export function AtomicRetailSalesPageV2() {
     }
   }, [si]);
 
+  const groceryLiveMetrics = useMemo(() => {
+    if (!groceryPos || !data) return null;
+    const referenceDate = new Date();
+    const intelligence = buildRetailDashboardIntelligence(data, "grocery", canSeeFinancials, [], referenceDate, "7d");
+    const todayKey = referenceDate.toISOString().slice(0, 10);
+    const itemsSold = data.sales
+      .filter((sale) => sale.date.startsWith(todayKey))
+      .reduce((total, sale) => total + sale.lines.reduce((lineTotal, line) => lineTotal + line.qty, 0), 0);
+    return { intelligence, itemsSold };
+  }, [canSeeFinancials, data, groceryPos]);
   const lines = useMemo(() => {
     if (!data) return [];
     return Object.entries(cart)
@@ -488,6 +500,7 @@ export function AtomicRetailSalesPageV2() {
           actions={
             <>
               <ProBadge tone="emerald">Atomic checkout</ProBadge>
+              {groceryPos && <GroceryStarterCatalogueButton compact />}
               <ProButton href="/stock" variant="secondary">{t("sales.add_stock_link")}</ProButton>
               {lastBillId && <ProButton href={`/bills/${lastBillId}`} variant="dark">{t("sales.view_bill")}</ProButton>}
             </>
@@ -508,29 +521,61 @@ export function AtomicRetailSalesPageV2() {
         )}
 
         <section className={`grid gap-3 ${groceryPos ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3"}`}>
-          <ProStatCard
-            label={t("sales.cart_items")}
-            value={String(cartCount)}
-            hint={lines.length ? `${lines.length} ${t("sales.product_lines")}` : t("sales.no_selected")}
-            icon={<SalesIcon className="h-5 w-5" />}
-            tone="teal"
-          />
-          <ProStatCard
-            label={t("sales.gross")}
-            value={formatLkr(gross)}
-            hint={discountClamped > 0 ? `${t("sales.discount")} ${formatLkr(discountClamped)}` : t("sales.before_discount")}
-            icon={<BillsIcon className="h-5 w-5" />}
-            tone="slate"
-          />
-          <ProStatCard
-            label={t("common.total")}
-            value={formatLkr(netTotal)}
-            hint={paymentSummaryLabel}
-            icon={<CostingIcon className="h-5 w-5" />}
-            tone="emerald"
-          />
-          {groceryPos && (
-            <ProStatCard label={si ? "තොග භාණ්ඩ" : "Items available"} value={String(inStock.length)} hint={si ? "විකිණීමට සූදානම්" : "Ready for retail sale"} icon={<SalesIcon className="h-5 w-5" />} tone="slate" />
+          {groceryPos && groceryLiveMetrics ? (
+            <>
+              <ProStatCard
+                label={si ? "අද විකුණුම්" : "Today’s sales"}
+                value={formatLkr(groceryLiveMetrics.intelligence.todaySales)}
+                hint={groceryLiveMetrics.intelligence.todaySalesChangePct == null ? (si ? "සම්පූර්ණ කළ bill තවම නැත" : "No completed bill yet") : `${groceryLiveMetrics.intelligence.todaySalesChangePct >= 0 ? "▲" : "▼"} ${Math.abs(groceryLiveMetrics.intelligence.todaySalesChangePct).toFixed(0)}% vs yesterday`}
+                icon={<SalesIcon className="h-5 w-5" />}
+                tone="teal"
+              />
+              <ProStatCard
+                label={si ? "සාදන ලද bills" : "Bills generated"}
+                value={String(groceryLiveMetrics.intelligence.todayTransactions)}
+                hint={si ? "අද සම්පූර්ණ කළ bills" : "Completed today"}
+                icon={<BillsIcon className="h-5 w-5" />}
+                tone="slate"
+              />
+              <ProStatCard
+                label={si ? "සාමාන්‍ය bill" : "Average bill value"}
+                value={formatLkr(groceryLiveMetrics.intelligence.averageBasket)}
+                hint={si ? "සම්පූර්ණ කළ checkout මත" : "From completed checkout"}
+                icon={<CostingIcon className="h-5 w-5" />}
+                tone="emerald"
+              />
+              <ProStatCard
+                label={si ? "විකුණු භාණ්ඩ" : "Items sold"}
+                value={String(groceryLiveMetrics.itemsSold)}
+                hint={si ? "අද bills තුළින්" : "Across today’s bills"}
+                icon={<SalesIcon className="h-5 w-5" />}
+                tone="slate"
+              />
+            </>
+          ) : (
+            <>
+              <ProStatCard
+                label={t("sales.cart_items")}
+                value={String(cartCount)}
+                hint={lines.length ? `${lines.length} ${t("sales.product_lines")}` : t("sales.no_selected")}
+                icon={<SalesIcon className="h-5 w-5" />}
+                tone="teal"
+              />
+              <ProStatCard
+                label={t("sales.gross")}
+                value={formatLkr(gross)}
+                hint={discountClamped > 0 ? `${t("sales.discount")} ${formatLkr(discountClamped)}` : t("sales.before_discount")}
+                icon={<BillsIcon className="h-5 w-5" />}
+                tone="slate"
+              />
+              <ProStatCard
+                label={t("common.total")}
+                value={formatLkr(netTotal)}
+                hint={paymentSummaryLabel}
+                icon={<CostingIcon className="h-5 w-5" />}
+                tone="emerald"
+              />
+            </>
           )}
         </section>
 
@@ -538,17 +583,27 @@ export function AtomicRetailSalesPageV2() {
           <section className="mt-6">
             <ProCard>
               {groceryPos ? (
-                <div className="space-y-5">
-                  <GroceryStarterShelf
-                    title={si ? "ඔබේ grocery shelf එක සකස් කරන්න" : "Set up your grocery shelf"}
-                    description={si ? "ඔබේ සැබෑ භාණ්ඩ හා මිල එක් කළ පසු, ඒවා මෙහි barcode scan සහ බිල්පත් සඳහා සූදානම් වේ." : "Add your real items and selling prices in Stock. They will then appear here for barcode scanning and checkout."}
-                  />
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-600">{si ? "මෙම පින්තූර ආදර්ශ පමණි — විකිණිය හැක්කේ ඔබ එකතු කරන සැබෑ තොගය පමණි." : "These are starter images only — checkout uses only the real stock you add."}</p>
-                    <ProButton href="/stock">{t("sales.add_stock_link")}</ProButton>
+                <div className="overflow-hidden rounded-2xl border border-blue-100 bg-[radial-gradient(circle_at_top_right,_rgba(129,140,248,0.16),transparent_35%),linear-gradient(135deg,#f8fbff,#ffffff_55%,#eef6ff)] p-5">
+                  <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="max-w-xl">
+                      <span className="inline-flex rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">First-time setup</span>
+                      <h2 className="mt-3 text-xl font-bold tracking-[-0.035em] text-slate-950">{si ? "ඔබේ විකිණිය හැකි grocery catalogue එක සකස් කරන්න" : "Set up your sellable grocery catalogue"}</h2>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{si ? "නිදර්ශන භාණ්ඩ 16ක් එක් කරන්න. එහි මිල, barcode, stock සහ පින්තූර Stock තුළින් වෙනස් කළ හැක." : "Add 16 editable products with LKR prices, stock, SKUs and barcodes. Update any price, image or quantity later in Stock."}</p>
+                    </div>
+                    <p className="text-sm font-bold text-emerald-800">{si ? "ඉහළින් ඇති starter products button එක භාවිතා කර catalogue එක එක් කරන්න." : "Use Add starter products in the page header to load the editable catalogue."}</p>
+                  </div>
+                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-blue-200 bg-white/75 px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-600">{si ? "Catalogue එක එක් කළ පසු එහිම සැබෑ product records checkout සහ dashboard එකෙහි පෙන්වයි." : "The same product records will appear in checkout and drive the live dashboard after you add them."}</p>
+                    <ProButton href="/stock" variant="secondary">{t("sales.add_stock_link")}</ProButton>
                   </div>
                 </div>
-              ) : <ProEmptyState title={t("sales.no_stock")} description={t("sales.add_stock_first_desc")} action={<ProButton href="/stock">{t("sales.add_stock_link")}</ProButton>} />}
+              ) : (
+                <ProEmptyState
+                  title={t("sales.no_stock")}
+                  description={t("sales.add_stock_first_desc")}
+                  action={<ProButton href="/stock">{t("sales.add_stock_link")}</ProButton>}
+                />
+              )}
             </ProCard>
           </section>
         ) : (
@@ -643,7 +698,7 @@ export function AtomicRetailSalesPageV2() {
                       >
                         {groceryPos && (
                           <div className="relative h-28 overflow-hidden border-b border-slate-100 bg-[radial-gradient(circle_at_50%_30%,#ffffff_0%,#eff6ff_62%,#eef2ff_100%)]">
-                            <GroceryProductArt name={product.name} category={product.category} className="h-full w-full" />
+                            <GroceryProductArt name={product.name} category={product.category} imageUrl={typeof product.customFields.imageUrl === "string" ? product.customFields.imageUrl : undefined} className="h-full w-full" />
                             <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[9px] font-bold text-slate-600 shadow-sm">{product.category || "Grocery"}</span>
                           </div>
                         )}

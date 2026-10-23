@@ -20,6 +20,7 @@ const FIELD_DEFS: Record<string, SectorFieldDef> = {
   weightKg: { key: "weightKg", type: "number", labelEn: "Weight (kg)", labelSi: "බර (kg)" },
   expiryDate: { key: "expiryDate", type: "date", labelEn: "Expiry date", labelSi: "කල් ඉකුත් දිනය" },
   barcode: { key: "barcode", type: "text", labelEn: "Barcode", labelSi: "බාර්කෝඩ්" },
+  imageUrl: { key: "imageUrl", type: "text", labelEn: "Product image URL", labelSi: "භාණ්ඩ පින්තූර URL", placeholder: "https://…/product.png" },
   unitVariant: {
     key: "unitVariant",
     type: "text",

@@ -10,7 +10,7 @@ export const sectors: SectorTemplate[] = [
     nameSi: "සිල්ලර සහ සුපිරි වෙළඳසැල්",
     nameTa: "மளிகை & சூப்பர்மார்க்கெட்",
     description: "Fast counter billing, barcode/pack items, expiry awareness and customer credit.",
-    extraFields: ["barcode", "unitVariant", "weightKg", "expiryDate", "brand", "manufacturer"],
+    extraFields: ["barcode", "imageUrl", "unitVariant", "weightKg", "expiryDate", "brand", "manufacturer"],
     reports: ["Daily sales", "Low stock & reorder", "Expiry alert", "Fast/slow movers", "Credit customers"],
   },
   {

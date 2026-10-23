@@ -24,6 +24,8 @@ import {
 import type { AppData } from "@/lib/store/types";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { GroceryStarterCatalogueButton } from "@/components/grocery/starter-catalogue-button";
+import { GroceryProductArt } from "@/components/sales/grocery-product-art";
 
 const RETAIL_GRADIENTS = [
   "from-emerald-500 to-teal-400",
@@ -174,7 +176,7 @@ function LowStock({ intel }: { intel: RetailDashboardIntelligence }) {
           const exhausted = item.stockQty <= 0;
           return (
             <Link href={`/stock?q=${encodeURIComponent(item.name)}`} key={item.productId} className="group flex items-center gap-3 py-3.5">
-              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-xs font-black text-white ${RETAIL_GRADIENTS[index % RETAIL_GRADIENTS.length]}`}>{item.name.slice(0, 1).toUpperCase()}</span>
+              <span className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br ${RETAIL_GRADIENTS[index % RETAIL_GRADIENTS.length]}`}><GroceryProductArt name={item.name} category={item.category} className="h-full w-full p-1" /></span>
               <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800 group-hover:text-blue-700">{item.name}</span><span className="block truncate text-[11px] text-slate-500">{item.category}</span></span>
               <span className={`rounded-full px-2 py-1 text-[10px] font-bold tabular-nums ${exhausted ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>{item.stockQty} {item.unit} left</span>
             </Link>
@@ -193,8 +195,11 @@ function TopProducts({ intel }: { intel: RetailDashboardIntelligence }) {
       <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-5">
         {top.length === 0 ? <p className="col-span-full py-4 text-sm text-slate-500">Top sellers will appear after recorded sales.</p> : top.map((item, index) => (
           <Link href={`/stock?q=${encodeURIComponent(item.name)}`} key={item.productId} className="group rounded-2xl border border-slate-100 bg-gradient-to-b from-slate-50 to-white p-3 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg">
-            <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br text-sm font-black text-white ${RETAIL_GRADIENTS[index % RETAIL_GRADIENTS.length]}`}>{index + 1}</div>
-            <p className="mt-3 truncate text-sm font-bold text-slate-800 group-hover:text-blue-700" title={item.name}>{item.name}</p>
+            <div className="relative flex h-20 items-center justify-center overflow-hidden rounded-xl bg-[radial-gradient(circle_at_50%_30%,#ffffff_0%,#eff6ff_62%,#eef2ff_100%)]">
+              <GroceryProductArt name={item.name} category={item.category} className="h-full w-full p-1" />
+              <span className={`absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-lg bg-gradient-to-br text-[10px] font-black text-white shadow-sm ${RETAIL_GRADIENTS[index % RETAIL_GRADIENTS.length]}`}>{index + 1}</span>
+            </div>
+            <p className="mt-2 truncate text-sm font-bold text-slate-800 group-hover:text-blue-700" title={item.name}>{item.name}</p>
             <p className="mt-1 text-[11px] text-slate-500">{item.qty.toLocaleString("en-LK")} sold</p>
             <p className="mt-1 text-xs font-bold tabular-nums text-slate-900">{formatLkr(item.revenue)}</p>
           </Link>
@@ -275,6 +280,15 @@ export function GroceryCommandCenter({ data }: { data: AppData }) {
           </div>
         </div>
         <div className="relative mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-blue-100/80 pt-4 text-xs font-medium text-slate-500"><span className="inline-flex items-center gap-1.5"><CalendarIcon className="h-3.5 w-3.5 text-blue-500" /> {date}</span><span><strong className="text-slate-900">{intel.activeSkuCount.toLocaleString("en-LK")}</strong> active items</span><span className="rounded-full bg-rose-100 px-2.5 py-1 font-bold text-rose-700">{intel.outOfStockCount} out of stock</span></div>
+      </section>
+
+      <section className={`flex flex-col gap-4 rounded-[22px] border border-emerald-100 bg-[radial-gradient(circle_at_92%_20%,rgba(45,212,191,0.22),transparent_34%),linear-gradient(120deg,#ecfdf5,#f8fbff)] p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)] sm:flex-row sm:items-center sm:justify-between ${intel.activeSkuCount === 0 ? "" : "hidden"}`}>
+        <div>
+          <span className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">Your grocery is ready to set up</span>
+          <h2 className="mt-1 text-xl font-bold tracking-[-0.035em] text-slate-950">Start with an editable Sri Lankan catalogue</h2>
+          <p className="mt-1 text-sm text-slate-600">Add the starter products once, then change every price, barcode, stock quantity and image in Stock.</p>
+        </div>
+        <GroceryStarterCatalogueButton compact />
       </section>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
