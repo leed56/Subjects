@@ -140,6 +140,14 @@ describe("retail dashboard intelligence", () => {
     expect(result.categoryMix.length).toBeGreaterThan(0);
   });
 
+  it("keeps category sales empty until a completed sale has been recorded", () => {
+    const withoutSales: AppData = { ...data(products), sales: [] };
+    const result = buildRetailDashboardIntelligence(withoutSales, "pharmacy", false, [], new Date("2026-08-23T12:00:00Z"));
+    expect(result.periodSales).toBe(0);
+    expect(result.topMovers).toEqual([]);
+    expect(result.categoryMix).toEqual([]);
+  });
+
   it("resolves each named period to real day-key bounds plus an equal-length prior period", () => {
     const reference = new Date("2026-08-23T12:00:00Z");
 

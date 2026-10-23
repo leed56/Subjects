@@ -147,8 +147,17 @@ function CategoryRing({ intel }: { intel: RetailDashboardIntelligence }) {
       <div className="grid gap-5 p-5 sm:grid-cols-[150px_minmax(0,1fr)] sm:items-center">
         <div className="relative mx-auto h-36 w-36 rounded-full" style={{ background: visible.length ? `conic-gradient(${stops})` : "#e2e8f0" }}>
           <div className="absolute inset-4 flex flex-col items-center justify-center rounded-full bg-white text-center shadow-inner">
-            <span className="text-xl font-bold tracking-[-0.05em] text-slate-950">{formatLkrCompact(intel.periodSales)}</span>
-            <span className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Sales</span>
+            {visible.length ? (
+              <>
+                <span className="text-xl font-bold tracking-[-0.05em] text-slate-950">{formatLkrCompact(intel.periodSales)}</span>
+                <span className="mt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Sales</span>
+              </>
+            ) : (
+              <>
+                <span className="text-sm font-bold text-slate-700">No sales yet</span>
+                <span className="mt-1 px-2 text-[10px] font-semibold leading-snug text-slate-400">Complete a checkout to see results.</span>
+              </>
+            )}
           </div>
         </div>
         <div className="space-y-2.5">

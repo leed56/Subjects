@@ -338,12 +338,6 @@ function buildCategoryMix(products: Product[], sales: Sale[]): RetailCategorySli
       values.set(category, (values.get(category) ?? 0) + line.qty * line.unitPrice);
     }
   }
-  if (!values.size) {
-    for (const product of products) {
-      if (!product.active) continue;
-      values.set(product.category || "Other", (values.get(product.category || "Other") ?? 0) + 1);
-    }
-  }
   const sorted = [...values.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
   const total = sorted.reduce((sum, [, value]) => sum + value, 0);
   return sorted.map(([category, value]) => ({
