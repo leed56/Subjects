@@ -3,6 +3,7 @@
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
+import { GroceryWorkspaceHeader } from "@/components/grocery/grocery-workspace-header";
 import {
   ProBadge,
   ProButton,
@@ -30,6 +31,7 @@ import type { PaymentMethod } from "@/lib/types";
 import { calcInputVat } from "@/lib/vat";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 type SupplierSection = "directory" | "orders" | "receipts";
 
@@ -46,6 +48,7 @@ export default function SuppliersPage() {
     recordSupplierPaymentToCloud,
   } = useAppStore();
   const { t } = useLocale();
+  const { org } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
 
   const [name, setName] = useState("");
@@ -58,6 +61,7 @@ export default function SuppliersPage() {
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [activeSection, setActiveSection] = useState<SupplierSection>("directory");
+  const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [savingSupplier, setSavingSupplier] = useState(false);
   const [savingPurchase, setSavingPurchase] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
@@ -131,6 +135,7 @@ export default function SuppliersPage() {
       )
     : data.suppliers;
   const paySupplier = paySupplierId ? data.suppliers.find((s) => s.id === paySupplierId) : null;
+  const showDirectoryForm = org.sector !== "grocery" || data.suppliers.length > 0 || editing !== null || showSupplierForm;
 
   const resetSupplierForm = () => {
     setName("");
@@ -139,9 +144,11 @@ export default function SuppliersPage() {
     setVatNumber("");
     setContactPerson("");
     setEditing(null);
+    setShowSupplierForm(false);
   };
 
   const startEdit = (supplier: Supplier) => {
+    setShowSupplierForm(true);
     setEditing(supplier);
     setName(supplier.name);
     setPhone(supplier.phone ?? "");
@@ -372,6 +379,23 @@ export default function SuppliersPage() {
   return (
     <AppShell>
       <ProMain>
+        {org.sector === "grocery" ? (
+          <>
+            <GroceryWorkspaceHeader
+              eyebrow="Supply & replenishment"
+              title="Suppliers & goods receipts"
+              description="Keep grocery suppliers, purchase orders, goods receipts and payables in one compact workspace."
+              detail={<><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">{data.suppliers.length} suppliers</span><span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-800">{formatLkr(totalPayable)} payable</span></>}
+              actions={<><Button onClick={() => { setActiveSection("directory"); setShowSupplierForm(true); }} disabled={!canWrite} variant="primary">{t("sup.add")}</Button><ProButton href="/stock" variant="secondary">{t("nav.stock")}</ProButton><Button onClick={openPo} disabled={data.suppliers.length === 0 || data.products.length === 0} variant="secondary">{t("sup.new_po")}</Button><Button onClick={openPurchase} disabled={data.suppliers.length === 0 || data.products.length === 0} variant="primary">{t("sup.record_purchase")}</Button></>}
+            />
+            <section className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard label={t("nav.suppliers")} value={String(data.suppliers.length)} hint="Active supplier profiles" icon={<SuppliersIcon className="h-5 w-5" />} />
+              <MetricCard label={t("sup.you_owe_col")} value={formatLkr(totalPayable)} hint={`${payableSuppliers} supplier${payableSuppliers === 1 ? "" : "s"} payable`} icon={<InboxIcon className="h-5 w-5" />} tone={totalPayable > 0 ? "warning" : "positive"} />
+              <MetricCard label={t("sup.vat_ready_suppliers")} value={String(vatSuppliers)} hint="VAT-ready records" icon={<VatIcon className="h-5 w-5" />} />
+              <MetricCard label={t("sup.recent_grn")} value={formatLkr(recentPurchaseValue)} hint="Latest 10 receipts" icon={<BillsIcon className="h-5 w-5" />} tone="positive" />
+            </section>
+          </>
+        ) : (
         <PageHeader
           title={t("sup.title")}
           description="Manage supplier relationships, purchase orders, goods receipts and payables from one operational workspace."
@@ -410,6 +434,7 @@ export default function SuppliersPage() {
             </section>
           }
         />
+        )}
 
         <WriteDisabledHint className="mb-5" />
 
@@ -431,8 +456,8 @@ export default function SuppliersPage() {
           />
         </div>
 
-        {activeSection === "directory" && <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <ProCard eyebrow={editing ? "Edit supplier" : "Create supplier"} title={editing ? t("sup.edit") : t("sup.add")}>
+        {activeSection === "directory" && <section className={`grid gap-5 ${showDirectoryForm && data.suppliers.length > 0 ? "xl:grid-cols-[0.9fr_1.1fr]" : ""}`}>
+          {showDirectoryForm && <ProCard eyebrow={editing ? "Edit supplier" : "Create supplier"} title={editing ? t("sup.edit") : t("sup.add")}>
             <form onSubmit={saveSupplier}>
               <div className="grid gap-3 sm:grid-cols-2">
                 <input required placeholder={t("sup.name")} value={name} onChange={(e) => setName(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100" />
@@ -452,9 +477,9 @@ export default function SuppliersPage() {
                 )}
               </div>
             </form>
-          </ProCard>
+          </ProCard>}
 
-          <ProCard title="Find suppliers" eyebrow="Search payables" action={<ProBadge tone={suppliers.length === data.suppliers.length ? "slate" : "teal"}>{suppliers.length} shown</ProBadge>}>
+          {data.suppliers.length > 0 ? <ProCard title="Find suppliers" eyebrow="Search payables" action={<ProBadge tone={suppliers.length === data.suppliers.length ? "slate" : "teal"}>{suppliers.length} shown</ProBadge>}>
             <div>
               <SearchInput
                 value={search}
@@ -467,7 +492,17 @@ export default function SuppliersPage() {
                 ? "Add at least one supplier and one product before recording purchases."
                 : t("sup.grn_hint")}
             </div>
-          </ProCard>
+          </ProCard> : !showDirectoryForm && (
+            <ProCard>
+              <div className="flex flex-col gap-4 rounded-2xl border border-dashed border-blue-200 bg-[linear-gradient(120deg,#f8fbff,#ffffff,#f0fdfa)] p-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-bold text-slate-900">Start your grocery supplier list</p>
+                  <p className="mt-1 max-w-xl text-xs leading-5 text-slate-500">Add a supplier when you are ready to record a purchase, goods receipt or supplier payment. Your grocery catalogue stays unchanged.</p>
+                </div>
+                <Button onClick={() => setShowSupplierForm(true)} disabled={!canWrite} variant="primary">{t("sup.add")}</Button>
+              </div>
+            </ProCard>
+          )}
         </section>}
 
         {showPurchase && (
@@ -607,7 +642,7 @@ export default function SuppliersPage() {
           </section>
         )}
 
-        {activeSection === "directory" && <section className="mt-6">
+        {activeSection === "directory" && (data.suppliers.length > 0 || org.sector !== "grocery") && <section className="mt-6">
           {data.suppliers.length === 0 ? (
             <ProCard>
               <ProEmptyState title={t("sup.no_suppliers")} description="Add suppliers to track GRNs, payables and payment history." />

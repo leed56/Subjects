@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
+import { GroceryWorkspaceHeader } from "@/components/grocery/grocery-workspace-header";
 import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
@@ -45,7 +46,7 @@ export default function BillsPage() {
   const router = useRouter();
   const { data, ready } = useAppStore();
   const { t } = useLocale();
-  const { canSeeFinancials, can, orgRole } = useSubscription();
+  const { canSeeFinancials, can, orgRole, org } = useSubscription();
   const [search, setSearch] = useState("");
   const [paymentFilter, setPaymentFilter] = useState<PaymentMethod | "all">("all");
   const [invoiceType, setInvoiceType] = useState<"all" | "vehicle" | "retail">("all");
@@ -129,6 +130,15 @@ export default function BillsPage() {
   return (
     <AppShell>
       <ProMain>
+        {org.sector === "grocery" ? (
+          <GroceryWorkspaceHeader
+            eyebrow="Grocery sales ledger"
+            title="Bills & orders"
+            description={`${data.sales.length} completed bill${data.sales.length === 1 ? "" : "s"} in your LakBiz sales register.`}
+            detail={<><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">Real checkout records</span><span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">LKR totals</span></>}
+            actions={<><ProButton href="/sales">{t("bills.create_sale")}</ProButton>{orgRole === "owner" && <ProButton href="/returns" variant="secondary">Returns control</ProButton>}</>}
+          />
+        ) : (
         <ProPageHeader
           eyebrow={t("bills.archive_eyebrow")}
           title={t("bills.title")}
@@ -154,6 +164,7 @@ export default function BillsPage() {
             </>
           }
         />
+        )}
 
         {data.sales.length > 0 && (
           <section>

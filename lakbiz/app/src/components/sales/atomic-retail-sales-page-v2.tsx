@@ -60,6 +60,23 @@ const ADVANCED_RETAIL_SECTORS = new Set(["pharmacy", "mobile_shop", "electronics
 const FAST_RETAIL_SECTORS = new Set(["pharmacy", "grocery"]);
 const SUCCESS_STORAGE_KEY = "lakbiz-atomic-sale-success";
 
+const GROCERY_CATEGORY_CHIPS = [
+  { name: "Fruits", matches: ["fruit"] },
+  { name: "Vegetables", matches: ["vegetable"] },
+  { name: "Meat & Poultry", matches: ["meat", "poultry", "seafood", "frozen"] },
+  { name: "Dairy", matches: ["dairy", "milk", "egg"] },
+  { name: "Bakery", matches: ["bread", "bakery"] },
+  { name: "Rice, Flour & Dry Goods", matches: ["rice", "flour", "grain", "sugar", "salt", "dry"] },
+  { name: "Beverages", matches: ["beverage", "drink", "juice", "water"] },
+  { name: "Household", matches: ["household", "clean", "home"] },
+] as const;
+
+function matchesGroceryCategory(product: Product, chip: string): boolean {
+  const category = (product.category ?? "").toLowerCase();
+  const definition = GROCERY_CATEGORY_CHIPS.find((candidate) => candidate.name === chip);
+  return definition ? definition.matches.some((word) => category.includes(word)) : false;
+}
+
 function clientId(prefix: string): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return `${prefix}-${crypto.randomUUID()}`;
@@ -272,7 +289,7 @@ export function AtomicRetailSalesPageV2() {
   const query = search.trim().toLowerCase();
   const searched = query ? inStock.filter((product) => productSearchText(product).includes(query)) : inStock;
   const categoryFiltered = fastRetail && categoryFilter !== "all"
-    ? searched.filter((product) => product.category === categoryFilter)
+    ? searched.filter((product) => groceryPos ? matchesGroceryCategory(product, categoryFilter) : product.category === categoryFilter)
     : searched;
   const filtered = !conditionRelevant || conditionFilter === "all"
     ? categoryFiltered
@@ -284,10 +301,15 @@ export function AtomicRetailSalesPageV2() {
       categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
     }
   }
-  const categories = Array.from(categoryCounts.entries())
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-    .slice(0, 12);
+  const categories = groceryPos
+    ? GROCERY_CATEGORY_CHIPS.map((chip) => ({
+        name: chip.name,
+        count: inStock.filter((product) => matchesGroceryCategory(product, chip.name)).length,
+      }))
+    : Array.from(categoryCounts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+      .slice(0, 12);
   const visibleProducts = fastRetail ? filtered.slice(0, resultLimit) : filtered;
   const exactMatch = query
     ? filtered.find((product) =>
@@ -486,7 +508,7 @@ export function AtomicRetailSalesPageV2() {
 
   return (
     <AppShell>
-      <ProMain>
+      <ProMain className={groceryPos ? "max-w-[1600px] py-4 sm:py-5 lg:px-5 lg:py-5" : ""}>
         {groceryPos ? (
           <section className="overflow-hidden rounded-[24px] border border-blue-100 bg-[radial-gradient(circle_at_92%_16%,rgba(129,140,248,0.24),transparent_28%),radial-gradient(circle_at_8%_100%,rgba(16,185,129,0.16),transparent_25%),linear-gradient(115deg,#f8fbff_0%,#edf5ff_56%,#faf5ff_100%)] p-4 shadow-[0_18px_44px_rgba(59,130,246,0.10)] sm:p-5">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
@@ -510,11 +532,12 @@ export function AtomicRetailSalesPageV2() {
                   className="h-12 w-full rounded-2xl border border-white/80 bg-white/90 pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-[0_8px_24px_rgba(37,99,235,0.09)] outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                 />
               </label>
-              <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <button type="button" onClick={() => { setCart({}); setPendingSaleId(null); setMessage(""); }} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-3 text-xs font-bold text-white shadow-[0_10px_20px_rgba(16,185,129,0.22)] transition hover:brightness-105"><span className="text-base">＋</span>{si ? "අලුත් bill" : "New bill"}</button>
                 <button type="button" disabled title={si ? "ඉක්මනින් පැමිණේ" : "Coming soon"} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/75 px-3 text-xs font-bold text-slate-400 disabled:cursor-not-allowed">{si ? "තබාගන්න" : "Hold bill"}</button>
+                <button type="button" disabled title={si ? "තබාගත් bills ඉක්මනින් පැමිණේ" : "Saved bill recall is coming soon"} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/75 px-3 text-xs font-bold text-slate-400 disabled:cursor-not-allowed">{si ? "නැවත කැඳවන්න" : "Recall bill"}</button>
                 <button type="button" onClick={() => document.getElementById("grocery-pos-search")?.focus()} className="inline-flex h-12 items-center justify-center rounded-2xl border border-violet-100 bg-violet-50/90 px-3 text-xs font-bold text-violet-700 transition hover:bg-violet-100">{si ? "මිල බලන්න" : "Price check"}</button>
-                <Link href="/stock" className="col-span-3 inline-flex h-10 items-center justify-center rounded-xl border border-blue-100 bg-white/75 px-3 text-xs font-bold text-blue-700 transition hover:bg-white sm:col-span-1 sm:h-12">{si ? "තොගය" : "Inventory"}</Link>
+                <Link href="/stock" className="col-span-2 inline-flex h-10 items-center justify-center rounded-xl border border-blue-100 bg-white/75 px-3 text-xs font-bold text-blue-700 transition hover:bg-white sm:col-span-1 sm:h-12">{si ? "තොගය" : "Inventory"}</Link>
                 <GroceryStarterCatalogueButton compact />
               </div>
             </div>
@@ -539,7 +562,7 @@ export function AtomicRetailSalesPageV2() {
           </div>
         )}
 
-        <section className={`mt-4 grid gap-3 ${groceryPos ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3"}`}>
+        <section className={`mt-4 grid gap-3 ${groceryPos ? "grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3"}`}>
           {groceryPos && groceryLiveMetrics ? (
             <>
               <ProStatCard
@@ -600,30 +623,27 @@ export function AtomicRetailSalesPageV2() {
 
         {inStock.length === 0 ? (
           <section className="mt-6">
-            <ProCard>
-              {groceryPos ? (
-                <div className="overflow-hidden rounded-2xl border border-blue-100 bg-[radial-gradient(circle_at_top_right,_rgba(129,140,248,0.16),transparent_35%),linear-gradient(135deg,#f8fbff,#ffffff_55%,#eef6ff)] p-5">
-                  <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="max-w-xl">
-                      <span className="inline-flex rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">First-time setup</span>
-                      <h2 className="mt-3 text-xl font-bold tracking-[-0.035em] text-slate-950">{si ? "ඔබේ විකිණිය හැකි grocery catalogue එක සකස් කරන්න" : "Set up your sellable grocery catalogue"}</h2>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">{si ? "නිදර්ශන භාණ්ඩ 16ක් එක් කරන්න. එහි මිල, barcode, stock සහ පින්තූර Stock තුළින් වෙනස් කළ හැක." : "Add 16 editable products with LKR prices, stock, SKUs and barcodes. Update any price, image or quantity later in Stock."}</p>
-                    </div>
-                    <p className="text-sm font-bold text-emerald-800">{si ? "ඉහළින් ඇති starter products button එක භාවිතා කර catalogue එක එක් කරන්න." : "Use Add starter products in the page header to load the editable catalogue."}</p>
-                  </div>
-                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-blue-200 bg-white/75 px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-600">{si ? "Catalogue එක එක් කළ පසු එහිම සැබෑ product records checkout සහ dashboard එකෙහි පෙන්වයි." : "The same product records will appear in checkout and drive the live dashboard after you add them."}</p>
-                    <ProButton href="/stock" variant="secondary">{t("sales.add_stock_link")}</ProButton>
-                  </div>
+            {groceryPos ? (
+              <div className="flex flex-col gap-4 rounded-2xl border border-blue-100 bg-[radial-gradient(circle_at_top_right,_rgba(129,140,248,0.14),transparent_34%),linear-gradient(105deg,#f8fbff,#ffffff_54%,#eef6ff)] px-5 py-4 shadow-[0_10px_28px_rgba(59,130,246,0.07)] sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <span className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-700">First-time setup</span>
+                  <h2 className="mt-1 text-base font-bold tracking-[-0.025em] text-slate-950">{si ? "විකිණිය හැකි grocery catalogue එක එක් කරන්න" : "Add a sellable grocery catalogue"}</h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">{si ? "Starter භාණ්ඩ 16ක් ඔබ තහවුරු කළ පසු පමණක් එක් වේ. මිල, barcode, stock සහ පින්තූර Stock තුළින් වෙනස් කළ හැක." : "Starter products are only added when you confirm. Prices, barcodes, stock and images stay editable in Stock."}</p>
                 </div>
-              ) : (
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <GroceryStarterCatalogueButton compact />
+                  <ProButton href="/stock" variant="secondary">{t("sales.add_stock_link")}</ProButton>
+                </div>
+              </div>
+            ) : (
+              <ProCard>
                 <ProEmptyState
                   title={t("sales.no_stock")}
                   description={t("sales.add_stock_first_desc")}
                   action={<ProButton href="/stock">{t("sales.add_stock_link")}</ProButton>}
                 />
-              )}
-            </ProCard>
+              </ProCard>
+            )}
           </section>
         ) : (
           <section className={`mt-5 grid gap-5 ${groceryPos ? "lg:grid-cols-[minmax(0,1fr)_minmax(340px,390px)]" : "xl:grid-cols-[1.45fr_0.85fr]"}`}>

@@ -218,6 +218,34 @@ function TopProducts({ intel }: { intel: RetailDashboardIntelligence }) {
   );
 }
 
+function RecentTransactions({ data }: { data: AppData }) {
+  const recent = data.sales.slice(0, 5);
+  return (
+    <Panel>
+      <PanelHeading title="Recent transactions" hint="Completed LakBiz bills" action={<Link href="/bills" className="text-xs font-bold text-blue-600 hover:text-blue-700">View bills</Link>} />
+      {recent.length === 0 ? (
+        <div className="px-5 py-7">
+          <p className="text-sm font-semibold text-slate-700">Your completed bills will appear here.</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">Start a bill from POS / Billing when you are ready to record a real sale.</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-100 px-5">
+          {recent.map((sale) => (
+            <Link key={sale.id} href={`/bills/${sale.id}`} className="flex items-center gap-3 py-3 transition hover:bg-slate-50">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-xs font-black text-blue-700">{sale.lines.length}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-bold text-slate-800">{sale.customerName || "Walk-in customer"}</span>
+                <span className="mt-0.5 block truncate text-[11px] text-slate-500">{sale.billNo ?? sale.id.slice(0, 8)} · {new Date(sale.date).toLocaleString("en-LK")}</span>
+              </span>
+              <span className="shrink-0 font-mono text-sm font-bold text-slate-950">{formatLkr(sale.total)}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function InventorySnapshot({ intel, canSeeFinancials }: { intel: RetailDashboardIntelligence; canSeeFinancials: boolean }) {
   const total = Math.max(1, intel.activeSkuCount);
   const sellable = Math.max(0, intel.activeSkuCount - intel.outOfStockCount);
@@ -290,7 +318,7 @@ export function GroceryCommandCenter({ data }: { data: AppData }) {
             {lastSale ? <Link href={`/bills/${lastSale.id}`} className="inline-flex h-16 min-w-24 flex-col items-center justify-center gap-1 rounded-2xl border border-violet-100 bg-violet-50 px-3 text-violet-700 shadow-sm transition hover:-translate-y-0.5"><BillsIcon className="h-4 w-4" /><span className="text-[11px] font-bold">Last bill</span></Link> : <span title="A completed bill is needed first" className="inline-flex h-16 min-w-24 cursor-not-allowed flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-slate-400"><BillsIcon className="h-4 w-4" /><span className="text-[11px] font-bold">Last bill</span></span>}
           </div>
         </div>
-        <div className="relative mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-blue-100/80 pt-3 text-xs font-medium text-slate-500"><span className="inline-flex items-center gap-1.5"><CalendarIcon className="h-3.5 w-3.5 text-blue-500" /> {date}</span><span><strong className="text-slate-900">{intel.activeSkuCount.toLocaleString("en-LK")}</strong> active items</span><span className="rounded-full bg-rose-100 px-2.5 py-1 font-bold text-rose-700">{intel.outOfStockCount} out of stock</span></div>
+        <div className="relative mt-4 grid gap-2 border-t border-blue-100/80 pt-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><Link href="/sales" className="flex h-11 min-w-0 items-center gap-3 rounded-xl border border-white bg-white/80 px-3 text-sm font-semibold text-slate-500 shadow-sm transition hover:border-blue-200 hover:bg-white hover:text-blue-700"><span className="text-lg text-blue-500">⌕</span><span className="truncate">Search products or scan barcode at POS</span><span className="ml-auto rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-600">POS</span></Link><div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-500"><span className="inline-flex items-center gap-1.5"><CalendarIcon className="h-3.5 w-3.5 text-blue-500" /> {date}</span><span><strong className="text-slate-900">{intel.activeSkuCount.toLocaleString("en-LK")}</strong> active items</span><span className="rounded-full bg-rose-100 px-2.5 py-1 font-bold text-rose-700">{intel.outOfStockCount} out of stock</span></div></div>
       </section>
 
       <section className={`flex flex-col gap-4 rounded-[22px] border border-emerald-100 bg-[radial-gradient(circle_at_92%_20%,rgba(45,212,191,0.22),transparent_34%),linear-gradient(120deg,#ecfdf5,#f8fbff)] p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)] sm:flex-row sm:items-center sm:justify-between ${intel.activeSkuCount === 0 ? "" : "hidden"}`}>
@@ -302,7 +330,7 @@ export function GroceryCommandCenter({ data }: { data: AppData }) {
         <GroceryStarterCatalogueButton compact />
       </section>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard label="Today&apos;s sales" value={formatLkrCompact(intel.todaySales)} hint={intel.todaySalesChangePct == null ? `${intel.todayTransactions} bills today` : <><span className={intel.todaySalesChangePct >= 0 ? "text-emerald-600" : "text-rose-600"}>{intel.todaySalesChangePct >= 0 ? "▲" : "▼"} {Math.abs(intel.todaySalesChangePct).toFixed(0)}%</span> vs yesterday</>} icon={<SalesIcon className="h-5 w-5" />} gradient={RETAIL_GRADIENTS[0]} href="/sales" />
         <StatCard label="Total orders" value={monthIntel.periodTransactions.toLocaleString("en-LK")} hint="Completed this month" icon={<BillsIcon className="h-5 w-5" />} gradient={RETAIL_GRADIENTS[1]} href="/sales" />
         <StatCard label="Revenue this month" value={formatLkrCompact(monthIntel.periodSales)} hint="Completed checkout revenue" icon={<CartIcon className="h-5 w-5" />} gradient={RETAIL_GRADIENTS[2]} href="/reports" />
@@ -319,7 +347,7 @@ export function GroceryCommandCenter({ data }: { data: AppData }) {
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.8fr)]">
         <div className="space-y-5"><TopProducts intel={intel} /><InventorySnapshot intel={intel} canSeeFinancials={canSeeFinancials} /></div>
-        <CheckoutStation intel={intel} shopName={shopName} />
+        <div className="space-y-5"><RecentTransactions data={data} /><CheckoutStation intel={intel} shopName={shopName} /></div>
       </div>
     </div>
   );

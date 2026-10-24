@@ -19,6 +19,7 @@ import {
   type ReturnAccountingAdjustment,
 } from "@/lib/supabase/return-accounting-client";
 import { exportReportsCsv, printReportsSummary, type ReportsExportData } from "@/lib/export";
+import { GroceryWorkspaceHeader } from "@/components/grocery/grocery-workspace-header";
 
 type Period = "7d" | "30d" | "month" | "all";
 type ReportView = "overview" | "sales" | "jobs";
@@ -292,10 +293,47 @@ export default function ReportsPage() {
   return (
     <AppShell>
       <ProMain>
-        <PageHeader
-          title={t("reports.title")}
-          description={t("reports.subtitle")}
-          actions={
+        {org.sector === "grocery" ? (
+          <>
+            <GroceryWorkspaceHeader
+              eyebrow="Retail intelligence"
+              title="Store reports"
+              description="Review completed grocery sales, category performance and inventory movement."
+              actions={
+                <>
+                  <SelectInput
+                    value={period}
+                    onChange={(v) => setPeriod(v as Period)}
+                    options={[
+                      { value: "7d", label: t("reports.period_7d") },
+                      { value: "30d", label: t("reports.period_30d") },
+                      { value: "month", label: t("reports.period_month") },
+                      { value: "all", label: t("reports.period_all") },
+                    ]}
+                    className="w-40"
+                  />
+                  {canExport && (
+                    <ExportActions
+                      disabled={sales.length === 0 && costedJobs.length === 0 && periodReturns.length === 0}
+                      onExportCsv={() => exportReportsCsv(localData.business, reportsExportData, reportsExportLabels)}
+                      onPrintPdf={() => printReportsSummary(localData.business, reportsExportData, reportsExportLabels, t("reports.title"))}
+                    />
+                  )}
+                </>
+              }
+            />
+            <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard label={t("reports.total_revenue")} value={formatLkr(totalRevenue)} />
+              <MetricCard label={t("reports.total_profit")} value={formatLkr(totalProfit)} hint={`${profitMarginPct.toFixed(1)}% ${t("reports.margin_pct")}`} tone={totalProfit < 0 ? "danger" : "positive"} />
+              <MetricCard label={t("reports.sales_count")} value={String(sales.length)} />
+              <MetricCard label={t("reports.avg_sale")} value={formatLkr(avgSale)} />
+            </div>
+          </>
+        ) : (
+          <PageHeader
+            title={t("reports.title")}
+            description={t("reports.subtitle")}
+            actions={
             <>
               <SelectInput
                 value={period}
@@ -318,16 +356,17 @@ export default function ReportsPage() {
                 />
               )}
             </>
-          }
-          metrics={
+            }
+            metrics={
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard label={t("reports.total_revenue")} value={formatLkr(totalRevenue)} />
               <MetricCard label={t("reports.total_profit")} value={formatLkr(totalProfit)} hint={`${profitMarginPct.toFixed(1)}% ${t("reports.margin_pct")}`} tone={totalProfit < 0 ? "danger" : "positive"} />
               <MetricCard label={t("reports.sales_count")} value={String(sales.length)} />
               <MetricCard label={t("reports.avg_sale")} value={formatLkr(avgSale)} />
             </div>
-          }
-        />
+            }
+          />
+        )}
 
         {returnAccountingError && (
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-900">

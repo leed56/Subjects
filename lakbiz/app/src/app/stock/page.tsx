@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ProductForm } from "@/components/product-form";
 import { StockCommandHeader } from "@/components/stock/stock-command-header";
+import { GroceryProductArt } from "@/components/sales/grocery-product-art";
+import { GroceryStarterCatalogueButton } from "@/components/grocery/starter-catalogue-button";
 import { ExportActions } from "@/components/export/export-actions";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { AppShell } from "@/components/shell/app-shell";
@@ -308,29 +310,44 @@ export default function StockPage() {
       render: (p) => {
         const badge = formatProductFieldBadge(p);
         return (
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={() => openEdit(p)} className={`font-semibold hover:text-teal-700 hover:underline ${p.active ? "text-slate-900" : "text-slate-400"}`}>
-                {p.name}
-              </button>
-              {conditionFilterRelevant && <ProductConditionBadge condition={p.condition} />}
-              {!p.active && <StatusBadge tone="neutral">{t("stock.inactive_badge")}</StatusBadge>}
+          <div className="flex min-w-0 items-center gap-3">
+            {org.sector === "grocery" && (
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-sky-100 bg-sky-50 p-1.5">
+                <GroceryProductArt
+                  name={p.name}
+                  category={p.category}
+                  imageUrl={typeof p.customFields.imageUrl === "string" ? p.customFields.imageUrl : undefined}
+                  className="h-full w-full"
+                />
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => openEdit(p)} className={`font-semibold hover:text-teal-700 hover:underline ${p.active ? "text-slate-900" : "text-slate-400"}`}>
+                  {p.name}
+                </button>
+                {conditionFilterRelevant && <ProductConditionBadge condition={p.condition} />}
+                {!p.active && <StatusBadge tone="neutral">{t("stock.inactive_badge")}</StatusBadge>}
+              </div>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {p.sku ? `${p.sku} · ` : ""}
+                {p.category || "General"}
+                {badge ? ` · ${badge}` : ""}
+                {org.sector === "grocery" && typeof p.customFields.barcode === "string" && p.customFields.barcode.trim()
+                  ? ` · ${p.customFields.barcode}`
+                  : ""}
+              </p>
+              {showLowStockOnly && (() => {
+                const suggestion = reorderByProductId.get(p.id);
+                if (!suggestion?.lastSupplierName) return null;
+                return (
+                  <p className="mt-0.5 text-xs text-amber-700">
+                    {t("stock.last_bought_from")} {suggestion.lastSupplierName}
+                    {suggestion.lastPurchaseDate ? ` · ${new Date(suggestion.lastPurchaseDate).toLocaleDateString("en-LK")}` : ""}
+                  </p>
+                );
+              })()}
             </div>
-            <p className="mt-0.5 text-xs text-slate-500">
-              {p.sku ? `${p.sku} · ` : ""}
-              {p.category || "General"}
-              {badge ? ` · ${badge}` : ""}
-            </p>
-            {showLowStockOnly && (() => {
-              const suggestion = reorderByProductId.get(p.id);
-              if (!suggestion?.lastSupplierName) return null;
-              return (
-                <p className="mt-0.5 text-xs text-amber-700">
-                  {t("stock.last_bought_from")} {suggestion.lastSupplierName}
-                  {suggestion.lastPurchaseDate ? ` · ${new Date(suggestion.lastPurchaseDate).toLocaleDateString("en-LK")}` : ""}
-                </p>
-              );
-            })()}
           </div>
         );
       },
@@ -530,11 +547,18 @@ export default function StockPage() {
             icon={<StockIcon className="h-6 w-6" />}
             title={t("stock.no_stock")}
             description={t("stock.no_stock_hint")}
-            action={
+            action={org.sector === "grocery" ? (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <GroceryStarterCatalogueButton />
+                <button type="button" onClick={openCreate} className="rounded-lg border border-teal-200 bg-white px-4 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50">
+                  {t("stock.add_item")}
+                </button>
+              </div>
+            ) : (
               <button type="button" onClick={openCreate} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700">
                 {t("stock.add_item")}
               </button>
-            }
+            )}
           />
         ) : (
           <>

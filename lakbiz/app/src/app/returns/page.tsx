@@ -23,6 +23,7 @@ import {
 } from "@/lib/supabase/sale-return-control-client";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { GroceryWorkspaceHeader } from "@/components/grocery/grocery-workspace-header";
 
 const emptySummary: SaleReturnControlSummary = {
   totalReturns: 0,
@@ -127,12 +128,21 @@ export default function ReturnsControlPage() {
   return (
     <AppShell>
       <ProMain>
-        <ProPageHeader
-          eyebrow="Owner financial control"
-          title="Customer returns"
-          description="One control center for physical return documents, credit-note recognition and refund or receivable settlement. Original invoices remain immutable."
-          actions={<ProButton href="/bills" variant="secondary">All bills</ProButton>}
-        />
+        {org.sector === "grocery" ? (
+          <GroceryWorkspaceHeader
+            eyebrow="Retail returns"
+            title="Returns control"
+            description="Process documented returns, credit notes and refunds without changing the original sale."
+            actions={<ProButton href="/bills" variant="secondary">All bills</ProButton>}
+          />
+        ) : (
+          <ProPageHeader
+            eyebrow="Owner financial control"
+            title="Customer returns"
+            description="One control center for physical return documents, credit-note recognition and refund or receivable settlement. Original invoices remain immutable."
+            actions={<ProButton href="/bills" variant="secondary">All bills</ProButton>}
+          />
+        )}
 
         {schemaMissing ? (
           <ProCard>

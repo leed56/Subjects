@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ExportActions } from "@/components/export/export-actions";
 import { AppShell } from "@/components/shell/app-shell";
+import { GroceryWorkspaceHeader } from "@/components/grocery/grocery-workspace-header";
 import {
   ProBadge,
   ProButton,
@@ -113,6 +114,13 @@ export default function VatReturnPage() {
     return (
       <AppShell>
         <ProMain>
+          {org.sector === "grocery" && (
+            <GroceryWorkspaceHeader
+              eyebrow="Store tax & filings"
+              title="VAT and tax settings"
+              description="Tax controls and financial reports are available to the workspace owner."
+            />
+          )}
           <ProCard>
             <ProEmptyState
               title="Owner-only financial report"
@@ -228,11 +236,20 @@ export default function VatReturnPage() {
     return (
       <AppShell>
         <ProMain>
+          {org.sector === "grocery" && (
+            <GroceryWorkspaceHeader
+              eyebrow="Store tax & filings"
+              title="VAT and tax settings"
+              description="Set up tax registration and filing preferences before VAT reconciliation begins."
+              actions={<ProButton href="/settings/shop">{t("vat.shop_settings")}</ProButton>}
+            />
+          )}
           <ProCard>
             <ProEmptyState
               title={t("vat.title")}
               description={t("vat.enable_hint")}
               action={<ProButton href="/settings/shop">{t("vat.shop_settings")}</ProButton>}
+              size={org.sector === "grocery" ? "compact" : "standard"}
             />
           </ProCard>
           {incomeTaxSection}
@@ -276,6 +293,15 @@ export default function VatReturnPage() {
   return (
     <AppShell>
       <ProMain>
+        {org.sector === "grocery" ? (
+          <GroceryWorkspaceHeader
+            eyebrow="Store tax & filings"
+            title="VAT reconciliation"
+            description={`${summary.bounds.label}${data.business.vatNumber ? ` · VAT ${data.business.vatNumber}` : ""}`}
+            detail={<><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-indigo-700">Owner financial workspace</span><span className="rounded-full bg-teal-50 px-2.5 py-1 text-teal-700">Live bill and GRN data</span></>}
+            actions={<><ProButton href="/sales" variant="secondary">{t("nav.sales")}</ProButton><ProButton href="/suppliers" variant="secondary">{t("sup.record_purchase")}</ProButton><ProButton href="/settings/shop">{t("vat.shop_settings")}</ProButton></>}
+          />
+        ) : (
         <ProPageHeader
           eyebrow={t("vat.ready_to_file")}
           title={t("vat.title")}
@@ -323,6 +349,7 @@ export default function VatReturnPage() {
             </>
           }
         />
+        )}
 
         {returnAccountingError && (
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-900">

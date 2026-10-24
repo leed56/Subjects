@@ -31,6 +31,7 @@ import type { ContactType, PaymentMethod, Product } from "@/lib/types";
 import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { GroceryWorkspaceHeader } from "@/components/grocery/grocery-workspace-header";
 
 type ContactFilter = "all" | ContactType;
 type ProfileTab = "overview" | "invoices" | "payments" | "ledger" | "equipment" | "messages";
@@ -324,10 +325,30 @@ export default function CustomersPage() {
   return (
     <AppShell>
       <ProMain>
-        <PageHeader
-          title={t("cust.title")}
-          description={`${data.customers.length} ${t("cust.customers_count")}`}
-          actions={
+        {org.sector === "grocery" ? (
+          <GroceryWorkspaceHeader
+            eyebrow="Lanka Grocery retail"
+            title="Customer directory"
+            description="Keep walk-in and account customer details ready for a fast checkout."
+            detail={`${data.customers.length} customer${data.customers.length === 1 ? "" : "s"}`}
+            actions={
+              <button
+                type="button"
+                onClick={openCreate}
+                disabled={!canWrite}
+                title={!canWrite ? disabledHint ?? undefined : undefined}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <PlusIcon className="h-4 w-4" />
+                {t("cust.add")}
+              </button>
+            }
+          />
+        ) : (
+          <PageHeader
+            title={t("cust.title")}
+            description={`${data.customers.length} ${t("cust.customers_count")}`}
+            actions={
             <>
               <button
                 type="button"
@@ -353,8 +374,9 @@ export default function CustomersPage() {
                 />
               )}
             </>
-          }
-        />
+            }
+          />
+        )}
 
         <WriteDisabledHint className="mb-4" />
 

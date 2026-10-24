@@ -15,7 +15,9 @@ const RETAIL_ORDER = [
   "/customers",
   "/reports",
   "/suppliers",
+  "/returns",
   "/expenses",
+  "/vat",
   "/settings/shop",
 ] as const;
 
@@ -27,7 +29,9 @@ const RETAIL_LABELS: Record<string, Record<Locale, string>> = {
   "/customers": { en: "Customers", si: "ගනුදෙනුකරුවන්", ta: "வாடிக்கையாளர்கள்" },
   "/reports": { en: "Reports & analytics", si: "වාර්තා සහ විශ්ලේෂණ", ta: "அறிக்கைகள் மற்றும் பகுப்பாய்வு" },
   "/suppliers": { en: "Suppliers", si: "සැපයුම්කරුවන්", ta: "வழங்குநர்கள்" },
+  "/returns": { en: "Returns", si: "ආපසු භාරගැනීම්", ta: "திரும்பப்பெறல்கள்" },
   "/expenses": { en: "Expenses", si: "වියදම්", ta: "செலவுகள்" },
+  "/vat": { en: "Store tax settings", si: "වෙළඳසැල් බදු", ta: "கடை வரி" },
   "/settings/shop": { en: "Store management", si: "සාප්පු කළමනාකරණය", ta: "கடை நிர்வாகம்" },
 };
 
@@ -39,7 +43,9 @@ const RETAIL_TONES: Record<string, string> = {
   "/customers": "from-sky-500 to-blue-600",
   "/reports": "from-amber-500 to-orange-500",
   "/suppliers": "from-rose-500 to-pink-600",
+  "/returns": "from-fuchsia-500 to-violet-600",
   "/expenses": "from-orange-500 to-amber-600",
+  "/vat": "from-indigo-500 to-violet-600",
   "/settings/shop": "from-indigo-500 to-violet-600",
 };
 

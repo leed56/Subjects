@@ -12,6 +12,7 @@ import { PlusIcon } from "@/components/ui/icons";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { paymentLabel } from "@/lib/i18n/payment";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { GroceryWorkspaceHeader } from "@/components/grocery/grocery-workspace-header";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { formatLkr } from "@/lib/format";
 import { getFiscalYearBounds, getIncomeTaxYearSummary } from "@/lib/income-tax";
@@ -267,10 +268,40 @@ export default function ExpensesPage() {
   return (
     <AppShell>
       <ProMain>
-        <PageHeader
-          title={t("expenses.title")}
-          description={`${expenses.length} ${t("expenses.expenses")}`}
-          actions={
+        {org.sector === "grocery" ? (
+          <>
+            <GroceryWorkspaceHeader
+              eyebrow="Grocery operations"
+              title="Store expenses"
+              description="Track the operating costs behind your retail performance."
+              detail={`${expenses.length} recorded expense${expenses.length === 1 ? "" : "s"}`}
+              actions={
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700"
+                >
+                  <PlusIcon className="h-4 w-4" />
+                  {t("expenses.add")}
+                </button>
+              }
+            />
+            <div className="mb-5 grid gap-3 sm:grid-cols-3">
+              <MetricCard label={t("expenses.this_month")} value={formatLkr(monthTotal)} />
+              <MetricCard label={t("expenses.this_fiscal_year")} value={formatLkr(yearTotal)} hint={bounds.label} />
+              <MetricCard
+                label={t("expenses.tax_impact")}
+                value={taxImpact > 0 ? `-${formatLkr(taxImpact)}` : formatLkr(0)}
+                hint={t("expenses.tax_impact_hint")}
+                tone={taxImpact > 0 ? "positive" : "default"}
+              />
+            </div>
+          </>
+        ) : (
+          <PageHeader
+            title={t("expenses.title")}
+            description={`${expenses.length} ${t("expenses.expenses")}`}
+            actions={
             <button
               type="button"
               onClick={openCreate}
@@ -291,8 +322,9 @@ export default function ExpensesPage() {
                 tone={taxImpact > 0 ? "positive" : "default"}
               />
             </div>
-          }
-        />
+            }
+          />
+        )}
 
         {loadError && (
           <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{loadError}</div>
