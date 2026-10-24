@@ -802,11 +802,32 @@ export function AtomicRetailSalesPageV2() {
                     {lines.map((line) => (
                       <div key={line.product.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                         <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-bold text-slate-950">{line.product.name}</p>
-                            <p className="mt-0.5 text-xs font-semibold text-slate-500">× {line.qty}</p>
+                          <div className="flex min-w-0 flex-1 gap-2.5">
+                            {groceryPos && (
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-blue-100 bg-gradient-to-br from-white to-blue-50">
+                                <GroceryProductArt
+                                  name={line.product.name}
+                                  category={line.product.category}
+                                  imageUrl={typeof line.product.customFields.imageUrl === "string" ? line.product.customFields.imageUrl : undefined}
+                                  className="h-full w-full p-1"
+                                />
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-bold text-slate-950">{line.product.name}</p>
+                              {groceryPos ? (
+                                <div className="mt-1.5 inline-flex items-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+                                  <button type="button" aria-label={`Decrease ${line.product.name}`} onClick={() => setQty(line.product.id, line.qty - 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-slate-600 hover:bg-slate-50">−</button>
+                                  <span className="flex h-7 min-w-8 items-center justify-center border-x border-slate-200 px-1 text-xs font-bold text-slate-900">{line.qty}</span>
+                                  <button type="button" aria-label={`Increase ${line.product.name}`} onClick={() => setQty(line.product.id, line.qty + 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-teal-700 hover:bg-teal-50">+</button>
+                                </div>
+                              ) : <p className="mt-0.5 text-xs font-semibold text-slate-500">× {line.qty}</p>}
+                            </div>
                           </div>
-                          <p className="shrink-0 font-mono text-sm font-bold text-slate-950">{formatLkr(line.unitPrice * line.qty)}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="shrink-0 font-mono text-sm font-bold text-slate-950">{formatLkr(line.unitPrice * line.qty)}</p>
+                            {groceryPos && <button type="button" aria-label={`Remove ${line.product.name}`} onClick={() => setQty(line.product.id, 0, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold text-slate-400 transition hover:bg-rose-50 hover:text-rose-600">×</button>}
+                          </div>
                         </div>
                         <label className="mt-3 flex items-center justify-between gap-2 text-xs font-bold text-slate-500">
                           {t("sales.unit_price")}
