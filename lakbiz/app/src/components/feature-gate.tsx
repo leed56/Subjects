@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { type ReactNode, useEffect } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { ProMain } from "@/components/ui/pro-shell";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -19,15 +19,44 @@ type FeatureGateProps = {
 
 export function FeatureGate({ children, feature }: FeatureGateProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { t, locale } = useLocale();
   const { can, org } = useSubscription();
   const required = feature ?? ROUTE_FEATURES[pathname] ?? null;
+
+  // Earlier Grocery navigation linked to the owner-only bank-transfer setup.
+  // Keep those existing bookmarks useful by opening the actual retail POS,
+  // which is the grocery checkout workspace and does not require Banking.
+  const groceryPosRouting = pathname === "/banking/pos-routing" && org.sector === "grocery";
+  const redirectGroceryPosRouting =
+    groceryPosRouting &&
+    org.isAuthenticated &&
+    required === "banking" &&
+    !can(required) &&
+    can("sales");
+
+  useEffect(() => {
+    if (redirectGroceryPosRouting) router.replace("/sales");
+  }, [redirectGroceryPosRouting, router]);
+
+  if (redirectGroceryPosRouting) {
+    return (
+      <AppShell>
+        <ProMain>
+          <section className="mx-auto flex min-h-[45vh] max-w-xl items-center justify-center py-10 text-center">
+            <p className="text-sm font-semibold text-slate-600">
+              Opening Grocery POS…
+            </p>
+          </section>
+        </ProMain>
+      </AppShell>
+    );
+  }
 
   if (!required || !org.isAuthenticated || can(required)) {
     return children;
   }
 
-  const groceryPosRouting = pathname === "/banking/pos-routing" && org.sector === "grocery";
   const si = locale === "si";
   const workspaceBlocked =
     required !== "write" &&
