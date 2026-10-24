@@ -10,12 +10,13 @@ export function SectorWorkspaceAutoBanner() {
   const { data, ready } = useAppStore();
   const { org } = useSubscription();
 
-  // Dashboard already has its own richer retail command centre. Injecting the
-  // generic sector banner there creates two competing hero surfaces. Keep this
-  // contextual banner only on Sales/POS, where it provides useful fast actions
-  // and catalogue context without duplicating the page's primary hierarchy.
+  // Grocery POS owns its compact counter command bar. Rendering the generic
+  // sector hero above it makes a normal desktop counter start with two
+  // competing command surfaces and pushes products/cart below the fold.
+  // Pharmacy continues to use this contextual banner because its workflow is
+  // intentionally different (batch, expiry and prescription controls).
   if (pathname !== "/sales" || !ready || !data) return null;
-  if (org.sector !== "pharmacy" && org.sector !== "grocery") return null;
+  if (org.sector !== "pharmacy") return null;
 
   const activeProducts = data.products.filter((product) => product.active);
   const catalogueCount = activeProducts.filter((product) => product.stockQty > 0).length;

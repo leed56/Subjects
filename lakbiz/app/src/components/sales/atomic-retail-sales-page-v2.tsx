@@ -487,25 +487,44 @@ export function AtomicRetailSalesPageV2() {
   return (
     <AppShell>
       <ProMain>
-        <ProPageHeader
-          eyebrow={groceryPos ? (si ? "Grocery POS / බිල්පත්" : "Grocery POS / Billing") : org.sector === "pharmacy" ? (si ? "ආරක්ෂිත Pharmacy POS" : "Protected Pharmacy POS") : t("sales.pos_eyebrow")}
-          title={groceryPos ? (si ? "වේගවත් Grocery Checkout" : "Fast grocery checkout") : t("sales.title")}
-          description={
-            org.sector === "pharmacy"
-              ? (si ? "Prescription, FEFO batch සහ ගෙවීම එකම checkout transaction එකක පාලනය කරයි." : "Prescription checks, FEFO batch allocation and payment commit in one checkout transaction.")
-              : groceryPos
-                ? (si ? "Barcode scan කරන්න, භාණ්ඩය තෝරන්න සහ එක click එකකින් බිල්පත සම්පූර්ණ කරන්න." : "Scan a barcode, choose products and complete a Sri Lankan retail bill in one place.")
-                : (si ? "ගෙවීම සහ තොගය එකම checkout transaction එකක සුරකියි." : "Payment and stock commit together in one checkout transaction.")
-          }
-          actions={
-            <>
-              <ProBadge tone="emerald">Atomic checkout</ProBadge>
-              {groceryPos && <GroceryStarterCatalogueButton compact />}
-              <ProButton href="/stock" variant="secondary">{t("sales.add_stock_link")}</ProButton>
-              {lastBillId && <ProButton href={`/bills/${lastBillId}`} variant="dark">{t("sales.view_bill")}</ProButton>}
-            </>
-          }
-        />
+        {groceryPos ? (
+          <section className="overflow-hidden rounded-[24px] border border-blue-100 bg-[radial-gradient(circle_at_92%_16%,rgba(129,140,248,0.24),transparent_28%),radial-gradient(circle_at_8%_100%,rgba(16,185,129,0.16),transparent_25%),linear-gradient(115deg,#f8fbff_0%,#edf5ff_56%,#faf5ff_100%)] p-4 shadow-[0_18px_44px_rgba(59,130,246,0.10)] sm:p-5">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+              <label className="relative block min-w-0 flex-1">
+                <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-lg text-blue-500">⌕</span>
+                <input
+                  id="grocery-pos-search"
+                  type="search"
+                  value={search}
+                  autoFocus
+                  autoComplete="off"
+                  onChange={(event) => { setSearch(event.target.value); setResultLimit(30); }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && quickAddCandidate) {
+                      event.preventDefault();
+                      addOne(quickAddCandidate);
+                    }
+                    if (event.key === "Escape") setSearch("");
+                  }}
+                  placeholder={si ? "භාණ්ඩය, SKU හෝ barcode සොයන්න…" : "Search products, scan barcode or enter SKU…"}
+                  className="h-12 w-full rounded-2xl border border-white/80 bg-white/90 pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-[0_8px_24px_rgba(37,99,235,0.09)] outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                />
+              </label>
+              <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+                <button type="button" onClick={() => { setCart({}); setPendingSaleId(null); setMessage(""); }} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-3 text-xs font-bold text-white shadow-[0_10px_20px_rgba(16,185,129,0.22)] transition hover:brightness-105"><span className="text-base">＋</span>{si ? "අලුත් bill" : "New bill"}</button>
+                <button type="button" disabled title={si ? "ඉක්මනින් පැමිණේ" : "Coming soon"} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/75 px-3 text-xs font-bold text-slate-400 disabled:cursor-not-allowed">{si ? "තබාගන්න" : "Hold bill"}</button>
+                <button type="button" onClick={() => document.getElementById("grocery-pos-search")?.focus()} className="inline-flex h-12 items-center justify-center rounded-2xl border border-violet-100 bg-violet-50/90 px-3 text-xs font-bold text-violet-700 transition hover:bg-violet-100">{si ? "මිල බලන්න" : "Price check"}</button>
+                <Link href="/stock" className="col-span-3 inline-flex h-10 items-center justify-center rounded-xl border border-blue-100 bg-white/75 px-3 text-xs font-bold text-blue-700 transition hover:bg-white sm:col-span-1 sm:h-12">{si ? "තොගය" : "Inventory"}</Link>
+                <GroceryStarterCatalogueButton compact />
+              </div>
+            </div>
+          </section>
+        ) : <ProPageHeader
+          eyebrow={org.sector === "pharmacy" ? (si ? "ආරක්ෂිත Pharmacy POS" : "Protected Pharmacy POS") : t("sales.pos_eyebrow")}
+          title={t("sales.title")}
+          description={org.sector === "pharmacy" ? (si ? "Prescription, FEFO batch සහ ගෙවීම එකම checkout transaction එකක පාලනය කරයි." : "Prescription checks, FEFO batch allocation and payment commit in one checkout transaction.") : (si ? "ගෙවීම සහ තොගය එකම checkout transaction එකක සුරකියි." : "Payment and stock commit together in one checkout transaction.")}
+          actions={<><ProBadge tone="emerald">Atomic checkout</ProBadge><ProButton href="/stock" variant="secondary">{t("sales.add_stock_link")}</ProButton>{lastBillId && <ProButton href={`/bills/${lastBillId}`} variant="dark">{t("sales.view_bill")}</ProButton>}</>}
+        />}
 
         <WriteDisabledHint className="mb-5" />
 
@@ -520,7 +539,7 @@ export function AtomicRetailSalesPageV2() {
           </div>
         )}
 
-        <section className={`grid gap-3 ${groceryPos ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3"}`}>
+        <section className={`mt-4 grid gap-3 ${groceryPos ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-3"}`}>
           {groceryPos && groceryLiveMetrics ? (
             <>
               <ProStatCard
@@ -607,14 +626,14 @@ export function AtomicRetailSalesPageV2() {
             </ProCard>
           </section>
         ) : (
-          <section className={`mt-6 grid gap-5 ${groceryPos ? "2xl:grid-cols-[minmax(0,1.65fr)_minmax(340px,0.85fr)]" : "xl:grid-cols-[1.45fr_0.85fr]"}`}>
+          <section className={`mt-5 grid gap-5 ${groceryPos ? "lg:grid-cols-[minmax(0,1fr)_minmax(340px,390px)]" : "xl:grid-cols-[1.45fr_0.85fr]"}`}>
             <div className="space-y-4">
               <ProCard
                 title={t("sales.products_title")}
                 eyebrow={t("sales.fast_checkout_eyebrow")}
                 action={<ProBadge tone="emerald">{inStock.length} available</ProBadge>}
               >
-                <div className="relative">
+                {!groceryPos && <div className="relative">
                   <input
                     type="search"
                     value={search}
@@ -641,10 +660,10 @@ export function AtomicRetailSalesPageV2() {
                     }
                     className={`h-12 w-full rounded-xl border px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:bg-white ${groceryPos ? "border-blue-100 bg-blue-50/55 focus:border-blue-400 focus:ring-4 focus:ring-blue-100" : "border-slate-200 bg-slate-50 focus:border-teal-300 focus:ring-4 focus:ring-teal-100"}`}
                   />
-                </div>
+                </div>}
 
                 {fastRetail && (
-                  <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  <div className={`flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${groceryPos ? "" : "mt-3"}`}>
                     <button
                       type="button"
                       onClick={() => { setCategoryFilter("all"); setResultLimit(30); }}
@@ -685,7 +704,7 @@ export function AtomicRetailSalesPageV2() {
               {filtered.length === 0 ? (
                 <ProCard><ProEmptyState title={t("sales.no_match")} description={t("sales.search_no_match_desc")} /></ProCard>
               ) : (
-                <div className={fastRetail ? groceryPos ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" : "grid gap-2 md:grid-cols-2 2xl:grid-cols-3" : "grid gap-3 md:grid-cols-2"}>
+                <div className={fastRetail ? groceryPos ? "grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6" : "grid gap-2 md:grid-cols-2 2xl:grid-cols-3" : "grid gap-3 md:grid-cols-2"}>
                   {visibleProducts.map((product) => {
                     const qty = cart[product.id] ?? 0;
                     const selected = qty > 0;
@@ -697,7 +716,7 @@ export function AtomicRetailSalesPageV2() {
                         className={`overflow-hidden rounded-2xl border bg-white transition ${groceryPos ? "shadow-[0_10px_26px_rgba(15,23,42,0.07)] hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_18px_30px_rgba(37,99,235,0.13)]" : "p-4"} ${selected ? "border-teal-300 ring-2 ring-teal-100" : "border-slate-200 hover:border-teal-200"}`}
                       >
                         {groceryPos && (
-                          <div className="relative h-28 overflow-hidden border-b border-slate-100 bg-[radial-gradient(circle_at_50%_30%,#ffffff_0%,#eff6ff_62%,#eef2ff_100%)]">
+                          <div className="relative h-24 overflow-hidden border-b border-slate-100 bg-[radial-gradient(circle_at_50%_30%,#ffffff_0%,#eff6ff_62%,#eef2ff_100%)]">
                             <GroceryProductArt name={product.name} category={product.category} imageUrl={typeof product.customFields.imageUrl === "string" ? product.customFields.imageUrl : undefined} className="h-full w-full" />
                             <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[9px] font-bold text-slate-600 shadow-sm">{product.category || "Grocery"}</span>
                           </div>
@@ -710,7 +729,7 @@ export function AtomicRetailSalesPageV2() {
                               {rx && <ProBadge tone="amber">Rx</ProBadge>}
                             </div>
                             <p className="mt-1 text-xs font-semibold text-slate-500">
-                              {product.sku ? `${product.sku} · ` : ""}{product.category || "General"}
+                              {groceryPos ? `${String(product.customFields.unitVariant ?? product.customFields.unit ?? "1 unit")} · ${product.category || "Grocery"}` : <>{product.sku ? `${product.sku} · ` : ""}{product.category || "General"}</>}
                             </p>
                             {org.sector === "pharmacy" && (
                               <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-500">
@@ -720,8 +739,7 @@ export function AtomicRetailSalesPageV2() {
                             )}
                           </div>
                           <div className="shrink-0 text-right">
-                            <p className="text-sm font-bold text-slate-950">{formatLkr(unitPrice)}</p>
-                            <p className="mt-1 text-[10px] font-semibold text-slate-400">{product.stockQty} in stock</p>
+                            {groceryPos ? <p className={`rounded-full px-2 py-1 text-[10px] font-bold ${product.stockQty <= (product.reorderLevel ?? 0) ? "bg-amber-100 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}>{product.stockQty} in stock</p> : <><p className="text-sm font-bold text-slate-950">{formatLkr(unitPrice)}</p><p className="mt-1 text-[10px] font-semibold text-slate-400">{product.stockQty} in stock</p></>}
                           </div>
                         </div>
                         <div className={`flex items-center justify-between gap-3 ${groceryPos ? "border-t border-slate-100 px-3 pb-3 pt-2.5" : "mt-4"}`}>
@@ -775,7 +793,7 @@ export function AtomicRetailSalesPageV2() {
               )}
             </div>
 
-            <aside className="space-y-4 xl:sticky xl:top-5 xl:self-start">
+            <aside className="space-y-4 lg:sticky lg:top-5 lg:self-start">
               <ProCard title={t("sales.cart_title")} eyebrow={t("sales.checkout_eyebrow")}>
                 {lines.length === 0 ? (
                   <ProEmptyState title={t("sales.no_selected")} description={t("sales.choose_products_desc")} />

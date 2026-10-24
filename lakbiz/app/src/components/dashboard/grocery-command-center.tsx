@@ -267,28 +267,30 @@ export function GroceryCommandCenter({ data }: { data: AppData }) {
   const [period, setPeriod] = useState<DashboardPeriod>("7d");
   const [referenceDate] = useState(() => new Date());
   const intel = useMemo(() => buildRetailDashboardIntelligence(data, "grocery", canSeeFinancials, [], referenceDate, period), [data, canSeeFinancials, referenceDate, period]);
+  const monthIntel = useMemo(() => buildRetailDashboardIntelligence(data, "grocery", canSeeFinancials, [], referenceDate, "this_month"), [data, canSeeFinancials, referenceDate]);
   const shopName = data.business.name || org.name || "LakBiz Grocery";
   const date = referenceDate.toLocaleDateString(locale === "si" ? "si-LK" : "en-LK", { weekday: "long", day: "numeric", month: "long" });
   const shortName = shopName.length > 30 ? `${shopName.slice(0, 30)}…` : shopName;
+  const lastSale = data.sales[0];
 
   return (
     <div className="space-y-5 pb-8">
-      <section className="relative overflow-hidden rounded-[26px] border border-blue-100 bg-[radial-gradient(circle_at_88%_12%,rgba(129,140,248,0.25),transparent_27%),radial-gradient(circle_at_6%_100%,rgba(16,185,129,0.16),transparent_25%),linear-gradient(115deg,#f8fbff_0%,#edf5ff_52%,#f7f1ff_100%)] px-5 py-6 shadow-[0_18px_48px_rgba(59,130,246,0.11)] sm:px-7 sm:py-7">
-        <div className="pointer-events-none absolute -right-8 top-3 h-28 w-28 rounded-full bg-gradient-to-br from-violet-300/40 to-fuchsia-200/20 blur-2xl" />
+      <section className="relative overflow-hidden rounded-[24px] border border-blue-100 bg-[radial-gradient(circle_at_92%_8%,rgba(129,140,248,0.20),transparent_25%),radial-gradient(circle_at_8%_100%,rgba(16,185,129,0.13),transparent_23%),linear-gradient(115deg,#f8fbff_0%,#edf5ff_58%,#faf5ff_100%)] px-5 py-5 shadow-[0_14px_38px_rgba(59,130,246,0.09)] sm:px-6">
         <div className="relative flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">Grocery command centre</span><span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Live store data</span></div>
-            <h1 className="mt-4 text-2xl font-bold tracking-[-0.045em] text-slate-950 sm:text-3xl">Good day, {shortName}</h1>
-            <p className="mt-1.5 text-sm text-slate-600">A colorful, live view of sales, stock and checkout readiness for your Sri Lankan grocery store.</p>
+            <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">{shortName}</span><span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Live store data</span></div>
+            <h1 className="mt-3 text-2xl font-bold tracking-[-0.045em] text-slate-950 sm:text-3xl">Good day, {shortName}</h1>
+            <p className="mt-1.5 text-sm text-slate-600">Here&apos;s what is happening in your grocery store today.</p>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-            <Link href="/sales" className="inline-flex h-14 min-w-28 flex-col items-center justify-center gap-0.5 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 px-3 text-white shadow-[0_12px_24px_rgba(16,185,129,0.24)] transition hover:-translate-y-0.5"><PlusIcon className="h-4 w-4" /><span className="text-[11px] font-bold">New bill</span></Link>
-            <Link href="/stock" className="inline-flex h-14 min-w-28 flex-col items-center justify-center gap-0.5 rounded-2xl border border-amber-100 bg-amber-50 px-3 text-amber-800 shadow-sm transition hover:-translate-y-0.5"><StockIcon className="h-4 w-4" /><span className="text-[11px] font-bold">Stock update</span></Link>
-            <Link href="/customers" className="inline-flex h-14 min-w-28 flex-col items-center justify-center gap-0.5 rounded-2xl border border-blue-100 bg-white px-3 text-blue-700 shadow-sm transition hover:-translate-y-0.5"><CustomersIcon className="h-4 w-4" /><span className="text-[11px] font-bold">Customer</span></Link>
-            <Link href="/reports" className="inline-flex h-14 min-w-28 flex-col items-center justify-center gap-0.5 rounded-2xl border border-violet-100 bg-violet-50 px-3 text-violet-700 shadow-sm transition hover:-translate-y-0.5"><ReportsIcon className="h-4 w-4" /><span className="text-[11px] font-bold">Reports</span></Link>
+            <Link href="/sales" className="inline-flex h-16 min-w-24 flex-col items-center justify-center gap-1 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 px-3 text-white shadow-[0_12px_24px_rgba(16,185,129,0.24)] transition hover:-translate-y-0.5"><PlusIcon className="h-4 w-4" /><span className="text-[11px] font-bold">New bill</span></Link>
+            <Link href="/returns" className="inline-flex h-16 min-w-24 flex-col items-center justify-center gap-1 rounded-2xl border border-rose-100 bg-rose-50 px-3 text-rose-700 shadow-sm transition hover:-translate-y-0.5"><span className="text-base">↩</span><span className="text-[11px] font-bold">Return</span></Link>
+            <Link href="/stock" className="inline-flex h-16 min-w-24 flex-col items-center justify-center gap-1 rounded-2xl border border-amber-100 bg-amber-50 px-3 text-amber-800 shadow-sm transition hover:-translate-y-0.5"><StockIcon className="h-4 w-4" /><span className="text-[11px] font-bold">Stock update</span></Link>
+            <Link href="/customers" className="inline-flex h-16 min-w-24 flex-col items-center justify-center gap-1 rounded-2xl border border-blue-100 bg-white px-3 text-blue-700 shadow-sm transition hover:-translate-y-0.5"><CustomersIcon className="h-4 w-4" /><span className="text-[11px] font-bold">Customer</span></Link>
+            {lastSale ? <Link href={`/bills/${lastSale.id}`} className="inline-flex h-16 min-w-24 flex-col items-center justify-center gap-1 rounded-2xl border border-violet-100 bg-violet-50 px-3 text-violet-700 shadow-sm transition hover:-translate-y-0.5"><BillsIcon className="h-4 w-4" /><span className="text-[11px] font-bold">Last bill</span></Link> : <span title="A completed bill is needed first" className="inline-flex h-16 min-w-24 cursor-not-allowed flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-slate-400"><BillsIcon className="h-4 w-4" /><span className="text-[11px] font-bold">Last bill</span></span>}
           </div>
         </div>
-        <div className="relative mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-blue-100/80 pt-4 text-xs font-medium text-slate-500"><span className="inline-flex items-center gap-1.5"><CalendarIcon className="h-3.5 w-3.5 text-blue-500" /> {date}</span><span><strong className="text-slate-900">{intel.activeSkuCount.toLocaleString("en-LK")}</strong> active items</span><span className="rounded-full bg-rose-100 px-2.5 py-1 font-bold text-rose-700">{intel.outOfStockCount} out of stock</span></div>
+        <div className="relative mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-blue-100/80 pt-3 text-xs font-medium text-slate-500"><span className="inline-flex items-center gap-1.5"><CalendarIcon className="h-3.5 w-3.5 text-blue-500" /> {date}</span><span><strong className="text-slate-900">{intel.activeSkuCount.toLocaleString("en-LK")}</strong> active items</span><span className="rounded-full bg-rose-100 px-2.5 py-1 font-bold text-rose-700">{intel.outOfStockCount} out of stock</span></div>
       </section>
 
       <section className={`flex flex-col gap-4 rounded-[22px] border border-emerald-100 bg-[radial-gradient(circle_at_92%_20%,rgba(45,212,191,0.22),transparent_34%),linear-gradient(120deg,#ecfdf5,#f8fbff)] p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)] sm:flex-row sm:items-center sm:justify-between ${intel.activeSkuCount === 0 ? "" : "hidden"}`}>
@@ -300,23 +302,22 @@ export function GroceryCommandCenter({ data }: { data: AppData }) {
         <GroceryStarterCatalogueButton compact />
       </section>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Today&apos;s sales" value={formatLkrCompact(intel.todaySales)} hint={intel.todaySalesChangePct == null ? `${intel.todayTransactions} bills today` : <><span className={intel.todaySalesChangePct >= 0 ? "text-emerald-600" : "text-rose-600"}>{intel.todaySalesChangePct >= 0 ? "▲" : "▼"} {Math.abs(intel.todaySalesChangePct).toFixed(0)}%</span> vs yesterday</>} icon={<SalesIcon className="h-5 w-5" />} gradient={RETAIL_GRADIENTS[0]} href="/sales" />
-        <StatCard label="Bills generated" value={intel.todayTransactions.toLocaleString("en-LK")} hint={`${intel.periodTransactions} in selected period`} icon={<BillsIcon className="h-5 w-5" />} gradient={RETAIL_GRADIENTS[1]} href="/sales" />
-        <StatCard label="Average bill" value={formatLkrCompact(intel.averageBasket)} hint="Based on recorded checkout" icon={<CartIcon className="h-5 w-5" />} gradient={RETAIL_GRADIENTS[2]} href="/sales" />
-        <StatCard label="Items ready to sell" value={Math.max(0, intel.activeSkuCount - intel.outOfStockCount).toLocaleString("en-LK")} hint={`${intel.lowStockCount} need shelf attention`} icon={<StockIcon className="h-5 w-5" />} gradient={RETAIL_GRADIENTS[3]} href="/stock" />
-        <StatCard label="Retail stock value" value={formatLkrCompact(intel.inventorySellValue)} hint="At current sell prices" icon={<SuppliersIcon className="h-5 w-5" />} gradient={RETAIL_GRADIENTS[4]} href="/stock" />
+        <StatCard label="Total orders" value={monthIntel.periodTransactions.toLocaleString("en-LK")} hint="Completed this month" icon={<BillsIcon className="h-5 w-5" />} gradient={RETAIL_GRADIENTS[1]} href="/sales" />
+        <StatCard label="Revenue this month" value={formatLkrCompact(monthIntel.periodSales)} hint="Completed checkout revenue" icon={<CartIcon className="h-5 w-5" />} gradient={RETAIL_GRADIENTS[2]} href="/reports" />
+        <StatCard label="Profit this month" value={canSeeFinancials ? formatLkrCompact(monthIntel.periodProfit ?? 0) : "—"} hint={canSeeFinancials ? "From completed bills" : "Owner-only metric"} icon={<SuppliersIcon className="h-5 w-5" />} gradient={RETAIL_GRADIENTS[3]} href="/reports" />
       </div>
 
-      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.85fr)]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)]">
         <Panel>
           <PanelHeading title="Sales overview" hint="Actual checkout revenue" action={<select value={typeof period === "string" ? period : "7d"} onChange={(event) => setPeriod(event.target.value as DashboardPeriod)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none focus:border-blue-400">{PERIODS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>} />
           <SalesChart intel={intel} />
         </Panel>
-        <div className="grid gap-5 sm:grid-cols-2 2xl:grid-cols-1"><CategoryRing intel={intel} /><LowStock intel={intel} /></div>
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-1"><CategoryRing intel={intel} /><LowStock intel={intel} /></div>
       </div>
 
-      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.8fr)]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.8fr)]">
         <div className="space-y-5"><TopProducts intel={intel} /><InventorySnapshot intel={intel} canSeeFinancials={canSeeFinancials} /></div>
         <CheckoutStation intel={intel} shopName={shopName} />
       </div>
