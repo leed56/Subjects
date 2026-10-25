@@ -3,6 +3,7 @@
 import type { BusinessInfo } from "@/lib/invoice";
 import { formatLkr } from "@/lib/format";
 import type { Sale } from "@/lib/store/types";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type {
   SaleCreditNoteRecord,
   SaleReturnLineRecord,
@@ -30,6 +31,7 @@ export function CreditNoteView({
   customerAddress,
   customerVatNumber,
 }: Props) {
+  const { org } = useSubscription();
   const originalBillNo = sale.billNo ?? sale.id.slice(0, 8).toUpperCase();
   const isTaxDocument = business.vatRegistered === true && Boolean(business.vatNumber);
 
@@ -118,7 +120,7 @@ export function CreditNoteView({
             <span className="font-mono font-semibold text-slate-950">{formatLkr(creditNote.outputVatReversal)}</span>
           </div>
         )}
-        <div className="flex items-center justify-between gap-4 rounded-lg bg-slate-950 px-3 py-3 text-white">
+        <div className={`flex items-center justify-between gap-4 rounded-lg px-3 py-3 ${org.sector === "grocery" ? "border border-emerald-100 bg-gradient-to-r from-emerald-50 to-sky-50 text-teal-800" : "bg-slate-950 text-white"}`}>
           <span className="font-semibold">Credit amount</span>
           <span className="font-mono text-lg font-bold">{formatLkr(creditNote.grossCredit)}</span>
         </div>

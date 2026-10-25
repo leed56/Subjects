@@ -213,10 +213,10 @@ export default function SaleExchangePage() {
           }
         />
 
-        <section className="mb-5 overflow-hidden rounded-2xl bg-slate-950 p-5 text-white shadow-[0_16px_36px_rgba(15,23,42,0.16)] sm:p-6">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-teal-300">Safe accounting model</p>
+        <section className={`mb-5 overflow-hidden rounded-2xl p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)] sm:p-6 ${org.sector === "grocery" ? "border border-emerald-100 bg-gradient-to-r from-emerald-50 via-sky-50 to-violet-50 text-slate-950" : "bg-slate-950 text-white"}`}>
+          <p className={`text-[10px] font-bold uppercase tracking-[0.18em] ${org.sector === "grocery" ? "text-emerald-700" : "text-teal-300"}`}>Safe accounting model</p>
           <h2 className="mt-2 text-xl font-semibold">Return + credit note + new sale</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+          <p className={`mt-2 max-w-3xl text-sm leading-6 ${org.sector === "grocery" ? "text-slate-600" : "text-slate-300"}`}>
             LakBiz does not edit the original invoice and does not disguise exchange credit as a discount. Create the replacement as a normal full-value CREDIT sale for the same customer, then apply the issued return credit against that new receivable.
           </p>
         </section>
@@ -258,10 +258,10 @@ export default function SaleExchangePage() {
             )}
 
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl bg-slate-950 p-5 text-white">
-                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Credit note</p>
-                <p className="mt-2 font-mono text-lg font-semibold text-teal-300">{creditNote.creditNoteNo}</p>
-                <p className="mt-1 text-xs text-slate-400">{returnRecord.returnNo}</p>
+              <div className={`rounded-2xl p-5 ${org.sector === "grocery" ? "border border-emerald-100 bg-gradient-to-br from-emerald-50 to-sky-50 text-slate-950" : "bg-slate-950 text-white"}`}>
+                <p className={`text-[10px] font-bold uppercase tracking-[0.15em] ${org.sector === "grocery" ? "text-emerald-700" : "text-slate-400"}`}>Credit note</p>
+                <p className={`mt-2 font-mono text-lg font-semibold ${org.sector === "grocery" ? "text-teal-700" : "text-teal-300"}`}>{creditNote.creditNoteNo}</p>
+                <p className={`mt-1 text-xs ${org.sector === "grocery" ? "text-slate-600" : "text-slate-400"}`}>{returnRecord.returnNo}</p>
               </div>
               <div className="rounded-2xl border border-teal-200 bg-teal-50 p-5">
                 <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-teal-700">Return credit available</p>
@@ -373,22 +373,22 @@ export default function SaleExchangePage() {
                   )}
 
                   {selectedSale && plan && (
-                    <div className="mt-4 rounded-2xl bg-slate-950 p-4 text-white">
+                    <div className={`mt-4 rounded-2xl p-4 ${org.sector === "grocery" ? "border border-emerald-100 bg-gradient-to-r from-emerald-50 via-sky-50 to-violet-50 text-slate-950" : "bg-slate-950 text-white"}`}>
                       <div className="grid gap-3 sm:grid-cols-3">
                         <div>
-                          <p className="text-[9px] font-bold uppercase tracking-[0.13em] text-slate-400">Credit applied</p>
-                          <p className="mt-1 font-mono text-base font-semibold text-teal-300">{formatLkr(plan.appliedCredit)}</p>
+                          <p className={`text-[9px] font-bold uppercase tracking-[0.13em] ${org.sector === "grocery" ? "text-slate-600" : "text-slate-400"}`}>Credit applied</p>
+                          <p className={`mt-1 font-mono text-base font-semibold ${org.sector === "grocery" ? "text-teal-700" : "text-teal-300"}`}>{formatLkr(plan.appliedCredit)}</p>
                         </div>
                         <div>
-                          <p className="text-[9px] font-bold uppercase tracking-[0.13em] text-slate-400">Customer still owes</p>
-                          <p className="mt-1 font-mono text-base font-semibold text-white">{formatLkr(plan.replacementBalanceAfterCredit)}</p>
+                          <p className={`text-[9px] font-bold uppercase tracking-[0.13em] ${org.sector === "grocery" ? "text-slate-600" : "text-slate-400"}`}>Customer still owes</p>
+                          <p className={`mt-1 font-mono text-base font-semibold ${org.sector === "grocery" ? "text-slate-950" : "text-white"}`}>{formatLkr(plan.replacementBalanceAfterCredit)}</p>
                         </div>
                         <div>
-                          <p className="text-[9px] font-bold uppercase tracking-[0.13em] text-slate-400">Return credit left</p>
-                          <p className="mt-1 font-mono text-base font-semibold text-white">{formatLkr(plan.remainingReturnCredit)}</p>
+                          <p className={`text-[9px] font-bold uppercase tracking-[0.13em] ${org.sector === "grocery" ? "text-slate-600" : "text-slate-400"}`}>Return credit left</p>
+                          <p className={`mt-1 font-mono text-base font-semibold ${org.sector === "grocery" ? "text-violet-700" : "text-white"}`}>{formatLkr(plan.remainingReturnCredit)}</p>
                         </div>
                       </div>
-                      <p className="mt-3 text-xs leading-5 text-slate-300">
+                      <p className={`mt-3 text-xs leading-5 ${org.sector === "grocery" ? "text-slate-600" : "text-slate-300"}`}>
                         {plan.replacementBalanceAfterCredit > 0
                           ? "Replacement costs more: only the price difference stays as normal customer receivable."
                           : plan.remainingReturnCredit > 0

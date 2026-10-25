@@ -24,6 +24,8 @@ import {
 import { useAppStore } from "@/lib/store/use-app-store";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { GroceryWorkspaceHeader } from "@/components/grocery/grocery-workspace-header";
+import { useLocale } from "@/lib/i18n/locale-provider";
+import { groceryWorkspaceCopy } from "@/lib/grocery-localization";
 
 const emptySummary: SaleReturnControlSummary = {
   totalReturns: 0,
@@ -50,6 +52,7 @@ function ReturnStatus({ row }: { row: SaleReturnControlRow }) {
 
 export default function ReturnsControlPage() {
   const { data, ready } = useAppStore();
+  const { locale } = useLocale();
   const { org, orgRole } = useSubscription();
   const [rows, setRows] = useState<SaleReturnControlRow[]>([]);
   const [summary, setSummary] = useState<SaleReturnControlSummary>(emptySummary);
@@ -130,10 +133,10 @@ export default function ReturnsControlPage() {
       <ProMain>
         {org.sector === "grocery" ? (
           <GroceryWorkspaceHeader
-            eyebrow="Retail returns"
-            title="Returns control"
-            description="Process documented returns, credit notes and refunds without changing the original sale."
-            actions={<ProButton href="/bills" variant="secondary">All bills</ProButton>}
+            eyebrow={groceryWorkspaceCopy(locale, "returns").eyebrow}
+            title={groceryWorkspaceCopy(locale, "returns").title}
+            description={groceryWorkspaceCopy(locale, "returns").description}
+            actions={<ProButton href="/bills" variant="secondary">{locale === "si" ? "සියලු බිල්පත්" : locale === "ta" ? "அனைத்து பில்கள்" : "All bills"}</ProButton>}
           />
         ) : (
           <ProPageHeader

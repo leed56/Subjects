@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { GroceryWorkspaceHeader } from "@/components/grocery/grocery-workspace-header";
+import { groceryWorkspaceCopy } from "@/lib/grocery-localization";
 import {
   ProBadge,
   ProButton,
@@ -47,7 +48,7 @@ export default function SuppliersPage() {
     cancelPurchaseOrderToCloud,
     recordSupplierPaymentToCloud,
   } = useAppStore();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { org } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
 
@@ -382,9 +383,9 @@ export default function SuppliersPage() {
         {org.sector === "grocery" ? (
           <>
             <GroceryWorkspaceHeader
-              eyebrow="Supply & replenishment"
-              title="Suppliers & goods receipts"
-              description="Keep grocery suppliers, purchase orders, goods receipts and payables in one compact workspace."
+              eyebrow={groceryWorkspaceCopy(locale, "suppliers").eyebrow}
+              title={groceryWorkspaceCopy(locale, "suppliers").title}
+              description={groceryWorkspaceCopy(locale, "suppliers").description}
               detail={<><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">{data.suppliers.length} suppliers</span><span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-800">{formatLkr(totalPayable)} payable</span></>}
               actions={<><Button onClick={() => { setActiveSection("directory"); setShowSupplierForm(true); }} disabled={!canWrite} variant="primary">{t("sup.add")}</Button><ProButton href="/stock" variant="secondary">{t("nav.stock")}</ProButton><Button onClick={openPo} disabled={data.suppliers.length === 0 || data.products.length === 0} variant="secondary">{t("sup.new_po")}</Button><Button onClick={openPurchase} disabled={data.suppliers.length === 0 || data.products.length === 0} variant="primary">{t("sup.record_purchase")}</Button></>}
             />
@@ -556,18 +557,18 @@ export default function SuppliersPage() {
                 })}
               </div>
 
-              <div className="mt-5 rounded-[1.25rem] bg-slate-950 p-4 text-white">
-                <div className="flex justify-between text-sm font-semibold text-slate-300">
+              <div className={`mt-5 rounded-[1.25rem] p-4 ${org.sector === "grocery" ? "border border-emerald-100 bg-gradient-to-r from-emerald-50 via-sky-50 to-violet-50 text-slate-900" : "bg-slate-950 text-white"}`}>
+                <div className={`flex justify-between text-sm font-semibold ${org.sector === "grocery" ? "text-slate-600" : "text-slate-300"}`}>
                   <span>{t("vat.subtotal")}</span>
                   <span className="font-mono">{formatLkr(purchaseTotal)}</span>
                 </div>
                 {vatRegistered && (
-                  <label className="mt-3 block text-sm font-semibold text-slate-300">
+                  <label className={`mt-3 block text-sm font-semibold ${org.sector === "grocery" ? "text-slate-600" : "text-slate-300"}`}>
                     {t("vat.input_vat")} (18%)
-                    <input type="number" min={0} value={purchaseInputVat === "" ? defaultInputVat : purchaseInputVat} onChange={(e) => setPurchaseInputVat(e.target.value === "" ? "" : Number(e.target.value))} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-white/10 px-3 text-sm font-bold text-white outline-none" />
+                    <input type="number" min={0} value={purchaseInputVat === "" ? defaultInputVat : purchaseInputVat} onChange={(e) => setPurchaseInputVat(e.target.value === "" ? "" : Number(e.target.value))} className={`mt-2 h-11 w-full rounded-xl px-3 text-sm font-bold outline-none ${org.sector === "grocery" ? "border border-emerald-100 bg-white text-slate-900" : "border border-white/10 bg-white/10 text-white"}`} />
                   </label>
                 )}
-                <div className="mt-3 flex justify-between text-lg font-bold text-teal-300">
+                <div className={`mt-3 flex justify-between text-lg font-bold ${org.sector === "grocery" ? "text-teal-800" : "text-teal-300"}`}>
                   <span>{t("common.total")}</span>
                   <span className="font-mono">{formatLkr(purchaseTotal + (vatRegistered ? effectiveInputVat : 0))}</span>
                 </div>
@@ -623,8 +624,8 @@ export default function SuppliersPage() {
                 })}
               </div>
 
-              <div className="mt-5 rounded-[1.25rem] bg-slate-950 p-4 text-white">
-                <div className="flex justify-between text-lg font-bold text-teal-300">
+              <div className={`mt-5 rounded-[1.25rem] p-4 ${org.sector === "grocery" ? "border border-emerald-100 bg-gradient-to-r from-emerald-50 via-sky-50 to-violet-50 text-slate-900" : "bg-slate-950 text-white"}`}>
+                <div className={`flex justify-between text-lg font-bold ${org.sector === "grocery" ? "text-teal-800" : "text-teal-300"}`}>
                   <span>{t("sup.po_expected")}</span>
                   <span className="font-mono">{formatLkr(poExpectedTotal)}</span>
                 </div>

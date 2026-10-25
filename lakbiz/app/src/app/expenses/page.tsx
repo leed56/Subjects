@@ -13,6 +13,7 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { paymentLabel } from "@/lib/i18n/payment";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { GroceryWorkspaceHeader } from "@/components/grocery/grocery-workspace-header";
+import { groceryWorkspaceCopy } from "@/lib/grocery-localization";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { formatLkr } from "@/lib/format";
 import { getFiscalYearBounds, getIncomeTaxYearSummary } from "@/lib/income-tax";
@@ -55,7 +56,7 @@ function monthStartIso(): string {
 }
 
 export default function ExpensesPage() {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { org, orgRole } = useSubscription();
   const { data: localData, ready: localReady } = useAppStore();
   const { toast } = useToast();
@@ -271,9 +272,9 @@ export default function ExpensesPage() {
         {org.sector === "grocery" ? (
           <>
             <GroceryWorkspaceHeader
-              eyebrow="Grocery operations"
-              title="Store expenses"
-              description="Track the operating costs behind your retail performance."
+              eyebrow={groceryWorkspaceCopy(locale, "expenses").eyebrow}
+              title={groceryWorkspaceCopy(locale, "expenses").title}
+              description={groceryWorkspaceCopy(locale, "expenses").description}
               detail={`${expenses.length} recorded expense${expenses.length === 1 ? "" : "s"}`}
               actions={
                 <button

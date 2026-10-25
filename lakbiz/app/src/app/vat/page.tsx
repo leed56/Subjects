@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ExportActions } from "@/components/export/export-actions";
 import { AppShell } from "@/components/shell/app-shell";
 import { GroceryWorkspaceHeader } from "@/components/grocery/grocery-workspace-header";
+import { groceryWorkspaceCopy } from "@/lib/grocery-localization";
 import {
   ProBadge,
   ProButton,
@@ -36,7 +37,7 @@ import { SalesIcon, ReportsIcon, VehiclesIcon, JobsIcon, CostingIcon, BillsIcon,
 
 export default function VatReturnPage() {
   const { data, ready } = useAppStore();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { can, org, canSeeFinancials } = useSubscription();
   const orgId = org.isAuthenticated ? org.id : null;
 
@@ -116,9 +117,9 @@ export default function VatReturnPage() {
         <ProMain>
           {org.sector === "grocery" && (
             <GroceryWorkspaceHeader
-              eyebrow="Store tax & filings"
-              title="VAT and tax settings"
-              description="Tax controls and financial reports are available to the workspace owner."
+              eyebrow={groceryWorkspaceCopy(locale, "vatSettings").eyebrow}
+              title={groceryWorkspaceCopy(locale, "vatSettings").title}
+              description={locale === "si" ? "බදු පාලන සහ මූල්‍ය වාර්තා workspace හිමිකරුට ලබාගත හැක." : locale === "ta" ? "வரி கட்டுப்பாடுகள் மற்றும் நிதி அறிக்கைகள் workspace உரிமையாளருக்குக் கிடைக்கும்." : "Tax controls and financial reports are available to the workspace owner."}
             />
           )}
           <ProCard>
@@ -238,9 +239,9 @@ export default function VatReturnPage() {
         <ProMain>
           {org.sector === "grocery" && (
             <GroceryWorkspaceHeader
-              eyebrow="Store tax & filings"
-              title="VAT and tax settings"
-              description="Set up tax registration and filing preferences before VAT reconciliation begins."
+              eyebrow={groceryWorkspaceCopy(locale, "vatSettings").eyebrow}
+              title={groceryWorkspaceCopy(locale, "vatSettings").title}
+              description={groceryWorkspaceCopy(locale, "vatSettings").description}
               actions={<ProButton href="/settings/shop">{t("vat.shop_settings")}</ProButton>}
             />
           )}
@@ -295,8 +296,8 @@ export default function VatReturnPage() {
       <ProMain>
         {org.sector === "grocery" ? (
           <GroceryWorkspaceHeader
-            eyebrow="Store tax & filings"
-            title="VAT reconciliation"
+            eyebrow={groceryWorkspaceCopy(locale, "vatReturn").eyebrow}
+            title={groceryWorkspaceCopy(locale, "vatReturn").title}
             description={`${summary.bounds.label}${data.business.vatNumber ? ` · VAT ${data.business.vatNumber}` : ""}`}
             detail={<><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-indigo-700">Owner financial workspace</span><span className="rounded-full bg-teal-50 px-2.5 py-1 text-teal-700">Live bill and GRN data</span></>}
             actions={<><ProButton href="/sales" variant="secondary">{t("nav.sales")}</ProButton><ProButton href="/suppliers" variant="secondary">{t("sup.record_purchase")}</ProButton><ProButton href="/settings/shop">{t("vat.shop_settings")}</ProButton></>}
@@ -357,17 +358,17 @@ export default function VatReturnPage() {
           </div>
         )}
 
-        <section className="mb-6 overflow-hidden rounded-xl bg-slate-950 p-6 text-white shadow-sm shadow-slate-950/20 ring-1 ring-slate-800 sm:p-8">
+        <section className={`mb-6 overflow-hidden rounded-xl p-6 sm:p-8 ${org.sector === "grocery" ? "border border-emerald-100 bg-[radial-gradient(circle_at_95%_0%,rgba(52,211,153,0.24),transparent_36%),linear-gradient(115deg,#f0fdf7,#eff7ff_65%,#f8f5ff)] text-slate-950 shadow-[0_18px_38px_rgba(15,118,110,0.08)]" : "bg-slate-950 text-white shadow-sm shadow-slate-950/20 ring-1 ring-slate-800"}`}>
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-teal-300">{t("vat.net_payable")}</p>
-              <p className="mt-3 font-mono text-4xl font-bold tracking-tight text-teal-300 sm:text-5xl">
+              <p className={`text-xs font-bold uppercase tracking-[0.24em] ${org.sector === "grocery" ? "text-teal-700" : "text-teal-300"}`}>{t("vat.net_payable")}</p>
+              <p className={`mt-3 font-mono text-4xl font-bold tracking-tight sm:text-5xl ${org.sector === "grocery" ? "text-teal-800" : "text-teal-300"}`}>
                 {formatLkr(summary.netPayable)}
               </p>
-              <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-400">{t("vat.ird_note")}</p>
+              <p className={`mt-3 max-w-2xl text-sm font-semibold leading-6 ${org.sector === "grocery" ? "text-slate-600" : "text-slate-400"}`}>{t("vat.ird_note")}</p>
             </div>
             <ProBadge tone={summary.netPayable > 0 ? "amber" : "emerald"}>
-              {summary.netPayable > 0 ? "Payable" : "Input credit"}
+              {summary.netPayable > 0 ? (locale === "si" ? "ගෙවිය යුතුයි" : locale === "ta" ? "செலுத்த வேண்டியது" : "Payable") : (locale === "si" ? "ආදාන බදු ණය" : locale === "ta" ? "உள்ளீட்டு வரி வரவு" : "Input credit")}
             </ProBadge>
           </div>
         </section>

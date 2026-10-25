@@ -146,10 +146,10 @@ export default function TrackedReceivingQueuePage() {
         ) : (
           <div className="space-y-5">
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl bg-slate-950 p-5 text-white shadow-[0_12px_32px_rgba(15,23,42,0.12)]">
-                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">{si ? "Identity action" : "Identity action"}</p>
-                <p className="mt-2 text-3xl font-semibold">{pending.length}</p>
-                <p className="mt-1 text-sm text-slate-300">{si ? "products need identity" : "products need identity"}</p>
+              <div className={`rounded-2xl p-5 shadow-[0_12px_32px_rgba(15,23,42,0.08)] ${org.sector === "grocery" ? "border border-emerald-100 bg-gradient-to-br from-emerald-50 via-sky-50 to-violet-50 text-slate-950" : "bg-slate-950 text-white"}`}>
+                <p className={`text-[10px] font-bold uppercase tracking-[0.15em] ${org.sector === "grocery" ? "text-emerald-700" : "text-slate-400"}`}>{si ? "Identity action" : "Identity action"}</p>
+                <p className={`mt-2 text-3xl font-semibold ${org.sector === "grocery" ? "text-teal-700" : ""}`}>{pending.length}</p>
+                <p className={`mt-1 text-sm ${org.sector === "grocery" ? "text-slate-600" : "text-slate-300"}`}>{si ? "products need identity" : "products need identity"}</p>
               </div>
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
                 <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-amber-700">{si ? "Unassigned stock" : "Unassigned stock"}</p>

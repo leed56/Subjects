@@ -1,3 +1,5 @@
+import { groceryTamil } from "./grocery-tamil";
+
 export type Locale = "si" | "en" | "ta";
 
 export const LOCALE_KEY = "lakbiz-locale";
@@ -3507,6 +3509,7 @@ const en: Dict = {
 // lower-frequency or role-specific screens) is tracked as follow-up work,
 // not silently claimed as done here.
 const ta: Dict = {
+  ...groceryTamil,
   // Nav
   "nav.dashboard": "முகப்புப் பலகை",
   "nav.stock": "கையிருப்பு",

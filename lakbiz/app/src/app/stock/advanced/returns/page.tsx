@@ -189,10 +189,10 @@ export default function ReturnInspectionPage() {
             )}
 
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl bg-slate-950 p-5 text-white">
-                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">Held quantity</p>
-                <p className="mt-2 text-3xl font-semibold">{totalQty}</p>
-                <p className="mt-1 text-sm text-slate-300">{holds.length} inspection record{holds.length === 1 ? "" : "s"}</p>
+              <div className={`rounded-2xl p-5 ${org.sector === "grocery" ? "border border-emerald-100 bg-gradient-to-br from-emerald-50 via-sky-50 to-violet-50 text-slate-950" : "bg-slate-950 text-white"}`}>
+                <p className={`text-[10px] font-bold uppercase tracking-[0.15em] ${org.sector === "grocery" ? "text-emerald-700" : "text-slate-400"}`}>Held quantity</p>
+                <p className={`mt-2 text-3xl font-semibold ${org.sector === "grocery" ? "text-teal-700" : ""}`}>{totalQty}</p>
+                <p className={`mt-1 text-sm ${org.sector === "grocery" ? "text-slate-600" : "text-slate-300"}`}>{holds.length} inspection record{holds.length === 1 ? "" : "s"}</p>
               </div>
               <div className="rounded-2xl border border-sky-200 bg-sky-50 p-5">
                 <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-sky-700">Inspection</p>

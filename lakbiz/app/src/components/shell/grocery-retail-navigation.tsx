@@ -101,17 +101,20 @@ export function GroceryRetailNavigation({
   });
   const mainHrefs = new Set(mainItems.map((item) => item.href));
   const moreItems = items.filter((item) => !mainHrefs.has(item.href));
+  const navigationLabel = locale === "si" ? "Grocery සිල්ලර සංචාලනය" : locale === "ta" ? "மளிகை சில்லறை வழிசெலுத்தல்" : "Grocery retail navigation";
+  const workspaceLabel = locale === "si" ? "සිල්ලර වැඩබිම" : locale === "ta" ? "சில்லறை பணியிடம்" : "Retail workspace";
+  const moreToolsLabel = locale === "si" ? "තවත් මෙවලම්" : locale === "ta" ? "மேலும் கருவிகள்" : "More tools";
 
   return (
-    <nav className="min-h-0 flex-1 overflow-y-auto px-3.5 py-5 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.14)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/[0.14]" aria-label="Grocery retail navigation">
-      <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Retail workspace</p>
+    <nav className="min-h-0 flex-1 overflow-y-auto px-3.5 py-5 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.14)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/[0.14]" aria-label={navigationLabel}>
+      <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">{workspaceLabel}</p>
       <div className="space-y-1.5">
         {mainItems.map((item) => <GroceryNavLink key={item.href} item={item} active={activeHref === item.href} locale={locale} t={t} />)}
       </div>
 
       {moreItems.length > 0 && (
         <div className="mt-6 border-t border-white/[0.07] pt-5">
-          <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">More tools</p>
+          <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">{moreToolsLabel}</p>
           <div className="space-y-1.5">
             {moreItems.map((item) => <GroceryNavLink key={item.href} item={item} active={activeHref === item.href} locale={locale} t={t} />)}
           </div>

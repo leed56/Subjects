@@ -421,9 +421,9 @@ export default function AdvancedInventoryPage() {
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-xl bg-slate-950 p-3 text-white">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{si ? "මුළු Stock quantity" : "Aggregate stock"}</p>
-                  <p className="mt-1 text-xl font-semibold">{selected.stockQty}</p>
+                <div className={`rounded-xl p-3 ${org.sector === "grocery" ? "border border-emerald-100 bg-gradient-to-br from-emerald-50 to-sky-50 text-slate-950" : "bg-slate-950 text-white"}`}>
+                  <p className={`text-[10px] font-bold uppercase tracking-[0.12em] ${org.sector === "grocery" ? "text-emerald-700" : "text-slate-400"}`}>{si ? "මුළු Stock quantity" : "Aggregate stock"}</p>
+                  <p className={`mt-1 text-xl font-semibold ${org.sector === "grocery" ? "text-teal-700" : ""}`}>{selected.stockQty}</p>
                 </div>
                 <div className="rounded-xl bg-slate-50 p-3">
                   <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{si ? "Identity මගින් හඳුනාගත්" : "Identity-covered"}</p>

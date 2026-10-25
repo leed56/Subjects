@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useLocale } from "@/lib/i18n/locale-provider";
-import { LOCALE_NAMES, nextLocale, type Locale } from "@/lib/i18n/translations";
+import { LOCALE_NAMES, type Locale } from "@/lib/i18n/translations";
 import { PLANS, formatLkrPrice } from "@/lib/subscription/plans";
 import { sectors } from "@/lib/sectors";
 import { SectorIcon } from "@/components/sector-icon";
@@ -399,13 +399,13 @@ export function MarketingHomePage() {
   return (
     <div lang={locale} className="min-h-screen overflow-hidden bg-white text-slate-950">
       <header className="sticky inset-x-0 top-0 z-50 border-b border-slate-200/70 bg-white/88 backdrop-blur-xl">
-        <div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
-          <Link href="/" className="flex items-center gap-3">
+        <div className="mx-auto flex min-h-[72px] max-w-[1440px] items-center justify-between gap-2 px-3 py-2.5 sm:gap-4 sm:px-6 lg:px-10">
+          <Link href="/" className="flex shrink-0 items-center gap-2 sm:gap-3" aria-label="LakBiz home">
             <span className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-teal-600 text-sm font-black text-white shadow-[0_8px_22px_rgba(13,148,136,0.22)]">L</span>
-            <span className="text-xl font-bold tracking-[-0.035em] text-slate-950">LakBiz</span>
+            <span className="hidden text-xl font-bold tracking-[-0.035em] text-slate-950 min-[370px]:inline">LakBiz</span>
           </Link>
 
-          <nav className="hidden items-center gap-8 text-sm font-semibold text-slate-500 lg:flex">
+          <nav className="hidden items-center gap-6 text-sm font-semibold text-slate-500 xl:flex" aria-label={locale === "si" ? "ප්‍රධාන සංචලනය" : locale === "ta" ? "முதன்மை வழிசெலுத்தல்" : "Main navigation"}>
             <a href="#features" className="transition hover:text-slate-950">{c.nav.features}</a>
             <a href="#solutions" className="transition hover:text-slate-950">{c.nav.solutions}</a>
             <a href="#plans" className="transition hover:text-slate-950">{c.nav.pricing}</a>
@@ -413,24 +413,38 @@ export function MarketingHomePage() {
             <a href="#contact" className="transition hover:text-slate-950">{c.nav.contact}</a>
           </nav>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Cycles si -> en -> ta -> si, same as every other language
-                switch in the app (nextLocale) — this previously toggled
-                only between "en" and "si" directly, so a visitor on Tamil
-                had no way to reach it from this control at all. */}
-            <button
-              type="button"
-              onClick={() => setLocale(nextLocale(locale))}
-              className="min-h-10 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-950"
-              aria-label="Toggle language"
-            >
-              {LOCALE_NAMES[nextLocale(locale)]}
-            </button>
-            <Link href="/login" className="hidden min-h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 sm:inline-flex">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
+            <label className="relative sm:hidden">
+              <span className="sr-only">{locale === "si" ? "භාෂාව තෝරන්න" : locale === "ta" ? "மொழியைத் தேர்ந்தெடுக்கவும்" : "Choose language"}</span>
+              <select
+                value={locale}
+                onChange={(event) => setLocale(event.target.value as Locale)}
+                className="h-10 w-[3.35rem] appearance-none rounded-xl border border-teal-100 bg-teal-50 pl-2 pr-1 text-center text-[11px] font-extrabold text-teal-800 outline-none transition focus:border-teal-400 focus:ring-4 focus:ring-teal-100"
+              >
+                <option value="en">EN</option>
+                <option value="si">සිං</option>
+                <option value="ta">த</option>
+              </select>
+            </label>
+            <div className="hidden items-center gap-0.5 rounded-2xl border border-teal-100 bg-teal-50/80 p-1 shadow-[0_5px_16px_rgba(15,118,110,0.07)] sm:flex" role="group" aria-label={locale === "si" ? "භාෂාව තෝරන්න" : locale === "ta" ? "மொழியைத் தேர்ந்தெடுக்கவும்" : "Choose language"}>
+              {(["en", "si", "ta"] as const).map((language) => (
+                <button
+                  key={language}
+                  type="button"
+                  onClick={() => setLocale(language)}
+                  aria-pressed={locale === language}
+                  aria-label={LOCALE_NAMES[language]}
+                  className={`min-h-9 rounded-xl px-2.5 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 lg:px-3 ${locale === language ? "bg-white text-teal-900 shadow-[0_2px_8px_rgba(15,118,110,0.14)]" : "text-slate-500 hover:bg-white/60 hover:text-teal-800"}`}
+                >
+                  {language === "en" ? "EN" : language === "si" ? "සිං" : "தமிழ்"}
+                </button>
+              ))}
+            </div>
+            <Link href="/login" className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-2.5 text-[11px] font-bold text-slate-700 shadow-sm transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 sm:px-4 sm:text-sm">
               {c.nav.signIn}
             </Link>
-            <a href="mailto:hello@lakbiz.app" className="inline-flex min-h-10 items-center justify-center rounded-xl bg-teal-600 px-4 text-xs font-bold text-white shadow-[0_8px_22px_rgba(13,148,136,0.2)] transition hover:bg-teal-700 sm:px-5 sm:text-sm">
-              {c.nav.demo}
+            <a href="mailto:hello@lakbiz.app" className="inline-flex min-h-10 items-center justify-center gap-1 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 px-2.5 text-[11px] font-extrabold text-white shadow-[0_8px_22px_rgba(13,148,136,0.2)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_26px_rgba(13,148,136,0.26)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 sm:px-5 sm:text-sm" aria-label={c.nav.demo}>
+              <span className="sm:hidden">{locale === "si" ? "ඩෙමෝ" : locale === "ta" ? "டெமோ" : "Demo"}</span><span className="hidden sm:inline">{c.nav.demo}</span><span aria-hidden="true">↗</span>
             </a>
           </div>
         </div>

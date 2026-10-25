@@ -500,9 +500,9 @@ export default function ReceiveTrackedStockPage() {
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl bg-slate-950 p-4 text-white">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Aggregate stock</p>
-                  <p className="mt-1 text-2xl font-semibold">{selected.stockQty}</p>
+                <div className={`rounded-xl p-4 ${org.sector === "grocery" ? "border border-emerald-100 bg-gradient-to-br from-emerald-50 to-sky-50 text-slate-950" : "bg-slate-950 text-white"}`}>
+                  <p className={`text-[10px] font-bold uppercase tracking-[0.12em] ${org.sector === "grocery" ? "text-emerald-700" : "text-slate-400"}`}>Aggregate stock</p>
+                  <p className={`mt-1 text-2xl font-semibold ${org.sector === "grocery" ? "text-teal-700" : ""}`}>{selected.stockQty}</p>
                 </div>
                 <div className="rounded-xl bg-slate-50 p-4">
                   <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Identity-covered</p>

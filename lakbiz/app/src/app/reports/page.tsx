@@ -20,6 +20,7 @@ import {
 } from "@/lib/supabase/return-accounting-client";
 import { exportReportsCsv, printReportsSummary, type ReportsExportData } from "@/lib/export";
 import { GroceryWorkspaceHeader } from "@/components/grocery/grocery-workspace-header";
+import { groceryWorkspaceCopy } from "@/lib/grocery-localization";
 
 type Period = "7d" | "30d" | "month" | "all";
 type ReportView = "overview" | "sales" | "jobs";
@@ -296,9 +297,9 @@ export default function ReportsPage() {
         {org.sector === "grocery" ? (
           <>
             <GroceryWorkspaceHeader
-              eyebrow="Retail intelligence"
-              title="Store reports"
-              description="Review completed grocery sales, category performance and inventory movement."
+              eyebrow={groceryWorkspaceCopy(locale, "reports").eyebrow}
+              title={groceryWorkspaceCopy(locale, "reports").title}
+              description={groceryWorkspaceCopy(locale, "reports").description}
               actions={
                 <>
                   <SelectInput

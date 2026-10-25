@@ -31,6 +31,14 @@ import { useWhatsAppApiConfigured } from "@/lib/messaging/use-sms-api-configured
 import { sectorAllowsApiWhatsApp } from "@/lib/messaging/wasender-sectors";
 import { isValidSlMobile } from "@/lib/messaging/phone";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import {
+  groceryCategoryLabel,
+  groceryProductLabel,
+  groceryProductSearchText,
+  groceryUi,
+  groceryUnitLabel,
+  type GroceryUiKey,
+} from "@/lib/grocery-localization";
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { buildSaleInventoryAllocationLine } from "@/lib/inventory-sale-allocation";
 import {
@@ -84,8 +92,8 @@ function clientId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function productSearchText(product: Product): string {
-  return [
+function productSearchText(product: Product, includeGroceryAliases = false): string {
+  const source = [
     product.name,
     product.sku,
     product.category,
@@ -99,6 +107,7 @@ function productSearchText(product: Product): string {
     .map(String)
     .join(" ")
     .toLowerCase();
+  return includeGroceryAliases ? `${source} ${groceryProductSearchText(product)}` : source;
 }
 
 function boolField(value: unknown): boolean {
@@ -115,6 +124,7 @@ export function AtomicRetailSalesPageV2() {
   const groceryPos = org.sector === "grocery";
   const advancedRetail = ADVANCED_RETAIL_SECTORS.has(org.sector);
   const conditionRelevant = !fastRetail;
+  const grocery = (key: GroceryUiKey) => groceryUi(locale, key);
 
   // The quote share button here was a plain wa.me deep link only — always
   // opens WhatsApp with the text pre-filled, but never actually sends.
@@ -170,17 +180,19 @@ export function AtomicRetailSalesPageV2() {
       sessionStorage.removeItem(SUCCESS_STORAGE_KEY);
       if (saved.saleId) setLastBillId(saved.saleId);
       const paymentNote = saved.paymentMethod === "mixed"
-        ? (si ? " · බෙදා ගෙවීම" : " · Split payment")
+        ? groceryPos ? ` · ${groceryUi(locale, "splitPayment")}` : (si ? " · බෙදා ගෙවීම" : " · Split payment")
         : "";
       setMessage(
-        si
+        groceryPos
+          ? `${groceryUi(locale, "completedBill")}${saved.billNo ? ` · ${saved.billNo}` : ""}${paymentNote}. ${locale === "si" ? "තොගය සහ ගෙවීම එකම ගනුදෙනුවක සුරකින ලදී." : locale === "ta" ? "கட்டணமும் சரக்கும் ஒரே பரிவர்த்தனையில் பதிவு செய்யப்பட்டன." : "Payment and inventory were committed in one transaction."}`
+          : si
           ? `විකිණීම සම්පූර්ණයි${saved.billNo ? ` · ${saved.billNo}` : ""}${paymentNote}. තොගය සහ ගෙවීම එකම transaction එකක සුරකින ලදී.`
           : `Sale completed${saved.billNo ? ` · ${saved.billNo}` : ""}${paymentNote}. Payment and inventory were committed in one transaction.`,
       );
     } catch {
       sessionStorage.removeItem(SUCCESS_STORAGE_KEY);
     }
-  }, [si]);
+  }, [groceryPos, locale, si]);
 
   const groceryLiveMetrics = useMemo(() => {
     if (!groceryPos || !data) return null;
@@ -230,7 +242,7 @@ export function AtomicRetailSalesPageV2() {
     (splitPayment && secondaryPayment === "cash" ? secondaryAmountValue : 0);
   const changeDue = cashReceived === "" ? 0 : Math.max(0, Number(cashReceived) - cashTenderPreview);
   const paymentSummaryLabel = splitPayment
-    ? (si ? "බෙදා ගෙවීම" : "Split payment")
+    ? (groceryPos ? grocery("splitPayment") : si ? "බෙදා ගෙවීම" : "Split payment")
     : paymentLabel(t, payment);
   const identityBlocked = advancedRetail && lines.some((line) => {
     const state = inventoryStates[line.product.id];
@@ -287,7 +299,7 @@ export function AtomicRetailSalesPageV2() {
 
   const inStock = data.products.filter((product) => product.active && product.stockQty > 0);
   const query = search.trim().toLowerCase();
-  const searched = query ? inStock.filter((product) => productSearchText(product).includes(query)) : inStock;
+  const searched = query ? inStock.filter((product) => productSearchText(product, groceryPos).includes(query)) : inStock;
   const categoryFiltered = fastRetail && categoryFilter !== "all"
     ? searched.filter((product) => groceryPos ? matchesGroceryCategory(product, categoryFilter) : product.category === categoryFilter)
     : searched;
@@ -528,16 +540,16 @@ export function AtomicRetailSalesPageV2() {
                     }
                     if (event.key === "Escape") setSearch("");
                   }}
-                  placeholder={si ? "භාණ්ඩය, SKU හෝ barcode සොයන්න…" : "Search products, scan barcode or enter SKU…"}
+                  placeholder={grocery("searchPlaceholder")}
                   className="h-12 w-full rounded-2xl border border-white/80 bg-white/90 pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-[0_8px_24px_rgba(37,99,235,0.09)] outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                 />
               </label>
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                <button type="button" onClick={() => { setCart({}); setPendingSaleId(null); setMessage(""); }} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-3 text-xs font-bold text-white shadow-[0_10px_20px_rgba(16,185,129,0.22)] transition hover:brightness-105"><span className="text-base">＋</span>{si ? "අලුත් bill" : "New bill"}</button>
-                <button type="button" disabled title={si ? "ඉක්මනින් පැමිණේ" : "Coming soon"} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/75 px-3 text-xs font-bold text-slate-400 disabled:cursor-not-allowed">{si ? "තබාගන්න" : "Hold bill"}</button>
-                <button type="button" disabled title={si ? "තබාගත් bills ඉක්මනින් පැමිණේ" : "Saved bill recall is coming soon"} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/75 px-3 text-xs font-bold text-slate-400 disabled:cursor-not-allowed">{si ? "නැවත කැඳවන්න" : "Recall bill"}</button>
-                <button type="button" onClick={() => document.getElementById("grocery-pos-search")?.focus()} className="inline-flex h-12 items-center justify-center rounded-2xl border border-violet-100 bg-violet-50/90 px-3 text-xs font-bold text-violet-700 transition hover:bg-violet-100">{si ? "මිල බලන්න" : "Price check"}</button>
-                <Link href="/stock" className="col-span-2 inline-flex h-10 items-center justify-center rounded-xl border border-blue-100 bg-white/75 px-3 text-xs font-bold text-blue-700 transition hover:bg-white sm:col-span-1 sm:h-12">{si ? "තොගය" : "Inventory"}</Link>
+                <button type="button" onClick={() => { setCart({}); setPendingSaleId(null); setMessage(""); }} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-3 text-xs font-bold text-white shadow-[0_10px_20px_rgba(16,185,129,0.22)] transition hover:brightness-105"><span className="text-base">＋</span>{grocery("newBill")}</button>
+                <button type="button" disabled title={locale === "si" ? "ඉක්මනින් පැමිණේ" : locale === "ta" ? "விரைவில் வருகிறது" : "Coming soon"} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/75 px-3 text-xs font-bold text-slate-400 disabled:cursor-not-allowed">{grocery("holdBill")}</button>
+                <button type="button" disabled title={locale === "si" ? "රඳවාගත් බිල්පත් ඉක්මනින් පැමිණේ" : locale === "ta" ? "சேமித்த பில்களை மீட்டெடுப்பது விரைவில் வருகிறது" : "Saved bill recall is coming soon"} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/75 px-3 text-xs font-bold text-slate-400 disabled:cursor-not-allowed">{grocery("recallBill")}</button>
+                <button type="button" onClick={() => document.getElementById("grocery-pos-search")?.focus()} className="inline-flex h-12 items-center justify-center rounded-2xl border border-violet-100 bg-violet-50/90 px-3 text-xs font-bold text-violet-700 transition hover:bg-violet-100">{grocery("priceCheck")}</button>
+                <Link href="/stock" className="col-span-2 inline-flex h-10 items-center justify-center rounded-xl border border-blue-100 bg-white/75 px-3 text-xs font-bold text-blue-700 transition hover:bg-white sm:col-span-1 sm:h-12">{grocery("inventory")}</Link>
                 <GroceryStarterCatalogueButton compact />
               </div>
             </div>
@@ -566,30 +578,30 @@ export function AtomicRetailSalesPageV2() {
           {groceryPos && groceryLiveMetrics ? (
             <>
               <ProStatCard
-                label={si ? "අද විකුණුම්" : "Today’s sales"}
+                label={grocery("todaySales")}
                 value={formatLkr(groceryLiveMetrics.intelligence.todaySales)}
-                hint={groceryLiveMetrics.intelligence.todaySalesChangePct == null ? (si ? "සම්පූර්ණ කළ bill තවම නැත" : "No completed bill yet") : `${groceryLiveMetrics.intelligence.todaySalesChangePct >= 0 ? "▲" : "▼"} ${Math.abs(groceryLiveMetrics.intelligence.todaySalesChangePct).toFixed(0)}% vs yesterday`}
+                hint={groceryLiveMetrics.intelligence.todaySalesChangePct == null ? grocery("noBillsYet") : `${groceryLiveMetrics.intelligence.todaySalesChangePct >= 0 ? "▲" : "▼"} ${Math.abs(groceryLiveMetrics.intelligence.todaySalesChangePct).toFixed(0)}% ${locale === "si" ? "ඊයේට වඩා" : locale === "ta" ? "நேற்றை விட" : "vs yesterday"}`}
                 icon={<SalesIcon className="h-5 w-5" />}
                 tone="teal"
               />
               <ProStatCard
-                label={si ? "සාදන ලද bills" : "Bills generated"}
+                label={grocery("billsGenerated")}
                 value={String(groceryLiveMetrics.intelligence.todayTransactions)}
-                hint={si ? "අද සම්පූර්ණ කළ bills" : "Completed today"}
+                hint={grocery("completedToday")}
                 icon={<BillsIcon className="h-5 w-5" />}
                 tone="slate"
               />
               <ProStatCard
-                label={si ? "සාමාන්‍ය bill" : "Average bill value"}
+                label={grocery("averageBill")}
                 value={formatLkr(groceryLiveMetrics.intelligence.averageBasket)}
-                hint={si ? "සම්පූර්ණ කළ checkout මත" : "From completed checkout"}
+                hint={grocery("fromCheckout")}
                 icon={<CostingIcon className="h-5 w-5" />}
                 tone="emerald"
               />
               <ProStatCard
-                label={si ? "විකුණු භාණ්ඩ" : "Items sold"}
+                label={grocery("itemsSold")}
                 value={String(groceryLiveMetrics.itemsSold)}
-                hint={si ? "අද bills තුළින්" : "Across today’s bills"}
+                hint={grocery("todayBills")}
                 icon={<SalesIcon className="h-5 w-5" />}
                 tone="slate"
               />
@@ -626,9 +638,9 @@ export function AtomicRetailSalesPageV2() {
             {groceryPos ? (
               <div className="flex flex-col gap-4 rounded-2xl border border-blue-100 bg-[radial-gradient(circle_at_top_right,_rgba(129,140,248,0.14),transparent_34%),linear-gradient(105deg,#f8fbff,#ffffff_54%,#eef6ff)] px-5 py-4 shadow-[0_10px_28px_rgba(59,130,246,0.07)] sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <span className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-700">First-time setup</span>
-                  <h2 className="mt-1 text-base font-bold tracking-[-0.025em] text-slate-950">{si ? "විකිණිය හැකි grocery catalogue එක එක් කරන්න" : "Add a sellable grocery catalogue"}</h2>
-                  <p className="mt-1 text-xs leading-5 text-slate-600">{si ? "Starter භාණ්ඩ 16ක් ඔබ තහවුරු කළ පසු පමණක් එක් වේ. මිල, barcode, stock සහ පින්තූර Stock තුළින් වෙනස් කළ හැක." : "Starter products are only added when you confirm. Prices, barcodes, stock and images stay editable in Stock."}</p>
+                  <span className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-700">{locale === "si" ? "පළමු සැකසුම" : locale === "ta" ? "முதல் அமைப்பு" : "First-time setup"}</span>
+                  <h2 className="mt-1 text-base font-bold tracking-[-0.025em] text-slate-950">{locale === "si" ? "විකිණිය හැකි සිල්ලර නාමාවලියක් එක් කරන්න" : locale === "ta" ? "விற்பனைக்கான மளிகைப் பட்டியலைச் சேர்க்கவும்" : "Add a sellable grocery catalogue"}</h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">{locale === "si" ? "ඔබ තහවුරු කළ පසු පමණක් ආරම්භක භාණ්ඩ 16ක් එක් වේ. මිල, තීරු කේත, තොග සහ පින්තූර තොග පිටුවෙන් වෙනස් කළ හැක." : locale === "ta" ? "நீங்கள் உறுதிப்படுத்திய பிறகே 16 தொடக்கப் பொருட்கள் சேர்க்கப்படும். விலை, பட்டைக் குறியீடு, சரக்கு மற்றும் படங்களை சரக்குப் பக்கத்தில் மாற்றலாம்." : "Starter products are only added when you confirm. Prices, barcodes, stock and images stay editable in Stock."}</p>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
                   <GroceryStarterCatalogueButton compact />
@@ -689,7 +701,7 @@ export function AtomicRetailSalesPageV2() {
                       onClick={() => { setCategoryFilter("all"); setResultLimit(30); }}
                       className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold ${categoryFilter === "all" ? groceryPos ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md shadow-blue-200" : "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
                     >
-                      {si ? "සියල්ල" : "All"} <span className="opacity-70">{inStock.length}</span>
+                      {groceryPos ? grocery("allProducts") : si ? "සියල්ල" : "All"} <span className="opacity-70">{inStock.length}</span>
                     </button>
                     {categories.map((category) => (
                       <button
@@ -699,7 +711,7 @@ export function AtomicRetailSalesPageV2() {
                         className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold ${categoryFilter === category.name ? groceryPos ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md shadow-blue-200" : "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
                       >
                         {groceryPos && <GroceryCategoryArt label={category.name} className="h-5 w-5" />}
-                        {category.name} <span className="opacity-70">{category.count}</span>
+                        {groceryPos ? groceryCategoryLabel(category.name, locale) : category.name} <span className="opacity-70">{category.count}</span>
                       </button>
                     ))}
                   </div>
@@ -721,8 +733,8 @@ export function AtomicRetailSalesPageV2() {
                 )}
               </ProCard>
 
-              {filtered.length === 0 ? (
-                <ProCard><ProEmptyState title={t("sales.no_match")} description={t("sales.search_no_match_desc")} /></ProCard>
+                {filtered.length === 0 ? (
+                  <ProCard><ProEmptyState title={groceryPos ? categoryFilter === "all" ? grocery("noMatchingProducts") : grocery("emptyCategory") : t("sales.no_match")} description={groceryPos ? grocery("emptyCategoryHint") : t("sales.search_no_match_desc")} /></ProCard>
               ) : (
                 <div className={fastRetail ? groceryPos ? "grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6" : "grid gap-2 md:grid-cols-2 2xl:grid-cols-3" : "grid gap-3 md:grid-cols-2"}>
                   {visibleProducts.map((product) => {
@@ -738,18 +750,20 @@ export function AtomicRetailSalesPageV2() {
                         {groceryPos && (
                           <div className="relative h-24 overflow-hidden border-b border-slate-100 bg-[radial-gradient(circle_at_50%_30%,#ffffff_0%,#eff6ff_62%,#eef2ff_100%)]">
                             <GroceryProductArt name={product.name} category={product.category} imageUrl={typeof product.customFields.imageUrl === "string" ? product.customFields.imageUrl : undefined} className="h-full w-full" />
-                            <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[9px] font-bold text-slate-600 shadow-sm">{product.category || "Grocery"}</span>
+                            <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[9px] font-bold text-slate-600 shadow-sm">{groceryCategoryLabel(product.category, locale) || "Grocery"}</span>
                           </div>
                         )}
                         <div className={`flex items-start justify-between gap-3 ${groceryPos ? "p-3" : ""}`}>
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <h2 className="truncate text-sm font-bold text-slate-950">{product.name}</h2>
+                              <h2 className="truncate text-sm font-bold text-slate-950">{groceryPos ? groceryProductLabel(product, locale) : product.name}</h2>
                               {conditionRelevant && <ProductConditionBadge condition={product.condition} />}
                               {rx && <ProBadge tone="amber">Rx</ProBadge>}
                             </div>
                             <p className="mt-1 text-xs font-semibold text-slate-500">
-                              {groceryPos ? `${String(product.customFields.unitVariant ?? product.customFields.unit ?? "1 unit")} · ${product.category || "Grocery"}` : <>{product.sku ? `${product.sku} · ` : ""}{product.category || "General"}</>}
+                              {groceryPos
+                                ? `${groceryUnitLabel(product.customFields.unitVariant ?? product.customFields.unit ?? "1 unit", locale)} · ${groceryCategoryLabel(product.category, locale) || "Grocery"}`
+                                : <>{product.sku ? `${product.sku} · ` : ""}{product.category || "General"}</>}
                             </p>
                             {org.sector === "pharmacy" && (
                               <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-500">
@@ -759,14 +773,27 @@ export function AtomicRetailSalesPageV2() {
                             )}
                           </div>
                           <div className="shrink-0 text-right">
-                            {groceryPos ? <p className={`rounded-full px-2 py-1 text-[10px] font-bold ${product.stockQty <= (product.reorderLevel ?? 0) ? "bg-amber-100 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}>{product.stockQty} in stock</p> : <><p className="text-sm font-bold text-slate-950">{formatLkr(unitPrice)}</p><p className="mt-1 text-[10px] font-semibold text-slate-400">{product.stockQty} in stock</p></>}
+                            {groceryPos ? (
+                              <p className={`rounded-full px-2 py-1 text-[10px] font-bold ${product.stockQty <= (product.reorderLevel ?? 0) ? "bg-amber-100 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}>{product.stockQty} {grocery("inStock")}</p>
+                            ) : (
+                              <>
+                                <p className="text-sm font-bold text-slate-950">{formatLkr(unitPrice)}</p>
+                                <p className="mt-1 text-[10px] font-semibold text-slate-400">{product.stockQty} in stock</p>
+                              </>
+                            )}
                           </div>
                         </div>
                         <div className={`flex items-center justify-between gap-3 ${groceryPos ? "border-t border-slate-100 px-3 pb-3 pt-2.5" : "mt-4"}`}>
                           {groceryPos ? (
                             <>
                               <span className="font-mono text-base font-extrabold text-slate-950">{formatLkr(unitPrice)}</span>
-                              <button type="button" aria-label={`Add ${product.name}`} onClick={() => addOne(product)} className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 text-xl font-semibold text-white shadow-[0_8px_16px_rgba(59,130,246,0.26)] transition hover:brightness-110 active:scale-95">+</button>
+                              <button
+                                type="button"
+                                aria-label={`${grocery("add")} ${groceryProductLabel(product, locale)}`}
+                                onClick={() => addOne(product)}
+                                className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 text-xl font-semibold text-white shadow-[0_8px_16px_rgba(59,130,246,0.26)] transition hover:brightness-110 active:scale-95"
+                              >+
+                              </button>
                             </>
                           ) : <>
                           <div className="flex items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
@@ -805,7 +832,7 @@ export function AtomicRetailSalesPageV2() {
                       onClick={() => setResultLimit((value) => value + 30)}
                       className="min-h-24 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-left hover:border-teal-300 hover:bg-teal-50"
                     >
-                      <span className="block text-sm font-bold text-slate-800">{si ? "තවත් භාණ්ඩ පෙන්වන්න" : "Show more products"}</span>
+                      <span className="block text-sm font-bold text-slate-800">{groceryPos ? grocery("showMore") : si ? "තවත් භාණ්ඩ පෙන්වන්න" : "Show more products"}</span>
                       <span className="mt-1 block text-xs text-slate-500">{visibleProducts.length} / {filtered.length}</span>
                     </button>
                   )}
@@ -814,9 +841,9 @@ export function AtomicRetailSalesPageV2() {
             </div>
 
             <aside className="space-y-4 lg:sticky lg:top-5 lg:self-start">
-              <ProCard title={t("sales.cart_title")} eyebrow={t("sales.checkout_eyebrow")}>
+              <ProCard title={groceryPos ? grocery("cart") : t("sales.cart_title")} eyebrow={groceryPos ? grocery("checkout") : t("sales.checkout_eyebrow")}>
                 {lines.length === 0 ? (
-                  <ProEmptyState title={t("sales.no_selected")} description={t("sales.choose_products_desc")} />
+                  <ProEmptyState title={groceryPos ? grocery("noItemsSelected") : t("sales.no_selected")} description={groceryPos ? grocery("chooseProducts") : t("sales.choose_products_desc")} />
                 ) : (
                   <div className="max-h-[30rem] space-y-3 overflow-y-auto pr-1">
                     {lines.map((line) => (
@@ -834,19 +861,19 @@ export function AtomicRetailSalesPageV2() {
                               </div>
                             )}
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-bold text-slate-950">{line.product.name}</p>
+                              <p className="truncate text-sm font-bold text-slate-950">{groceryPos ? groceryProductLabel(line.product, locale) : line.product.name}</p>
                               {groceryPos ? (
                                 <div className="mt-1.5 inline-flex items-center overflow-hidden rounded-lg border border-slate-200 bg-white">
-                                  <button type="button" aria-label={`Decrease ${line.product.name}`} onClick={() => setQty(line.product.id, line.qty - 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-slate-600 hover:bg-slate-50">−</button>
+                                  <button type="button" aria-label={`${grocery("decrease")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, line.qty - 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-slate-600 hover:bg-slate-50">−</button>
                                   <span className="flex h-7 min-w-8 items-center justify-center border-x border-slate-200 px-1 text-xs font-bold text-slate-900">{line.qty}</span>
-                                  <button type="button" aria-label={`Increase ${line.product.name}`} onClick={() => setQty(line.product.id, line.qty + 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-teal-700 hover:bg-teal-50">+</button>
+                                  <button type="button" aria-label={`${grocery("increase")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, line.qty + 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-teal-700 hover:bg-teal-50">+</button>
                                 </div>
                               ) : <p className="mt-0.5 text-xs font-semibold text-slate-500">× {line.qty}</p>}
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5">
                             <p className="shrink-0 font-mono text-sm font-bold text-slate-950">{formatLkr(line.unitPrice * line.qty)}</p>
-                            {groceryPos && <button type="button" aria-label={`Remove ${line.product.name}`} onClick={() => setQty(line.product.id, 0, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold text-slate-400 transition hover:bg-rose-50 hover:text-rose-600">×</button>}
+                            {groceryPos && <button type="button" aria-label={`${grocery("removeItem")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, 0, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold text-slate-400 transition hover:bg-rose-50 hover:text-rose-600">×</button>}
                           </div>
                         </div>
                         <label className="mt-3 flex items-center justify-between gap-2 text-xs font-bold text-slate-500">
@@ -890,15 +917,15 @@ export function AtomicRetailSalesPageV2() {
                     />
                   </label>
                   {billVat && (
-                    <div className="rounded-lg bg-slate-900 px-3 py-2.5 text-xs text-slate-200">
+                    <div className={`rounded-lg px-3 py-2.5 text-xs ${groceryPos ? "border border-violet-100 bg-violet-50 text-slate-700" : "bg-slate-900 text-slate-200"}`}>
                       <div className="flex justify-between"><span>{t("vat.taxable")}</span><span className="font-mono">{formatLkr(billVat.subtotal)}</span></div>
-                      <div className="mt-1 flex justify-between text-teal-300"><span>{t("vat.output_vat")} (18%)</span><span className="font-mono font-bold">{formatLkr(billVat.vat)}</span></div>
+                      <div className={`mt-1 flex justify-between ${groceryPos ? "text-violet-700" : "text-teal-300"}`}><span>{t("vat.output_vat")} (18%)</span><span className="font-mono font-bold">{formatLkr(billVat.vat)}</span></div>
                     </div>
                   )}
                 </div>
 
-                <div className="mt-5 rounded-xl bg-slate-950 p-4 text-white">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-teal-300">{t("common.total")}</p>
+                <div className={`mt-5 rounded-xl p-4 ${groceryPos ? "border border-blue-100 bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 text-slate-950 shadow-[0_10px_22px_rgba(59,130,246,0.08)]" : "bg-slate-950 text-white"}`}>
+                  <p className={`text-xs font-bold uppercase tracking-[0.16em] ${groceryPos ? "text-blue-700" : "text-teal-300"}`}>{t("common.total")}</p>
                   <p className="mt-1 text-3xl font-bold tracking-tight">{formatLkr(netTotal)}</p>
                 </div>
 

@@ -19,6 +19,12 @@ import { StockIcon, PlusIcon } from "@/components/ui/icons";
 import { formatLkr } from "@/lib/format";
 import { exportStockCsv } from "@/lib/export";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import {
+  groceryCategoryLabel,
+  groceryProductLabel,
+  groceryProductSearchText,
+  groceryUnitLabel,
+} from "@/lib/grocery-localization";
 import { formatProductFieldBadge } from "@/lib/sector-fields";
 import { useAppStore } from "@/lib/store/use-app-store";
 import { getLowStockProducts, getReorderSuggestions } from "@/lib/store/actions";
@@ -45,7 +51,7 @@ export default function StockPage() {
   } = useAppStore();
   const { org, subscription, canSeeFinancials, can } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { toast } = useToast();
   const conditionFilterRelevant = org.sector !== "pharmacy" && org.sector !== "grocery";
 
@@ -131,9 +137,7 @@ export default function StockPage() {
   const searched = query
     ? data.products.filter(
         (p) =>
-          p.name.toLowerCase().includes(query) ||
-          (p.sku ?? "").toLowerCase().includes(query) ||
-          p.category.toLowerCase().includes(query),
+          (org.sector === "grocery" ? groceryProductSearchText(p) : `${p.name} ${p.sku ?? ""} ${p.category}`.toLowerCase()).includes(query),
       )
     : data.products;
   const byCondition = !conditionFilterRelevant || conditionFilter === "all"
@@ -324,14 +328,14 @@ export default function StockPage() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" onClick={() => openEdit(p)} className={`font-semibold hover:text-teal-700 hover:underline ${p.active ? "text-slate-900" : "text-slate-400"}`}>
-                  {p.name}
+                  {org.sector === "grocery" ? groceryProductLabel(p, locale) : p.name}
                 </button>
                 {conditionFilterRelevant && <ProductConditionBadge condition={p.condition} />}
                 {!p.active && <StatusBadge tone="neutral">{t("stock.inactive_badge")}</StatusBadge>}
               </div>
               <p className="mt-0.5 text-xs text-slate-500">
                 {p.sku ? `${p.sku} · ` : ""}
-                {p.category || "General"}
+                {org.sector === "grocery" ? groceryCategoryLabel(p.category, locale) : p.category || "General"}
                 {badge ? ` · ${badge}` : ""}
                 {org.sector === "grocery" && typeof p.customFields.barcode === "string" && p.customFields.barcode.trim()
                   ? ` · ${p.customFields.barcode}`
@@ -357,7 +361,9 @@ export default function StockPage() {
       header: t("stock.title"),
       align: "right",
       render: (p) => {
-        const unit = String(p.customFields.unit ?? "pcs");
+        const unit = org.sector === "grocery"
+          ? groceryUnitLabel(p.customFields.unitVariant ?? p.customFields.unit, locale)
+          : String(p.customFields.unit ?? "pcs");
         const low = p.reorderLevel != null && p.stockQty <= p.reorderLevel;
         return (
           <div className="text-right">

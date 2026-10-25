@@ -32,6 +32,7 @@ import { WriteDisabledHint } from "@/components/write-disabled-hint";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { GroceryWorkspaceHeader } from "@/components/grocery/grocery-workspace-header";
+import { groceryWorkspaceCopy } from "@/lib/grocery-localization";
 
 type ContactFilter = "all" | ContactType;
 type ProfileTab = "overview" | "invoices" | "payments" | "ledger" | "equipment" | "messages";
@@ -47,7 +48,7 @@ export default function CustomersPage() {
     setCustomerProductPriceToCloud,
     removeCustomerProductPriceToCloud,
   } = useAppStore();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { canWrite, disabledHint } = useWriteAccess();
   const { can, org } = useSubscription();
   const { toast } = useToast();
@@ -327,9 +328,9 @@ export default function CustomersPage() {
       <ProMain>
         {org.sector === "grocery" ? (
           <GroceryWorkspaceHeader
-            eyebrow="Lanka Grocery retail"
-            title="Customer directory"
-            description="Keep walk-in and account customer details ready for a fast checkout."
+            eyebrow={groceryWorkspaceCopy(locale, "customers").eyebrow}
+            title={groceryWorkspaceCopy(locale, "customers").title}
+            description={groceryWorkspaceCopy(locale, "customers").description}
             detail={`${data.customers.length} customer${data.customers.length === 1 ? "" : "s"}`}
             actions={
               <button

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { GroceryWorkspaceHeader } from "@/components/grocery/grocery-workspace-header";
+import { groceryWorkspaceCopy } from "@/lib/grocery-localization";
 import { AppShell } from "@/components/shell/app-shell";
 import {
   ProBadge,
@@ -45,7 +46,7 @@ function customerPhoneForSale(
 export default function BillsPage() {
   const router = useRouter();
   const { data, ready } = useAppStore();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { canSeeFinancials, can, orgRole, org } = useSubscription();
   const [search, setSearch] = useState("");
   const [paymentFilter, setPaymentFilter] = useState<PaymentMethod | "all">("all");
@@ -132,9 +133,9 @@ export default function BillsPage() {
       <ProMain>
         {org.sector === "grocery" ? (
           <GroceryWorkspaceHeader
-            eyebrow="Grocery sales ledger"
-            title="Bills & orders"
-            description={`${data.sales.length} completed bill${data.sales.length === 1 ? "" : "s"} in your LakBiz sales register.`}
+            eyebrow={groceryWorkspaceCopy(locale, "bills").eyebrow}
+            title={groceryWorkspaceCopy(locale, "bills").title}
+            description={groceryWorkspaceCopy(locale, "bills").description}
             detail={<><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">Real checkout records</span><span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">LKR totals</span></>}
             actions={<><ProButton href="/sales">{t("bills.create_sale")}</ProButton>{orgRole === "owner" && <ProButton href="/returns" variant="secondary">Returns control</ProButton>}</>}
           />

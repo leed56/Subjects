@@ -288,10 +288,10 @@ export default function SaleReturnSettlementPage() {
         ) : (
           <div className="space-y-5">
             <section className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-xl bg-slate-950 p-5 text-white">
-                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400">{returnRecord.returnNo}</p>
-                <p className="mt-2 font-mono text-2xl font-semibold">{formatLkr(returnRecord.merchandiseValue)}</p>
-                <p className="mt-1 text-xs text-slate-400">{si ? "Physical return value" : "Physical return value"}</p>
+              <div className={`rounded-xl p-5 ${org.sector === "grocery" ? "border border-emerald-100 bg-gradient-to-br from-emerald-50 via-sky-50 to-violet-50 text-slate-950" : "bg-slate-950 text-white"}`}>
+                <p className={`text-[10px] font-bold uppercase tracking-[0.15em] ${org.sector === "grocery" ? "text-emerald-700" : "text-slate-400"}`}>{returnRecord.returnNo}</p>
+                <p className={`mt-2 font-mono text-2xl font-semibold ${org.sector === "grocery" ? "text-teal-700" : ""}`}>{formatLkr(returnRecord.merchandiseValue)}</p>
+                <p className={`mt-1 text-xs ${org.sector === "grocery" ? "text-slate-600" : "text-slate-400"}`}>{si ? "Physical return value" : "Physical return value"}</p>
               </div>
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
                 <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-amber-700">VAT reversal</p>

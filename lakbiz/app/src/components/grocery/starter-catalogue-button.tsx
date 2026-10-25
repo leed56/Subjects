@@ -11,6 +11,7 @@ import { useAppStore } from "@/lib/store/use-app-store";
 import type { ProductInput } from "@/lib/store/types";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 type GroceryStarterCatalogueButtonProps = {
   className?: string;
@@ -28,6 +29,7 @@ export function GroceryStarterCatalogueButton({
   compact = false,
 }: GroceryStarterCatalogueButtonProps) {
   const { data, saveProductToCloud } = useAppStore();
+  const { locale } = useLocale();
   const { org, orgRole } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
   const { toast } = useToast();
@@ -60,20 +62,20 @@ export function GroceryStarterCatalogueButton({
       // cloud is unavailable afterwards. That local record is valid and will
       // sync once a workspace is connected, so it should not abort the import.
       if (!result.ok && result.error !== "Cloud not connected") {
-        setError(result.error ?? "LakBiz could not save the catalogue.");
+        setError(result.error ?? (locale === "si" ? "LakBiz හට නාමාවලිය සුරැකිය නොහැක." : locale === "ta" ? "LakBiz பட்டியலைச் சேமிக்க முடியவில்லை." : "LakBiz could not save the catalogue."));
         setQueue([]);
         setSaving(false);
         toast({
           tone: "error",
-          title: "Starter catalogue paused",
-          description: result.error ?? "Please resolve the save issue and try again.",
+          title: locale === "si" ? "ආරම්භක නාමාවලිය නවතා ඇත" : locale === "ta" ? "தொடக்கப் பட்டியல் இடைநிறுத்தப்பட்டது" : "Starter catalogue paused",
+          description: result.error ?? (locale === "si" ? "සුරැකීමේ ගැටලුව විසඳා නැවත උත්සාහ කරන්න." : locale === "ta" ? "சேமிப்புச் சிக்கலைத் தீர்த்து மீண்டும் முயற்சிக்கவும்." : "Please resolve the save issue and try again."),
         });
         return;
       }
       setCompleted((count) => count + 1);
       setQueue((currentQueue) => currentQueue.slice(1));
     });
-  }, [data?.products, queue, saveProductToCloud, saving, toast]);
+  }, [data?.products, locale, queue, saveProductToCloud, saving, toast]);
 
   useEffect(() => {
     if (!saving || queue.length !== 0) return;
@@ -81,25 +83,25 @@ export function GroceryStarterCatalogueButton({
     if (completed > 0) {
       toast({
         tone: "success",
-        title: "Grocery starter catalogue is ready",
-        description: `${completed} editable products are now available in Stock and POS / Billing.`,
+        title: locale === "si" ? "සිල්ලර ආරම්භක නාමාවලිය සූදානම්" : locale === "ta" ? "மளிகை தொடக்கப் பட்டியல் தயாராக உள்ளது" : "Grocery starter catalogue is ready",
+        description: locale === "si" ? `සංස්කරණය කළ හැකි භාණ්ඩ ${completed}ක් දැන් තොගය සහ POS / බිල්පත් තුළ ඇත.` : locale === "ta" ? `திருத்தக்கூடிய ${completed} பொருட்கள் இப்போது சரக்கு மற்றும் POS / பில்லிங்கில் உள்ளன.` : `${completed} editable products are now available in Stock and POS / Billing.`,
       });
     }
-  }, [completed, queue.length, saving, toast]);
+  }, [completed, locale, queue.length, saving, toast]);
 
   if (org.sector !== "grocery") return null;
 
   if (!isOwner) {
     return (
       <p className={`text-xs font-semibold text-slate-500 ${className}`}>
-        Your workspace owner can load the starter grocery catalogue.
+        {locale === "si" ? "ඔබේ වැඩබිම් හිමිකරුට ආරම්භක සිල්ලර නාමාවලිය එක් කළ හැක." : locale === "ta" ? "உங்கள் பணியிட உரிமையாளர் தொடக்க மளிகைப் பட்டியலை ஏற்றலாம்." : "Your workspace owner can load the starter grocery catalogue."}
       </p>
     );
   }
 
   const addCatalogue = () => {
     if (missing.length === 0) {
-      toast({ tone: "info", title: "Starter catalogue already loaded", description: "Manage prices, stock, barcodes and product images in Stock." });
+        toast({ tone: "info", title: locale === "si" ? "ආරම්භක නාමාවලිය දැනටමත් එක් කර ඇත" : locale === "ta" ? "தொடக்கப் பட்டியல் ஏற்கனவே ஏற்றப்பட்டுள்ளது" : "Starter catalogue already loaded", description: locale === "si" ? "තොගය තුළ මිල, තොග, තීරු කේත සහ පින්තූර කළමනාකරණය කරන්න." : locale === "ta" ? "சரக்கில் விலை, கையிருப்பு, பட்டைக் குறியீடு மற்றும் படங்களை நிர்வகிக்கவும்." : "Manage prices, stock, barcodes and product images in Stock." });
       return;
     }
     setError(null);
@@ -110,12 +112,12 @@ export function GroceryStarterCatalogueButton({
   };
 
   const label = saving
-    ? `Adding ${Math.min(completed + 1, completed + queue.length)} of ${completed + queue.length}`
+    ? `${locale === "si" ? "එක් කරමින්" : locale === "ta" ? "சேர்க்கிறது" : "Adding"} ${Math.min(completed + 1, completed + queue.length)} / ${completed + queue.length}`
     : missing.length === 0
-      ? "Starter catalogue ready"
+      ? (locale === "si" ? "ආරම්භක නාමාවලිය සූදානම්" : locale === "ta" ? "தொடக்கப் பட்டியல் தயார்" : "Starter catalogue ready")
       : compact
-        ? `Add ${missing.length} starter products`
-        : "Add starter grocery catalogue";
+        ? `${missing.length} ${locale === "si" ? "ආරම්භක භාණ්ඩ එක් කරන්න" : locale === "ta" ? "தொடக்கப் பொருட்களைச் சேர்" : "starter products"}`
+        : locale === "si" ? "ආරම්භක සිල්ලර නාමාවලිය එක් කරන්න" : locale === "ta" ? "தொடக்க மளிகைப் பட்டியலைச் சேர்" : "Add starter grocery catalogue";
 
   return (
     <>
@@ -128,16 +130,16 @@ export function GroceryStarterCatalogueButton({
           data-testid="grocery-starter-catalogue-button"
           className="inline-flex min-h-11 items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 px-4 py-2.5 text-sm font-bold text-white shadow-[0_12px_24px_rgba(13,148,136,0.22)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-55"
         >
-          {saving ? "Preparing products…" : "✦ "}{label}
+          {saving ? (locale === "si" ? "භාණ්ඩ සූදානම් කරමින්…" : locale === "ta" ? "பொருட்கள் தயாராகின்றன…" : "Preparing products…") : "✦ "}{label}
         </button>
-        {saving && <span className="text-xs font-bold text-teal-700">{completed} of {completed + queue.length} saved</span>}
+        {saving && <span className="text-xs font-bold text-teal-700">{completed} / {completed + queue.length} {locale === "si" ? "සුරකින ලදී" : locale === "ta" ? "சேமிக்கப்பட்டது" : "saved"}</span>}
         {error && <span role="alert" className="text-xs font-semibold text-rose-700">{error}</span>}
       </div>
       <ConfirmDialog
         open={confirming}
-        title="Add the Sri Lankan grocery starter catalogue?"
-        description={`This adds ${missing.length || GROCERY_STARTER_CATALOGUE.length} editable products with LKR selling prices, stock, SKUs and barcodes. Nothing is added until you choose Add catalogue, and you can edit or remove any product in Stock afterwards.`}
-        confirmLabel="Add catalogue"
+        title={locale === "si" ? "ශ්‍රී ලංකා ආරම්භක සිල්ලර නාමාවලිය එක් කරන්නද?" : locale === "ta" ? "இலங்கை தொடக்க மளிகைப் பட்டியலைச் சேர்க்கவா?" : "Add the Sri Lankan grocery starter catalogue?"}
+        description={locale === "si" ? `මෙය LKR විකුණුම් මිල, තොග, SKU සහ තීරු කේත සමඟ සංස්කරණය කළ හැකි භාණ්ඩ ${missing.length || GROCERY_STARTER_CATALOGUE.length}ක් එක් කරයි. ඔබ නාමාවලිය එක් කරන්න තෝරන තෙක් කිසිවක් එක් නොවේ.` : locale === "ta" ? `இது LKR விலை, சரக்கு, SKU மற்றும் பட்டைக் குறியீட்டுடன் திருத்தக்கூடிய ${missing.length || GROCERY_STARTER_CATALOGUE.length} பொருட்களைச் சேர்க்கும். பட்டியலைச் சேர் என்பதைத் தேர்வதற்கு முன் எதுவும் சேர்க்கப்படாது.` : `This adds ${missing.length || GROCERY_STARTER_CATALOGUE.length} editable products with LKR selling prices, stock, SKUs and barcodes. Nothing is added until you choose Add catalogue.`}
+        confirmLabel={locale === "si" ? "නාමාවලිය එක් කරන්න" : locale === "ta" ? "பட்டியலைச் சேர்" : "Add catalogue"}
         onConfirm={addCatalogue}
         onClose={() => setConfirming(false)}
       />
