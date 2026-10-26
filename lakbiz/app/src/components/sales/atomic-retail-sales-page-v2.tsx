@@ -523,7 +523,7 @@ export function AtomicRetailSalesPageV2() {
       <ProMain className={groceryPos ? "max-w-[1600px] py-4 sm:py-5 lg:px-5 lg:py-5" : ""}>
         {groceryPos ? (
           <section className="overflow-hidden rounded-[24px] border border-blue-100 bg-[radial-gradient(circle_at_92%_16%,rgba(129,140,248,0.24),transparent_28%),radial-gradient(circle_at_8%_100%,rgba(16,185,129,0.16),transparent_25%),linear-gradient(115deg,#f8fbff_0%,#edf5ff_56%,#faf5ff_100%)] p-4 shadow-[0_18px_44px_rgba(59,130,246,0.10)] sm:p-5">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center">
               <label className="relative block min-w-0 flex-1">
                 <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-lg text-blue-500">⌕</span>
                 <input
