@@ -130,7 +130,11 @@ function SalesChart({ intel }: { intel: RetailDashboardIntelligence }) {
         </div>
         <p className="max-w-36 text-right text-[11px] leading-4 text-slate-400">{localizePeriodText(intel.periodComparisonLabel)}</p>
       </div>
-      <div className="flex h-48 items-end gap-2 rounded-2xl border border-slate-100 bg-gradient-to-b from-sky-50/65 to-white px-3 pb-6 pt-4">
+      {intel.periodSales === 0 ? (
+        <div className="flex h-40 items-center justify-center rounded-2xl border border-dashed border-blue-100 bg-gradient-to-b from-sky-50/65 to-white px-5 text-center text-sm font-medium text-slate-500">
+          {locale === "si" ? "විකුණුම් සටහන් වූ පසු දෛනික ප්‍රවණතාව මෙහි පෙන්වයි." : locale === "ta" ? "விற்பனை பதிவானதும் தினசரி நிலை இங்கே தோன்றும்." : "Daily sales will appear here after the first completed bill."}
+        </div>
+      ) : <div className="flex h-48 items-end gap-2 rounded-2xl border border-slate-100 bg-gradient-to-b from-sky-50/65 to-white px-3 pb-6 pt-4">
         {intel.trend.map((point, index) => {
           const height = point.revenue <= 0 ? 6 : Math.max(9, (point.revenue / max) * 100);
           return (
@@ -146,7 +150,7 @@ function SalesChart({ intel }: { intel: RetailDashboardIntelligence }) {
             </div>
           );
         })}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -175,8 +179,8 @@ function CategoryRing({ intel }: { intel: RetailDashboardIntelligence }) {
               </>
             ) : (
               <>
-                <span className="text-sm font-bold text-slate-700">{text("noSalesYet")}</span>
-                <span className="mt-1 px-2 text-[10px] font-semibold leading-snug text-slate-400">{text("salesWillAppear")}</span>
+                <span className="text-xl font-bold text-slate-700">0</span>
+                <span className="mt-1 px-2 text-[10px] font-semibold leading-snug text-slate-500">{text("noSalesYet")}</span>
               </>
             )}
           </div>
@@ -362,7 +366,7 @@ export function GroceryCommandCenter({ data }: { data: AppData }) {
             {lastSale ? <Link href={`/bills/${lastSale.id}`} className="inline-flex h-16 min-w-24 flex-col items-center justify-center gap-1 rounded-2xl border border-violet-100 bg-violet-50 px-3 text-violet-700 shadow-sm transition hover:-translate-y-0.5"><BillsIcon className="h-4 w-4" /><span className="text-[11px] font-bold">{locale === "si" ? "අවසන් බිල්පත" : locale === "ta" ? "கடைசி பில்" : "Last bill"}</span></Link> : <span title={locale === "si" ? "පළමුව සම්පූර්ණ කළ බිල්පතක් අවශ්‍යයි" : locale === "ta" ? "முதலில் முடிக்கப்பட்ட பில் தேவை" : "A completed bill is needed first"} className="inline-flex h-16 min-w-24 cursor-not-allowed flex-col items-center justify-center gap-1 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-slate-400"><BillsIcon className="h-4 w-4" /><span className="text-[11px] font-bold">{locale === "si" ? "අවසන් බිල්පත" : locale === "ta" ? "கடைசி பில்" : "Last bill"}</span></span>}
           </div>
         </div>
-        <div className="relative mt-4 grid gap-2 border-t border-blue-100/80 pt-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><Link href="/sales" className="flex h-11 min-w-0 items-center gap-3 rounded-xl border border-white bg-white/80 px-3 text-sm font-semibold text-slate-500 shadow-sm transition hover:border-blue-200 hover:bg-white hover:text-blue-700"><span className="text-lg text-blue-500">⌕</span><span className="truncate">{text("searchPlaceholder")}</span><span className="ml-auto rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-600">POS</span></Link><div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-500"><span className="inline-flex items-center gap-1.5"><CalendarIcon className="h-3.5 w-3.5 text-blue-500" /> {date}</span><span><strong className="text-slate-900">{intel.activeSkuCount.toLocaleString("en-LK")}</strong> {text("activeItems")}</span><span className="rounded-full bg-rose-100 px-2.5 py-1 font-bold text-rose-700">{intel.outOfStockCount} {text("outOfStock")}</span></div></div>
+        <div className="relative mt-4 grid gap-2 border-t border-blue-100/80 pt-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><Link href="/sales" className="flex h-11 min-w-0 items-center gap-3 rounded-xl border border-white bg-white/80 px-3 text-sm font-semibold text-slate-500 shadow-sm transition hover:border-blue-200 hover:bg-white hover:text-blue-700"><span className="shrink-0 text-lg text-blue-500">⌕</span><span className="min-w-0 flex-1 truncate">{text("searchPlaceholder")}</span><span className="shrink-0 whitespace-nowrap rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-600">POS</span></Link><div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-500"><span className="inline-flex items-center gap-1.5"><CalendarIcon className="h-3.5 w-3.5 text-blue-500" /> {date}</span><span><strong className="text-slate-900">{intel.activeSkuCount.toLocaleString("en-LK")}</strong> {text("activeItems")}</span><span className="rounded-full bg-rose-100 px-2.5 py-1 font-bold text-rose-700">{intel.outOfStockCount} {text("outOfStock")}</span></div></div>
       </section>
 
       <section className={`flex flex-col gap-4 rounded-[22px] border border-emerald-100 bg-[radial-gradient(circle_at_92%_20%,rgba(45,212,191,0.22),transparent_34%),linear-gradient(120deg,#ecfdf5,#f8fbff)] p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)] sm:flex-row sm:items-center sm:justify-between ${intel.activeSkuCount === 0 ? "" : "hidden"}`}>

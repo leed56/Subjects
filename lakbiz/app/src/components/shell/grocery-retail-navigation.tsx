@@ -65,7 +65,7 @@ function GroceryNavLink({ item, active, locale, t }: { item: NavItem; active: bo
     <Link
       href={item.href}
       aria-current={active ? "page" : undefined}
-      className={`group relative flex min-h-11 items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 ${
+      className={`group relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 ${
         active
           ? `bg-gradient-to-r ${tone} text-white shadow-[0_12px_26px_rgba(59,130,246,0.24)]`
           : "text-slate-300 hover:bg-white/[0.07] hover:text-white"
@@ -75,7 +75,7 @@ function GroceryNavLink({ item, active, locale, t }: { item: NavItem; active: bo
       <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${active ? "bg-white/16 text-white" : "bg-white/[0.045] text-slate-400 group-hover:bg-white/[0.1] group-hover:text-white"}`}>
         <Icon className="h-[18px] w-[18px]" />
       </span>
-      <span className="min-w-0 truncate font-sinhala">{label}</span>
+      <span className="min-w-0 flex-1 break-normal font-sinhala leading-5 [overflow-wrap:normal]">{label}</span>
       {active && <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-white shadow-[0_0_0_3px_rgba(255,255,255,0.16)]" />}
     </Link>
   );

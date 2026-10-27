@@ -99,6 +99,7 @@ export function ProductForm({
     }
     return emptyForm(shopSectorId);
   });
+  const [validationError, setValidationError] = useState("");
   const units = useMemo(
     () => Array.from(new Set([
       ...unitsForSector(lockedSectorId ?? form.sectorId),
@@ -152,6 +153,11 @@ export function ProductForm({
     e.preventDefault();
     if (!form.name.trim()) return;
     const sectorId = lockedSectorId ?? form.sectorId;
+    if (sectorId === "grocery" && form.active && (!Number.isFinite(form.sellPrice) || form.sellPrice <= 0)) {
+      setValidationError(locale === "si" ? "සක්‍රීය භාණ්ඩයකට ධන විකුණුම් මිලක් අවශ්‍යයි." : locale === "ta" ? "செயலில் உள்ள பொருளுக்கு பூஜ்ஜியத்தை விட அதிக விற்பனை விலை தேவை." : "An active grocery product needs a selling price above zero.");
+      return;
+    }
+    setValidationError("");
     const { sectorCustom, ...rest } = form;
     onSubmit({
       ...rest,
@@ -312,6 +318,7 @@ export function ProductForm({
             <input
               type="number"
               min={0}
+              step="0.01"
               value={form.sellPrice || ""}
               onChange={(e) => set("sellPrice", Number(e.target.value))}
               className={inputClass}
@@ -353,6 +360,8 @@ export function ProductForm({
           )}
         </div>
       </section>
+
+      {validationError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{validationError}</p>}
 
       {sectorFields.length > 0 && (
         <section className={sectionClass}>

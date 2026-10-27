@@ -75,6 +75,8 @@ const GROCERY_CATEGORY_CHIPS = [
   { name: "Dairy", matches: ["dairy", "milk", "egg"] },
   { name: "Bakery", matches: ["bread", "bakery"] },
   { name: "Rice, Flour & Dry Goods", matches: ["rice", "flour", "grain", "sugar", "salt", "dry"] },
+  { name: "Spices & Seasoning", matches: ["spice", "seasoning"] },
+  { name: "Coconut Products", matches: ["coconut"] },
   { name: "Beverages", matches: ["beverage", "drink", "juice", "water"] },
   { name: "Household", matches: ["household", "clean", "home"] },
 ] as const;
@@ -117,7 +119,7 @@ function boolField(value: unknown): boolean {
 export function AtomicRetailSalesPageV2() {
   const { data, ready } = useAppStore();
   const { t, locale } = useLocale();
-  const { org, canSeeFinancials, can } = useSubscription();
+  const { org, orgRole, canSeeFinancials, can } = useSubscription();
   const { canWrite, disabledHint } = useWriteAccess();
   const si = locale === "si";
   const fastRetail = FAST_RETAIL_SECTORS.has(org.sector);
@@ -210,15 +212,16 @@ export function AtomicRetailSalesPageV2() {
       .filter(([, qty]) => qty > 0)
       .map(([productId, qty]) => {
         const product = data.products.find((row) => row.id === productId)!;
-        const unitPrice = effectiveUnitPrice(
+        const selectedPrice = effectiveUnitPrice(
           product,
           customerId,
           data,
-          priceOverrides[productId],
+          groceryPos && orgRole !== "owner" && orgRole !== "manager" ? undefined : priceOverrides[productId],
         );
+        const unitPrice = groceryPos && selectedPrice <= 0 ? product.sellPrice : selectedPrice;
         return { product, qty, unitPrice };
       });
-  }, [cart, priceOverrides, data, customerId]);
+  }, [cart, priceOverrides, data, customerId, groceryPos, orgRole]);
 
   // Tell the shared mobile bottom nav to step aside only while our own
   // fixed settlement bar is actually showing (lines non-empty) — see
@@ -297,7 +300,9 @@ export function AtomicRetailSalesPageV2() {
     });
   };
 
-  const inStock = data.products.filter((product) => product.active && product.stockQty > 0);
+  const inStock = data.products.filter((product) =>
+    product.active && product.stockQty > 0 && (!groceryPos || product.sellPrice > 0)
+  );
   const query = search.trim().toLowerCase();
   const searched = query ? inStock.filter((product) => productSearchText(product, groceryPos).includes(query)) : inStock;
   const categoryFiltered = fastRetail && categoryFilter !== "all"
@@ -659,11 +664,11 @@ export function AtomicRetailSalesPageV2() {
           </section>
         ) : (
           <section className={`mt-5 grid gap-5 ${groceryPos ? "lg:grid-cols-[minmax(0,1fr)_minmax(340px,390px)]" : "xl:grid-cols-[1.45fr_0.85fr]"}`}>
-            <div className="space-y-4">
+            <div className="min-w-0 space-y-4">
               <ProCard
                 title={t("sales.products_title")}
                 eyebrow={t("sales.fast_checkout_eyebrow")}
-                action={<ProBadge tone="emerald">{inStock.length} available</ProBadge>}
+                action={<ProBadge tone="emerald">{inStock.length} {groceryPos ? grocery("available") : "available"}</ProBadge>}
               >
                 {!groceryPos && <div className="relative">
                   <input
@@ -736,33 +741,35 @@ export function AtomicRetailSalesPageV2() {
                 {filtered.length === 0 ? (
                   <ProCard><ProEmptyState title={groceryPos ? categoryFilter === "all" ? grocery("noMatchingProducts") : grocery("emptyCategory") : t("sales.no_match")} description={groceryPos ? grocery("emptyCategoryHint") : t("sales.search_no_match_desc")} /></ProCard>
               ) : (
-                <div className={fastRetail ? groceryPos ? "grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6" : "grid gap-2 md:grid-cols-2 2xl:grid-cols-3" : "grid gap-3 md:grid-cols-2"}>
+                <div className={fastRetail ? groceryPos ? "grid gap-3 sm:grid-cols-2 2xl:grid-cols-3" : "grid gap-2 md:grid-cols-2 2xl:grid-cols-3" : "grid gap-3 md:grid-cols-2"}>
                   {visibleProducts.map((product) => {
                     const qty = cart[product.id] ?? 0;
                     const selected = qty > 0;
-                    const unitPrice = effectiveUnitPrice(product, customerId, data, priceOverrides[product.id]);
+                    const selectedPrice = effectiveUnitPrice(product, customerId, data,
+                      groceryPos && orgRole !== "owner" && orgRole !== "manager" ? undefined : priceOverrides[product.id]);
+                    const unitPrice = groceryPos && selectedPrice <= 0 ? product.sellPrice : selectedPrice;
                     const rx = org.sector === "pharmacy" && boolField(product.customFields.requiresPrescription);
                     return (
                       <article
                         key={product.id}
-                        className={`overflow-hidden rounded-2xl border bg-white transition ${groceryPos ? "shadow-[0_10px_26px_rgba(15,23,42,0.07)] hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_18px_30px_rgba(37,99,235,0.13)]" : "p-4"} ${selected ? "border-teal-300 ring-2 ring-teal-100" : "border-slate-200 hover:border-teal-200"}`}
+                        className={`min-w-0 overflow-hidden rounded-2xl border bg-white transition ${groceryPos ? "shadow-[0_10px_26px_rgba(15,23,42,0.07)] hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_18px_30px_rgba(37,99,235,0.13)]" : "p-4"} ${selected ? "border-teal-300 ring-2 ring-teal-100" : "border-slate-200 hover:border-teal-200"}`}
                       >
                         {groceryPos && (
                           <div className="relative h-24 overflow-hidden border-b border-slate-100 bg-[radial-gradient(circle_at_50%_30%,#ffffff_0%,#eff6ff_62%,#eef2ff_100%)]">
                             <GroceryProductArt name={product.name} category={product.category} imageUrl={typeof product.customFields.imageUrl === "string" ? product.customFields.imageUrl : undefined} className="h-full w-full" />
-                            <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[9px] font-bold text-slate-600 shadow-sm">{groceryCategoryLabel(product.category, locale) || "Grocery"}</span>
+                            <span className="absolute left-2 top-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-white/90 px-2 py-1 text-[9px] font-bold text-slate-600 shadow-sm" title={groceryCategoryLabel(product.category, locale) || "Grocery"}>{groceryCategoryLabel(product.category, locale) || "Grocery"}</span>
                           </div>
                         )}
-                        <div className={`flex items-start justify-between gap-3 ${groceryPos ? "p-3" : ""}`}>
+                        <div className={`${groceryPos ? "space-y-2 p-3" : "flex items-start justify-between gap-3"}`}>
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <h2 className="truncate text-sm font-bold text-slate-950">{groceryPos ? groceryProductLabel(product, locale) : product.name}</h2>
+                              <h2 className={`text-sm font-bold text-slate-950 ${groceryPos ? "break-normal leading-6 [overflow-wrap:normal]" : "truncate"}`}>{groceryPos ? groceryProductLabel(product, locale) : product.name}</h2>
                               {conditionRelevant && <ProductConditionBadge condition={product.condition} />}
                               {rx && <ProBadge tone="amber">Rx</ProBadge>}
                             </div>
-                            <p className="mt-1 text-xs font-semibold text-slate-500">
+                            <p className={`mt-1 text-xs font-semibold text-slate-500 ${groceryPos ? "break-normal leading-5 [overflow-wrap:normal]" : ""}`}>
                               {groceryPos
-                                ? `${groceryUnitLabel(product.customFields.unitVariant ?? product.customFields.unit ?? "1 unit", locale)} · ${groceryCategoryLabel(product.category, locale) || "Grocery"}`
+                                ? groceryUnitLabel(product.customFields.unitVariant ?? product.customFields.unit ?? "1 unit", locale)
                                 : <>{product.sku ? `${product.sku} · ` : ""}{product.category || "General"}</>}
                             </p>
                             {org.sector === "pharmacy" && (
@@ -772,9 +779,9 @@ export function AtomicRetailSalesPageV2() {
                               </p>
                             )}
                           </div>
-                          <div className="shrink-0 text-right">
+                          <div className={groceryPos ? "" : "shrink-0 text-right"}>
                             {groceryPos ? (
-                              <p className={`rounded-full px-2 py-1 text-[10px] font-bold ${product.stockQty <= (product.reorderLevel ?? 0) ? "bg-amber-100 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}>{product.stockQty} {grocery("inStock")}</p>
+                              <p className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold leading-5 [overflow-wrap:normal] ${product.stockQty <= (product.reorderLevel ?? 0) ? "bg-amber-100 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}>{product.stockQty} {grocery("inStock")}</p>
                             ) : (
                               <>
                                 <p className="text-sm font-bold text-slate-950">{formatLkr(unitPrice)}</p>
@@ -876,20 +883,20 @@ export function AtomicRetailSalesPageV2() {
                             {groceryPos && <button type="button" aria-label={`${grocery("removeItem")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, 0, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold text-slate-400 transition hover:bg-rose-50 hover:text-rose-600">×</button>}
                           </div>
                         </div>
-                        <label className="mt-3 flex items-center justify-between gap-2 text-xs font-bold text-slate-500">
+                        {(!groceryPos || orgRole === "owner" || orgRole === "manager") && <label className="mt-3 flex items-center justify-between gap-2 text-xs font-bold text-slate-500">
                           {t("sales.unit_price")}
                           <input
                             type="number"
-                            min={0}
+                            min={groceryPos ? 0.01 : 0}
                             step="any"
                             value={line.unitPrice}
                             onChange={(event) => {
-                              setPriceOverrides((current) => ({ ...current, [line.product.id]: Math.max(0, Number(event.target.value)) }));
+                              setPriceOverrides((current) => ({ ...current, [line.product.id]: Math.max(groceryPos ? 0.01 : 0, Number(event.target.value)) }));
                               setPendingSaleId(null);
                             }}
                             className="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-right text-xs font-bold text-slate-700 outline-none focus:border-teal-300"
                           />
-                        </label>
+                        </label>}
                         {advancedRetail && (
                           <AdvancedSaleSelector
                             productId={line.product.id}
@@ -993,7 +1000,7 @@ export function AtomicRetailSalesPageV2() {
 
                     <label className={`mt-3 flex cursor-pointer items-center justify-between gap-4 rounded-xl border px-4 py-3 transition ${splitPayment ? "border-teal-200 bg-teal-50" : "border-slate-200 bg-slate-50"}`}>
                       <div>
-                        <span className="block text-sm font-bold text-slate-800">{si ? "ගෙවීම දෙකට බෙදන්න" : "Split payment"}</span>
+                        <span className="block text-sm font-bold text-slate-800">{groceryPos ? grocery("splitPayment") : si ? "ගෙවීම දෙකට බෙදන්න" : "Split payment"}</span>
                         <span className="mt-0.5 block text-xs text-slate-500">{si ? "උදා: cash + card, cash + credit" : "For example cash + card or cash + customer credit"}</span>
                       </div>
                       <input
@@ -1168,7 +1175,7 @@ export function AtomicRetailSalesPageV2() {
                     onClick={() => void handleSale()}
                     className="w-full rounded-lg bg-teal-600 py-4 text-sm font-bold text-white shadow-[0_8px_20px_rgba(13,148,136,0.2)] transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {saving ? t("common.saving") : identityBlocked ? (si ? "Checkout අවශ්‍යතා සම්පූර්ණ කරන්න" : "Complete checkout requirements") : splitPayment ? (si ? "බෙදා ගෙවීමෙන් විකිණීම සම්පූර්ණ කරන්න" : "Complete split-payment sale") : t("sales.complete")}
+                    {saving ? t("common.saving") : identityBlocked ? (si ? "Checkout අවශ්‍යතා සම්පූර්ණ කරන්න" : "Complete checkout requirements") : groceryPos ? grocery("completed") : splitPayment ? (si ? "බෙදා ගෙවීමෙන් විකිණීම සම්පූර්ණ කරන්න" : "Complete split-payment sale") : t("sales.complete")}
                   </button>
                 </div>
               </ProCard>
