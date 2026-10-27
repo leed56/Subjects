@@ -13,7 +13,7 @@ type PageHeaderProps = {
 
 export function PageHeader({ title, description, actions, metrics }: PageHeaderProps) {
   return (
-    <div className="mb-8">
+    <div data-ui="page-header" className="mb-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-[-0.025em] text-slate-950 sm:text-3xl">{title}</h1>
@@ -113,7 +113,7 @@ const METRIC_TONE: Record<NonNullable<MetricCardProps["tone"]>, string> = {
 
 export function MetricCard({ label, value, hint, icon, tone = "default", className = "" }: MetricCardProps) {
   return (
-    <div className={`min-w-0 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:p-5 sm:shadow-[0_8px_30px_rgba(15,23,42,0.045)] ${className}`}>
+    <div data-ui="metric-card" className={`min-w-0 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:p-5 sm:shadow-[0_8px_30px_rgba(15,23,42,0.045)] ${className}`}>
       <div className="flex items-start justify-between gap-2 sm:items-center sm:gap-3">
         <p className="text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-400 sm:text-[11px]">{label}</p>
         {icon && (

@@ -379,7 +379,7 @@ export function PremiumJobExperience() {
                   onClick={() => setCategory(value)}
                   className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                     category === value
-                      ? "bg-[#071827] text-white shadow-sm"
+                      ? "border border-sky-200 bg-sky-100 text-blue-800 shadow-sm"
                       : "border border-slate-200 bg-white text-slate-600 hover:border-teal-200 hover:bg-teal-50"
                   }`}
                 >
@@ -442,7 +442,7 @@ export function PremiumJobExperience() {
                   <div key={line.id} className="p-4 sm:p-5">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-2.5">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-[11px] font-bold text-white">{index + 1}</span>
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-[11px] font-bold text-blue-800">{index + 1}</span>
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-slate-900">{line.name || copy("Custom part", "අභිරුචි කොටස")}</p>
                           {canSeeFinancials && (
@@ -678,9 +678,9 @@ export function PremiumJobExperience() {
             </label>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-[linear-gradient(145deg,#071827_0%,#0c2636_100%)] p-4 text-white shadow-[0_12px_34px_rgba(2,8,23,0.14)] sm:p-5">
+          <div className="rounded-2xl border border-sky-200 bg-[linear-gradient(145deg,#ffffff_0%,#eaf6ff_100%)] p-4 text-slate-900 shadow-[0_12px_34px_rgba(30,87,150,0.09)] sm:p-5">
             <p className="text-sm font-semibold">{copy("Where should the purchase go?", "මෙම මිලදී ගැනීම යා යුත්තේ කොහේද?")}</p>
-            <p className="mt-1 text-xs leading-5 text-slate-300">
+            <p className="mt-1 text-xs leading-5 text-slate-600">
               {copy("Choose the accounting/inventory outcome for every line in this purchase batch.", "මෙම මිලදී ගැනීමේ සියලු පේළි සඳහා ගිණුම්/තොග ප්‍රතිඵලය තෝරන්න.")}
             </p>
             <div className="mt-4 space-y-2">
@@ -689,24 +689,24 @@ export function PremiumJobExperience() {
                 onClick={() => setOutcome("expense")}
                 className={`w-full rounded-xl border p-3 text-left transition ${
                   outcome === "expense"
-                    ? "border-teal-300 bg-teal-400/15 ring-1 ring-teal-300/30"
-                    : "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]"
+                    ? "border-sky-400 bg-sky-100 ring-1 ring-sky-200"
+                    : "border-sky-100 bg-white hover:bg-sky-50"
                 }`}
               >
                 <span className="block text-sm font-semibold">{copy("Use directly on this job", "මෙම කාර්යයට සෘජුව භාවිතා කරන්න")}</span>
-                <span className="mt-0.5 block text-[11px] leading-4 text-slate-300">{copy("Records job material cost and a linked parts-purchase expense.", "කාර්යයේ ද්‍රව්‍ය පිරිවැය සහ සම්බන්ධ parts-purchase expense එක සටහන් කරයි.")}</span>
+                <span className="mt-0.5 block text-[11px] leading-4 text-slate-600">{copy("Records job material cost and a linked parts-purchase expense.", "කාර්යයේ ද්‍රව්‍ය පිරිවැය සහ සම්බන්ධ parts-purchase expense එක සටහන් කරයි.")}</span>
               </button>
               <button
                 type="button"
                 onClick={() => setOutcome("inventory")}
                 className={`w-full rounded-xl border p-3 text-left transition ${
                   outcome === "inventory"
-                    ? "border-teal-300 bg-teal-400/15 ring-1 ring-teal-300/30"
-                    : "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]"
+                    ? "border-sky-400 bg-sky-100 ring-1 ring-sky-200"
+                    : "border-sky-100 bg-white hover:bg-sky-50"
                 }`}
               >
                 <span className="block text-sm font-semibold">{copy("Receive into Stock, then use on job", "තොගයට ලබාගෙන පසුව කාර්යයට භාවිතා කරන්න")}</span>
-                <span className="mt-0.5 block text-[11px] leading-4 text-slate-300">{copy("Creates/updates stock, consumes the job quantity and leaves any surplus available.", "තොගය සාදා/යාවත්කාලීන කර කාර්යයට අවශ්‍ය ප්‍රමාණය භාවිතා කර ඉතිරිය තොගයේ තබයි.")}</span>
+                <span className="mt-0.5 block text-[11px] leading-4 text-slate-600">{copy("Creates/updates stock, consumes the job quantity and leaves any surplus available.", "තොගය සාදා/යාවත්කාලීන කර කාර්යයට අවශ්‍ය ප්‍රමාණය භාවිතා කර ඉතිරිය තොගයේ තබයි.")}</span>
               </button>
             </div>
           </div>

@@ -65,13 +65,13 @@ export function Sidebar() {
   };
 
   return (
-    <aside className={`sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/[0.06] lg:flex ${org.sector === "grocery" ? "bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.24),transparent_30%),linear-gradient(160deg,#071327,#08111f_55%,#111239)]" : "bg-[#08111f]"}`}>
+    <aside className={`sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/[0.06] lg:flex ${org.sector === "grocery" ? "bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.24),transparent_30%),linear-gradient(160deg,#071327,#08111f_55%,#111239)]" : org.sector === "ac_hvac" ? "bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.21),transparent_32%),linear-gradient(170deg,#10315c,#102844_55%,#173661)]" : "bg-[#08111f]"}`}>
       <div className="flex h-20 items-center gap-2 border-b border-white/[0.06] px-5">
         <Link href={isPlatformAdmin ? "/admin" : "/dashboard"} className="flex min-w-0 flex-1 items-center gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-400 to-teal-600 text-sm font-bold text-white shadow-lg shadow-teal-950/30">L</span>
           <div className="min-w-0 leading-tight">
             <span className="block truncate text-lg font-bold tracking-tight text-white">LakBiz</span>
-            <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{org.sector === "grocery" ? "Grocery retail POS" : "Business workspace"}</span>
+            <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{org.sector === "grocery" ? "Grocery retail POS" : org.sector === "ac_hvac" ? "HVAC service command" : "Business workspace"}</span>
           </div>
         </Link>
         {/* Persistent, header-level alert badge — expired lots, blocked

@@ -331,15 +331,15 @@ export default function VehiclesPage() {
                   <input placeholder={t("jobs.job_notes")} value={notes} onChange={(e) => setNotes(e.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none focus:border-teal-300 focus:ring-4 focus:ring-teal-100 lg:col-span-2" />
                 </div>
 
-                <div className="mt-5 rounded-[1.25rem] bg-slate-950 p-4 text-white">
+                <div className={`mt-5 rounded-[1.25rem] p-4 ${org.sector === "ac_hvac" ? "border border-sky-200 bg-gradient-to-r from-cyan-50 to-blue-50 text-slate-900" : "bg-slate-950 text-white"}`}>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("veh.total_cost")}</p>
-                      <p className="mt-1 font-mono text-xl font-bold text-white">{formatLkr(currentCost)}</p>
+                      <p className={`text-xs font-bold uppercase tracking-wide ${org.sector === "ac_hvac" ? "text-slate-600" : "text-slate-400"}`}>{t("veh.total_cost")}</p>
+                      <p className={`mt-1 font-mono text-xl font-bold ${org.sector === "ac_hvac" ? "text-slate-900" : "text-white"}`}>{formatLkr(currentCost)}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("veh.est_profit")}</p>
-                      <p className="mt-1 font-mono text-xl font-bold text-teal-300">{formatLkr(askPrice - currentCost)}</p>
+                      <p className={`text-xs font-bold uppercase tracking-wide ${org.sector === "ac_hvac" ? "text-slate-600" : "text-slate-400"}`}>{t("veh.est_profit")}</p>
+                      <p className={`mt-1 font-mono text-xl font-bold ${org.sector === "ac_hvac" ? "text-blue-700" : "text-teal-300"}`}>{formatLkr(askPrice - currentCost)}</p>
                     </div>
                   </div>
                 </div>
@@ -509,9 +509,9 @@ export default function VehiclesPage() {
                   </select>
                 )}
               </div>
-              {canSeeFinancials && <div className="mt-5 rounded-2xl bg-slate-950 p-4 text-white">
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("common.profit")}</p>
-                <p className="mt-1 font-mono text-2xl font-bold text-teal-300">
+              {canSeeFinancials && <div className={`mt-5 rounded-2xl p-4 ${org.sector === "ac_hvac" ? "border border-sky-200 bg-gradient-to-r from-cyan-50 to-blue-50 text-slate-900" : "bg-slate-950 text-white"}`}>
+                <p className={`text-xs font-bold uppercase tracking-wide ${org.sector === "ac_hvac" ? "text-slate-600" : "text-slate-400"}`}>{t("common.profit")}</p>
+                <p className={`mt-1 font-mono text-2xl font-bold ${org.sector === "ac_hvac" ? "text-blue-700" : "text-teal-300"}`}>
                   {formatLkr(sellPrice - vehicleTotalCost(sellVehicleRecord.purchasePrice, sellVehicleRecord.reconditionCost))}
                 </p>
               </div>}

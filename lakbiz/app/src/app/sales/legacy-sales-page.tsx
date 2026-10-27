@@ -644,12 +644,12 @@ export default function SalesPage() {
                     />
                   </label>
                   {billVat && (
-                    <div className="rounded-2xl bg-slate-950 p-3 text-white">
-                      <div className="flex justify-between text-slate-300">
+                    <div className={`rounded-2xl p-3 ${org.sector === "ac_hvac" ? "border border-sky-200 bg-sky-50 text-slate-900" : "bg-slate-950 text-white"}`}>
+                      <div className={`flex justify-between ${org.sector === "ac_hvac" ? "text-slate-600" : "text-slate-300"}`}>
                         <span>{t("vat.subtotal")}</span>
                         <span className="font-mono">{formatLkr(billVat.subtotal)}</span>
                       </div>
-                      <div className="mt-2 flex justify-between text-teal-300">
+                      <div className={`mt-2 flex justify-between ${org.sector === "ac_hvac" ? "text-blue-700" : "text-teal-300"}`}>
                         <span>{t("vat.output_vat")} (18%)</span>
                         <span className="font-mono font-bold">{formatLkr(billVat.vat)}</span>
                       </div>

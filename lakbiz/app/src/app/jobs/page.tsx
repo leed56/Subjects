@@ -27,7 +27,7 @@ import { Drawer, DrawerFooter, Dialog, ConfirmDialog } from "@/components/ui/ove
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
 import { FormField, TextInput, SelectInput, MoneyInput, DateInput } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
-import { AssetIcon, PlusIcon, FilterIcon, CloseIcon } from "@/components/ui/icons";
+import { AssetIcon, PlusIcon, FilterIcon, CloseIcon, CoolingIcon, CalendarIcon, JobsIcon, CostingIcon } from "@/components/ui/icons";
 import {
   AC_BRANDS,
   AC_BTU_OPTIONS,
@@ -505,10 +505,10 @@ export default function JobsPage() {
           }
           metrics={
             <div className={`grid gap-3 sm:grid-cols-2 ${canOperateJobs ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
-              <MetricCard label={t("jobs.pending")} value={String(pending.length)} hint={t("jobs.stat_pending_hint")} tone={pending.length ? "warning" : "default"} />
-              <MetricCard label={t("jobs.schedule")} value={String(scheduled.length)} hint={t("jobs.stat_scheduled_hint")} />
-              <MetricCard label={t("jobs.service_due_section")} value={String(serviceDue.length)} hint={t("jobs.stat_service_due_hint")} tone={serviceDue.length ? "warning" : "default"} />
-              {canOperateJobs && <MetricCard label={t("jobs.quote_label")} value={formatLkr(quoteTotal)} hint={t("jobs.stat_quote_total_hint")} tone="positive" />}
+              <MetricCard label={t("jobs.pending")} value={String(pending.length)} hint={t("jobs.stat_pending_hint")} tone={pending.length ? "warning" : "default"} icon={<CoolingIcon className="h-5 w-5" />} />
+              <MetricCard label={t("jobs.schedule")} value={String(scheduled.length)} hint={t("jobs.stat_scheduled_hint")} icon={<CalendarIcon className="h-5 w-5" />} />
+              <MetricCard label={t("jobs.service_due_section")} value={String(serviceDue.length)} hint={t("jobs.stat_service_due_hint")} tone={serviceDue.length ? "warning" : "default"} icon={<JobsIcon className="h-5 w-5" />} />
+              {canOperateJobs && <MetricCard label={t("jobs.quote_label")} value={formatLkr(quoteTotal)} hint={t("jobs.stat_quote_total_hint")} tone="positive" icon={<CostingIcon className="h-5 w-5" />} />}
             </div>
           }
         />

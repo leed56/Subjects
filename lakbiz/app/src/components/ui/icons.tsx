@@ -121,6 +121,17 @@ export const JobsIcon = (p: IconProps) =>
     p,
   );
 
+/** Cooling coil/snowflake mark for the HVAC service workspace. */
+export const CoolingIcon = (p: IconProps) =>
+  base(
+    <>
+      <circle cx="12" cy="12" r="2.1" />
+      <path d="M12 2v7.9M12 14.1V22M2 12h7.9M14.1 12H22M4.9 4.9l5.6 5.6m3 3 5.6 5.6M19.1 4.9l-5.6 5.6m-3 3-5.6 5.6" />
+      <path d="m9.7 4.4 2.3 2.3 2.3-2.3M9.7 19.6l2.3-2.3 2.3 2.3M4.4 9.7 6.7 12l-2.3 2.3M19.6 9.7 17.3 12l2.3 2.3" />
+    </>,
+    p,
+  );
+
 export const WorkforceIcon = (p: IconProps) =>
   base(
     <>

@@ -8,7 +8,7 @@ import { Drawer, ConfirmDialog } from "@/components/ui/overlay";
 import { FormField, TextInput, SelectInput, DateInput } from "@/components/ui/form";
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
 import { useToast } from "@/components/ui/toast";
-import { PlusIcon } from "@/components/ui/icons";
+import { AssetIcon, PlusIcon } from "@/components/ui/icons";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -309,10 +309,10 @@ export default function AssetsPage() {
           }
           metrics={
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard label={t("assets.units")} value={String(assets.length)} />
-              <MetricCard label={t("assets.status_active")} value={String(activeCount)} tone="positive" />
-              <MetricCard label={t("assets.service_due_soon")} value={String(dueSoonCount)} tone={dueSoonCount > 0 ? "warning" : "default"} />
-              <MetricCard label={t("assets.under_warranty")} value={String(warrantyActiveCount)} />
+              <MetricCard label={t("assets.units")} value={String(assets.length)} icon={<AssetIcon className="h-5 w-5" />} />
+              <MetricCard label={t("assets.status_active")} value={String(activeCount)} tone="positive" icon={<AssetIcon className="h-5 w-5" />} />
+              <MetricCard label={t("assets.service_due_soon")} value={String(dueSoonCount)} tone={dueSoonCount > 0 ? "warning" : "default"} icon={<AssetIcon className="h-5 w-5" />} />
+              <MetricCard label={t("assets.under_warranty")} value={String(warrantyActiveCount)} icon={<AssetIcon className="h-5 w-5" />} />
             </div>
           }
         />

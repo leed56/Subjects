@@ -1,0 +1,214 @@
+/* HVAC keeps the grocery workspace's compact, colorful hierarchy while using
+   a service palette of sky, cobalt, mint and warm amber. Scoped to HVAC shops. */
+.hvac-workspace {
+  background:
+    radial-gradient(circle at 92% 4%, rgba(56, 189, 248, 0.16), transparent 28rem),
+    radial-gradient(circle at 22% 0%, rgba(45, 212, 191, 0.13), transparent 27rem),
+    linear-gradient(180deg, #f2f9ff 0%, #eaf3fb 100%);
+}
+
+.hvac-workspace main {
+  --hvac-blue: #1557cf;
+  --hvac-cyan: #0891b2;
+  --hvac-mint: #059669;
+  --hvac-amber: #d97706;
+}
+
+.hvac-workspace aside a[aria-current="page"] {
+  background: linear-gradient(100deg, #0ea5c6, #1764da 66%, #6558e8);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(19, 104, 212, 0.26);
+}
+
+.hvac-workspace aside a[aria-current="page"] > span:first-child {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.hvac-workspace aside nav p[class*="uppercase"] {
+  color: #a7c7e8;
+}
+
+.hvac-workspace aside nav a:not([aria-current="page"]):hover {
+  background: rgba(125, 211, 252, 0.12);
+}
+
+.hvac-workspace main [data-ui="page-header"],
+.hvac-workspace main [data-ui="pro-page-header"] {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(1.15rem, 2vw, 1.85rem);
+  border: 1px solid #d6eafd;
+  border-radius: 1.6rem;
+  background:
+    radial-gradient(circle at 92% 12%, rgba(125, 211, 252, 0.3), transparent 30%),
+    radial-gradient(circle at 70% 100%, rgba(110, 231, 183, 0.2), transparent 33%),
+    linear-gradient(125deg, #fff 0%, #f2f9ff 56%, #e9f3ff 100%);
+  box-shadow: 0 16px 36px rgba(30, 87, 150, 0.075);
+}
+
+.hvac-workspace main [data-ui="page-header"]::before,
+.hvac-workspace main [data-ui="pro-page-header"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: linear-gradient(180deg, #16c6e5, #1765df 52%, #6b5cf0);
+}
+
+.hvac-workspace main [data-ui="page-header"] h1,
+.hvac-workspace main [data-ui="pro-page-header"] h1 {
+  color: #12325a;
+  line-height: 1.16;
+  overflow-wrap: normal;
+}
+
+.hvac-workspace main [data-ui="page-header"] > div:first-child p,
+.hvac-workspace main [data-ui="pro-page-header"] > div:first-child p {
+  color: #496789;
+}
+
+.hvac-workspace main [data-ui="page-header"] > .mt-5 {
+  margin-top: 1.4rem;
+}
+
+.hvac-workspace main [data-ui="metric-card"],
+.hvac-workspace main [data-ui="pro-stat-card"] {
+  border: 1px solid #d5e8fa;
+  border-top: 4px solid #1685ee;
+  border-radius: 1.2rem;
+  background: linear-gradient(155deg, #fff, #f4faff);
+  box-shadow: 0 8px 20px rgba(30, 87, 150, 0.075);
+}
+
+.hvac-workspace main [data-ui="metric-card"]:nth-child(4n + 1),
+.hvac-workspace main [data-ui="pro-stat-card"]:nth-child(4n + 1) {
+  border-top-color: #15b8d0;
+  background: linear-gradient(155deg, #fff, #effbfe);
+}
+
+.hvac-workspace main [data-ui="metric-card"]:nth-child(4n + 2),
+.hvac-workspace main [data-ui="pro-stat-card"]:nth-child(4n + 2) {
+  border-top-color: #5965ed;
+  background: linear-gradient(155deg, #fff, #f1f2ff);
+}
+
+.hvac-workspace main [data-ui="metric-card"]:nth-child(4n + 3),
+.hvac-workspace main [data-ui="pro-stat-card"]:nth-child(4n + 3) {
+  border-top-color: #f5a623;
+  background: linear-gradient(155deg, #fff, #fff8eb);
+}
+
+.hvac-workspace main [data-ui="metric-card"]:nth-child(4n + 4),
+.hvac-workspace main [data-ui="pro-stat-card"]:nth-child(4n + 4) {
+  border-top-color: #20b99d;
+  background: linear-gradient(155deg, #fff, #effcf7);
+}
+
+.hvac-workspace main [data-ui="metric-card"] p:first-child {
+  color: #4b6688;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+}
+
+.hvac-workspace main [data-ui="metric-card"] p:nth-child(2) {
+  color: #12325a;
+}
+
+.hvac-workspace main [data-ui="metric-card"] span:has(> svg) {
+  color: #1765d1;
+  background: #e9f3ff;
+  box-shadow: inset 0 0 0 1px #d6e8ff;
+}
+
+/* The legacy dashboard gave its first KPI a near-black special treatment. */
+.hvac-workspace main > [data-ui="page-header"] > .mt-5 > .grid > [data-ui="metric-card"]:first-child {
+  border-color: #bce7f4 !important;
+  border-top-color: #15b8d0 !important;
+  background: linear-gradient(155deg, #fff, #ecfbff) !important;
+  box-shadow: 0 8px 20px rgba(30, 87, 150, 0.075) !important;
+}
+
+.hvac-workspace main > [data-ui="page-header"] > .mt-5 > .grid > [data-ui="metric-card"]:first-child p {
+  color: #14375d !important;
+}
+
+.hvac-workspace main [data-ui="page-header"] button.bg-teal-600,
+.hvac-workspace main [data-ui="pro-page-header"] button.bg-teal-600,
+.hvac-workspace main [data-ui="page-header"] a.bg-teal-600 {
+  background: linear-gradient(105deg, #089aca, #1864df);
+  box-shadow: 0 9px 20px rgba(25, 100, 207, 0.19);
+}
+
+.hvac-workspace main section,
+.hvac-workspace main article {
+  scroll-margin-top: 5rem;
+}
+
+/* Work-order financial summaries remain legible on light surfaces. */
+.hvac-workspace main article:has(> .h-1.bg-teal-500) > .p-4 > div.mt-3.grid {
+  border-color: #c9e2f8;
+  background: #d9edfc;
+  box-shadow: none;
+}
+
+.hvac-workspace main article:has(> .h-1.bg-teal-500) > .p-4 > div.mt-3.grid > div {
+  background: linear-gradient(145deg, #fff, #f1f9ff);
+}
+
+.hvac-workspace main article:has(> .h-1.bg-teal-500) > .p-4 > div.mt-3.grid p:first-child {
+  color: #557492;
+}
+
+.hvac-workspace main article:has(> .h-1.bg-teal-500) > .p-4 > div.mt-3.grid p:last-child {
+  color: #14375d;
+}
+
+/* Job drawers are rendered in a portal, so their HVAC-specific selectors
+   identify the canonical job-invoice link rather than relying on ancestry. */
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  > div:nth-child(2) > .mb-4.grid.grid-cols-2.gap-2 {
+  border-color: #cce5f9;
+  background: #dcefff;
+  box-shadow: 0 8px 22px rgba(30, 87, 150, 0.09);
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  > div:nth-child(2) > .mb-4.grid.grid-cols-2.gap-2 > div {
+  border-color: #d4e7f8;
+  background: linear-gradient(145deg, #fff, #f0f8ff) !important;
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  > div:nth-child(2) > .mb-4.grid.grid-cols-2.gap-2 > div p:first-child {
+  color: #557492 !important;
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  > div:nth-child(2) > .mb-4.grid.grid-cols-2.gap-2 > div p:last-child {
+  color: #14375d !important;
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  [role="tablist"] button[aria-selected="true"] {
+  border-color: #a9d9fb !important;
+  background: linear-gradient(140deg, #e4f5ff, #d7eaff) !important;
+  color: #1555aa !important;
+  box-shadow: 0 4px 12px rgba(30, 87, 150, 0.12) !important;
+}
+
+[role="dialog"][aria-labelledby="drawer-title"]:has(a[href^="/jobs/"][href$="/invoice"])
+  [role="tablist"] ~ .mt-4.space-y-3 > .flex.flex-wrap.gap-2:first-child > button:nth-child(3) {
+  border-color: #b4dcf6 !important;
+  background: #e7f5ff !important;
+  color: #1555aa !important;
+  box-shadow: none;
+}
+
+@media (max-width: 640px) {
+  .hvac-workspace main [data-ui="page-header"],
+  .hvac-workspace main [data-ui="pro-page-header"] {
+    border-radius: 1.2rem;
+    padding: 1.15rem;
+  }
+}

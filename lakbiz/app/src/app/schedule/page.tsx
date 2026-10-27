@@ -7,7 +7,7 @@ import { PageHeader, MetricCard, EmptyState, StatusBadge } from "@/components/ui
 import { Drawer } from "@/components/ui/overlay";
 import { FormField, DateInput, SelectInput } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
-import { ChevronRightIcon, CheckIcon } from "@/components/ui/icons";
+import { ChevronRightIcon, CheckIcon, CalendarIcon, CoolingIcon, JobsIcon } from "@/components/ui/icons";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { CallLink, NavigateLink } from "@/components/ui/field-links";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -176,9 +176,9 @@ export default function SchedulePage() {
           }
           metrics={
             <div className="grid gap-3 sm:grid-cols-3">
-              <MetricCard label={t("schedule.jobs_this_week")} value={String(weekTotal)} />
-              <MetricCard label={t("schedule.today_count")} value={String(todayCount)} tone={todayCount > 0 ? "positive" : "default"} />
-              <MetricCard label={t("schedule.unscheduled")} value={String(unscheduled.length)} tone={unscheduled.length > 0 ? "warning" : "default"} />
+              <MetricCard label={t("schedule.jobs_this_week")} value={String(weekTotal)} icon={<CalendarIcon className="h-5 w-5" />} />
+              <MetricCard label={t("schedule.today_count")} value={String(todayCount)} tone={todayCount > 0 ? "positive" : "default"} icon={<CoolingIcon className="h-5 w-5" />} />
+              <MetricCard label={t("schedule.unscheduled")} value={String(unscheduled.length)} tone={unscheduled.length > 0 ? "warning" : "default"} icon={<JobsIcon className="h-5 w-5" />} />
             </div>
           }
         />

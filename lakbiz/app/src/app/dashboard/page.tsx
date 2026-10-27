@@ -26,6 +26,7 @@ import {
   ActionMenu,
 } from "@/components/ui/primitives";
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
+import { CoolingIcon, JobsIcon, BankingIcon, CostingIcon } from "@/components/ui/icons";
 import { ConfirmDialog } from "@/components/ui/overlay";
 import { CallLink, NavigateLink } from "@/components/ui/field-links";
 import { jobStatusLabel } from "@/lib/ac-jobs";
@@ -730,6 +731,7 @@ export default function DashboardPage() {
               <MetricCard
                 label={showAcJobs && canSeeFinancials ? t("dash.today_revenue") : t("dash.today_sales")}
                 value={formatLkr(combinedTodayRevenue)}
+                icon={showAcJobs ? <CoolingIcon className="h-5 w-5" /> : undefined}
                 hint={
                   showAcJobs && canSeeFinancials
                     ? t("dash.sales_jobs_hint").replace("{sales}", String(stats.saleCount)).replace("{jobs}", String(todayJobs.length))
@@ -740,6 +742,7 @@ export default function DashboardPage() {
                 <MetricCard
                   label={t("dash.today_profit")}
                   value={formatLkr(combinedTodayProfit)}
+                  icon={showAcJobs ? <CostingIcon className="h-5 w-5" /> : undefined}
                   hint={combinedTodayRevenue > 0 ? t("dash.kpi_margin").replace("{pct}", String(marginPct)) : "—"}
                   tone="positive"
                 />
@@ -759,12 +762,14 @@ export default function DashboardPage() {
               <MetricCard
                 label={t("dash.kpi_payments_received")}
                 value={formatLkr(stats.paymentsReceivedToday)}
+                icon={showAcJobs ? <BankingIcon className="h-5 w-5" /> : undefined}
                 hint={t("dash.kpi_payments_count").replace("{count}", String(stats.paymentsReceivedCount))}
               />
               {canSeeJobs && (
                 <MetricCard
                   label={t("dash.kpi_jobs_today")}
                   value={String(stats.todayJobsCount)}
+                  icon={<JobsIcon className="h-5 w-5" />}
                   hint={t("dash.kpi_jobs_breakdown").replace("{completed}", String(stats.todayJobsCompletedCount)).replace("{remaining}", String(stats.todayJobsRemainingCount))}
                   tone={stats.todayJobsUnassignedCount > 0 ? "warning" : "default"}
                 />

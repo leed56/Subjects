@@ -1,3 +1,5 @@
+"use client";
+
 import type { ReactNode } from "react";
 import { TrialBanner } from "@/components/trial-banner";
 import { CloudSyncBanner } from "@/components/cloud-sync-banner";
@@ -6,6 +8,7 @@ import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { SectorWorkspaceAutoBanner } from "@/components/sector/sector-workspace-auto-banner";
 import { Sidebar } from "@/components/shell/sidebar";
 import { MobileNav } from "@/components/shell/mobile-nav";
+import { useSubscription } from "@/lib/subscription/subscription-provider";
 
 /**
  * Application shell for every authenticated shop/settings page.
@@ -15,8 +18,10 @@ import { MobileNav } from "@/components/shell/mobile-nav";
  * continuous white sheet; page-level components still own the hierarchy.
  */
 export function AppShell({ children }: { children: ReactNode }) {
+  const { org } = useSubscription();
+  const isHvac = org.sector === "ac_hvac";
   return (
-    <div className="flex min-h-full bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.055),transparent_28rem),radial-gradient(circle_at_95%_12%,rgba(56,189,248,0.035),transparent_26rem),linear-gradient(180deg,#f5f8fc_0%,#edf3f8_100%)] text-slate-950">
+    <div className={`flex min-h-full bg-[radial-gradient(circle_at_18%_0%,rgba(20,184,166,0.055),transparent_28rem),radial-gradient(circle_at_95%_12%,rgba(56,189,248,0.035),transparent_26rem),linear-gradient(180deg,#f5f8fc_0%,#edf3f8_100%)] text-slate-950 ${isHvac ? "hvac-workspace" : ""}`}>
       {/* A prior version hid this with a CSS transform (-translate-y-full,
           revealed via focus:translate-y-0). That box was still laid out
           at top-3 before the transform, and a translateY(-100%) only

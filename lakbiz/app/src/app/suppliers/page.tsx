@@ -557,18 +557,18 @@ export default function SuppliersPage() {
                 })}
               </div>
 
-              <div className={`mt-5 rounded-[1.25rem] p-4 ${org.sector === "grocery" ? "border border-emerald-100 bg-gradient-to-r from-emerald-50 via-sky-50 to-violet-50 text-slate-900" : "bg-slate-950 text-white"}`}>
-                <div className={`flex justify-between text-sm font-semibold ${org.sector === "grocery" ? "text-slate-600" : "text-slate-300"}`}>
+              <div className={`mt-5 rounded-[1.25rem] p-4 ${org.sector === "grocery" || org.sector === "ac_hvac" ? "border border-sky-100 bg-gradient-to-r from-cyan-50 via-sky-50 to-indigo-50 text-slate-900" : "bg-slate-950 text-white"}`}>
+                <div className={`flex justify-between text-sm font-semibold ${org.sector === "grocery" || org.sector === "ac_hvac" ? "text-slate-600" : "text-slate-300"}`}>
                   <span>{t("vat.subtotal")}</span>
                   <span className="font-mono">{formatLkr(purchaseTotal)}</span>
                 </div>
                 {vatRegistered && (
-                  <label className={`mt-3 block text-sm font-semibold ${org.sector === "grocery" ? "text-slate-600" : "text-slate-300"}`}>
+                  <label className={`mt-3 block text-sm font-semibold ${org.sector === "grocery" || org.sector === "ac_hvac" ? "text-slate-600" : "text-slate-300"}`}>
                     {t("vat.input_vat")} (18%)
-                    <input type="number" min={0} value={purchaseInputVat === "" ? defaultInputVat : purchaseInputVat} onChange={(e) => setPurchaseInputVat(e.target.value === "" ? "" : Number(e.target.value))} className={`mt-2 h-11 w-full rounded-xl px-3 text-sm font-bold outline-none ${org.sector === "grocery" ? "border border-emerald-100 bg-white text-slate-900" : "border border-white/10 bg-white/10 text-white"}`} />
+                    <input type="number" min={0} value={purchaseInputVat === "" ? defaultInputVat : purchaseInputVat} onChange={(e) => setPurchaseInputVat(e.target.value === "" ? "" : Number(e.target.value))} className={`mt-2 h-11 w-full rounded-xl px-3 text-sm font-bold outline-none ${org.sector === "grocery" || org.sector === "ac_hvac" ? "border border-sky-100 bg-white text-slate-900" : "border border-white/10 bg-white/10 text-white"}`} />
                   </label>
                 )}
-                <div className={`mt-3 flex justify-between text-lg font-bold ${org.sector === "grocery" ? "text-teal-800" : "text-teal-300"}`}>
+                <div className={`mt-3 flex justify-between text-lg font-bold ${org.sector === "grocery" || org.sector === "ac_hvac" ? "text-blue-800" : "text-teal-300"}`}>
                   <span>{t("common.total")}</span>
                   <span className="font-mono">{formatLkr(purchaseTotal + (vatRegistered ? effectiveInputVat : 0))}</span>
                 </div>
@@ -624,8 +624,8 @@ export default function SuppliersPage() {
                 })}
               </div>
 
-              <div className={`mt-5 rounded-[1.25rem] p-4 ${org.sector === "grocery" ? "border border-emerald-100 bg-gradient-to-r from-emerald-50 via-sky-50 to-violet-50 text-slate-900" : "bg-slate-950 text-white"}`}>
-                <div className={`flex justify-between text-lg font-bold ${org.sector === "grocery" ? "text-teal-800" : "text-teal-300"}`}>
+              <div className={`mt-5 rounded-[1.25rem] p-4 ${org.sector === "grocery" || org.sector === "ac_hvac" ? "border border-sky-100 bg-gradient-to-r from-cyan-50 via-sky-50 to-indigo-50 text-slate-900" : "bg-slate-950 text-white"}`}>
+                <div className={`flex justify-between text-lg font-bold ${org.sector === "grocery" || org.sector === "ac_hvac" ? "text-blue-800" : "text-teal-300"}`}>
                   <span>{t("sup.po_expected")}</span>
                   <span className="font-mono">{formatLkr(poExpectedTotal)}</span>
                 </div>
