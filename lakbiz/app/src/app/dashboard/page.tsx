@@ -369,6 +369,52 @@ export default function DashboardPage() {
         ? ["/vehicles", "/customers", "/vehicles"]
         : ["/stock", "/customers", dashboardPrimary.href];
 
+  if (!hasAnyData && org.sector === "ac_hvac") {
+    return (
+      <AppShell>
+        <ProMain>
+          <PageHeader
+            title={`${dashboardPreset.title} · ${shopName}`}
+            description={dashboardPreset.subtitle}
+            actions={canSeeJobs ? <Link href="/jobs" className={primaryButton}>+ {t("jobs.new")}</Link> : undefined}
+            metrics={
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <MetricCard label={t("dash.kpi_jobs_today")} value={String(stats.todayJobsCount)} hint={t("dash.operations_title")} icon={<CoolingIcon className="h-5 w-5" />} />
+                <MetricCard label={t("jobs.pending")} value={String(data.acJobs.filter((job) => job.status === "quote").length)} hint={t("jobs.stat_pending_hint")} icon={<JobsIcon className="h-5 w-5" />} />
+                <MetricCard label={t("jobs.schedule")} value={String(data.acJobs.filter((job) => Boolean(job.scheduledDate) && job.status !== "cancelled").length)} hint={t("jobs.stat_scheduled_hint")} icon={<CostingIcon className="h-5 w-5" />} />
+                <MetricCard label={t("jobs.service_due_section")} value={String(stats.acServiceDueSoonCount)} hint={t("jobs.stat_service_due_hint")} icon={<BankingIcon className="h-5 w-5" />} />
+              </div>
+            }
+          />
+          <OfflineSyncNotice />
+          <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+            <Card>
+              <SectionHeader title={dashboardPreset.onboardingTitle} uppercase={false} />
+              <p className="mb-4 text-sm leading-6 text-slate-600">{dashboardPreset.onboardingDescription}</p>
+              <div className="space-y-2">
+                {dashboardPreset.onboardingSteps.map((step, index) => (
+                  <Link
+                    key={step}
+                    href={onboardingLinks[index] ?? dashboardPrimary.href}
+                    className="group flex min-h-12 items-center gap-3 rounded-xl border border-sky-100 bg-gradient-to-r from-white to-sky-50 px-3 py-2 transition hover:border-sky-300 hover:shadow-sm"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-xs font-bold text-blue-800">{index + 1}</span>
+                    <span className="flex-1 text-sm font-medium text-slate-700 group-hover:text-slate-950">{step}</span>
+                    <span className="text-sm font-bold text-blue-700" aria-hidden="true">→</span>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+            <Card>
+              <SectionHeader title={t("dash.operations_title")} uppercase={false} action={canSeeJobs ? <Link href="/jobs" className={ghostLink}>{t("dash.view")}</Link> : undefined} />
+              <EmptyState title={t("dash.operations_empty_title")} description={t("dash.operations_empty_desc")} icon={<CoolingIcon className="h-5 w-5" />} size="compact" />
+            </Card>
+          </div>
+        </ProMain>
+      </AppShell>
+    );
+  }
+
   // Textile keeps its compact command centre visible from day one because
   // physical rolls, cuts and dispatches live in RLS-protected sector tables
   // rather than the local-first store used by this generic empty check. Its

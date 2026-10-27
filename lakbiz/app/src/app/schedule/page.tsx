@@ -16,6 +16,7 @@ import { useAppStore } from "@/lib/store/use-app-store";
 import type { ACJob } from "@/lib/store/types";
 import { jobStatusClass, jobStatusLabel, type ACJobStatus } from "@/lib/ac-jobs";
 import { jobTypeLabel } from "@/lib/ac-job-types";
+import { isHvacDemo } from "@/lib/hvac-demo";
 
 /** Monday-based week start, module-level so it isn't recomputed inline
  * during render (matches the codebase's existing Date.now()-outside-render
@@ -77,7 +78,7 @@ export default function SchedulePage() {
 
   const todayIso = useMemo(() => toIsoDate(new Date()), []);
 
-  if (!org.isAuthenticated || !localReady || !localData) {
+  if ((!org.isAuthenticated && !isHvacDemo(org)) || !localReady || !localData) {
     return (
       <AppShell>
         <ProMain>

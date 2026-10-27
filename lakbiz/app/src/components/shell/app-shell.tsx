@@ -9,6 +9,7 @@ import { SectorWorkspaceAutoBanner } from "@/components/sector/sector-workspace-
 import { Sidebar } from "@/components/shell/sidebar";
 import { MobileNav } from "@/components/shell/mobile-nav";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { isHvacDemo } from "@/lib/hvac-demo";
 
 /**
  * Application shell for every authenticated shop/settings page.
@@ -48,6 +49,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileNav />
+        {isHvacDemo(org) && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sky-200 bg-sky-50 px-4 py-2 text-xs text-blue-900 sm:px-6">
+            <span><strong>HVAC demo · Sample data</strong> — explore jobs, stock and billing. Changes stay in this browser.</span>
+            <a href="/demo/hvac?reset=1" className="rounded-lg border border-sky-200 bg-white px-3 py-1.5 font-semibold hover:bg-sky-100">Reset demo</a>
+          </div>
+        )}
         <TrialBanner />
         <PwaInstallPrompt />
         <OfflineBanner />

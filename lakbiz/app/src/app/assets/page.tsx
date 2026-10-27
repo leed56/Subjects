@@ -15,6 +15,7 @@ import { useAppStore } from "@/lib/store/use-app-store";
 import { formatLkr } from "@/lib/format";
 import { daysUntilDate } from "@/lib/ac-service";
 import { computeRepeatRepairSignal } from "@/lib/repeat-repair";
+import { createHvacDemoAssets, HVAC_DEMO_ASSETS_KEY, isHvacDemo } from "@/lib/hvac-demo";
 import {
   createAsset,
   deleteAsset,
@@ -67,6 +68,7 @@ export default function AssetsPage() {
   const { t } = useLocale();
   const { org, canSeeFinancials } = useSubscription();
   const { data: localData, ready: localReady } = useAppStore();
+  const demo = isHvacDemo(org);
   const { toast } = useToast();
 
   const [assets, setAssets] = useState<AcAsset[] | null>(null);
@@ -94,7 +96,14 @@ export default function AssetsPage() {
 
   useEffect(() => {
     if (!orgId) {
-      setAssets([]);
+      if (demo) {
+        try {
+          const saved = localStorage.getItem(HVAC_DEMO_ASSETS_KEY);
+          setAssets(saved ? JSON.parse(saved) as AcAsset[] : createHvacDemoAssets());
+        } catch {
+          setAssets(createHvacDemoAssets());
+        }
+      } else setAssets([]);
       return;
     }
     let cancelled = false;
@@ -106,10 +115,17 @@ export default function AssetsPage() {
     return () => {
       cancelled = true;
     };
-  }, [orgId]);
+  }, [orgId, demo]);
 
   useEffect(() => {
     if (!profileAsset || profileTab !== "jobs") return;
+    if (demo && localData) {
+      const jobs = localData.acJobs.filter((job) => job.customerId === profileAsset.customerId);
+      setProfileJobs(jobs.map((job) => ({ id: job.id, jobNo: job.jobNo, jobDate: job.date, status: job.status, description: job.description, complaint: job.complaint ?? null, diagnosis: job.diagnosis ?? null, quotedAmount: job.quotedAmount, assigneeType: job.assigneeType ?? null, subcontractCost: job.subcontractCost ?? null, jobType: job.jobType })));
+      const ids = new Set(jobs.map((job) => job.id));
+      setProfileJobItems(localData.jobItems.filter((item) => ids.has(item.jobId)).map((item) => ({ jobId: item.jobId, itemType: item.itemType, name: item.name, qty: item.qty, lineTotal: item.lineTotal, isReplacement: item.isReplacement ?? false, oldComponentName: item.oldComponentName ?? null, oldComponentDisposition: item.oldComponentDisposition ?? null, newComponentSerial: item.newComponentSerial ?? null, warrantyType: item.warrantyType ?? null, warrantyStartDate: item.warrantyStartDate ?? null, warrantyExpiryDate: item.warrantyExpiryDate ?? null, supplierId: item.supplierId ?? null })));
+      return;
+    }
     let cancelled = false;
     void fetchAssetJobs(profileAsset.id).then(async (result) => {
       if (cancelled) return;
@@ -120,9 +136,9 @@ export default function AssetsPage() {
     return () => {
       cancelled = true;
     };
-  }, [profileAsset, profileTab]);
+  }, [profileAsset, profileTab, demo, localData]);
 
-  if (!org.isAuthenticated || !localReady || !localData || assets === null) {
+  if ((!org.isAuthenticated && !demo) || !localReady || !localData || assets === null) {
     return (
       <AppShell>
         <ProMain>
@@ -172,6 +188,17 @@ export default function AssetsPage() {
 
   const handleSave = async () => {
     if (saving) return;
+    if (demo) {
+      const now = new Date().toISOString();
+      const asset: AcAsset = { id: editing?.id ?? crypto.randomUUID(), organizationId: org.id!, customerId: form.customerId || null, brand: form.brand || null, model: form.model || null, serialNo: form.serialNo || null, indoorSerial: form.indoorSerial || null, outdoorSerial: form.outdoorSerial || null, btu: form.btu ? Number(form.btu) : null, acType: form.acType || null, refrigerantType: form.refrigerantType || null, installDate: form.installDate || null, warrantyExpiry: form.warrantyExpiry || null, locationInProperty: form.locationInProperty || null, siteAddress: form.siteAddress || null, status: form.status, nextServiceDate: form.nextServiceDate || null, notes: form.notes || null, createdAt: editing?.createdAt ?? now, updatedAt: now };
+      const next = [asset, ...assets.filter((item) => item.id !== asset.id)];
+      localStorage.setItem(HVAC_DEMO_ASSETS_KEY, JSON.stringify(next));
+      setAssets(next);
+      setFormOpen(false);
+      resetForm();
+      toast({ tone: "success", title: editing ? t("common.update") : t("assets.added") });
+      return;
+    }
     const input: AcAssetInput = {
       customerId: form.customerId || null,
       brand: form.brand,
@@ -208,6 +235,14 @@ export default function AssetsPage() {
 
   const confirmDelete = async () => {
     if (!deleteTarget || deleting) return;
+    if (demo) {
+      const next = assets.filter((asset) => asset.id !== deleteTarget.id);
+      localStorage.setItem(HVAC_DEMO_ASSETS_KEY, JSON.stringify(next));
+      setAssets(next);
+      if (profileAsset?.id === deleteTarget.id) setProfileAsset(null);
+      setDeleteTarget(null);
+      return;
+    }
     setDeleting(true);
     const result = await deleteAsset(deleteTarget.id);
     setDeleting(false);
