@@ -26,6 +26,7 @@ import {
   ActionMenu,
 } from "@/components/ui/primitives";
 import { DataTable, type DataTableColumn } from "@/components/ui/table";
+import { CoolingIcon, JobsIcon, BankingIcon, CostingIcon } from "@/components/ui/icons";
 import { ConfirmDialog } from "@/components/ui/overlay";
 import { CallLink, NavigateLink } from "@/components/ui/field-links";
 import { jobStatusLabel } from "@/lib/ac-jobs";
@@ -368,6 +369,52 @@ export default function DashboardPage() {
         ? ["/vehicles", "/customers", "/vehicles"]
         : ["/stock", "/customers", dashboardPrimary.href];
 
+  if (!hasAnyData && org.sector === "ac_hvac") {
+    return (
+      <AppShell>
+        <ProMain>
+          <PageHeader
+            title={`${dashboardPreset.title} · ${shopName}`}
+            description={dashboardPreset.subtitle}
+            actions={canSeeJobs ? <Link href="/jobs" className={primaryButton}>+ {t("jobs.new")}</Link> : undefined}
+            metrics={
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <MetricCard label={t("dash.kpi_jobs_today")} value={String(stats.todayJobsCount)} hint={t("dash.operations_title")} icon={<CoolingIcon className="h-5 w-5" />} />
+                <MetricCard label={t("jobs.pending")} value={String(data.acJobs.filter((job) => job.status === "quote").length)} hint={t("jobs.stat_pending_hint")} icon={<JobsIcon className="h-5 w-5" />} />
+                <MetricCard label={t("jobs.schedule")} value={String(data.acJobs.filter((job) => Boolean(job.scheduledDate) && job.status !== "cancelled").length)} hint={t("jobs.stat_scheduled_hint")} icon={<CostingIcon className="h-5 w-5" />} />
+                <MetricCard label={t("jobs.service_due_section")} value={String(stats.acServiceDueSoonCount)} hint={t("jobs.stat_service_due_hint")} icon={<BankingIcon className="h-5 w-5" />} />
+              </div>
+            }
+          />
+          <OfflineSyncNotice />
+          <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+            <Card>
+              <SectionHeader title={dashboardPreset.onboardingTitle} uppercase={false} />
+              <p className="mb-4 text-sm leading-6 text-slate-600">{dashboardPreset.onboardingDescription}</p>
+              <div className="space-y-2">
+                {dashboardPreset.onboardingSteps.map((step, index) => (
+                  <Link
+                    key={step}
+                    href={onboardingLinks[index] ?? dashboardPrimary.href}
+                    className="group flex min-h-12 items-center gap-3 rounded-xl border border-sky-100 bg-gradient-to-r from-white to-sky-50 px-3 py-2 transition hover:border-sky-300 hover:shadow-sm"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-xs font-bold text-blue-800">{index + 1}</span>
+                    <span className="flex-1 text-sm font-medium text-slate-700 group-hover:text-slate-950">{step}</span>
+                    <span className="text-sm font-bold text-blue-700" aria-hidden="true">→</span>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+            <Card>
+              <SectionHeader title={t("dash.operations_title")} uppercase={false} action={canSeeJobs ? <Link href="/jobs" className={ghostLink}>{t("dash.view")}</Link> : undefined} />
+              <EmptyState title={t("dash.operations_empty_title")} description={t("dash.operations_empty_desc")} icon={<CoolingIcon className="h-5 w-5" />} size="compact" />
+            </Card>
+          </div>
+        </ProMain>
+      </AppShell>
+    );
+  }
+
   // Textile keeps its compact command centre visible from day one because
   // physical rolls, cuts and dispatches live in RLS-protected sector tables
   // rather than the local-first store used by this generic empty check. Its
@@ -644,7 +691,7 @@ export default function DashboardPage() {
                       : "Complete first fabric sale"
                   : dashboardPrimary.label}
               </Link>
-              {canSeeJobs && <Link href="/jobs" className={primaryButton}>{t("jobs.new")}</Link>}
+              {canSeeJobs && dashboardPrimary.href !== "/jobs" && <Link href="/jobs" className={primaryButton}>{t("jobs.new")}</Link>}
               <ActionMenu
                 label={t("dash.more")}
                 items={[
@@ -730,6 +777,7 @@ export default function DashboardPage() {
               <MetricCard
                 label={showAcJobs && canSeeFinancials ? t("dash.today_revenue") : t("dash.today_sales")}
                 value={formatLkr(combinedTodayRevenue)}
+                icon={showAcJobs ? <CoolingIcon className="h-5 w-5" /> : undefined}
                 hint={
                   showAcJobs && canSeeFinancials
                     ? t("dash.sales_jobs_hint").replace("{sales}", String(stats.saleCount)).replace("{jobs}", String(todayJobs.length))
@@ -740,6 +788,7 @@ export default function DashboardPage() {
                 <MetricCard
                   label={t("dash.today_profit")}
                   value={formatLkr(combinedTodayProfit)}
+                  icon={showAcJobs ? <CostingIcon className="h-5 w-5" /> : undefined}
                   hint={combinedTodayRevenue > 0 ? t("dash.kpi_margin").replace("{pct}", String(marginPct)) : "—"}
                   tone="positive"
                 />
@@ -759,12 +808,14 @@ export default function DashboardPage() {
               <MetricCard
                 label={t("dash.kpi_payments_received")}
                 value={formatLkr(stats.paymentsReceivedToday)}
+                icon={showAcJobs ? <BankingIcon className="h-5 w-5" /> : undefined}
                 hint={t("dash.kpi_payments_count").replace("{count}", String(stats.paymentsReceivedCount))}
               />
               {canSeeJobs && (
                 <MetricCard
                   label={t("dash.kpi_jobs_today")}
                   value={String(stats.todayJobsCount)}
+                  icon={<JobsIcon className="h-5 w-5" />}
                   hint={t("dash.kpi_jobs_breakdown").replace("{completed}", String(stats.todayJobsCompletedCount)).replace("{remaining}", String(stats.todayJobsRemainingCount))}
                   tone={stats.todayJobsUnassignedCount > 0 ? "warning" : "default"}
                 />
@@ -913,8 +964,8 @@ export default function DashboardPage() {
               <>
                 <div className="flex h-36 items-end gap-1.5">
                   {trend.map((p) => (
-                    <div key={p.key} className="flex flex-1 flex-col items-center justify-end gap-1">
-                      <div className="flex w-full flex-1 items-end justify-center gap-0.5">
+                    <div key={p.key} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+                      <div className="flex min-h-0 w-full flex-1 items-end justify-center gap-0.5">
                         <div
                           title={`${t("dash.today_sales")}: ${formatLkr(p.revenue)}`}
                           className={canSeeFinancials ? "w-1/2 rounded-t bg-teal-500" : "w-full rounded-t bg-teal-500"}

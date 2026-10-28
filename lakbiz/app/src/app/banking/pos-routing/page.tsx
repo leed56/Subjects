@@ -250,12 +250,12 @@ export default function PosBankRoutingPage() {
               </div>
 
               {currentAccount ? (
-                <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950 p-5 text-white shadow-[0_14px_34px_rgba(15,23,42,0.16)]">
+                <div className={`mt-4 rounded-2xl border p-5 shadow-[0_14px_34px_rgba(15,23,42,0.08)] ${org.sector === "ac_hvac" ? "border-sky-200 bg-gradient-to-r from-cyan-50 to-blue-50 text-slate-900" : "border-slate-800 bg-slate-950 text-white"}`}>
                   <p className="text-sm font-semibold">{currentAccount.accountName}</p>
-                  <p className="mt-1 text-xs text-slate-400">
+                  <p className={`mt-1 text-xs ${org.sector === "ac_hvac" ? "text-slate-600" : "text-slate-400"}`}>
                     {currentAccount.branch || "—"} · {currentAccount.accountNumber}
                   </p>
-                  <div className="mt-4 border-t border-white/10 pt-4 text-xs leading-5 text-slate-300">
+                  <div className={`mt-4 border-t pt-4 text-xs leading-5 ${org.sector === "ac_hvac" ? "border-sky-200 text-slate-600" : "border-white/10 text-slate-300"}`}>
                     {text.protected}
                   </div>
                 </div>

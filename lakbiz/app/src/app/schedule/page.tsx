@@ -7,7 +7,7 @@ import { PageHeader, MetricCard, EmptyState, StatusBadge } from "@/components/ui
 import { Drawer } from "@/components/ui/overlay";
 import { FormField, DateInput, SelectInput } from "@/components/ui/form";
 import { useToast } from "@/components/ui/toast";
-import { ChevronRightIcon, CheckIcon } from "@/components/ui/icons";
+import { ChevronRightIcon, CheckIcon, CalendarIcon, CoolingIcon, JobsIcon } from "@/components/ui/icons";
 import { MessageSendButton } from "@/components/messaging/message-send-button";
 import { CallLink, NavigateLink } from "@/components/ui/field-links";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -16,6 +16,7 @@ import { useAppStore } from "@/lib/store/use-app-store";
 import type { ACJob } from "@/lib/store/types";
 import { jobStatusClass, jobStatusLabel, type ACJobStatus } from "@/lib/ac-jobs";
 import { jobTypeLabel } from "@/lib/ac-job-types";
+import { isHvacDemo } from "@/lib/hvac-demo";
 
 /** Monday-based week start, module-level so it isn't recomputed inline
  * during render (matches the codebase's existing Date.now()-outside-render
@@ -36,7 +37,8 @@ function addDays(d: Date, n: number): Date {
 }
 
 function toIsoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // Calendar days must not shift to the previous date at Sri Lankan midnight.
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 // Reported/found in the HVAC screen sweep: this used to be an allowlist
@@ -77,7 +79,7 @@ export default function SchedulePage() {
 
   const todayIso = useMemo(() => toIsoDate(new Date()), []);
 
-  if (!org.isAuthenticated || !localReady || !localData) {
+  if ((!org.isAuthenticated && !isHvacDemo(org)) || !localReady || !localData) {
     return (
       <AppShell>
         <ProMain>
@@ -176,9 +178,9 @@ export default function SchedulePage() {
           }
           metrics={
             <div className="grid gap-3 sm:grid-cols-3">
-              <MetricCard label={t("schedule.jobs_this_week")} value={String(weekTotal)} />
-              <MetricCard label={t("schedule.today_count")} value={String(todayCount)} tone={todayCount > 0 ? "positive" : "default"} />
-              <MetricCard label={t("schedule.unscheduled")} value={String(unscheduled.length)} tone={unscheduled.length > 0 ? "warning" : "default"} />
+              <MetricCard label={t("schedule.jobs_this_week")} value={String(weekTotal)} icon={<CalendarIcon className="h-5 w-5" />} />
+              <MetricCard label={t("schedule.today_count")} value={String(todayCount)} tone={todayCount > 0 ? "positive" : "default"} icon={<CoolingIcon className="h-5 w-5" />} />
+              <MetricCard label={t("schedule.unscheduled")} value={String(unscheduled.length)} tone={unscheduled.length > 0 ? "warning" : "default"} icon={<JobsIcon className="h-5 w-5" />} />
             </div>
           }
         />

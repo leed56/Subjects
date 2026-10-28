@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { runServiceDueReminders } from "@/lib/messaging/service-due-cron";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { messageSectorAccessError } from "@/lib/messaging/sector-policy-server";
+import { orgAllowsBulkMessaging } from "@/lib/messaging/plan-gate-server";
 
 function isCronAuthorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
@@ -65,6 +67,12 @@ export async function POST() {
 
   if (member.role !== "owner" && member.role !== "manager") {
     return NextResponse.json({ ok: false, error: "Owner or manager only" }, { status: 403 });
+  }
+
+  const sectorError = await messageSectorAccessError(supabase, member.organization_id, "ac_job");
+  if (sectorError) return NextResponse.json({ ok: false, error: sectorError }, { status: 403 });
+  if (!await orgAllowsBulkMessaging(supabase, member.organization_id)) {
+    return NextResponse.json({ ok: false, error: "Automatic messaging is not enabled for this workspace." }, { status: 403 });
   }
 
   const result = await runServiceDueReminders(admin, {

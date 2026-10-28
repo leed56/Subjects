@@ -358,14 +358,14 @@ export default function VatReturnPage() {
           </div>
         )}
 
-        <section className={`mb-6 overflow-hidden rounded-xl p-6 sm:p-8 ${org.sector === "grocery" ? "border border-emerald-100 bg-[radial-gradient(circle_at_95%_0%,rgba(52,211,153,0.24),transparent_36%),linear-gradient(115deg,#f0fdf7,#eff7ff_65%,#f8f5ff)] text-slate-950 shadow-[0_18px_38px_rgba(15,118,110,0.08)]" : "bg-slate-950 text-white shadow-sm shadow-slate-950/20 ring-1 ring-slate-800"}`}>
+        <section className={`mb-6 overflow-hidden rounded-xl p-6 sm:p-8 ${org.sector === "grocery" ? "border border-emerald-100 bg-[radial-gradient(circle_at_95%_0%,rgba(52,211,153,0.24),transparent_36%),linear-gradient(115deg,#f0fdf7,#eff7ff_65%,#f8f5ff)] text-slate-950 shadow-[0_18px_38px_rgba(15,118,110,0.08)]" : org.sector === "ac_hvac" ? "border border-sky-200 bg-gradient-to-r from-cyan-50 via-sky-50 to-indigo-50 text-slate-950 shadow-[0_18px_38px_rgba(30,87,150,0.08)]" : "bg-slate-950 text-white shadow-sm shadow-slate-950/20 ring-1 ring-slate-800"}`}>
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className={`text-xs font-bold uppercase tracking-[0.24em] ${org.sector === "grocery" ? "text-teal-700" : "text-teal-300"}`}>{t("vat.net_payable")}</p>
-              <p className={`mt-3 font-mono text-4xl font-bold tracking-tight sm:text-5xl ${org.sector === "grocery" ? "text-teal-800" : "text-teal-300"}`}>
+              <p className={`text-xs font-bold uppercase tracking-[0.24em] ${org.sector === "grocery" ? "text-teal-700" : org.sector === "ac_hvac" ? "text-blue-700" : "text-teal-300"}`}>{t("vat.net_payable")}</p>
+              <p className={`mt-3 font-mono text-4xl font-bold tracking-tight sm:text-5xl ${org.sector === "grocery" ? "text-teal-800" : org.sector === "ac_hvac" ? "text-blue-800" : "text-teal-300"}`}>
                 {formatLkr(summary.netPayable)}
               </p>
-              <p className={`mt-3 max-w-2xl text-sm font-semibold leading-6 ${org.sector === "grocery" ? "text-slate-600" : "text-slate-400"}`}>{t("vat.ird_note")}</p>
+              <p className={`mt-3 max-w-2xl text-sm font-semibold leading-6 ${org.sector === "grocery" || org.sector === "ac_hvac" ? "text-slate-600" : "text-slate-400"}`}>{t("vat.ird_note")}</p>
             </div>
             <ProBadge tone={summary.netPayable > 0 ? "amber" : "emerald"}>
               {summary.netPayable > 0 ? (locale === "si" ? "ගෙවිය යුතුයි" : locale === "ta" ? "செலுத்த வேண்டியது" : "Payable") : (locale === "si" ? "ආදාන බදු ණය" : locale === "ta" ? "உள்ளீட்டு வரி வரவு" : "Input credit")}

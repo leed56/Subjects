@@ -2,10 +2,17 @@ name: LakBiz Deployed UI QA
 
 on:
   workflow_dispatch:
+    inputs:
+      run_staging_roles:
+        description: "Run authenticated journeys in the separately configured staging project"
+        required: false
+        type: boolean
+        default: false
   pull_request:
     paths:
       - lakbiz/app/src/**
       - lakbiz/app/scripts/qa-deployed-ui.mjs
+      - lakbiz/app/scripts/qa-sector-isolation.mjs
       - .github/workflows/lakbiz-deployed-ui-qa.yml
 
 permissions:
@@ -17,21 +24,21 @@ concurrency:
 
 jobs:
   visual-qa:
-    name: HVAC, Pharmacy and Grocery deployed UI
+    name: Ten-template deployed UI (no database writes)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
       run:
         working-directory: lakbiz/app
     env:
-      NEXT_PUBLIC_SUPABASE_URL: https://zestppstpwjxriwcuykc.supabase.co
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       LAKBIZ_EXPECTED_BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       LAKBIZ_UI_QA_DIR: /tmp/lakbiz-ui-qa
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -59,14 +66,10 @@ jobs:
           set -euo pipefail
           npx playwright install --with-deps chromium
 
-      - name: Verify secure browser-QA capability
+      - name: Verify exact commit identity
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
-            echo "SUPABASE_SERVICE_ROLE_KEY is required for disposable visual-QA identities."
-            exit 1
-          fi
           if [ -z "${LAKBIZ_EXPECTED_BUILD_SHA:-}" ]; then
             echo "LAKBIZ_EXPECTED_BUILD_SHA is required to prevent stale-preview QA."
             exit 1
@@ -76,14 +79,51 @@ jobs:
             exit 1
           fi
 
-      - name: Run deployed HVAC, Pharmacy and Grocery UI QA
-        run: node scripts/qa-deployed-ui.mjs
+      - name: Check all templates, languages and shop isolation without database writes
+        run: node scripts/qa-sector-isolation.mjs
 
       - name: Upload UI screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: lakbiz-deployed-ui-qa
-          path: /tmp/lakbiz-ui-qa/*.png
+          path: /tmp/lakbiz-ui-qa/*
+          if-no-files-found: warn
+          retention-days: 7
+
+  staging-roles:
+    name: Authenticated staging journeys
+    if: github.event_name == 'workflow_dispatch' && inputs.run_staging_roles
+    environment: lakbiz-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: lakbiz/app
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.LAKBIZ_STAGING_SUPABASE_URL }}
+      LAKBIZ_STAGING_SUPABASE_HOST: ${{ vars.LAKBIZ_STAGING_SUPABASE_HOST }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.LAKBIZ_STAGING_SERVICE_ROLE_KEY }}
+      LAKBIZ_PREVIEW_URL: ${{ vars.LAKBIZ_STAGING_PREVIEW_URL }}
+      LAKBIZ_QA_PHARMACY_ORG: ${{ vars.LAKBIZ_QA_PHARMACY_ORG }}
+      LAKBIZ_QA_GROCERY_ORG: ${{ vars.LAKBIZ_QA_GROCERY_ORG }}
+      LAKBIZ_QA_HVAC_ORG: ${{ vars.LAKBIZ_QA_HVAC_ORG }}
+      LAKBIZ_EXPECTED_BUILD_SHA: ${{ github.sha }}
+      LAKBIZ_UI_QA_DIR: /tmp/lakbiz-staging-ui-qa
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run signed-in journeys against staging only
+        run: node scripts/qa-deployed-ui.mjs
+      - name: Upload staging evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lakbiz-staging-ui-qa
+          path: /tmp/lakbiz-staging-ui-qa/*
           if-no-files-found: warn
           retention-days: 7

@@ -11,6 +11,7 @@ import { requireOrgOwner } from "@/lib/org-role/require-org-role";
 import { parseOrgRole } from "@/lib/org-role/permissions";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { OrgRole } from "@/lib/subscription/types";
+import { sectorAllowsTeamRole } from "@/lib/sector-features";
 
 export async function GET() {
   const owner = await requireOrgOwner();
@@ -79,6 +80,14 @@ export async function POST(request: Request) {
   }
 
   const action = body.action ?? "create";
+
+  if ((action === "create" || action === "update_role") && body.role === "technician") {
+    const { data: org } = await admin.from("organizations").select("sector").eq("id", owner.organizationId).maybeSingle();
+    const { data: enabled, error } = await admin.rpc("org_has_module", { org_id: owner.organizationId, module_key: "ac_jobs" });
+    if (!org || !sectorAllowsTeamRole(org.sector, body.role) || error || enabled !== true) {
+      return NextResponse.json({ ok: false, error: "Technician access is available only for an enabled HVAC workspace." }, { status: 403 });
+    }
+  }
 
   if (action === "update_role" || action === "remove_member") {
     const targetUserId = body.userId?.trim() ?? "";

@@ -18,6 +18,8 @@ import {
 } from "@/lib/messaging";
 import { useSmsApiConfigured, useWhatsAppApiConfigured } from "@/lib/messaging/use-sms-api-configured";
 import { sectorAllowsApiWhatsApp } from "@/lib/messaging/wasender-sectors";
+import { notificationStorageScope } from "@/lib/messaging/settings";
+import { notificationSettingsForSector, sectorAllowsMessage } from "@/lib/messaging/sector-policy";
 
 type MessageComposerProps = {
   open: boolean;
@@ -77,10 +79,12 @@ export function MessageComposer({
   // wasender-sectors.ts for why — one connected number, shared by whichever
   // sectors are listed there). Same bulk_messaging plan gate as SMS API.
   const canApiWhatsApp = can("bulk_messaging") && sectorAllowsApiWhatsApp(org.sector);
-  const settings = loadNotificationSettings();
+  const storageScope = notificationStorageScope(org.id, org.sector);
+  const settings = notificationSettingsForSector(loadNotificationSettings(storageScope), org.sector);
   const [channel, setChannel] = useState<MessageChannel>(settings.defaultChannel);
   const [templateId, setTemplateId] = useState<MessageTemplateId>(
-    defaultTemplate ?? defaultTemplateForContext(context),
+    sectorAllowsMessage(org.sector, context.type, defaultTemplate ?? defaultTemplateForContext(context))
+      ? defaultTemplate ?? defaultTemplateForContext(context) : "custom",
   );
   const [messageLang, setMessageLang] = useState<"si" | "en">(
     settings.preferredLanguage,
@@ -98,7 +102,7 @@ export function MessageComposer({
   // walk-in-phone field already established for the Sales page.
   const [editablePhone, setEditablePhone] = useState(phone ?? "");
 
-  const templates = templatesForContext(context.type);
+  const templates = templatesForContext(context.type, org.sector);
   const smsApiConfigured = useSmsApiConfigured();
   const apiEnabled = smsApiConfigured === true;
   const whatsappApiConfigured = useWhatsAppApiConfigured();
@@ -122,7 +126,8 @@ export function MessageComposer({
   useEffect(() => {
     if (!open) return;
     void refreshOrg();
-    setTemplateId(defaultTemplate ?? defaultTemplateForContext(context));
+    const requestedTemplate = defaultTemplate ?? defaultTemplateForContext(context);
+    setTemplateId(sectorAllowsMessage(org.sector, context.type, requestedTemplate) ? requestedTemplate : "custom");
     setChannel(
       settings.defaultChannel === "api_sms" && !canApiSms
         ? "whatsapp"
@@ -134,7 +139,7 @@ export function MessageComposer({
     setEditablePhone(phone ?? "");
     setFeedback(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, contextId, defaultTemplate, settings.defaultChannel, settings.preferredLanguage, canApiSms, canApiWhatsApp, refreshOrg]);
+  }, [open, contextId, defaultTemplate, settings.defaultChannel, settings.preferredLanguage, canApiSms, canApiWhatsApp, refreshOrg, org.sector]);
 
   // Same unstable-`context`-reference issue as the effect above, and
   // arguably worse here: without this, a manually edited message body
@@ -153,10 +158,10 @@ export function MessageComposer({
 
   const phoneOk = isValidSlMobile(editablePhone);
 
-  if (!open) return null;
+  if (!open || !sectorAllowsMessage(org.sector, context.type)) return null;
 
   const handleSend = async () => {
-    if (!body.trim()) return;
+    if (!body.trim() || !sectorAllowsMessage(org.sector, context.type, templateId)) return;
     setSending(true);
     setFeedback(null);
 
@@ -181,7 +186,7 @@ export function MessageComposer({
           : "opened"
         : "api_failed",
       providerRef: result.providerRef,
-    });
+    }, storageScope);
 
     setSending(false);
     if (result.ok) {

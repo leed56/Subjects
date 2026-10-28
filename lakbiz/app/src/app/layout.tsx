@@ -13,6 +13,7 @@ import "./premium-ops-final.css";
 import "./premium-ops-realistic.css";
 import "./premium-job-detail.css";
 import "./atomic-pos-layout.css";
+import "./hvac-workspace.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -81,8 +82,7 @@ export default function RootLayout({
             <SubscriptionProvider>
               <ToastProvider>
                 <PlatformAdminRedirect />
-                <ShopRouteGuard />
-                <AppStoreProvider>{children}</AppStoreProvider>
+                <AppStoreProvider><ShopRouteGuard>{children}</ShopRouteGuard></AppStoreProvider>
               </ToastProvider>
             </SubscriptionProvider>
           </AuthProvider>

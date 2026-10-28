@@ -17,8 +17,8 @@ export function SettingsNav() {
   ].filter((item) => canAccessSettingsPath(item.href));
 
   return (
-    <nav aria-label="Settings" className="mb-7 overflow-x-auto border-b border-slate-200">
-      <div className="flex min-w-max gap-1">
+    <nav aria-label="Settings" className="mb-7 border-b border-slate-200">
+      <div className="grid grid-cols-2 gap-1 sm:flex sm:flex-wrap">
         {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
@@ -26,7 +26,7 @@ export function SettingsNav() {
               key={item.href}
               href={item.href}
               aria-current={active ? "page" : undefined}
-              className={`relative px-4 py-3 text-sm font-semibold transition-colors ${
+              className={`relative min-w-0 px-3 py-3 text-center text-sm font-semibold leading-relaxed transition-colors sm:px-4 ${
                 active ? "text-teal-700" : "text-slate-500 hover:text-slate-900"
               }`}
             >

@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/.qa-hvac/
+/.qa-sector-isolation/
 
 # next.js
 /.next/

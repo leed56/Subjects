@@ -82,7 +82,7 @@ body:has(aside a[href="/stock"][aria-current="page"]) main > div:first-child but
 /* Owner dashboard: one strong KPI anchors the page. The remaining metrics
    stay light so the command center has hierarchy instead of four equal white
    cards competing for attention. */
-body:has(aside a[href="/dashboard"][aria-current="page"]) main > div:first-child > .mt-5 > .grid > div:first-child {
+body:not(:has(.hvac-workspace)):has(aside a[href="/dashboard"][aria-current="page"]) main > div:first-child > .mt-5 > .grid > div:first-child {
   border-color: #14283e !important;
   background:
     radial-gradient(circle at 100% 0%, rgba(45, 212, 191, 0.18), transparent 46%),
@@ -90,15 +90,15 @@ body:has(aside a[href="/dashboard"][aria-current="page"]) main > div:first-child
   box-shadow: 0 18px 44px rgba(8, 17, 31, 0.16) !important;
 }
 
-body:has(aside a[href="/dashboard"][aria-current="page"]) main > div:first-child > .mt-5 > .grid > div:first-child > div p {
+body:not(:has(.hvac-workspace)):has(aside a[href="/dashboard"][aria-current="page"]) main > div:first-child > .mt-5 > .grid > div:first-child > div p {
   color: #8ea6bf !important;
 }
 
-body:has(aside a[href="/dashboard"][aria-current="page"]) main > div:first-child > .mt-5 > .grid > div:first-child > p:first-of-type {
+body:not(:has(.hvac-workspace)):has(aside a[href="/dashboard"][aria-current="page"]) main > div:first-child > .mt-5 > .grid > div:first-child > p:first-of-type {
   color: #f8fafc !important;
 }
 
-body:has(aside a[href="/dashboard"][aria-current="page"]) main > div:first-child > .mt-5 > .grid > div:first-child > p:last-of-type {
+body:not(:has(.hvac-workspace)):has(aside a[href="/dashboard"][aria-current="page"]) main > div:first-child > .mt-5 > .grid > div:first-child > p:last-of-type {
   color: #a9bdd0 !important;
 }
 

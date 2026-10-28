@@ -21,6 +21,7 @@ import {
 import { exportReportsCsv, printReportsSummary, type ReportsExportData } from "@/lib/export";
 import { GroceryWorkspaceHeader } from "@/components/grocery/grocery-workspace-header";
 import { groceryWorkspaceCopy } from "@/lib/grocery-localization";
+import { isHvacDemo } from "@/lib/hvac-demo";
 
 type Period = "7d" | "30d" | "month" | "all";
 type ReportView = "overview" | "sales" | "jobs";
@@ -109,7 +110,7 @@ export default function ReportsPage() {
     };
   }, [canSeeFinancials, org.isAuthenticated, org.id]);
 
-  if (!org.isAuthenticated || !localReady || !localData || !jobLinkedExpenseTotals || returnAdjustments == null) {
+  if ((!org.isAuthenticated && !isHvacDemo(org)) || !localReady || !localData || !jobLinkedExpenseTotals || returnAdjustments == null) {
     return (
       <AppShell>
         <ProMain>

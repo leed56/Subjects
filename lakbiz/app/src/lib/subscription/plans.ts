@@ -100,7 +100,7 @@ export const ADDONS: {
 }[] = [
   { id: "extra_user", nameEn: "Extra user", nameSi: "අමතර පරිශීලක", priceMonthlyLkr: 490 },
   { id: "extra_branch", nameEn: "Extra branch", nameSi: "අමතර ශාඛාව", priceMonthlyLkr: 990 },
-  { id: "ac_jobs", nameEn: "AC Jobs module", nameSi: "AC රැකියා", priceMonthlyLkr: 790 },
+  { id: "ac_jobs", nameEn: "AC Jobs module", nameSi: "AC වැඩ", priceMonthlyLkr: 790 },
   { id: "vehicles", nameEn: "Vehicles module", nameSi: "වාහන", priceMonthlyLkr: 790 },
   { id: "sector_pack", nameEn: "AC + Vehicles pack", nameSi: "AC + වාහන", priceMonthlyLkr: 1290 },
 ];

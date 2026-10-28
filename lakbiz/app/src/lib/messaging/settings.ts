@@ -8,6 +8,19 @@ import type {
 const SETTINGS_KEY = "lakbiz-notification-settings-v1";
 const LOG_KEY = "lakbiz-notification-log-v1";
 const MAX_LOG = 100;
+let activeScope = "anonymous";
+
+export function notificationStorageScope(orgId: string | null, sector: string): string {
+  return orgId ? `shop:${orgId}` : `demo:${sector}`;
+}
+
+export function setNotificationStorageScope(scope: string): void {
+  activeScope = scope;
+}
+
+function scopedKey(key: string, scope = activeScope): string {
+  return `${key}:${scope}`;
+}
 
 export const defaultNotificationSettings = (): NotificationSettings => ({
   defaultChannel: "whatsapp",
@@ -109,26 +122,26 @@ function parseRemindDays(
   return defaults.serviceDueRemindDays;
 }
 
-export function loadNotificationSettings(): NotificationSettings {
+export function loadNotificationSettings(scope?: string): NotificationSettings {
   if (typeof window === "undefined") return defaultNotificationSettings();
   try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
+    const raw = localStorage.getItem(scopedKey(SETTINGS_KEY, scope));
     if (!raw) return defaultNotificationSettings();
-    return { ...defaultNotificationSettings(), ...JSON.parse(raw) };
+    return parseNotificationSettings(JSON.parse(raw));
   } catch {
     return defaultNotificationSettings();
   }
 }
 
-export function saveNotificationSettings(settings: NotificationSettings): void {
+export function saveNotificationSettings(settings: NotificationSettings, scope?: string): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  localStorage.setItem(scopedKey(SETTINGS_KEY, scope), JSON.stringify(settings));
 }
 
-export function loadNotificationLog(): NotificationLogEntry[] {
+export function loadNotificationLog(scope?: string): NotificationLogEntry[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(LOG_KEY);
+    const raw = localStorage.getItem(scopedKey(LOG_KEY, scope));
     if (!raw) return [];
     return JSON.parse(raw) as NotificationLogEntry[];
   } catch {
@@ -136,7 +149,7 @@ export function loadNotificationLog(): NotificationLogEntry[] {
   }
 }
 
-export function appendNotificationLog(entry: Omit<NotificationLogEntry, "id" | "sentAt">): NotificationLogEntry {
+export function appendNotificationLog(entry: Omit<NotificationLogEntry, "id" | "sentAt">, scope?: string): NotificationLogEntry {
   const full: NotificationLogEntry = {
     ...entry,
     id: newId(),
@@ -145,7 +158,7 @@ export function appendNotificationLog(entry: Omit<NotificationLogEntry, "id" | "
 
   if (typeof window === "undefined") return full;
 
-  const log = [full, ...loadNotificationLog()].slice(0, MAX_LOG);
-  localStorage.setItem(LOG_KEY, JSON.stringify(log));
+  const log = [full, ...loadNotificationLog(scope)].slice(0, MAX_LOG);
+  localStorage.setItem(scopedKey(LOG_KEY, scope), JSON.stringify(log));
   return full;
 }
