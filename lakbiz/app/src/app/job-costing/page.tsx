@@ -16,6 +16,7 @@ import type { ACJobType } from "@/lib/ac-job-types";
 import type { ACJob } from "@/lib/store/types";
 import { fetchOrgExpenses } from "@/lib/supabase/expenses-client";
 import { computeJobProfitability, isLowMarginJob, type JobProfitability, type JobLinkedExpense } from "@/lib/job-profitability";
+import { isHvacDemo } from "@/lib/hvac-demo";
 
 type CostedJob = {
   job: ACJob;
@@ -27,7 +28,7 @@ type StatusFilter = "active" | "completed" | "all";
 
 export default function JobCostingPage() {
   const { t, locale } = useLocale();
-  const { org, orgRole } = useSubscription();
+  const { org, canSeeFinancials } = useSubscription();
   const { data: localData, ready: localReady } = useAppStore();
 
   const [search, setSearch] = useState("");
@@ -41,7 +42,6 @@ export default function JobCostingPage() {
   const [technicianFilter, setTechnicianFilter] = useState("all");
   const [onlyUnrecorded, setOnlyUnrecorded] = useState(false);
 
-  const canSeeFinancials = orgRole === "owner" || orgRole === "manager";
   const orgId = org.isAuthenticated ? org.id : null;
 
   // Expenses are cloud-only (not part of the local-first store — see
@@ -70,7 +70,7 @@ export default function JobCostingPage() {
     };
   }, [orgId, canSeeFinancials]);
 
-  if (!org.isAuthenticated || !localReady || !localData || !jobLinkedExpenseTotals) {
+  if ((!org.isAuthenticated && !isHvacDemo(org)) || !localReady || !localData || !jobLinkedExpenseTotals) {
     return (
       <AppShell>
         <ProMain>

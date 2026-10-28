@@ -27,7 +27,8 @@ try {
       page.on("pageerror", (error) => errors.push(error.message));
       try {
         await page.goto(`${baseUrl}${path}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
-        await page.waitForTimeout(1700);
+        await page.locator(".hvac-workspace main h1").waitFor({ state: "visible", timeout: 25_000 });
+        await page.waitForTimeout(500);
         const result = await page.evaluate(() => ({
           sector: document.querySelector(".hvac-workspace") !== null,
           scrollWidth: document.documentElement.scrollWidth,
@@ -36,9 +37,15 @@ try {
           header: document.querySelector('main [data-ui="page-header"], main [data-ui="pro-page-header"]') !== null,
           metricCount: document.querySelectorAll('main [data-ui="metric-card"], main [data-ui="pro-stat-card"]').length,
           loading: document.querySelector("main")?.textContent?.includes("Loading...") ?? false,
+          darkCards: [...document.querySelectorAll('main [data-ui="metric-card"], main [data-ui="pro-stat-card"], main [data-ui="stock-command-header"]')].filter((element) => {
+            const style = getComputedStyle(element);
+            const colors = `${style.backgroundImage} ${style.backgroundColor}`.match(/rgba?\([^)]*\)/g) ?? [];
+            const opaque = colors.map((color) => color.match(/[\d.]+/g)?.map(Number) ?? []).filter((channels) => channels.length >= 3 && (channels.length < 4 || channels[3] > 0.5));
+            return opaque.length > 0 && opaque.every(([red, green, blue]) => (red + green + blue) / 3 < 75);
+          }).length,
         }));
         await page.screenshot({ path: `${outputDir}/${path.slice(1)}-${width}.png`, fullPage: true });
-        if (!result.sector || !result.heading || result.scrollWidth > result.viewport + 2 || errors.length) {
+        if (!result.sector || !result.heading || result.scrollWidth > result.viewport + 2 || result.darkCards > 0 || errors.length) {
           failures.push({ path, width, result, errors });
         }
         console.log(JSON.stringify({ path, width, ...result, errors }));

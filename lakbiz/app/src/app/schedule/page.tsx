@@ -37,7 +37,8 @@ function addDays(d: Date, n: number): Date {
 }
 
 function toIsoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // Calendar days must not shift to the previous date at Sri Lankan midnight.
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 // Reported/found in the HVAC screen sweep: this used to be an allowlist

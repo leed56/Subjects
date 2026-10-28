@@ -83,25 +83,25 @@
 
 .hvac-workspace main [data-ui="metric-card"]:nth-child(4n + 1),
 .hvac-workspace main [data-ui="pro-stat-card"]:nth-child(4n + 1) {
-  border-top-color: #15b8d0;
+  border-top-color: #15b8d0 !important;
   background: linear-gradient(155deg, #fff, #effbfe);
 }
 
 .hvac-workspace main [data-ui="metric-card"]:nth-child(4n + 2),
 .hvac-workspace main [data-ui="pro-stat-card"]:nth-child(4n + 2) {
-  border-top-color: #5965ed;
+  border-top-color: #5965ed !important;
   background: linear-gradient(155deg, #fff, #f1f2ff);
 }
 
 .hvac-workspace main [data-ui="metric-card"]:nth-child(4n + 3),
 .hvac-workspace main [data-ui="pro-stat-card"]:nth-child(4n + 3) {
-  border-top-color: #f5a623;
+  border-top-color: #f5a623 !important;
   background: linear-gradient(155deg, #fff, #fff8eb);
 }
 
 .hvac-workspace main [data-ui="metric-card"]:nth-child(4n + 4),
 .hvac-workspace main [data-ui="pro-stat-card"]:nth-child(4n + 4) {
-  border-top-color: #20b99d;
+  border-top-color: #20b99d !important;
   background: linear-gradient(155deg, #fff, #effcf7);
 }
 
@@ -121,15 +121,21 @@
   box-shadow: inset 0 0 0 1px #d6e8ff;
 }
 
+.hvac-workspace [data-ui="stock-command-header"] {
+  border-color: #cde5fa;
+  background: radial-gradient(circle at 95% 0%, #c9edff, transparent 38%), linear-gradient(120deg, #fff, #f0f8ff 60%, #eef0ff);
+  color: #14375d;
+}
+
 /* The legacy dashboard gave its first KPI a near-black special treatment. */
-.hvac-workspace main > [data-ui="page-header"] > .mt-5 > .grid > [data-ui="metric-card"]:first-child {
+.hvac-workspace.hvac-workspace main > [data-ui="page-header"] > .mt-5 > .grid > [data-ui="metric-card"]:first-child {
   border-color: #bce7f4 !important;
   border-top-color: #15b8d0 !important;
   background: linear-gradient(155deg, #fff, #ecfbff) !important;
   box-shadow: 0 8px 20px rgba(30, 87, 150, 0.075) !important;
 }
 
-.hvac-workspace main > [data-ui="page-header"] > .mt-5 > .grid > [data-ui="metric-card"]:first-child p {
+.hvac-workspace.hvac-workspace main > [data-ui="page-header"] > .mt-5 > .grid > [data-ui="metric-card"]:first-child p {
   color: #14375d !important;
 }
 

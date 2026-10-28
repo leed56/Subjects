@@ -691,7 +691,7 @@ export default function DashboardPage() {
                       : "Complete first fabric sale"
                   : dashboardPrimary.label}
               </Link>
-              {canSeeJobs && <Link href="/jobs" className={primaryButton}>{t("jobs.new")}</Link>}
+              {canSeeJobs && dashboardPrimary.href !== "/jobs" && <Link href="/jobs" className={primaryButton}>{t("jobs.new")}</Link>}
               <ActionMenu
                 label={t("dash.more")}
                 items={[
@@ -964,8 +964,8 @@ export default function DashboardPage() {
               <>
                 <div className="flex h-36 items-end gap-1.5">
                   {trend.map((p) => (
-                    <div key={p.key} className="flex flex-1 flex-col items-center justify-end gap-1">
-                      <div className="flex w-full flex-1 items-end justify-center gap-0.5">
+                    <div key={p.key} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+                      <div className="flex min-h-0 w-full flex-1 items-end justify-center gap-0.5">
                         <div
                           title={`${t("dash.today_sales")}: ${formatLkr(p.revenue)}`}
                           className={canSeeFinancials ? "w-1/2 rounded-t bg-teal-500" : "w-full rounded-t bg-teal-500"}
