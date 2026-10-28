@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useGroceryCatalogueReadiness } from "@/hooks/use-grocery-catalogue-readiness";
+import { groceryCatalogueStatusCopy } from "@/lib/grocery-catalogue-status-copy";
+import { CatalogueImportError } from "@/lib/supabase/grocery-catalogue-readiness";
 import { ConfirmDialog } from "@/components/ui/overlay";
 import { useToast } from "@/components/ui/toast";
 import { GRINDING_MILL_CATALOGUE, grindingMillProductsMissing } from "@/lib/grinding-mill-catalogue";
@@ -56,6 +59,7 @@ const copy = {
 export function GrindingMillCatalogueButton() {
   const { data, saveProductToCloud, cloudSyncError, offlinePendingSync, syncConflict } = useAppStore();
   const { org, orgRole } = useSubscription();
+  const availability = useGroceryCatalogueReadiness("mill", org, orgRole);
   const { canWrite, disabledHint } = useWriteAccess();
   const { locale } = useLocale();
   const { toast } = useToast();
@@ -66,6 +70,8 @@ export function GrindingMillCatalogueButton() {
   const [error, setError] = useState<string | null>(null);
   const inFlightSku = useRef<string | null>(null);
   const labels = copy[locale];
+  const statusLabels = groceryCatalogueStatusCopy[locale];
+  const cloudImportInFlight = useRef(false);
 
   const missing = useMemo(
     () => grindingMillProductsMissing(data?.products.flatMap((product) => [product.sku, typeof product.customFields.templateSku === "string" ? product.customFields.templateSku : undefined]) ?? []),
@@ -73,7 +79,7 @@ export function GrindingMillCatalogueButton() {
   );
 
   useEffect(() => {
-    if (!saving || queue.length === 0) return;
+    if (org.isAuthenticated || !saving || queue.length === 0) return;
     const next = queue[0];
     if (inFlightSku.current === next.sku) return;
     inFlightSku.current = next.sku ?? next.name;
@@ -89,27 +95,29 @@ export function GrindingMillCatalogueButton() {
       setCompleted((count) => count + 1);
       setQueue((current) => current.slice(1));
     });
-  }, [labels, queue, saveProductToCloud, saving, toast]);
+  }, [labels, queue, saveProductToCloud, saving, toast, org.isAuthenticated]);
 
   useEffect(() => {
-    if (!saving || queue.length !== 0) return;
+    if (org.isAuthenticated || !saving || queue.length !== 0) return;
     setSaving(false);
     if (completed > 0) toast({ tone: "success", title: labels.done, description: `${completed} / ${GRINDING_MILL_CATALOGUE.length}` });
-  }, [completed, labels, queue.length, saving, toast]);
+  }, [completed, labels, queue.length, saving, toast, org.isAuthenticated]);
 
   if (org.sector !== "grocery" || orgRole !== "owner") return null;
 
   const start = async () => {
+    if (cloudImportInFlight.current || !availability.ready) return;
     setConfirming(false);
     setError(null);
     setCompleted(0);
     if (org.isAuthenticated) {
       if (!org.id || !navigator.onLine || offlinePendingSync || syncConflict || cloudSyncError) {
-        const problem = "Resolve the cloud sync status before importing templates.";
+        const problem = statusLabels.syncHint;
         setError(problem);
         toast({ tone: "error", title: labels.paused, description: problem });
         return;
       }
+      cloudImportInFlight.current = true;
       setSaving(true);
       try {
         const result = await importGrindingMillCatalogue(org.id);
@@ -118,10 +126,14 @@ export function GrindingMillCatalogueButton() {
         // Do not create an optimistic local copy: it could replay over the server.
         window.location.reload();
       } catch (cause) {
-        const problem = cause instanceof Error ? cause.message : labels.error;
+        const setupPending = cause instanceof CatalogueImportError && cause.setupRequired;
+        if (setupPending) availability.markSetupPending();
+        const problem = setupPending ? statusLabels.pendingHint : statusLabels.failed;
         setError(problem);
         toast({ tone: "error", title: labels.paused, description: problem });
         setSaving(false);
+      } finally {
+        cloudImportInFlight.current = false;
       }
       return;
     }
@@ -131,19 +143,20 @@ export function GrindingMillCatalogueButton() {
 
   return (
     <section className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-orange-50 px-4 py-3 shadow-sm" aria-label={labels.title}>
-      <div>
+      <div className="min-w-0">
         <p className="text-sm font-bold text-slate-900">{labels.title}</p>
         <p className="mt-0.5 max-w-2xl text-xs leading-5 text-slate-600">{labels.detail}</p>
-        {error && <p role="alert" className="mt-1 text-xs font-semibold text-rose-700">{error}</p>}
+        {missing.length > 0 && !availability.ready && <p role="status" className="mt-1 max-w-2xl text-xs font-semibold leading-5 text-slate-600">{availability.checking ? statusLabels.checking : availability.reason === "connection" ? statusLabels.connectionHint : statusLabels.pendingHint}</p>}
+        {error && <p role="alert" className="mt-1 max-w-2xl text-xs font-semibold leading-5 text-rose-700">{error}</p>}
       </div>
       <button
         type="button"
-        disabled={!canWrite || saving || missing.length === 0 || (org.isAuthenticated && (offlinePendingSync || Boolean(syncConflict) || Boolean(cloudSyncError)))}
+        disabled={!canWrite || !availability.ready || saving || missing.length === 0 || (org.isAuthenticated && (offlinePendingSync || Boolean(syncConflict) || Boolean(cloudSyncError)))}
         title={disabledHint ?? undefined}
         onClick={() => setConfirming(true)}
         className="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-600"
       >
-        {saving ? `${completed} / ${completed + queue.length}` : missing.length === 0 ? labels.ready : `${labels.button} · ${missing.length}`}
+        {saving ? org.isAuthenticated ? statusLabels.importing : `${completed} / ${completed + queue.length}` : missing.length === 0 ? labels.ready : availability.checking ? statusLabels.checking : !availability.ready ? statusLabels.pending : `${labels.button} · ${missing.length}`}
       </button>
       <ConfirmDialog
         open={confirming}
