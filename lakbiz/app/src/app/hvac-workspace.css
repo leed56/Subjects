@@ -128,14 +128,14 @@
 }
 
 /* The legacy dashboard gave its first KPI a near-black special treatment. */
-.hvac-workspace.hvac-workspace main > [data-ui="page-header"] > .mt-5 > .grid > [data-ui="metric-card"]:first-child {
+.hvac-workspace main > [data-ui="page-header"] > .mt-5 > .grid > [data-ui="metric-card"]:first-child {
   border-color: #bce7f4 !important;
   border-top-color: #15b8d0 !important;
   background: linear-gradient(155deg, #fff, #ecfbff) !important;
   box-shadow: 0 8px 20px rgba(30, 87, 150, 0.075) !important;
 }
 
-.hvac-workspace.hvac-workspace main > [data-ui="page-header"] > .mt-5 > .grid > [data-ui="metric-card"]:first-child p {
+.hvac-workspace main > [data-ui="page-header"] > .mt-5 > .grid > [data-ui="metric-card"]:first-child p {
   color: #14375d !important;
 }
 

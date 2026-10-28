@@ -5,7 +5,7 @@ import { chromium } from "playwright";
 
 const baseUrl = (process.env.LAKBIZ_PREVIEW_URL ?? "http://localhost:3011").replace(/\/$/, "");
 const outputDir = process.env.LAKBIZ_UI_QA_DIR ?? "./.qa-hvac";
-const paths = ["/dashboard", "/jobs", "/assets", "/schedule", "/workforce", "/stock", "/sales", "/customers", "/bills", "/suppliers", "/job-costing", "/reports", "/vat"];
+const paths = process.env.LAKBIZ_QA_PATHS?.split(",") ?? ["/dashboard", "/jobs", "/assets", "/schedule", "/workforce", "/stock", "/sales", "/customers", "/bills", "/suppliers", "/job-costing", "/reports", "/vat"];
 const widths = [1280, 390];
 const browser = await chromium.launch({ headless: true });
 const failures = [];
@@ -43,9 +43,13 @@ try {
             const opaque = colors.map((color) => color.match(/[\d.]+/g)?.map(Number) ?? []).filter((channels) => channels.length >= 3 && (channels.length < 4 || channels[3] > 0.5));
             return opaque.length > 0 && opaque.every(([red, green, blue]) => (red + green + blue) / 3 < 75);
           }).length,
+          fadedMetricValues: [...document.querySelectorAll('main [data-ui="metric-card"] > p:first-of-type')].filter((element) => {
+            const channels = getComputedStyle(element).color.match(/[\d.]+/g)?.map(Number) ?? [];
+            return channels.length >= 3 && channels.slice(0, 3).every((channel) => channel > 210);
+          }).length,
         }));
         await page.screenshot({ path: `${outputDir}/${path.slice(1)}-${width}.png`, fullPage: true });
-        if (!result.sector || !result.heading || result.scrollWidth > result.viewport + 2 || result.darkCards > 0 || errors.length) {
+        if (!result.sector || !result.heading || result.scrollWidth > result.viewport + 2 || result.darkCards > 0 || result.fadedMetricValues > 0 || errors.length) {
           failures.push({ path, width, result, errors });
         }
         console.log(JSON.stringify({ path, width, ...result, errors }));
