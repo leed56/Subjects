@@ -26,6 +26,10 @@ This change:
 - Keeps failed notification saves on the authorized server path instead of
   falling back to an unchecked direct database update.
 - Wraps mobile settings tabs so Sinhala/Tamil labels are visible.
+- Uses the owner's approved Sinhala name **AC වැඩ** for AC Jobs. Related job
+  actions, reports, schedules and Sinhala message templates use the same work
+  terminology; identifiers and existing records remain unchanged. This wording
+  correction is separate from the outstanding full catalogue/native review.
 
 ## Specialty boundaries checked
 
