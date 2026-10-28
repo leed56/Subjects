@@ -1,9 +1,14 @@
 import type { BusinessInfo } from "@/lib/invoice";
 import { defaultBusiness } from "@/lib/invoice";
 import { clampCompanyIncomeTaxRatePct } from "@/lib/income-tax";
-import { loadAppData, saveAppData } from "./storage";
+import { activeAppStorageScope, loadAppData, saveAppData } from "./storage";
 
 const SHOP_SETTINGS_KEY = "lakbiz-shop-settings-v1";
+
+function settingsKey(scope?: string): string {
+  const current = scope ?? activeAppStorageScope();
+  return current ? `${SHOP_SETTINGS_KEY}-${current}` : SHOP_SETTINGS_KEY;
+}
 
 function normalize(business: BusinessInfo): BusinessInfo {
   return {
@@ -20,10 +25,10 @@ function normalize(business: BusinessInfo): BusinessInfo {
   };
 }
 
-export function loadShopSettings(): BusinessInfo {
+export function loadShopSettings(scope?: string): BusinessInfo {
   if (typeof window === "undefined") return defaultBusiness();
   try {
-    const raw = localStorage.getItem(SHOP_SETTINGS_KEY);
+    const raw = localStorage.getItem(settingsKey(scope));
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<BusinessInfo>;
       return normalize({ ...defaultBusiness(), ...parsed });
@@ -31,21 +36,21 @@ export function loadShopSettings(): BusinessInfo {
   } catch {
     /* fall through */
   }
-  return { ...loadAppData().business };
+  return { ...loadAppData(scope).business };
 }
 
-export function saveShopSettings(business: BusinessInfo): void {
+export function saveShopSettings(business: BusinessInfo, scope?: string): void {
   if (typeof window === "undefined") {
     throw new Error("Cannot save on server");
   }
 
   const payload = normalize(business);
-  localStorage.setItem(SHOP_SETTINGS_KEY, JSON.stringify(payload));
+  localStorage.setItem(settingsKey(scope), JSON.stringify(payload));
 
-  const app = loadAppData();
+  const app = loadAppData(scope);
   app.business = {
     ...app.business,
     ...payload,
   };
-  saveAppData(app);
+  saveAppData(app, scope);
 }

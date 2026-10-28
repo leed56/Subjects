@@ -1,0 +1,23 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
+const output = join(process.cwd(), "public", "images", "grocery", "meat");
+await mkdir(output, { recursive: true });
+
+const art = {
+  bre: `<path d="M25 67c0-20 19-37 43-35 13 1 24 11 22 25-2 17-21 31-41 31-15 0-24-8-24-21Z" fill="#f2a59e" stroke="#cf7774" stroke-width="3"/><path d="M67 69c4-19 23-31 44-29 18 2 28 16 23 30-6 17-27 27-45 24-16-2-25-11-22-25Z" fill="#f7b4a9" stroke="#d9877f" stroke-width="3"/><path d="M37 64c8-14 22-19 36-16M82 67c9-13 21-16 33-12" fill="none" stroke="#ffd6cd" stroke-width="5" stroke-linecap="round"/>`,
+  drm: `<g transform="rotate(-20 64 57)"><path d="M25 47c-4-15 7-26 22-26 20 0 34 16 34 32 0 12-8 20-19 23L53 89l-11-7 4-16C35 65 28 58 25 47Z" fill="#dda274" stroke="#b97755" stroke-width="3"/><path d="M48 80l-8 14m12-10 5 14" stroke="#f8e7d7" stroke-width="11" stroke-linecap="round"/></g><g transform="translate(51 7) rotate(24 64 57)"><path d="M25 47c-4-15 7-26 22-26 20 0 34 16 34 32 0 12-8 20-19 23L53 89l-11-7 4-16C35 65 28 58 25 47Z" fill="#e6ad80" stroke="#bd7f58" stroke-width="3"/><path d="M48 80l-8 14m12-10 5 14" stroke="#f8e7d7" stroke-width="11" stroke-linecap="round"/></g>`,
+  prt: `<path d="M23 50c0-11 8-18 18-18h74c12 0 21 8 21 19v35H23V50Z" fill="#d9e4ea" stroke="#a9bdc8" stroke-width="3"/><path d="M31 61c0-12 9-20 19-18 13 3 20 13 15 25-5 12-16 15-25 9-7-4-9-9-9-16ZM68 52c4-11 18-17 30-12 11 5 14 18 8 27-7 11-20 13-29 6-9-6-13-13-9-21ZM95 72c-1-11 9-20 20-17 13 2 19 12 14 22-5 11-18 15-27 8-5-3-7-8-7-13Z" fill="#efaaa0" stroke="#cf8179" stroke-width="3"/><path d="M23 86h113" stroke="#91aab7" stroke-width="5"/>`,
+  sas: `<g fill="#ce7a65" stroke="#ab6057" stroke-width="3"><rect x="23" y="39" width="73" height="18" rx="9" transform="rotate(-13 23 39)"/><rect x="39" y="57" width="77" height="18" rx="9" transform="rotate(5 39 57)"/><rect x="67" y="35" width="66" height="18" rx="9" transform="rotate(19 67 35)"/></g><g stroke="#f3bd9f" stroke-width="3" opacity=".75"><path d="M37 45l41-10M51 66l43 3M80 39l33 12"/></g>`,
+  sal: `<g fill="#ca7760" stroke="#a95d52" stroke-width="3"><rect x="21" y="37" width="118" height="25" rx="12" transform="rotate(-8 21 37)"/><rect x="25" y="64" width="113" height="25" rx="12" transform="rotate(5 25 64)"/></g><path d="M38 51l71-10M40 75l71 6" stroke="#efb496" stroke-width="4" stroke-linecap="round" opacity=".75"/>`,
+  mbl: `<g fill="#d58d70" stroke="#ae6955" stroke-width="3"><circle cx="42" cy="49" r="16"/><circle cx="78" cy="42" r="17"/><circle cx="113" cy="49" r="16"/><circle cx="59" cy="76" r="17"/><circle cx="98" cy="76" r="17"/></g><g fill="#f2bd98" opacity=".7"><circle cx="37" cy="44" r="4"/><circle cx="74" cy="36" r="4"/><circle cx="108" cy="43" r="4"/><circle cx="55" cy="70" r="4"/><circle cx="93" cy="70" r="4"/></g>`,
+  bro: `<path d="M37 59c0-22 19-39 45-39 29 0 47 19 43 40-3 20-20 34-45 34-23 0-43-13-43-35Z" fill="#ecc29b" stroke="#ba8b68" stroke-width="3"/><path d="M58 50c3-10 16-17 28-14 12 4 17 12 14 21-3 10-15 17-27 14-11-3-18-12-15-21Z" fill="#f4d0ad" stroke="#c99b77" stroke-width="3"/><path d="M43 73 23 84m96-11 18 11" stroke="#e9c09a" stroke-width="12" stroke-linecap="round"/><circle cx="20" cy="86" r="7" fill="#f6e7d2"/><circle cx="140" cy="86" r="7" fill="#f6e7d2"/>`,
+  par: `<path d="M34 58c1-23 20-40 47-40 30 0 49 19 45 42-4 20-22 35-47 35-24 0-46-15-45-37Z" fill="#b77e5c" stroke="#8d5e47" stroke-width="3"/><path d="M54 49c5-13 19-18 31-14 14 4 20 16 15 27-4 11-18 18-30 14-13-3-21-15-16-27Z" fill="#d59a72" stroke="#a87354" stroke-width="3"/><path d="M42 72 22 86m99-13 19 12" stroke="#b77e5c" stroke-width="12" stroke-linecap="round"/><circle cx="20" cy="88" r="7" fill="#e8cfb6"/><circle cx="141" cy="87" r="7" fill="#e8cfb6"/>`,
+  far: `<path d="M36 60c0-23 19-40 46-40 30 0 48 19 44 40-3 21-21 35-46 35-25 0-44-14-44-35Z" fill="#d8a273" stroke="#a87750" stroke-width="3"/><path d="M59 51c4-11 17-17 29-14 12 3 18 15 14 25-4 11-16 18-28 15-13-3-19-15-15-26Z" fill="#ebba8b" stroke="#bb895d" stroke-width="3"/><path d="M43 73 22 86m99-12 18 12" stroke="#d5a075" stroke-width="12" stroke-linecap="round"/><circle cx="20" cy="88" r="7" fill="#f1dcc2"/><circle cx="141" cy="88" r="7" fill="#f1dcc2"/>`,
+};
+
+for (const [code, drawing] of Object.entries(art)) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 110" role="img" aria-label="Unbranded grocery meat illustration"><ellipse cx="80" cy="95" rx="65" ry="7" fill="#284b63" opacity=".1"/>${drawing}</svg>`;
+  await writeFile(join(output, `${code}.svg`), svg, "utf8");
+}
+console.log(`Created ${Object.keys(art).length} original grocery meat illustrations.`);

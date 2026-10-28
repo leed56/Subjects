@@ -1,5 +1,7 @@
 import type { ACJobStatus } from "@/lib/ac-jobs";
 import type { MessageTemplate, MessageTemplateId } from "./types";
+import type { SectorId } from "@/lib/types";
+import { sectorAllowsMessage } from "./sector-policy";
 
 export const MESSAGE_TEMPLATES: MessageTemplate[] = [
   {
@@ -53,7 +55,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     labelSi: "ඉන්වොයිසිය",
     category: "jobs",
     en: `Hi {{customerName}}, your invoice from *{{shopName}}*.\n\nJob: {{jobNo}}\nTotal: *{{quotedAmount}}*\nDeposit: {{depositAmount}}\nBalance: *{{balance}}*\n\n{{shopPhone}}\nThank you!`,
-    si: `ආයුබෝවන් {{customerName}}, *{{shopName}}* ඉන්වොයිසිය.\n\nJob: {{jobNo}}\nමුළු මුදල: *{{quotedAmount}}*\nමුද්දර: {{depositAmount}}\nඉතිරි: *{{balance}}*\n\n{{shopPhone}}\nස්තූතියි!`,
+    si: `ආයුබෝවන් {{customerName}}, *{{shopName}}* ඉන්වොයිසිය.\n\nවැඩ අංකය: {{jobNo}}\nමුළු මුදල: *{{quotedAmount}}*\nමුද්දර: {{depositAmount}}\nඉතිරි: *{{balance}}*\n\n{{shopPhone}}\nස්තූතියි!`,
   },
   {
     id: "job_quote",
@@ -62,7 +64,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     labelSi: "AC ඇස්තමේන්තුව",
     category: "jobs",
     en: `Hi {{customerName}}, your AC quote from *{{shopName}}*.\n\nJob: {{jobNo}}\n{{description}}\nQuoted: *{{quotedAmount}}*\nDeposit: {{depositAmount}}\nSite: {{address}}\n\nReply or call {{shopPhone}} to confirm.`,
-    si: `ආයුබෝවන් {{customerName}}, *{{shopName}}* AC ඇස්තමේන්තුව.\n\nJob: {{jobNo}}\n{{description}}\nමුදල: *{{quotedAmount}}*\nමුද්දර: {{depositAmount}}\nලිපිනය: {{address}}\n\n{{shopPhone}}`,
+    si: `ආයුබෝවන් {{customerName}}, *{{shopName}}* AC ඇස්තමේන්තුව.\n\nවැඩ අංකය: {{jobNo}}\n{{description}}\nමුදල: *{{quotedAmount}}*\nමුද්දර: {{depositAmount}}\nලිපිනය: {{address}}\n\n{{shopPhone}}`,
   },
   {
     id: "job_deposit",
@@ -71,7 +73,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     labelSi: "මුද්දර ලැබුණා",
     category: "jobs",
     en: `Hi {{customerName}}, deposit received for AC job *{{jobNo}}* at *{{shopName}}*.\n\nBalance due: *{{balance}}*\nWe will confirm your install date shortly.\n{{shopPhone}}`,
-    si: `ආයුබෝවන් {{customerName}}, *{{shopName}}* AC job *{{jobNo}}* මුද්දර ලැබුණා.\n\nඉතිරි: *{{balance}}*\nඅනුස්ථාපන දිනය ඉක්මනින් දන්වන්නෙමු.\n{{shopPhone}}`,
+    si: `ආයුබෝවන් {{customerName}}, *{{shopName}}* AC වැඩය *{{jobNo}}* මුද්දර ලැබුණා.\n\nඉතිරි: *{{balance}}*\nඅනුස්ථාපන දිනය ඉක්මනින් දන්වන්නෙමු.\n{{shopPhone}}`,
   },
   {
     id: "job_scheduled",
@@ -80,7 +82,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     labelSi: "අනුස්ථාපන දිනය",
     category: "jobs",
     en: `Hi {{customerName}}, your AC installation is *scheduled*.\n\n*{{shopName}}* · Job {{jobNo}}\nDate: *{{scheduledDate}}*\nAddress: {{address}}\n{{description}}\n\nPlease ensure someone is available on site.\n{{shopPhone}}`,
-    si: `ආයුබෝවන් {{customerName}}, AC අනුස්ථාපනය *නියමිතයි*.\n\n*{{shopName}}* · Job {{jobNo}}\nදිනය: *{{scheduledDate}}*\nලිපිනය: {{address}}\n{{description}}\n\nකරුණාකර site එකේ කෙනෙක් සිටින බව සහතික කරන්න.\n{{shopPhone}}`,
+    si: `ආයුබෝවන් {{customerName}}, AC අනුස්ථාපනය *නියමිතයි*.\n\n*{{shopName}}* · වැඩ අංකය {{jobNo}}\nදිනය: *{{scheduledDate}}*\nලිපිනය: {{address}}\n{{description}}\n\nකරුණාකර site එකේ කෙනෙක් සිටින බව සහතික කරන්න.\n{{shopPhone}}`,
   },
   {
     id: "job_installed",
@@ -89,7 +91,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     labelSi: "අනුස්ථාපනය සම්පූර්ණ",
     category: "jobs",
     en: `Hi {{customerName}}, your AC installation is complete!\n\n*{{shopName}}* · Job {{jobNo}}\n{{description}}\n\nWarranty & service reminders will follow. For support: {{shopPhone}}`,
-    si: `ආයුබෝවන් {{customerName}}, AC අනුස්ථාපනය සම්පූර්ණයි!\n\n*{{shopName}}* · Job {{jobNo}}\n{{description}}\n\nසේවා සහතිකය සහ සේවා මතක් කිරීම් ලැබෙනු ඇත. {{shopPhone}}`,
+    si: `ආයුබෝවන් {{customerName}}, AC අනුස්ථාපනය සම්පූර්ණයි!\n\n*{{shopName}}* · වැඩ අංකය {{jobNo}}\n{{description}}\n\nසේවා සහතිකය සහ සේවා මතක් කිරීම් ලැබෙනු ඇත. {{shopPhone}}`,
   },
   {
     id: "job_service_due",
@@ -98,7 +100,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     labelSi: "සේවාව අවශ්‍ය",
     category: "jobs",
     en: `Hi {{customerName}}, your AC at {{address}} is due for *service/cleaning*.\n\n*{{shopName}}* · Job {{jobNo}}\nBook a visit: {{shopPhone}}\nKeep your unit running efficiently!`,
-    si: `ආයුබෝවන් {{customerName}}, {{address}} හි AC එකට *සේවාව/පිරිසිදු කිරීම* අවශ්‍යයි.\n\n*{{shopName}}* · Job {{jobNo}}\nවේලාවක් වෙන්කර ගන්න: {{shopPhone}}`,
+    si: `ආයුබෝවන් {{customerName}}, {{address}} හි AC එකට *සේවාව/පිරිසිදු කිරීම* අවශ්‍යයි.\n\n*{{shopName}}* · වැඩ අංකය {{jobNo}}\nවේලාවක් වෙන්කර ගන්න: {{shopPhone}}`,
   },
   {
     id: "job_service_due_upcoming",
@@ -107,7 +109,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     labelSi: "සේවාව ළඟදී",
     category: "jobs",
     en: `Hi {{customerName}}, reminder from *{{shopName}}*.\n\nYour AC service is due on *{{serviceDueDate}}*.\nJob {{jobNo}} · {{address}}\n\nCall {{shopPhone}} to book a visit.`,
-    si: `ආයුබෝවන් {{customerName}}, *{{shopName}}* මතක් කිරීම.\n\nAC සේවාව *{{serviceDueDate}}* වන දින.\nJob {{jobNo}} · {{address}}\n\n{{shopPhone}}`,
+    si: `ආයුබෝවන් {{customerName}}, *{{shopName}}* මතක් කිරීම.\n\nAC සේවාව *{{serviceDueDate}}* වන දින.\nවැඩ අංකය {{jobNo}} · {{address}}\n\n{{shopPhone}}`,
   },
   {
     id: "job_service_due_today",
@@ -116,7 +118,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     labelSi: "සේවාව අද",
     category: "jobs",
     en: `Hi {{customerName}}, your AC service is *due today*.\n\n*{{shopName}}* · Job {{jobNo}}\n{{address}}\nOur team will contact you. Queries: {{shopPhone}}`,
-    si: `ආයුබෝවන් {{customerName}}, AC සේවාව *අද*.\n\n*{{shopName}}* · Job {{jobNo}}\n{{address}}\n{{shopPhone}}`,
+    si: `ආයුබෝවන් {{customerName}}, AC සේවාව *අද*.\n\n*{{shopName}}* · වැඩ අංකය {{jobNo}}\n{{address}}\n{{shopPhone}}`,
   },
   {
     id: "job_service_due_owner",
@@ -125,7 +127,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     labelSi: "සේවාව අවශ්‍ය (හිමිකරු)",
     category: "jobs",
     en: `*{{shopName}}* — AC service due\nJob {{jobNo}}\nCustomer: {{customerName}}\nPhone: {{customerPhone}}\nAddress: {{address}}\nDue: {{serviceDueDate}}`,
-    si: `*{{shopName}}* — AC සේවාව අවශ්‍ය\nJob {{jobNo}}\n{{customerName}} · {{customerPhone}}\n{{address}}\nDue: {{serviceDueDate}}`,
+    si: `*{{shopName}}* — AC සේවාව අවශ්‍ය\nවැඩ අංකය {{jobNo}}\n{{customerName}} · {{customerPhone}}\n{{address}}\nDue: {{serviceDueDate}}`,
   },
   {
     id: "job_service_due_technician",
@@ -134,7 +136,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     labelSi: "සේවා රැකියාව (කාර්මික)",
     category: "jobs",
     en: `*{{shopName}}* service visit\nJob {{jobNo}}\nCustomer: {{customerName}} · {{customerPhone}}\n{{address}}\n{{description}}\nDue: {{serviceDueDate}}`,
-    si: `*{{shopName}}* සේවා රැකියාව\nJob {{jobNo}}\n{{customerName}} · {{customerPhone}}\n{{address}}\nDue: {{serviceDueDate}}`,
+    si: `*{{shopName}}* සේවා වැඩය\nවැඩ අංකය {{jobNo}}\n{{customerName}} · {{customerPhone}}\n{{address}}\nDue: {{serviceDueDate}}`,
   },
   {
     id: "job_service_complete_next",
@@ -143,7 +145,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     labelSi: "සේවාව සම්පූර්ණ + ඊළඟ දිනය",
     category: "jobs",
     en: `Hi {{customerName}}, your AC service at {{address}} is complete today.\n\n*{{shopName}}* · Job {{jobNo}}\nNext service due: *{{serviceDueDate}}* (in {{intervalDays}} days).\n\n{{shopPhone}}`,
-    si: `ආයුබෝවන් {{customerName}}, {{address}} හි AC සේවාව අද සම්පූර්ණයි.\n\n*{{shopName}}* · Job {{jobNo}}\nඊළඟ සේවාව: *{{serviceDueDate}}* (දින {{intervalDays}}).\n\n{{shopPhone}}`,
+    si: `ආයුබෝවන් {{customerName}}, {{address}} හි AC සේවාව අද සම්පූර්ණයි.\n\n*{{shopName}}* · වැඩ අංකය {{jobNo}}\nඊළඟ සේවාව: *{{serviceDueDate}}* (දින {{intervalDays}}).\n\n{{shopPhone}}`,
   },
   {
     id: "job_completed",
@@ -152,7 +154,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     labelSi: "වැඩ සම්පූර්ණ",
     category: "jobs",
     en: `Hi {{customerName}}, job *{{jobNo}}* is marked complete at *{{shopName}}*.\n\nThank you for choosing us! Rate us or refer a friend.\n{{shopPhone}}`,
-    si: `ආයුබෝවන් {{customerName}}, *{{shopName}}* job *{{jobNo}}* සම්පූර්ණයි.\n\nඅපව තෝරා ගැනීමට ස්තූතියි!\n{{shopPhone}}`,
+    si: `ආයුබෝවන් {{customerName}}, *{{shopName}}* වැඩය *{{jobNo}}* සම්පූර්ණයි.\n\nඅපව තෝරා ගැනීමට ස්තූතියි!\n{{shopPhone}}`,
   },
   {
     id: "job_assignee_dispatch",
@@ -161,7 +163,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
     labelSi: "වැඩ නියෝගය (පවරන ලද)",
     category: "jobs",
     en: `*{{shopName}}* — Work order\nJob {{jobNo}}\n{{description}}\nCustomer: {{customerName}}\nSite: {{address}}\nScheduled: {{scheduledDate}}\nQuote: {{quotedAmount}}`,
-    si: `*{{shopName}}* — වැඩ නියෝගය\nJob {{jobNo}}\n{{description}}\nපාරිභෝගික: {{customerName}}\nස්ථානය: {{address}}\nදිනය: {{scheduledDate}}\nමුදල: {{quotedAmount}}`,
+    si: `*{{shopName}}* — වැඩ නියෝගය\nවැඩ අංකය {{jobNo}}\n{{description}}\nපාරිභෝගික: {{customerName}}\nස්ථානය: {{address}}\nදිනය: {{scheduledDate}}\nමුදල: {{quotedAmount}}`,
   },
   {
     id: "subscription_renewal_reminder",
@@ -189,21 +191,23 @@ export function getTemplate(id: MessageTemplateId): MessageTemplate {
 
 export function templatesForContext(
   contextType: "sale" | "customer" | "ac_job" | "custom",
+  sector: SectorId,
 ): MessageTemplate[] {
+  const templates = MESSAGE_TEMPLATES.filter((template) => sectorAllowsMessage(sector, contextType, template.id));
   if (contextType === "sale") {
-    return MESSAGE_TEMPLATES.filter((t) =>
+    return templates.filter((t) =>
       ["bill_receipt", "sales_quote", "custom"].includes(t.id),
     );
   }
   if (contextType === "customer") {
-    return MESSAGE_TEMPLATES.filter((t) =>
+    return templates.filter((t) =>
       ["credit_reminder", "payment_thanks", "custom"].includes(t.id),
     );
   }
   if (contextType === "ac_job") {
-    return MESSAGE_TEMPLATES.filter((t) => t.category === "jobs" || t.id === "custom");
+    return templates.filter((t) => t.category === "jobs" || t.id === "custom");
   }
-  return MESSAGE_TEMPLATES;
+  return templates;
 }
 
 export function defaultTemplateForJob(status: ACJobStatus): MessageTemplateId {

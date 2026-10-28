@@ -6,6 +6,8 @@ import { ProductForm } from "@/components/product-form";
 import { StockCommandHeader } from "@/components/stock/stock-command-header";
 import { GroceryProductArt } from "@/components/sales/grocery-product-art";
 import { GroceryStarterCatalogueButton } from "@/components/grocery/starter-catalogue-button";
+import { GrindingMillCatalogueButton } from "@/components/grocery/grinding-mill-catalogue-button";
+import { GroceryMeatCatalogueButton } from "@/components/grocery/meat-catalogue-button";
 import { ExportActions } from "@/components/export/export-actions";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { AppShell } from "@/components/shell/app-shell";
@@ -488,6 +490,8 @@ export default function StockPage() {
         />
 
         <WriteDisabledHint className="mb-4" />
+        <GrindingMillCatalogueButton />
+        <GroceryMeatCatalogueButton />
 
         <FilterBar>
           <SearchInput value={search} onChange={setSearch} placeholder={t("stock.search_placeholder")} className="min-w-[220px] flex-1" />

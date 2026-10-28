@@ -23,9 +23,9 @@ import {
   getOrCreateOrgForUser,
 } from "@/lib/supabase/org-settings";
 import { useAppStore } from "@/lib/store/use-app-store";
+import { appStorageScope } from "@/lib/store/storage";
+import { loadShopSettings, saveShopSettings } from "@/lib/store/shop-settings";
 
-const SHOP_KEY = "lakbiz-shop-settings-v1";
-const APP_KEY = "lakbiz-app-data-v2";
 const SAVED_AT_KEY = "lakbiz-shop-settings-saved-at-v1";
 
 type Msg = { ok: boolean; text: string };
@@ -43,26 +43,6 @@ function looksLikeBrNumber(value: string): boolean {
 }
 function looksLikeTin(value: string): boolean {
   return /^\d{6,12}$/.test(value.trim());
-}
-
-function readStorage(): Partial<BusinessInfo> | null {
-  try {
-    const a = localStorage.getItem(SHOP_KEY);
-    if (a) return JSON.parse(a) as Partial<BusinessInfo>;
-    const b = localStorage.getItem(APP_KEY);
-    if (b) return ((JSON.parse(b) as { business?: Partial<BusinessInfo> }).business ?? null);
-  } catch {}
-  return null;
-}
-
-function writeStorage(data: BusinessInfo): void {
-  localStorage.setItem(SHOP_KEY, JSON.stringify(data));
-  try {
-    const raw = localStorage.getItem(APP_KEY);
-    const app = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-    app.business = { ...((app.business as object) ?? {}), ...data };
-    localStorage.setItem(APP_KEY, JSON.stringify(app));
-  } catch {}
 }
 
 function readForm(form: HTMLFormElement, logoDataUrl?: string): BusinessInfo {
@@ -184,7 +164,9 @@ export default function ShopSettingsPage() {
   const [, forceTick] = useState(0);
 
   const { user } = useAuth();
-  const { org } = useSubscription();
+  const { org, ready: subscriptionReady } = useSubscription();
+  const storageScope = appStorageScope(org.id, org.sector);
+  const savedAtKey = `${SAVED_AT_KEY}-${storageScope}`;
   const { updateBusinessToCloud } = useAppStore();
   const { t } = useLocale();
   const orgIdRef = useRef(org.id);
@@ -206,19 +188,21 @@ export default function ShopSettingsPage() {
   };
 
   useEffect(() => {
+    if (!subscriptionReady) return;
     const form = formRef.current;
     if (!form) return;
-    const saved = readStorage();
+    const saved = loadShopSettings(storageScope);
     if (saved) {
+      if (saved.name === "My Shop") saved.name = org.name;
       fillForm(form, saved);
-      if (saved.logoDataUrl) setLogoDataUrl(saved.logoDataUrl);
+      setLogoDataUrl(saved.logoDataUrl);
       setIncomeTaxPreset(incomeTaxPresetValue(saved.companyIncomeTaxRate));
     }
     try {
-      const savedAt = localStorage.getItem(SAVED_AT_KEY);
-      if (savedAt) setLastSavedAt(Number(savedAt));
+      const savedAt = localStorage.getItem(savedAtKey);
+      setLastSavedAt(savedAt ? Number(savedAt) : null);
     } catch {}
-  }, []);
+  }, [subscriptionReady, storageScope, savedAtKey, org.name]);
 
   // Keeps "Synced N minutes ago" honest without a save happening again —
   // otherwise it would say "Just now" forever until the next render was
@@ -230,17 +214,19 @@ export default function ShopSettingsPage() {
   }, [lastSavedAt]);
 
   useEffect(() => {
-    if (!org.id || !isSupabaseConfigured()) return;
+    if (!org.id || !org.isAuthenticated || !isSupabaseConfigured()) return;
+    let cancelled = false;
     void fetchOrgShopSettings(org.id).then((cloud) => {
       const form = formRef.current;
-      if (!cloud || !form) return;
-      const local = readStorage();
+      if (cancelled || !cloud || !form) return;
+      const local = loadShopSettings(storageScope);
       if (local?.name && local.name !== "My Shop") return;
       fillForm(form, cloud);
       if (cloud.logoDataUrl) setLogoDataUrl(cloud.logoDataUrl);
       setIncomeTaxPreset(incomeTaxPresetValue(cloud.companyIncomeTaxRate));
     });
-  }, [org.id]);
+    return () => { cancelled = true; };
+  }, [org.id, org.isAuthenticated, storageScope]);
 
   useEffect(() => () => {
     if (resetBtnTimerRef.current) clearTimeout(resetBtnTimerRef.current);
@@ -280,7 +266,7 @@ export default function ShopSettingsPage() {
     showMsg({ ok: true, text: t("vat.saving") }, "saving");
 
     try {
-      writeStorage(payload);
+      saveShopSettings(payload, storageScope);
     } catch {
       showMsg({ ok: false, text: "Save failed — browser storage blocked." }, "idle");
       return;
@@ -316,7 +302,7 @@ export default function ShopSettingsPage() {
     const savedAt = Date.now();
     setLastSavedAt(savedAt);
     try {
-      localStorage.setItem(SAVED_AT_KEY, String(savedAt));
+      localStorage.setItem(savedAtKey, String(savedAt));
     } catch {}
 
     showMsg(

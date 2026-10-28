@@ -144,6 +144,7 @@ import {
 } from "./actions";
 import {
   clearAppData,
+  appStorageScope,
   emptyAppData,
   loadAppData,
   saveAppData,
@@ -173,6 +174,7 @@ import type {
   VehicleSaleInput,
 } from "./types";
 import type { SectorId } from "@/lib/types";
+import { notificationStorageScope, setNotificationStorageScope } from "@/lib/messaging/settings";
 
 export type AppStoreValue = {
   data: AppData | null;
@@ -427,7 +429,8 @@ function useAppStoreState(): AppStoreValue {
       return;
     }
 
-    setStorageOrgId(org.id);
+    setStorageOrgId(appStorageScope(org.id, org.sector));
+    setNotificationStorageScope(notificationStorageScope(org.id, org.sector));
     const initial = loadAppData(org.id);
     setData(initial);
     latestDataRef.current = initial;
@@ -451,19 +454,13 @@ function useAppStoreState(): AppStoreValue {
       retryTimerRef.current = null;
     }
     retryAttemptRef.current = 0;
-  }, [subscriptionReady, user, org.id, org.isAuthenticated, refreshOfflinePendingState]);
+  }, [subscriptionReady, user, org.id, org.sector, org.isAuthenticated, refreshOfflinePendingState]);
 
   useEffect(() => {
     if (!isOnline) {
       setCloudSyncError(null);
     }
   }, [isOnline]);
-
-  useEffect(() => {
-    if (!org.id) {
-      setStorageOrgId(null);
-    }
-  }, [org.id]);
 
   const executeCloudPush = useCallback(
     async (
@@ -1027,8 +1024,12 @@ function useAppStoreState(): AppStoreValue {
       let newStockLogIds: string[] = [];
 
       if (existingId) {
+        const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
         next = updateProduct(data, existingId, normalized);
         productId = existingId;
+        newStockLogIds = next.stockLogs
+          .filter((log) => !prevLogIds.has(log.id))
+          .map((log) => log.id);
       } else {
         if (!canAddProduct(data)) {
           return { ok: false, error: "Product limit reached" };

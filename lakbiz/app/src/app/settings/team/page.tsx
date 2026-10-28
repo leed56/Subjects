@@ -17,6 +17,7 @@ import { useAuth } from "@/components/auth-provider";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { OrgRole } from "@/lib/subscription/types";
+import { sectorAllowsTeamRole } from "@/lib/sector-features";
 
 const EDITABLE_ROLES: OrgRole[] = ["data_entry", "cashier", "technician", "manager"];
 
@@ -32,6 +33,24 @@ const ROLE_DESCRIPTION_KEYS: Record<OrgRole, string> = {
   technician: "team.role_desc_technician",
 };
 
+const NON_HVAC_ROLE_DESCRIPTIONS = {
+  si: {
+    manager: "දෛනික විකුණුම්, තොග සහ ගනුදෙනුකරු කටයුතු පාලනය කරයි. මූල්‍ය වාර්තා හිමිකරුට පමණි.",
+    data_entry: "විකුණුම්, තොග සහ ගනුදෙනුකරු තොරතුරු සටහන් කරයි. හිමිකරුගේ මූල්‍ය වාර්තා ලබා ගත නොහැක.",
+    cashier: "විකුණුම්, තොග, ගනුදෙනුකරුවන් සහ බිල්පත් සඳහා ප්‍රවේශය.",
+  },
+  en: {
+    manager: "Manage daily sales, stock and customer operations. Financial reports are owner-only.",
+    data_entry: "Record sales, stock and customer details. Owner financial reports are restricted.",
+    cashier: "Access sales, stock, customers and bills.",
+  },
+  ta: {
+    manager: "தினசரி விற்பனை, சரக்கு மற்றும் வாடிக்கையாளர் பணிகளை நிர்வகிக்கலாம். நிதி அறிக்கைகள் உரிமையாளருக்கு மட்டும்.",
+    data_entry: "விற்பனை, சரக்கு மற்றும் வாடிக்கையாளர் விவரங்களைப் பதிவு செய்யலாம். உரிமையாளரின் நிதி அறிக்கைகளை அணுக முடியாது.",
+    cashier: "விற்பனை, சரக்கு, வாடிக்கையாளர்கள் மற்றும் பில்களுக்கான அணுகல்.",
+  },
+};
+
 type MemberRow = {
   userId: string;
   email: string | null;
@@ -40,8 +59,9 @@ type MemberRow = {
 };
 
 export default function TeamSettingsPage() {
-  const { t } = useLocale();
-  const { canManageTeam } = useSubscription();
+  const { t, locale } = useLocale();
+  const { canManageTeam, org, can } = useSubscription();
+  const editableRoles = EDITABLE_ROLES.filter((role) => sectorAllowsTeamRole(org.sector, role) && (role !== "technician" || can("ac_jobs")));
   const { user } = useAuth();
   const { toast } = useToast();
   const [members, setMembers] = useState<MemberRow[]>([]);
@@ -51,6 +71,8 @@ export default function TeamSettingsPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<OrgRole>("data_entry");
+  const roleDescription = org.sector !== "ac_hvac" && (role === "manager" || role === "data_entry" || role === "cashier")
+    ? NON_HVAC_ROLE_DESCRIPTIONS[locale][role] : t(ROLE_DESCRIPTION_KEYS[role]);
   const [submitting, setSubmitting] = useState(false);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<MemberRow | null>(null);
@@ -266,10 +288,10 @@ export default function TeamSettingsPage() {
                 >
                   <option value="data_entry">{t("team.role_data_entry")}</option>
                   <option value="cashier">{t("team.role_cashier")}</option>
-                  <option value="technician">{t("team.role_technician")}</option>
+                  {editableRoles.includes("technician") && <option value="technician">{t("team.role_technician")}</option>}
                   <option value="manager">{t("team.role_manager")}</option>
                 </select>
-                <span className="mt-1.5 block text-xs font-medium leading-4 text-slate-500">{t(ROLE_DESCRIPTION_KEYS[role])}</span>
+                <span className="mt-1.5 block text-xs font-medium leading-4 text-slate-500">{roleDescription}</span>
               </label>
               <button
                 type="submit"
@@ -305,7 +327,8 @@ export default function TeamSettingsPage() {
                             onChange={(e) => void handleRoleChange(m.userId, e.target.value as OrgRole)}
                             className="h-9 rounded-lg border border-slate-200 px-2 text-xs font-semibold disabled:opacity-50"
                           >
-                            {EDITABLE_ROLES.map((r) => (
+                            {!editableRoles.includes(m.role) && <option value={m.role} disabled>{t(`team.role_${m.role}`)}</option>}
+                            {editableRoles.map((r) => (
                               <option key={r} value={r}>
                                 {t(`team.role_${r}`)}
                               </option>

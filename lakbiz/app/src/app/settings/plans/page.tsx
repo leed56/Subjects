@@ -15,6 +15,11 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { PLANS, formatLkrPrice, getPlan, planPrice, relevantAddons } from "@/lib/subscription/plans";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 
+function formatPlanDate(value: string): string {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  return parts ? `${parts[3]}/${parts[2]}/${parts[1]}` : value;
+}
+
 export default function PlansPage() {
   const { locale, t } = useLocale();
   const { subscription, org, daysLeftInTrial, isReadOnly } = useSubscription();
@@ -29,7 +34,7 @@ export default function PlansPage() {
           ? "amber"
           : "slate";
   const periodEnd = subscription.currentPeriodEnd ?? subscription.trialEndsAt;
-  const planName = locale === "si" ? currentPlan.nameSi : currentPlan.nameEn;
+  const planName = locale === "si" ? currentPlan.nameSi : locale === "ta" ? currentPlan.nameTa : currentPlan.nameEn;
   const billingLabel =
     subscription.billingCycle === "annual" ? t("sub.annual") : t("sub.monthly");
   const currentPrice = planPrice(currentPlan, subscription.billingCycle);
@@ -43,7 +48,7 @@ export default function PlansPage() {
           description={t("sub.plans_page_desc")}
           actions={
             <ProButton href="/dashboard" variant="secondary">
-              Dashboard
+              {locale === "si" ? "ප්‍රධාන පුවරුව" : locale === "ta" ? "முகப்புப் பலகை" : "Dashboard"}
             </ProButton>
           }
         />
@@ -60,7 +65,7 @@ export default function PlansPage() {
             label={t("sub.plans_stat_plan")}
             value={planName}
             hint={t("sub.plans_assigned_hint")}
-            icon="Plan"
+            icon="◈"
             tone="teal"
           />
           <ProStatCard
@@ -68,10 +73,10 @@ export default function PlansPage() {
             value={t(`sub.status_${subscription.status}`)}
             hint={
               daysLeftInTrial != null
-                ? `${daysLeftInTrial} day${daysLeftInTrial === 1 ? "" : "s"} left`
+                ? t("sub.trial_days_left").replace("{days}", String(daysLeftInTrial))
                 : t("sub.plans_managed_account")
             }
-            icon="OK"
+            icon="✓"
             tone={statusTone}
           />
           <ProStatCard
@@ -82,25 +87,25 @@ export default function PlansPage() {
                 ? t("sub.annual_save")
                 : t("sub.plans_reference_price")
             }
-            icon="Billing"
+            icon="▣"
             tone="slate"
           />
           <ProStatCard
             label={t("sub.plans_stat_business")}
             value={org.name}
             hint={org.isAuthenticated ? t("sub.db_connected") : t("sub.login_demo")}
-            icon="Shop"
+            icon="⌂"
             tone="blue"
           />
           <ProStatCard
             label={t("sub.plans_stat_period")}
             value={
               periodEnd
-                ? new Date(periodEnd).toLocaleDateString("en-LK")
+                ? formatPlanDate(periodEnd)
                 : t("sub.plans_manual_period")
             }
             hint={t("sub.plans_updated_by")}
-            icon="Date"
+            icon="◷"
             tone="amber"
           />
         </section>
@@ -159,7 +164,7 @@ export default function PlansPage() {
           <ProCard title={t("sub.choose_plan")} eyebrow={t("sub.plans_packages_eyebrow")}>
             <div className="grid gap-4 md:grid-cols-3">
               {PLANS.map((plan) => {
-                const name = locale === "si" ? plan.nameSi : plan.nameEn;
+                const name = locale === "si" ? plan.nameSi : locale === "ta" ? plan.nameTa : plan.nameEn;
                 const monthly = plan.priceMonthlyLkr;
                 const annual = plan.priceAnnualLkr;
                 return (
@@ -212,7 +217,7 @@ export default function PlansPage() {
                     className="rounded-2xl border border-slate-200 bg-white p-4 text-sm"
                   >
                     <p className="font-bold text-slate-950">
-                      {locale === "si" ? addon.nameSi : addon.nameEn}
+                      {locale === "si" ? addon.nameSi : locale === "ta" ? addon.id === "extra_user" ? "கூடுதல் பயனர்" : addon.id === "extra_branch" ? "கூடுதல் கிளை" : addon.nameEn : addon.nameEn}
                     </p>
                     <p className="mt-1 font-mono font-bold text-teal-700">
                       {formatLkrPrice(addon.priceMonthlyLkr)}/{t("sub.month")}

@@ -24,6 +24,7 @@ import type {
 } from "@/lib/store/types";
 import { businessFromOrg, fetchOrgShopSettings } from "./org-settings";
 import { createBrowserClient } from "./client";
+import { appendStockLogRows } from "./stock-log-sync";
 import { fetchAllPages } from "./pagination";
 import {
   hasSyncConflict,
@@ -697,6 +698,7 @@ async function upsertOrgRows(
 ): Promise<string | null> {
   const uniqueRows = dedupeRowsById(rows);
   if (uniqueRows.length === 0) return null;
+  if (table === "stock_logs") return appendStockLogRows(uniqueRows);
   const supabase = createBrowserClient();
   if (!supabase) return "Supabase not configured";
 
@@ -836,7 +838,6 @@ async function deleteOrgRowsNotIn(
     | "customer_payments"
     | "customer_product_prices"
     | "supplier_payments"
-    | "stock_logs"
     | "bank_accounts"
     | "bank_transactions"
     | "bank_transfers"
@@ -2777,7 +2778,9 @@ export async function pushBusinessData(
     .select("*", { count: "exact", head: true })
     .eq("organization_id", organizationId);
 
-  // Multi-staff shops: skip prune so one device cannot delete another user's rows.
+  // Stock history is never pruned, including in single-owner shops. A browser
+  // cache is not an authority to erase a durable movement created elsewhere.
+  // Multi-staff shops: skip other pruning so devices do not delete each other's rows.
   if ((memberCount ?? 0) > 1) {
     const advanced = await advanceOrgSyncGeneration(organizationId, seenGeneration);
     if (!advanced.ok) {
@@ -2794,7 +2797,6 @@ export async function pushBusinessData(
       | "customer_payments"
       | "customer_product_prices"
       | "supplier_payments"
-      | "stock_logs"
       | "cheques"
       | "ac_jobs"
       | "vehicles"
@@ -2820,7 +2822,6 @@ export async function pushBusinessData(
       ids: data.customerProductPrices.map((p) => p.id),
     },
     { table: "supplier_payments", ids: data.supplierPayments.map((p) => p.id) },
-    { table: "stock_logs", ids: data.stockLogs.map((l) => l.id) },
     { table: "bank_transactions", ids: data.bankTransactions.map((t) => t.id) },
     { table: "bank_transfers", ids: data.bankTransfers.map((t) => t.id) },
     { table: "cheques", ids: data.cheques.map((c) => c.id) },

@@ -5,6 +5,7 @@ import { normalizeSlPhone } from "@/lib/messaging/phone";
 import { checkOrgSmsQuota } from "@/lib/messaging/sms-quota-server";
 import { fetchPlatformMessagingPolicy } from "@/lib/messaging/platform-policy-server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { messageSectorAccessError } from "@/lib/messaging/sector-policy-server";
 
 export async function POST(request: Request) {
   if (!isTextLkConfigured()) {
@@ -71,6 +72,8 @@ export async function POST(request: Request) {
   }
 
   const phone = normalizeSlPhone(body.phone ?? "");
+  const sectorError = await messageSectorAccessError(supabase, member.organization_id, body.contextType, body.templateId);
+  if (sectorError) return NextResponse.json({ ok: false, error: sectorError }, { status: 403 });
   const message = body.message?.trim();
 
   if (!phone || !message) {
