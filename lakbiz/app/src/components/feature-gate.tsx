@@ -53,7 +53,7 @@ export function FeatureGate({ children, feature }: FeatureGateProps) {
     );
   }
 
-  if (!required || !org.isAuthenticated || can(required)) {
+  if (!required || can(required)) {
     return children;
   }
 

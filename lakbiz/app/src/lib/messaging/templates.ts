@@ -1,5 +1,7 @@
 import type { ACJobStatus } from "@/lib/ac-jobs";
 import type { MessageTemplate, MessageTemplateId } from "./types";
+import type { SectorId } from "@/lib/types";
+import { sectorAllowsMessage } from "./sector-policy";
 
 export const MESSAGE_TEMPLATES: MessageTemplate[] = [
   {
@@ -189,21 +191,23 @@ export function getTemplate(id: MessageTemplateId): MessageTemplate {
 
 export function templatesForContext(
   contextType: "sale" | "customer" | "ac_job" | "custom",
+  sector: SectorId,
 ): MessageTemplate[] {
+  const templates = MESSAGE_TEMPLATES.filter((template) => sectorAllowsMessage(sector, contextType, template.id));
   if (contextType === "sale") {
-    return MESSAGE_TEMPLATES.filter((t) =>
+    return templates.filter((t) =>
       ["bill_receipt", "sales_quote", "custom"].includes(t.id),
     );
   }
   if (contextType === "customer") {
-    return MESSAGE_TEMPLATES.filter((t) =>
+    return templates.filter((t) =>
       ["credit_reminder", "payment_thanks", "custom"].includes(t.id),
     );
   }
   if (contextType === "ac_job") {
-    return MESSAGE_TEMPLATES.filter((t) => t.category === "jobs" || t.id === "custom");
+    return templates.filter((t) => t.category === "jobs" || t.id === "custom");
   }
-  return MESSAGE_TEMPLATES;
+  return templates;
 }
 
 export function defaultTemplateForJob(status: ACJobStatus): MessageTemplateId {

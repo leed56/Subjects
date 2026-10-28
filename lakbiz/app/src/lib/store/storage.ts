@@ -12,9 +12,18 @@ const STORAGE_KEY_V1 = "lakbiz-app-data-v1";
 
 let activeOrgId: string | null = null;
 
+/** Anonymous template demos must not share a catalogue with each other. */
+export function appStorageScope(orgId: string | null, sector: string): string {
+  return orgId ?? `demo-${sector}`;
+}
+
 /** Scope localStorage per tenant so shops never clash on the same browser. */
 export function setStorageOrgId(orgId: string | null): void {
   activeOrgId = orgId;
+}
+
+export function activeAppStorageScope(): string | null {
+  return activeOrgId;
 }
 
 function storageKeyV2(orgId?: string | null): string {
@@ -117,23 +126,6 @@ export function parseAppData(parsed: Partial<AppData>): AppData {
   };
 }
 
-function migrateLegacyGlobalKey(orgId: string | null): AppData | null {
-  if (!orgId || typeof window === "undefined") return null;
-  const orgKey = storageKeyV2(orgId);
-  if (localStorage.getItem(orgKey)) return null;
-  const legacy = localStorage.getItem(STORAGE_KEY_V2);
-  if (!legacy) return null;
-  try {
-    const parsed = JSON.parse(legacy) as Partial<AppData>;
-    const businessName = parsed.business?.name?.trim();
-    if (!businessName || businessName === "My Shop") return null;
-    localStorage.setItem(orgKey, legacy);
-    return syncAcJobServiceStatuses(parseAppData(parsed));
-  } catch {
-    return null;
-  }
-}
-
 export function loadAppData(orgId?: string | null): AppData {
   if (typeof window === "undefined") return emptyAppData();
   const key = storageKeyV2(orgId);
@@ -144,8 +136,10 @@ export function loadAppData(orgId?: string | null): AppData {
       return syncAcJobServiceStatuses(parseAppData(parsed));
     }
 
-    const migrated = migrateLegacyGlobalKey(orgId ?? activeOrgId);
-    if (migrated) return migrated;
+    // A global cache has no proven shop owner. Never adopt it into a shop or
+    // template demo (and subsequently sync it to that shop). Keep both legacy
+    // keys intact for explicit recovery; existing tenant caches still load above.
+    if (orgId ?? activeOrgId) return emptyAppData();
 
     const rawV1 = localStorage.getItem(STORAGE_KEY_V1);
     if (rawV1) {

@@ -3,6 +3,7 @@ import { parseNotificationSettings } from "@/lib/messaging/settings";
 import { toShopNotificationPayload } from "@/lib/messaging/platform-policy";
 import type { NotificationSettings } from "@/lib/messaging/types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { notificationSettingsForSector, supportsAcServiceMessaging } from "@/lib/messaging/sector-policy";
 
 async function requireOrgMember() {
   const supabase = await createServerSupabaseClient();
@@ -39,7 +40,7 @@ export async function GET() {
 
   const { data, error } = await ctx.supabase
     .from("organizations")
-    .select("notification_settings")
+    .select("notification_settings, sector")
     .eq("id", ctx.organizationId)
     .maybeSingle();
 
@@ -47,7 +48,7 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: error?.message ?? "Not found" }, { status: 500 });
   }
 
-  const settings = parseNotificationSettings(data.notification_settings);
+  const settings = notificationSettingsForSector(parseNotificationSettings(data.notification_settings), data.sector);
   return NextResponse.json({ ok: true, settings });
 }
 
@@ -66,14 +67,21 @@ export async function PUT(request: Request) {
 
   const { data: existingRow } = await ctx.supabase
     .from("organizations")
-    .select("notification_settings")
+    .select("notification_settings, sector")
     .eq("id", ctx.organizationId)
     .maybeSingle();
 
-  const merged = parseNotificationSettings({
+  if (!existingRow?.sector) return NextResponse.json({ ok: false, error: "Workspace template could not be verified." }, { status: 403 });
+  if (!supportsAcServiceMessaging(existingRow.sector) && (
+    body.autoPromptOnJobStatus === true || body.autoSendServiceDueSms === true || body.autoSendOnServiceComplete === true ||
+    body.notifyCustomerOnServiceDue === true || body.notifyOwnerOnServiceDue === true || body.notifyTechnicianOnServiceDue === true ||
+    (typeof body.technicianPhone === "string" && body.technicianPhone.trim() !== "")
+  )) return NextResponse.json({ ok: false, error: "AC service settings are available only to HVAC workspaces." }, { status: 403 });
+
+  const merged = notificationSettingsForSector(parseNotificationSettings({
     ...(existingRow?.notification_settings as object),
     ...body,
-  });
+  }), existingRow.sector);
 
   const payload = toShopNotificationPayload(merged);
 

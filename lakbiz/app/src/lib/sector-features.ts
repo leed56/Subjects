@@ -149,3 +149,21 @@ export function sectorAllowsFeature(
 ): boolean {
   return sectorFeatures(sectorId)[feature] ?? false;
 }
+
+const SECTOR_ROUTES: Array<{ prefixes: string[]; sectors: SectorId[] }> = [
+  { prefixes: ["/jobs", "/schedule", "/assets", "/workforce", "/teams", "/job-costing"], sectors: ["ac_hvac"] },
+  { prefixes: ["/vehicles"], sectors: ["car_sales"] },
+  { prefixes: ["/stock/rolls", "/stock/cutting", "/stock/dispatch", "/textile"], sectors: ["textile"] },
+  { prefixes: ["/stock/advanced"], sectors: ["pharmacy", "electronics", "mobile_shop", "footwear"] },
+  { prefixes: ["/pulse"], sectors: ["textile", "pharmacy"] },
+];
+
+/** Apply to direct links as well as navigation, including anonymous demos. */
+export function sectorAllowsRoute(sector: SectorId, pathname: string): boolean {
+  const rule = SECTOR_ROUTES.find(({ prefixes }) => prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)));
+  return !rule || rule.sectors.includes(sector);
+}
+
+export function sectorAllowsTeamRole(sector: unknown, role: string): boolean {
+  return role !== "technician" || sector === "ac_hvac";
+}

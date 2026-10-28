@@ -6,6 +6,8 @@ import { formatLkr } from "@/lib/format";
 import type { BusinessInfo } from "@/lib/invoice";
 import { parseNotificationSettings } from "@/lib/messaging/settings";
 import { fetchPlatformMessagingPolicy } from "@/lib/messaging/platform-policy-server";
+import { orgAllowsBulkMessaging } from "./plan-gate-server";
+import { supportsAcServiceMessaging } from "./sector-policy";
 
 import { composeMessage } from "./compose";
 import { sendTextLkSms, isTextLkConfigured } from "./textlk-server";
@@ -34,6 +36,7 @@ type AcJobRow = {
 
 type OrgRow = {
   id: string;
+  sector: string;
   name: string;
   phone: string | null;
   notification_settings: unknown;
@@ -214,7 +217,8 @@ export async function runServiceDueReminders(
 
   let orgQuery = supabase
     .from("organizations")
-    .select("id, name, phone, notification_settings");
+    .select("id, name, phone, notification_settings, sector")
+    .eq("sector", "ac_hvac");
 
   if (options.organizationId) {
     orgQuery = orgQuery.eq("id", options.organizationId);
@@ -228,12 +232,15 @@ export async function runServiceDueReminders(
   const today = todayIso();
 
   for (const org of (orgs ?? []) as OrgRow[]) {
+    if (!supportsAcServiceMessaging(org.sector)) continue;
     const settings: NotificationSettings = parseNotificationSettings(
       org.notification_settings,
     );
 
     if (!settings.autoSendServiceDueSms) continue;
     if (settings.serviceDueRemindDays.length === 0) continue;
+    const { data: acEnabled, error: moduleError } = await supabase.rpc("org_has_module", { org_id: org.id, module_key: "ac_jobs" });
+    if (moduleError || acEnabled !== true || !await orgAllowsBulkMessaging(supabase, org.id)) continue;
 
     result.orgsScanned += 1;
     const business = businessFromOrg(org);

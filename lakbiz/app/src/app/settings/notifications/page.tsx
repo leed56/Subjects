@@ -19,14 +19,18 @@ import { formatSlPhoneDisplay, isValidSlMobile } from "@/lib/messaging";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useSmsApiConfigured, useWhatsAppApiConfigured } from "@/lib/messaging/use-sms-api-configured";
 import { sectorAllowsApiWhatsApp } from "@/lib/messaging/wasender-sectors";
+import { notificationStorageScope } from "@/lib/messaging/settings";
+import { notificationSettingsForSector, supportsAcServiceMessaging } from "@/lib/messaging/sector-policy";
 import {
   fetchOrgNotificationSettings,
   saveOrgNotificationSettings,
 } from "@/lib/supabase/org-notification-settings";
 
 export default function NotificationsSettingsPage() {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { org, can } = useSubscription();
+  const showAcControls = supportsAcServiceMessaging(org.sector) && can("ac_jobs");
+  const storageScope = notificationStorageScope(org.id, org.sector);
   const [settings, setSettings] = useState<NotificationSettings>(
     defaultNotificationSettings(),
   );
@@ -66,36 +70,40 @@ export default function NotificationsSettingsPage() {
   }, []);
 
   useEffect(() => {
-    const local = loadNotificationSettings();
+    const local = notificationSettingsForSector(loadNotificationSettings(storageScope), org.sector);
     setSettings(local);
-    setLog(loadNotificationLog());
+    setLog(loadNotificationLog(storageScope));
 
-    if (!org.id) return;
+    if (!org.id || !org.isAuthenticated) return;
 
+    let cancelled = false;
     fetchOrgNotificationSettings(org.id).then((cloud) => {
-      if (cloud) {
-        setSettings((prev) => ({ ...prev, ...cloud }));
-        saveNotificationSettings({ ...local, ...cloud });
+      if (cloud && !cancelled) {
+        const effective = notificationSettingsForSector({ ...local, ...cloud }, org.sector);
+        setSettings(effective);
+        saveNotificationSettings(effective, storageScope);
       }
     });
-  }, [org.id]);
+    return () => { cancelled = true; };
+  }, [org.id, org.isAuthenticated, org.sector, storageScope]);
 
   const persist = useCallback(
     async (next: NotificationSettings) => {
-      setSettings(next);
-      saveNotificationSettings(next);
+      const effective = notificationSettingsForSector(next, org.sector);
+      setSettings(effective);
+      saveNotificationSettings(effective, storageScope);
       setSaved(false);
       setCloudError(null);
       setSaving(true);
 
-      if (!org.id) {
+      if (!org.id || !org.isAuthenticated) {
         setSaving(false);
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
         return;
       }
 
-      const err = await saveOrgNotificationSettings(org.id, next);
+      const err = await saveOrgNotificationSettings(org.id, effective);
       setSaving(false);
       if (err) {
         setCloudError(err);
@@ -104,10 +112,11 @@ export default function NotificationsSettingsPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     },
-    [org.id],
+    [org.id, org.isAuthenticated, org.sector, storageScope],
   );
 
   const runBatchNow = async () => {
+    if (!showAcControls || !org.isAuthenticated) return;
     setBatchRunning(true);
     setBatchResult(null);
     try {
@@ -237,7 +246,7 @@ export default function NotificationsSettingsPage() {
               </select>
             </label>
 
-            <label className="flex items-center gap-3 text-sm">
+            {showAcControls && <label className="flex items-center gap-3 text-sm">
               <input
                 type="checkbox"
                 checked={settings.autoPromptOnJobStatus}
@@ -250,11 +259,11 @@ export default function NotificationsSettingsPage() {
                 className="h-4 w-4 rounded border-slate-300"
               />
               {t("msg.auto_prompt_jobs")}
-            </label>
+            </label>}
           </div>
         </section>
 
-        <section className="mb-6 rounded-2xl border border-teal-200/80 bg-gradient-to-br from-teal-50/70 via-white to-white p-6 shadow-[0_8px_30px_rgba(15,118,110,0.07)]">
+        {showAcControls && <section data-ui="ac-service-notification-settings" className="mb-6 rounded-2xl border border-teal-200/80 bg-gradient-to-br from-teal-50/70 via-white to-white p-6 shadow-[0_8px_30px_rgba(15,118,110,0.07)]">
           <h2 className="font-semibold text-slate-900">
             {t("msg.auto_service_due_title")}
           </h2>
@@ -550,11 +559,11 @@ export default function NotificationsSettingsPage() {
               </div>
             )}
           </div>
-        </section>
+        </section>}
 
         <section className="mb-6 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
           <h2 className="font-semibold text-slate-900">{t("msg.api_title")}</h2>
-          <p className="mt-2 text-sm text-slate-600">{t("msg.api_desc")}</p>
+          <p className="mt-2 text-sm text-slate-600">{showAcControls ? t("msg.api_desc") : locale === "si" ? "LakBiz හරහා ගනුදෙනුකරුවන්ට බිල්පත් සහ ගෙවීම් පණිවිඩ SMS මඟින් යවන්න." : locale === "ta" ? "LakBiz மூலம் வாடிக்கையாளர்களுக்கு பில்கள் மற்றும் கட்டணச் செய்திகளை SMS வழியாக அனுப்புங்கள்." : "Send billing and payment messages to customers by SMS from LakBiz."}</p>
           <p
             className={`mt-3 text-sm ${
               !mounted || smsApiConfigured === null
@@ -567,7 +576,7 @@ export default function NotificationsSettingsPage() {
             {!mounted || smsApiConfigured === null
               ? t("msg.api_checking")
               : apiEnabled
-                ? t("msg.api_active")
+                ? showAcControls ? t("msg.api_active") : locale === "si" ? "SMS සක්‍රීයයි — ගනුදෙනුකරුවන් සහ බිල්පත් සඳහා ලබා ගත හැක." : locale === "ta" ? "SMS செயலில் உள்ளது — வாடிக்கையாளர்கள் மற்றும் பில்களுக்குக் கிடைக்கும்." : "SMS is active — available for Customers and Bills."
                 : t("msg.api_inactive")}
           </p>
           {apiEnabled && (
@@ -585,7 +594,7 @@ export default function NotificationsSettingsPage() {
         <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
           <h2 className="font-semibold text-slate-900">{t("msg.log_title")}</h2>
           {log.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">{t("msg.log_empty")}</p>
+            <p className="mt-3 text-sm text-slate-500">{showAcControls ? t("msg.log_empty") : locale === "si" ? "තවම පණිවිඩ නැත. ගනුදෙනුකරුවන් හෝ බිල්පත් වෙතින් පණිවිඩ යවන්න." : locale === "ta" ? "இன்னும் செய்திகள் இல்லை. வாடிக்கையாளர்கள் அல்லது பில்களிலிருந்து செய்திகளை அனுப்புங்கள்." : "No messages yet. Send from Customers or Bills."}</p>
           ) : (
             <ul className="mt-4 space-y-3">
               {log.slice(0, 15).map((entry) => (
