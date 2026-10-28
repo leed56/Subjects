@@ -61,6 +61,7 @@ try {
           legacyMessage: document.body.textContent.includes("LEGACY AC PRIVATE MESSAGE"),
           acText: /AC service|AC job|Technician phone|Send due reminders now|from Jobs|on Jobs/.test(document.querySelector("main")?.textContent ?? ""),
           serviceNav: document.querySelector('a[href="/jobs"]') !== null,
+          jobNavLabel: document.querySelector('aside a[href="/jobs"]')?.textContent?.trim() ?? "",
           vehicleNav: document.querySelector('a[href="/vehicles"]') !== null,
           clippedSettingsTabs: Array.from(document.querySelectorAll('nav[aria-label="Settings"] a')).some((link) => {
             const rect = link.getBoundingClientRect();
@@ -71,6 +72,7 @@ try {
           build: document.body.dataset.lakbizBuildSha,
         }));
         if (expectedBuildSha && result.build !== expectedBuildSha) throw new Error(`Preview changed during QA: expected ${expectedBuildSha}, found ${result.build}`);
+        if (sector === "ac_hvac" && locale === "si" && !result.jobNavLabel.includes("AC වැඩ")) throw new Error("Sinhala HVAC navigation must use the owner's approved term AC වැඩ");
         await page.screenshot({ path: `${output}/${sector}-messages-${width}-${locale}.png`, fullPage: true });
         if (result.acControls !== (sector === "ac_hvac") || result.serviceNav !== (sector === "ac_hvac") || result.vehicleNav !== (sector === "car_sales") || (sector !== "ac_hvac" && result.acText) || result.legacyMessage || result.clippedSettingsTabs || result.scrollWidth > width + 2 || errors.length || mutations.length) failures.push({ sector, locale, width, result, errors, mutations });
         await page.goto(`${base}/settings/shop`, { waitUntil: "domcontentloaded" });
@@ -78,6 +80,11 @@ try {
         await page.waitForFunction((expected) => Array.from(document.querySelectorAll('input[name="name"]')).some((input) => input.getClientRects().length > 0 && input.value === `${expected} QA demo`), sector);
         const legacyRetained = await page.evaluate(() => localStorage.getItem("lakbiz-app-data-v2")?.includes("LEGACY PRIVATE AC SHOP"));
         if (!legacyRetained) failures.push({ sector, locale, width, error: "Legacy data was not retained" });
+        if (sector === "ac_hvac" && locale === "si") {
+          await page.goto(`${base}/jobs`, { waitUntil: "domcontentloaded" });
+          await page.getByRole("heading", { level: 1, name: "AC වැඩ", exact: true }).waitFor();
+          await page.screenshot({ path: `${output}/hvac-jobs-${width}-si.png`, fullPage: true });
+        }
         const wrongPath = sector === "ac_hvac" ? "/vehicles" : "/jobs";
         await page.goto(`${base}${wrongPath}`, { waitUntil: "domcontentloaded" });
         await page.locator('[data-ui="workspace-route-blocked"]').waitFor({ timeout: 25_000 });
