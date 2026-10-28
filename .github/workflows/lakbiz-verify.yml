@@ -62,5 +62,8 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      - name: Isolated catalogue SQL rehearsal
+        run: npm run qa:mill:sql
+
       - name: Production build
         run: npm run build

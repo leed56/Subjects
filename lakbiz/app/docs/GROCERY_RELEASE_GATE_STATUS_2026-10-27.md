@@ -1,5 +1,12 @@
 # LakBiz Grocery release gate — 27 October 2026
 
+**28 October update:** See `STOCK_HISTORY_AND_BACKUP_2026-10-28.md` for the
+fresh backup/application restore and coordinated append-only stock-history
+correction prepared after this audit. See `CATALOGUE_DEPLOYMENT_FIX_2026-10-28.md`
+for the missing import-function fix. Those migrations are not installed live.
+Completed-bill protection, atomic legacy stock sync and the remaining full
+Supabase staging/release gates below are still open.
+
 **Status: reviewable branch; production promotion blocked.** This branch is based
 on `claude/world-class-banking-ui` at `2d3a9f0` and excludes the unrelated
 changes in the original checkout. It does not change a live shop or apply a
