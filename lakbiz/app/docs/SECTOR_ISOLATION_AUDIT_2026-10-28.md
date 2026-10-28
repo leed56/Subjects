@@ -64,8 +64,13 @@ ledger attack has been closed. Earlier RLS and completed-ledger findings in
 ## Verification and release checks
 
 - `npm run verify`: lint, types, translation-baseline check, 42 test files / 276
-  tests and production build pass on the Grocery branch. Six pre-existing lint
-  warnings remain; the existing translation debt is SI 0, EN 1, TA 1480 keys.
+  tests and production build pass on the Grocery branch. The earlier framework
+  reported six pre-existing lint warnings. The patched lint configuration also
+  flags five existing full-page navigation calls, for 11 warnings and zero
+  errors. These navigation warnings are separate from new failures; logout
+  navigation has not been casually rewritten because it intentionally clears
+  the old authenticated application state. Translation debt is SI 0, EN 1,
+  TA 1480 keys.
 - Regression tests cover every specialty route across all ten sectors,
   messages, effective preferences, old global caches, independent shop
   identities, denied saves, and a reminder worker that never visits non-HVAC
@@ -84,6 +89,21 @@ ledger attack has been closed. Earlier RLS and completed-ledger findings in
   require a separately configured `lakbiz-staging` environment and explicitly
   named staging shops. The script refuses the production Supabase host before
   any network activity and no longer accepts a different deployed commit.
+
+## Dependency hardening
+
+The expanded audit found four vulnerable production packages (including a
+critical framework advisory) and 12 flagged dependency entries overall in the
+original lockfile. The branches pin Next.js and its lint configuration to
+16.4.3 and refresh compatible transitive fixes. `npm audit --json` then reports
+zero vulnerabilities across production and development dependencies. CI now
+runs a dependency audit as well as lint/types/tests/build, using Node 22.
+
+The framework maintainer's [image-optimization advisory](https://github.com/vercel/next.js/security/advisories/GHSA-2464-fhr4-w9xw)
+and [cache-function advisory](https://github.com/vercel/next.js/security/advisories/GHSA-673q-mjm6-r5xr)
+identify patched releases; the branch uses the later 16.4.3 release. This package
+audit does not resolve the separate database-policy and application-ledger
+findings below.
 
 ## Remaining production gates
 
