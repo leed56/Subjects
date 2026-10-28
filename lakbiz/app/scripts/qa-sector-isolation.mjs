@@ -26,7 +26,9 @@ try {
   for (const sector of sectors) {
     for (const locale of sector === "grocery" || sector === "ac_hvac" ? ["en", "si", "ta"] : ["en"]) {
     for (const width of [1280, 390]) {
-      const context = await browser.newContext({ viewport: { width, height: 900 } });
+      // Keep these network assertions outside the PWA cache and its first-install
+      // controller reload. Service-worker/offline journeys are a separate gate.
+      const context = await browser.newContext({ viewport: { width, height: 900 }, serviceWorkers: "block" });
       await context.addInitScript(({ sector, locale }) => {
         localStorage.setItem("lakbiz-org-demo", JSON.stringify({ id: null, name: `${sector} QA demo`, sector, role: "owner", isAuthenticated: false }));
         localStorage.setItem("lakbiz-subscription-demo", JSON.stringify({ planId: "pro", status: "active", billingCycle: "monthly", trialEndsAt: null, currentPeriodEnd: null, addons: [], isDemo: true }));
