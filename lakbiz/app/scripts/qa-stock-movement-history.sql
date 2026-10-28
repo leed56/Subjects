@@ -1,4 +1,8 @@
 \set ON_ERROR_STOP on
+\if :{?fixture_sector}
+\else
+\set fixture_sector grocery
+\endif
 -- Execute only against the disposable, loopback-only PostgreSQL restore.
 -- Fixtures, migration rehearsal and all test changes are rolled back.
 begin;
@@ -9,6 +13,7 @@ do $$ begin
 end $$;
 create function pg_temp.assert_ok(ok boolean, label text) returns void
 language plpgsql as $$ begin if ok is distinct from true then raise exception 'Assertion failed: %', label; end if; end $$;
+select pg_temp.assert_ok(:'fixture_sector' in ('grocery','ac_hvac'),'only Grocery and HVAC staging fixtures allowed');
 create temp table before_stock_history as
 select count(*) as rows, md5(coalesce(string_agg(to_jsonb(l)::text, '|' order by id),'')) as fingerprint from public.stock_logs l;
 
@@ -21,7 +26,7 @@ select pg_temp.assert_ok((select b.rows=count(*) and b.fingerprint=md5(coalesce(
 select pg_temp.assert_ok(not has_table_privilege('authenticated','public.stock_logs','UPDATE') and not has_table_privilege('authenticated','public.stock_logs','DELETE') and not has_table_privilege('authenticated','public.stock_logs','TRUNCATE'),'client mutation privileges revoked');
 
 insert into auth.users(id) values ('28100000-0000-4000-8000-000000000001'),('28100000-0000-4000-8000-000000000002'),('28100000-0000-4000-8000-000000000003');
-insert into public.organizations(id,name,sector) values ('28200000-0000-4000-8000-000000000001','Stock-history staging A','grocery'),('28200000-0000-4000-8000-000000000002','Stock-history staging B','grocery');
+insert into public.organizations(id,name,sector) values ('28200000-0000-4000-8000-000000000001','Stock-history staging A',:'fixture_sector'),('28200000-0000-4000-8000-000000000002','Stock-history staging B',:'fixture_sector');
 insert into public.subscriptions(organization_id,plan_id,status) values ('28200000-0000-4000-8000-000000000001','pro','active'),('28200000-0000-4000-8000-000000000002','pro','active');
 insert into public.org_members(organization_id,user_id,role) values
 ('28200000-0000-4000-8000-000000000001','28100000-0000-4000-8000-000000000001','owner'),
@@ -30,16 +35,19 @@ insert into public.org_members(organization_id,user_id,role) values
 set local request.jwt.claim.sub='28100000-0000-4000-8000-000000000001';
 set local role authenticated;
 insert into public.products(id,organization_id,name,category,sector_id,condition,buy_price,sell_price,stock_qty,unit,active,custom_fields)
-values ('qa-history-rice','28200000-0000-4000-8000-000000000001','QA Rice','Rice','grocery','new',180,280,10,'kg',true,'{}');
+values ('qa-history-rice','28200000-0000-4000-8000-000000000001','QA Rice','Rice',:'fixture_sector','new',180,280,10,'kg',true,'{}');
 insert into public.stock_logs(id,organization_id,product_id,product_name,log_type,qty,note,user_id)
 values ('qa-history-opening','28200000-0000-4000-8000-000000000001','qa-history-rice','QA Rice','in',10,'Opening stock','28100000-0000-4000-8000-000000000002');
 select pg_temp.assert_ok((select user_id='28100000-0000-4000-8000-000000000001'::uuid from public.stock_logs where id='qa-history-opening'),'server stamps real actor');
+select :'fixture_sector' = 'grocery' as check_grocery \gset
+\if :check_grocery
 select pg_temp.assert_ok(public.grocery_catalogue_readiness('28200000-0000-4000-8000-000000000001') = '{"mill":true,"meat":true}'::jsonb,'owner sees installed catalogue functions');
 select pg_temp.assert_ok((public.import_grocery_mill_catalogue('28200000-0000-4000-8000-000000000001')->>'added')::int=36,'mill import creates 36');
 select pg_temp.assert_ok((public.import_grocery_mill_catalogue('28200000-0000-4000-8000-000000000001')->>'added')::int=0,'mill retry creates zero');
 select pg_temp.assert_ok((public.import_grocery_meat_catalogue('28200000-0000-4000-8000-000000000001')->>'added')::int=9,'meat import creates 9');
 select pg_temp.assert_ok((public.import_grocery_meat_catalogue('28200000-0000-4000-8000-000000000001')->>'added')::int=0,'meat retry creates zero');
 select pg_temp.assert_ok((select count(*)=45 from public.products where organization_id='28200000-0000-4000-8000-000000000001' and id<>'qa-history-rice' and active=false and sell_price=0 and buy_price=0 and stock_qty=0 and not custom_fields ? 'barcode'),'import templates remain inactive, unpriced, unstocked and barcode-free');
+\endif
 
 -- An identical retry uses DO NOTHING; it never invokes an UPDATE trigger.
 insert into public.stock_logs(id,organization_id,product_id,product_name,log_type,qty,note)

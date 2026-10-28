@@ -47,7 +47,8 @@ catalogue and stock-history migrations in a transaction and rolls back:
   sale line unchanged.
 
 The real PostgreSQL rehearsal passed against both the older local restore and
-today's fresh restore. These are SQL integration checks, not an authenticated
+today's fresh restore. The final script also passed with both `grocery` and
+`ac_hvac` fixtures (`psql -v fixture_sector=...`). These are SQL integration checks, not an authenticated
 Supabase browser journey or physical scanner/printer verification.
 
 ## Fresh backup and restore proof
