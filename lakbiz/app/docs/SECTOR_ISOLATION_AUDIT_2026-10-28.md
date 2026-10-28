@@ -75,7 +75,9 @@ ledger attack has been closed. Earlier RLS and completed-ledger findings in
   checks AC controls and navigation, incompatible direct links, legacy-message
   privacy, correct shop identity, mobile tab clipping, overflow and browser
   errors. Mutation requests are actively blocked and reported. Screenshots and
-  `report.json` are generated as verification artifacts.
+  `report.json` are generated as verification artifacts. The service worker is
+  blocked in these contexts so its initial controller reload cannot interrupt
+  a navigation; offline/PWA update behavior is not covered by this check.
 - Automatic deployed UI checks now run that credential-free script on the exact
   PR commit. The old check created temporary Auth users and memberships in
   existing shops; that path is no longer automatic. Authenticated journeys now
