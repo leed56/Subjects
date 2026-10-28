@@ -70,6 +70,7 @@ try {
           width: innerWidth,
           build: document.body.dataset.lakbizBuildSha,
         }));
+        if (expectedBuildSha && result.build !== expectedBuildSha) throw new Error(`Preview changed during QA: expected ${expectedBuildSha}, found ${result.build}`);
         await page.screenshot({ path: `${output}/${sector}-messages-${width}-${locale}.png`, fullPage: true });
         if (result.acControls !== (sector === "ac_hvac") || result.serviceNav !== (sector === "ac_hvac") || result.vehicleNav !== (sector === "car_sales") || (sector !== "ac_hvac" && result.acText) || result.legacyMessage || result.clippedSettingsTabs || result.scrollWidth > width + 2 || errors.length || mutations.length) failures.push({ sector, locale, width, result, errors, mutations });
         await page.goto(`${base}/settings/shop`, { waitUntil: "domcontentloaded" });
