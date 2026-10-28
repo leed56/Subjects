@@ -4,6 +4,7 @@ import { sendWasenderWhatsApp, isWasenderConfigured } from "@/lib/messaging/wase
 import { sectorAllowsApiWhatsApp } from "@/lib/messaging/wasender-sectors";
 import { normalizeSlPhone } from "@/lib/messaging/phone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { messageSectorAccessError } from "@/lib/messaging/sector-policy-server";
 
 // Mirrors /api/messages/send (the Text.lk SMS route) — same auth/role/
 // plan-gate shape, same notification_log write-back — but for the
@@ -93,6 +94,8 @@ export async function POST(request: Request) {
   }
 
   const phone = normalizeSlPhone(body.phone ?? "");
+  const sectorError = await messageSectorAccessError(supabase, member.organization_id, body.contextType, body.templateId);
+  if (sectorError) return NextResponse.json({ ok: false, error: sectorError }, { status: 403 });
   const message = body.message?.trim();
 
   if (!phone || !message) {

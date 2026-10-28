@@ -82,8 +82,7 @@ export default function RootLayout({
             <SubscriptionProvider>
               <ToastProvider>
                 <PlatformAdminRedirect />
-                <ShopRouteGuard />
-                <AppStoreProvider>{children}</AppStoreProvider>
+                <AppStoreProvider><ShopRouteGuard>{children}</ShopRouteGuard></AppStoreProvider>
               </ToastProvider>
             </SubscriptionProvider>
           </AuthProvider>

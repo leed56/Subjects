@@ -15,6 +15,7 @@ import {
 } from "@/lib/supabase/auth-actions";
 import { createBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { canAccess, daysUntil, isReadOnlyStatus } from "./can";
+import { sectorAllowsRoute } from "@/lib/sector-features";
 import { defaultTrialSubscription } from "./plans";
 import {
   canAccessSettingsPath as checkSettingsPath,
@@ -239,7 +240,7 @@ export function SubscriptionProvider({
       orgRole,
       canSeeFinancials: canSeeFinancials(orgRole),
       canManageTeam: canManageTeam(orgRole),
-      canAccessShopRoute: (href: string) => checkShopRoute(orgRole, href),
+      canAccessShopRoute: (href: string) => sectorAllowsRoute(org.sector, href) && checkShopRoute(orgRole, href),
       canAccessSettingsPath: (pathname: string) => checkSettingsPath(orgRole, pathname),
       can,
       daysLeftInTrial,
