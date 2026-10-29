@@ -25,6 +25,7 @@ import type {
 import { businessFromOrg, fetchOrgShopSettings } from "./org-settings";
 import { createBrowserClient } from "./client";
 import { appendStockLogRows } from "./stock-log-sync";
+import { pendingLegacyInvoiceIds, recordCompletedInvoice } from "./invoice-sync";
 import { fetchAllPages } from "./pagination";
 import {
   hasSyncConflict,
@@ -672,8 +673,6 @@ async function upsertOrgRows(
     | "products_base"
     | "customers"
     | "suppliers"
-    | "sales"
-    | "sales_base"
     | "purchases"
     | "purchase_orders"
     | "customer_payments"
@@ -765,9 +764,9 @@ export async function syncCustomersSnapshot(
   );
 }
 
-/** Masked views (sales/products/ac_jobs/contractors/vehicles/technicians/job_items): avoid upsert — SELECT on *_base is revoked, and the view itself has no unique constraint for ON CONFLICT to target. */
+/** Masked mutable views: base SELECT is revoked and views have no conflict key. Invoices use their transaction RPC instead. */
 async function upsertMaskedViewRows(
-  table: "sales" | "products" | "ac_jobs" | "contractors" | "vehicles" | "technicians" | "job_items",
+  table: "products" | "ac_jobs" | "contractors" | "vehicles" | "technicians" | "job_items",
   organizationId: string,
   rows: Record<string, unknown>[],
 ): Promise<string | null> {
@@ -831,8 +830,6 @@ async function deleteOrgRowsNotIn(
     | "products_base"
     | "customers"
     | "suppliers"
-    | "sales"
-    | "sales_base"
     | "purchases"
     | "purchase_orders"
     | "customer_payments"
@@ -951,19 +948,11 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-/** Org-wide batched replace for a job/sale/purchase line-items table —
- * the full-sync counterpart to replaceSaleLines/replacePurchaseLines/
- * replacePurchaseOrderLines below, which stay as they are for the
- * single-record push paths (syncSaleSnapshot etc.), where one record's
- * lines really is the right unit of work. Deletes existing lines for
- * every given parent id, then inserts the full replacement set — same
- * end state as calling the single-record version once per parent, just
- * O(records / LINE_REPLACE_BATCH_SIZE) round trips instead of
- * O(records) × 2. */
+/** Batched purchase/PO line replacement. Completed invoice lines never enter this mutable path. */
 async function replaceLinesBatch(
-  table: "sale_lines" | "purchase_lines" | "purchase_order_lines",
+  table: "purchase_lines" | "purchase_order_lines",
   organizationId: string,
-  parentIdColumn: "sale_id" | "purchase_id" | "purchase_order_id",
+  parentIdColumn: "purchase_id" | "purchase_order_id",
   parentIds: string[],
   rows: Record<string, unknown>[],
 ): Promise<string | null> {
@@ -986,26 +975,6 @@ async function replaceLinesBatch(
   }
 
   return null;
-}
-
-async function replaceSaleLines(
-  organizationId: string,
-  saleId: string,
-  rows: Record<string, unknown>[],
-): Promise<string | null> {
-  const supabase = createBrowserClient();
-  if (!supabase) return "Supabase not configured";
-
-  const { error: delErr } = await supabase
-    .from("sale_lines")
-    .delete()
-    .eq("organization_id", organizationId)
-    .eq("sale_id", saleId);
-  if (delErr) return delErr.message;
-
-  if (rows.length === 0) return null;
-  const { error: insErr } = await supabase.from("sale_lines").insert(rows);
-  return insErr?.message ?? null;
 }
 
 async function replacePurchaseLines(
@@ -1174,6 +1143,41 @@ function chequeRowFromCheque(
   };
 }
 
+/**
+ * Context for the atomic legacy invoice bridge. The invoice RPC derives all
+ * money, quantities and stock decisions from the server; these rows only carry
+ * stable local identifiers and customer/display metadata needed to preserve a
+ * reconnecting cashier's receipt.
+ */
+function completedInvoiceContext(
+  organizationId: string,
+  data: AppData,
+  sale: Sale,
+): Record<string, unknown> {
+  const customer = sale.customerId
+    ? data.customers.find((row) => row.id === sale.customerId)
+    : undefined;
+  const bankTransaction = data.bankTransactions.find((row) => row.id === sale.id);
+  const cheque = sale.chequeId
+    ? data.cheques.find((row) => row.id === sale.chequeId)
+    : undefined;
+  const billTag = sale.id.slice(0, 8);
+
+  return {
+    atomic_side_effects: true,
+    customer: customer
+      ? customerRowsForOrg(organizationId, [customer])[0]
+      : undefined,
+    bank_transaction: bankTransaction
+      ? bankTransactionRow(organizationId, bankTransaction)
+      : undefined,
+    cheque: cheque ? chequeRowFromCheque(organizationId, cheque) : undefined,
+    stock_logs: data.stockLogs
+      .filter((log) => log.type === "sale" && log.note?.includes(billTag))
+      .map((log) => stockLogRow(organizationId, log)),
+  };
+}
+
 function acJobRowFromJob(
   organizationId: string,
   job: ACJob,
@@ -1278,7 +1282,7 @@ export async function syncProductsSnapshot(
   );
 }
 
-/** Upsert a sale and related stock/customer/cheque/job rows directly to Supabase. */
+/** Commit a new legacy invoice once, then retry its related legacy workflow rows. */
 export async function syncSaleSnapshot(
   organizationId: string,
   data: AppData,
@@ -1288,64 +1292,69 @@ export async function syncSaleSnapshot(
   const sale = data.sales.find((row) => row.id === saleId);
   if (!sale) return "Sale not found locally";
 
-  const custErr = await syncCustomersSnapshot(organizationId, data.customers);
-  if (custErr) return custErr;
-
-  const productIds = [
-    ...new Set(sale.lines.map((line) => line.productId).filter(Boolean)),
-  ];
-  const products = await productsWithPreservedBuyPrices(
-    organizationId,
-    data.products,
-    options?.preserveBuyPrices,
-  );
-  const prodErr = await upsertMaskedViewRows(
-    "products",
-    organizationId,
-    productRowsFromList(
+  const pending = await pendingLegacyInvoiceIds(organizationId, [saleId]);
+  if (pending.error) return pending.error;
+  if (pending.ids.has(saleId)) {
+    const productIds = [...new Set(sale.lines.map((line) => line.productId).filter(Boolean))];
+    const products = await productsWithPreservedBuyPrices(organizationId, data.products, options?.preserveBuyPrices);
+    const soldByProduct = new Map<string, number>();
+    for (const line of sale.lines) {
+      soldByProduct.set(line.productId, (soldByProduct.get(line.productId) ?? 0) + line.qty);
+    }
+    // The local-first sale already reduced stock. Rehydrate the pre-sale
+    // quantity for the masked-view upsert; the server transaction below then
+    // performs the single authoritative decrement and appends its audit row.
+    const productsAtCheckoutStart = products.map((product) => ({
+      ...product,
+      stockQty: product.stockQty + (soldByProduct.get(product.id) ?? 0),
+    }));
+    const prodErr = await upsertMaskedViewRows(
+      "products",
       organizationId,
-      products.filter((p) => productIds.includes(p.id)),
-    ),
-  );
-  if (prodErr) return prodErr;
-
-  const saleErr = await upsertMaskedViewRows("sales", organizationId, [
-    saleRowFromSale(organizationId, sale),
-  ]);
-  if (saleErr) return saleErr;
-
-  const linesErr = await replaceSaleLines(
-    organizationId,
-    saleId,
-    saleLineRowsFromSale(organizationId, sale),
-  );
-  if (linesErr) return linesErr;
-
-  const bankTransaction = data.bankTransactions.find((row) => row.id === saleId);
-  if (bankTransaction) {
-    const bankErr = await syncBankTransactionSnapshot(organizationId, data, saleId);
-    if (bankErr) return bankErr;
-  }
-
-  const billTag = sale.id.slice(0, 8);
-  const saleLogs = data.stockLogs.filter(
-    (log) => log.type === "sale" && log.note?.includes(billTag),
-  );
-  if (saleLogs.length > 0) {
-    const logErr = await upsertOrgRows(
-      "stock_logs",
-      saleLogs.map((log) => stockLogRow(organizationId, log)),
+      productRowsFromList(
+        organizationId,
+        productsAtCheckoutStart.filter((p) => productIds.includes(p.id)),
+      ),
     );
-    if (logErr) return logErr;
-  }
+    if (prodErr) return prodErr;
 
-  if (sale.chequeId) {
-    const cheque = data.cheques.find((row) => row.id === sale.chequeId);
-    if (cheque) {
-      const chequeErr = await upsertOrgRows("cheques", [
-        chequeRowFromCheque(organizationId, cheque),
-      ]);
-      if (chequeErr) return chequeErr;
+    const saleErr = await recordCompletedInvoice(
+      organizationId,
+      saleRowFromSale(organizationId, sale),
+      saleLineRowsFromSale(organizationId, sale),
+      completedInvoiceContext(organizationId, data, sale),
+    );
+    if (saleErr) return saleErr;
+    // Stock, customer credit, bank receipt and cheque are committed by the
+    // same server transaction as the invoice. Do not replay these rows via
+    // separate HTTP writes after the invoice has been sealed.
+  } else {
+    const bankTransaction = data.bankTransactions.find((row) => row.id === saleId);
+    if (bankTransaction) {
+      const bankErr = await syncBankTransactionSnapshot(organizationId, data, saleId);
+      if (bankErr) return bankErr;
+    }
+
+    const billTag = sale.id.slice(0, 8);
+    const saleLogs = data.stockLogs.filter(
+      (log) => log.type === "sale" && log.note?.includes(billTag),
+    );
+    if (saleLogs.length > 0) {
+      const logErr = await upsertOrgRows(
+        "stock_logs",
+        saleLogs.map((log) => stockLogRow(organizationId, log)),
+      );
+      if (logErr) return logErr;
+    }
+
+    if (sale.chequeId) {
+      const cheque = data.cheques.find((row) => row.id === sale.chequeId);
+      if (cheque) {
+        const chequeErr = await upsertOrgRows("cheques", [
+          chequeRowFromCheque(organizationId, cheque),
+        ]);
+        if (chequeErr) return chequeErr;
+      }
     }
   }
 
@@ -2105,8 +2114,7 @@ export async function syncVehicleSaleSnapshot(
   const sale = data.sales.find((row) => row.id === vehicleId);
   if (!sale) return "Vehicle invoice not found locally";
 
-  // syncSaleSnapshot is safe to retry because both the sale and vehicle use a
-  // stable id and sale lines are replaced rather than appended.
+  // The invoice's stable identity is retried without replacing recorded lines.
   const saleErr = await syncSaleSnapshot(organizationId, data, sale.id);
   if (saleErr) return saleErr;
 
@@ -2322,6 +2330,10 @@ export async function pushBusinessData(
 ): Promise<CloudPushResult> {
   const seenGeneration =
     options?.seenGeneration ?? (await fetchOrgSyncGeneration(organizationId));
+  // Resolve unknown invoices before any writes. Retail/textile must use their
+  // authoritative checkout engine, never recover through a snapshot backdoor.
+  const pendingInvoices = await pendingLegacyInvoiceIds(organizationId, data.sales.map((sale) => sale.id));
+  if (pendingInvoices.error) return { error: pendingInvoices.error, stale: false, generation: seenGeneration };
   let products = data.products;
   if (options?.preserveBuyPrices) {
     const supabase = createBrowserClient();
@@ -2383,36 +2395,6 @@ export async function pushBusinessData(
     account_number: b.accountNumber,
     balance: b.balance,
   }));
-
-  const saleRows = data.sales.map((s) => ({
-    id: s.id,
-    organization_id: organizationId,
-    bill_no: s.billNo ?? null,
-    sale_date: s.date,
-    subtotal: s.subtotal ?? null,
-    output_vat: s.outputVat ?? null,
-    discount: s.discount ?? 0,
-    total: s.total,
-    profit: s.profit,
-    payment_method: s.paymentMethod,
-    customer_id: s.customerId ?? null,
-    customer_name: s.customerName ?? null,
-    credit_amount: s.creditAmount,
-    cheque_id: s.chequeId ?? null,
-  }));
-
-  const saleLineRows = data.sales.flatMap((sale) =>
-    sale.lines.map((line, index) => ({
-      organization_id: organizationId,
-      sale_id: sale.id,
-      product_id: line.productId || null,
-      product_name: line.productName,
-      qty: line.qty,
-      unit_price: line.unitPrice,
-      buy_price: line.buyPrice,
-      line_order: index,
-    })),
-  );
 
   const purchaseRows = data.purchases.map((p) => ({
     id: p.id,
@@ -2656,8 +2638,6 @@ export async function pushBusinessData(
       | "customers"
       | "suppliers"
       | "bank_accounts"
-      | "sales"
-      | "sales_base"
       | "purchases"
       | "purchase_orders"
       | "customer_payments"
@@ -2694,14 +2674,12 @@ export async function pushBusinessData(
     { table: "contractor_payments", rows: contractorPaymentRows },
     { table: "vehicles", rows: vehicleRows },
     { table: "products", rows: productRows },
-    { table: "sales", rows: saleRows },
     { table: "purchases", rows: purchaseRows },
     { table: "purchase_orders", rows: purchaseOrderRows },
   ];
 
   for (const step of upsertSteps) {
     const maskedTables = new Set([
-      "sales",
       "products",
       "ac_jobs",
       "contractors",
@@ -2712,7 +2690,6 @@ export async function pushBusinessData(
     const err = maskedTables.has(step.table)
       ? await upsertMaskedViewRows(
           step.table as
-            | "sales"
             | "products"
             | "ac_jobs"
             | "contractors"
@@ -2726,30 +2703,12 @@ export async function pushBusinessData(
     if (err) return { error: err, stale: false, generation: seenGeneration };
   }
 
-  // Phase 25 perf fix: this used to loop per sale/purchase/purchase-order
-  // and call replaceSaleLines/replacePurchaseLines/replacePurchaseOrderLines
-  // once EACH — 2 sequential network round trips (delete + insert) per
-  // record, awaited one at a time. pushBusinessData runs on a 1.5s
-  // debounce after literally any local edit anywhere in the app (see
-  // scheduleCloudPush's ~90 call sites in app-store-provider.tsx), and
-  // pushes the FULL local dataset every time, not a delta — so an org
-  // with, say, 800 historical sales paid roughly 1600 sequential round
-  // trips on every single edit, and that cost only grows as the org's
-  // history grows. saleLineRows/purchaseLineRows/purchaseOrderLineRows
-  // are already the full flattened arrays across every sale/purchase/PO
-  // (built via flatMap above) — there was no reason to filter them back
-  // apart and replace them one parent at a time. Batched below instead:
-  // O(records / BATCH) round trips instead of O(records), chunked (not
-  // one unbounded call) specifically because delete .in() filters ride in
-  // the URL query string, which has a real length limit inserts don't.
-  const saleErr = await replaceLinesBatch(
-    "sale_lines",
-    organizationId,
-    "sale_id",
-    data.sales.map((s) => s.id),
-    saleLineRows,
-  );
-  if (saleErr) return { error: saleErr, stale: false, generation: seenGeneration };
+  // Historical invoices are untouched. Pending legacy invoices commit their
+  // headers and lines together; retail/textile use their own checkout engines.
+  for (const sale of data.sales.filter((row) => pendingInvoices.ids.has(row.id))) {
+    const saleErr = await recordCompletedInvoice(organizationId, saleRowFromSale(organizationId, sale), saleLineRowsFromSale(organizationId, sale));
+    if (saleErr) return { error: saleErr, stale: false, generation: seenGeneration };
+  }
 
   const purchaseErr = await replaceLinesBatch(
     "purchase_lines",
@@ -2791,7 +2750,6 @@ export async function pushBusinessData(
 
   const pruneSteps: Array<{
     table:
-      | "sales"
       | "purchases"
       | "purchase_orders"
       | "customer_payments"
@@ -2813,7 +2771,6 @@ export async function pushBusinessData(
       | "job_status_history";
     ids: string[];
   }> = [
-    { table: "sales", ids: data.sales.map((s) => s.id) },
     { table: "purchases", ids: data.purchases.map((p) => p.id) },
     { table: "purchase_orders", ids: data.purchaseOrders.map((po) => po.id) },
     { table: "customer_payments", ids: data.customerPayments.map((p) => p.id) },
