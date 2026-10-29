@@ -641,13 +641,13 @@ export function AtomicRetailSalesPageV2() {
         {inStock.length === 0 ? (
           <section className="mt-6">
             {groceryPos ? (
-              <div className="flex flex-col gap-4 rounded-2xl border border-blue-100 bg-[radial-gradient(circle_at_top_right,_rgba(129,140,248,0.14),transparent_34%),linear-gradient(105deg,#f8fbff,#ffffff_54%,#eef6ff)] px-5 py-4 shadow-[0_10px_28px_rgba(59,130,246,0.07)] sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-4 rounded-2xl border border-blue-100 bg-[radial-gradient(circle_at_top_right,_rgba(129,140,248,0.14),transparent_34%),linear-gradient(105deg,#f8fbff,#ffffff_54%,#eef6ff)] px-5 py-4 shadow-[0_10px_28px_rgba(59,130,246,0.07)] xl:flex-row xl:items-center xl:justify-between">
                 <div className="min-w-0">
                   <span className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-700">{locale === "si" ? "පළමු සැකසුම" : locale === "ta" ? "முதல் அமைப்பு" : "First-time setup"}</span>
                   <h2 className="mt-1 text-base font-bold tracking-[-0.025em] text-slate-950">{locale === "si" ? "විකිණිය හැකි සිල්ලර නාමාවලියක් එක් කරන්න" : locale === "ta" ? "விற்பனைக்கான மளிகைப் பட்டியலைச் சேர்க்கவும்" : "Add a sellable grocery catalogue"}</h2>
                   <p className="mt-1 text-xs leading-5 text-slate-600">{locale === "si" ? "ඔබ තහවුරු කළ පසු පමණක් ආරම්භක භාණ්ඩ 16ක් එක් වේ. මිල, තීරු කේත, තොග සහ පින්තූර තොග පිටුවෙන් වෙනස් කළ හැක." : locale === "ta" ? "நீங்கள் உறுதிப்படுத்திய பிறகே 16 தொடக்கப் பொருட்கள் சேர்க்கப்படும். விலை, பட்டைக் குறியீடு, சரக்கு மற்றும் படங்களை சரக்குப் பக்கத்தில் மாற்றலாம்." : "Starter products are only added when you confirm. Prices, barcodes, stock and images stay editable in Stock."}</p>
                 </div>
-                <div className="flex shrink-0 flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 xl:shrink-0">
                   <GroceryStarterCatalogueButton compact />
                   <ProButton href="/stock" variant="secondary">{t("sales.add_stock_link")}</ProButton>
                 </div>
