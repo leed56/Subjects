@@ -71,6 +71,9 @@ import {
   setLocalSyncGeneration,
 } from "@/lib/supabase/sync-watermark";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { completedInvoiceCommitReady } from "@/lib/supabase/invoice-sync";
+import { invoiceNotices } from "@/lib/invoice-notices";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import { isBrowserOnline, useOnlineStatus } from "@/lib/offline/connectivity";
 import {
   bumpOfflinePendingChange,
@@ -370,6 +373,7 @@ function normalizeProductForShop(
 
 function useAppStoreState(): AppStoreValue {
   const { user } = useAuth();
+  const { locale } = useLocale();
   const {
     ready: subscriptionReady,
     org,
@@ -948,6 +952,9 @@ function useAppStoreState(): AppStoreValue {
       if (!data || isReadOnly) return { ok: false, error: "Read-only mode" };
       if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
 
+      if (data.sales.some((sale) => sale.customerId === id)) {
+        return { ok: false, error: invoiceNotices[locale].customer };
+      }
       const next = deleteCustomer(data, id);
       setData(next);
       latestDataRef.current = next;
@@ -980,6 +987,7 @@ function useAppStoreState(): AppStoreValue {
     },
     [
       data,
+      locale,
       isReadOnly,
       syncConflict,
       isOnline,
@@ -1102,6 +1110,10 @@ function useAppStoreState(): AppStoreValue {
       if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
 
+      if (isOnline && org.isAuthenticated && org.id && user && !await completedInvoiceCommitReady(org.id)) {
+        return { ok: false, error: invoiceNotices[locale].setup };
+      }
+
       const prevJobIds = new Set(data.acJobs.map((job) => job.id));
       const prevSalesLen = data.sales.length;
       const next = createSale(data, lines, paymentMethod, options ?? {});
@@ -1148,6 +1160,7 @@ function useAppStoreState(): AppStoreValue {
     },
     [
       data,
+      locale,
       syncConflict,
       isReadOnly,
       can,
@@ -2634,6 +2647,10 @@ function useAppStoreState(): AppStoreValue {
       if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
 
+      if (isOnline && org.isAuthenticated && org.id && user && !await completedInvoiceCommitReady(org.id)) {
+        return { ok: false, error: invoiceNotices[locale].setup };
+      }
+
       const vehicle = data.vehicles.find((row) => row.id === input.vehicleId);
       if (!vehicle || vehicle.status === "sold") {
         return { ok: false, error: "Could not sell vehicle" };
@@ -2676,6 +2693,7 @@ function useAppStoreState(): AppStoreValue {
     },
     [
       data,
+      locale,
       syncConflict,
       isReadOnly,
       can,
@@ -3559,6 +3577,9 @@ function useAppStoreState(): AppStoreValue {
         return { ok: false, error: "Product not found" };
       }
 
+      if (data.sales.some((sale) => sale.lines.some((line) => line.productId === id))) {
+        return { ok: false, error: invoiceNotices[locale].product };
+      }
       const next = deleteProduct(data, id);
       setData(next);
       latestDataRef.current = next;
@@ -3591,6 +3612,7 @@ function useAppStoreState(): AppStoreValue {
     },
     [
       data,
+      locale,
       syncConflict,
       isReadOnly,
       can,
