@@ -459,3 +459,24 @@ The branch's `recordCustomerPayment` creates a stable payment ID in local state,
 
 Before adding the new RPC, inspect and reconcile the complete definitions/call graphs for the return-settlement and textile cheque functions above, including their callers and any nested functions. Then implement a coordinated lock-order migration for all writers in one tested migration set, or formally isolate the first RPC rollout to organizations/features where those legacy writers cannot run. Do not deploy a payment-only lock and claim all customer receivables are concurrency-safe.
 
+## 18. Stop-ship finding: deployed migration history is ahead of this repository branch
+
+A further comparison of the linked Supabase migration history with `lakbiz/supabase/migrations` on this PR branch found substantial source/deployment drift.
+
+- The linked database reports migrations through `20261011094954_general_ledger_foundation`, including the August 2026 sale-return, safe-exchange, POS tender, textile atomic-sales, textile-credit and cheque-related migrations.
+- The PR branch's migration directory contains 66 files and its latest migration is dated 2025-07-14 (`20250714000002_expenses_parts_purchase_category.sql`). It does not contain the live 2026 migration set.
+- The live function definitions inspected for `apply_sale_return_exchange`, `finalize_textile_sale`, `finalize_textile_sale_v2`, `finalize_textile_sale_v3`, `finalize_textile_sale_v4`, `finalize_sale_with_private_tenders`, and `finalize_sale_with_tenders` therefore cannot be safely recreated or replaced by editing the old branch migrations in isolation.
+- The inspected `apply_sale_return_exchange` function already has settlement-ID replay handling, locks return/replacement/customer records, adjusts customer balance, and increments generation, but the visible lock order is not organization-first.
+- The live textile finalizer chain has multiple wrappers. `finalize_textile_sale_v4` performs customer-related pre-validation before delegating to the lower textile sale chain; that chain ultimately calls the shared POS finalizer. Any lock-order correction must preserve its reservations, roll stock, pricing, tender, and replay behavior.
+- The full definitions/call graph of `settle_sale_return_credit` and `transition_textile_cheque` still require extraction and review before a replacement can be safely authored. A partial replacement would risk dropping existing financial, textile, or authorization behavior.
+
+### Required action before production-safe code changes
+
+1. Reconcile the missing live migration history into the repository from the authoritative deployment/source of truth, preserving exact migration order and versions.
+2. Recover the complete definitions and grants for all customer-balance writers and their wrappers/triggers.
+3. Build local PostgreSQL tests against that reconciled schema, including concurrent POS sale/payment/return/cheque cases and replay/idempotency.
+4. Only then create a forward migration that changes all required lock orders and adds the customer-payment RPC; migrate the client to that exact RPC contract.
+5. Verify grants, RLS/module/role/subscription checks, SECURITY DEFINER search paths, and function execution privileges before considering deployment.
+
+**Current decision:** no speculative replacement functions or migration were added. The branch does not contain the deployed schema foundation needed to make a complete, safe financial fix. No live database changes were made. This is a stop-ship compatibility blocker, not a claim that the financial paths have been fixed.
+
