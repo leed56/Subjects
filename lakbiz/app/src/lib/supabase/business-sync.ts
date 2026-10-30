@@ -32,7 +32,10 @@ import {
 } from "@/lib/offline/sync-conflict";
 import { localDataWatermark } from "./sync-watermark";
 import { fetchAllPages } from "./pagination";
-import { selectNewSaleStockLogs } from "@/lib/offline/sale-cloud-sync";
+import {
+  selectNewSaleStockLogs,
+  omitCustomerCreditBalance,
+} from "@/lib/offline/sale-cloud-sync";
 
 export type CloudPushResult = {
   error: string | null;
@@ -1337,7 +1340,13 @@ export async function syncSaleSnapshot(
   const sale = data.sales.find((row) => row.id === saleId);
   if (!sale) return "Sale not found locally";
 
-  const custErr = await syncCustomersSnapshot(organizationId, data.customers);
+  // Sale sync must not mirror a whole customer snapshot: credit_balance is
+  // financial state and may have changed on another device. Update only
+  // customer details here; the sale transaction must post the credit delta.
+  const customerRows = omitCustomerCreditBalance(
+    customerRowsForOrg(organizationId, data.customers),
+  );
+  const custErr = await upsertOrgRows("customers", customerRows);
   if (custErr) return custErr;
 
   const productIds = [
