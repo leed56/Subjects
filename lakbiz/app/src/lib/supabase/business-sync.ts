@@ -182,6 +182,11 @@ export async function pullBusinessData(
   const supabase = createBrowserClient();
   if (!supabase) return null;
 
+  // Bracket the multi-request snapshot with the organization generation.
+  // If a sync commits while table reads are in flight, reject the mixed view.
+  const snapshotGeneration = await fetchOrgSyncGeneration(organizationId);
+  if (snapshotGeneration < 0) return null;
+
   const [
     productsRes,
     customersRes,
@@ -318,6 +323,16 @@ export async function pullBusinessData(
     for (const [label, result] of failedReads) {
       console.warn(`[pullBusinessData] ${label}:`, result.error?.message);
     }
+    return null;
+  }
+
+  // Independent PostgREST reads are not a database snapshot. Confirm no
+  // generation change occurred while the 24 business tables were being read.
+  const confirmedGeneration = await fetchOrgSyncGeneration(organizationId);
+  if (confirmedGeneration !== snapshotGeneration) {
+    console.warn(
+      "[pullBusinessData] Organization changed during snapshot; rejecting mixed snapshot",
+    );
     return null;
   }
 
