@@ -1681,12 +1681,15 @@ export async function syncSupplierPaymentSnapshot(
   const payment = data.supplierPayments.find((row) => row.id === paymentId);
   if (!payment) return "Payment not found locally";
 
-  const supErr = await syncSuppliersSnapshot(organizationId, data.suppliers);
-  if (supErr) return supErr;
-
-  return upsertOrgRows("supplier_payments", [
+  // Persist the payment ledger entry before mirroring the derived supplier
+  // balance. If the second request fails, retrying the idempotent payment
+  // upsert is safe and the balance is not changed without its ledger record.
+  const paymentErr = await upsertOrgRows("supplier_payments", [
     supplierPaymentRow(organizationId, payment),
   ]);
+  if (paymentErr) return paymentErr;
+
+  return syncSuppliersSnapshot(organizationId, data.suppliers);
 }
 
 function customerPaymentRow(
@@ -1989,15 +1992,16 @@ export async function syncBankTransactionSnapshot(
   const txn = data.bankTransactions.find((row) => row.id === txnId);
   if (!txn) return "Transaction not found locally";
 
-  const account = data.bankAccounts.find((row) => row.id === txn.accountId);
-  if (account) {
-    const accountErr = await upsertBankAccounts(organizationId, [account]);
-    if (accountErr) return accountErr;
-  }
-
-  return upsertOrgRows("bank_transactions", [
+  // Write the ledger entry first. Never publish a new account balance if
+  // its corresponding transaction failed to persist.
+  const transactionErr = await upsertOrgRows("bank_transactions", [
     bankTransactionRow(organizationId, txn),
   ]);
+  if (transactionErr) return transactionErr;
+
+  const account = data.bankAccounts.find((row) => row.id === txn.accountId);
+  if (!account) return null;
+  return upsertBankAccounts(organizationId, [account]);
 }
 
 /** Remove a bank transaction and sync the updated account balance to Supabase. */
@@ -2031,16 +2035,19 @@ export async function syncBankTransferSnapshot(
   const transfer = data.bankTransfers.find((row) => row.id === transferId);
   if (!transfer) return "Transfer not found locally";
 
+  // Persist the transfer ledger row before either derived account balance.
+  // A failed ledger write must not leave balances reflecting a transfer that
+  // the cloud cannot see.
+  const transferErr = await upsertOrgRows("bank_transfers", [
+    bankTransferRow(organizationId, transfer),
+  ]);
+  if (transferErr) return transferErr;
+
   const accounts = data.bankAccounts.filter(
     (row) =>
       row.id === transfer.fromAccountId || row.id === transfer.toAccountId,
   );
-  const accountErr = await upsertBankAccounts(organizationId, accounts);
-  if (accountErr) return accountErr;
-
-  return upsertOrgRows("bank_transfers", [
-    bankTransferRow(organizationId, transfer),
-  ]);
+  return upsertBankAccounts(organizationId, accounts);
 }
 
 /** Upsert a cheque register row directly to Supabase. */
