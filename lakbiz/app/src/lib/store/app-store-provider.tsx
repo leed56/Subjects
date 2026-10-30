@@ -1058,6 +1058,11 @@ function useAppStoreState(): AppStoreValue {
       }
 
       if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+        if (org.id) {
+          touchOfflinePending(org.id);
+          refreshOfflinePendingState(org.id);
+          scheduleCloudPush(next);
+        }
         return { ok: false, error: "Cloud not connected" };
       }
 
