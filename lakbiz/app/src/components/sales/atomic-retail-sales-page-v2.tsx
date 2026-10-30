@@ -60,6 +60,12 @@ import {
 import { useWriteAccess } from "@/lib/subscription/use-can-write";
 import type { Product, ProductCondition } from "@/lib/types";
 import { splitInclusiveTotal } from "@/lib/vat";
+import {
+  parsePharmacyPackaging,
+  formatUomBreakdown,
+  type RxClinicalIntake,
+} from "@/lib/pharmacy-uom";
+import { seedPharmacyCatalog } from "@/lib/pharmacy-demo-seed";
 
 type CheckoutPayment = CheckoutTenderKind;
 type ConditionFilter = "all" | ProductCondition;
@@ -75,6 +81,7 @@ const GROCERY_CATEGORY_CHIPS = [
   { name: "Dairy", matches: ["dairy", "milk", "egg"] },
   { name: "Bakery", matches: ["bread", "bakery"] },
   { name: "Rice, Flour & Dry Goods", matches: ["rice", "flour", "grain", "sugar", "salt", "dry"] },
+  { name: "Spices & Seasoning", matches: ["spice", "seasoning"] },
   { name: "Beverages", matches: ["beverage", "drink", "juice", "water"] },
   { name: "Household", matches: ["household", "clean", "home"] },
 ] as const;
@@ -122,9 +129,9 @@ export function AtomicRetailSalesPageV2() {
   const si = locale === "si";
   const fastRetail = FAST_RETAIL_SECTORS.has(org.sector);
   const groceryPos = org.sector === "grocery";
+  const grocery = (key: GroceryUiKey) => groceryUi(locale, key);
   const advancedRetail = ADVANCED_RETAIL_SECTORS.has(org.sector);
   const conditionRelevant = !fastRetail;
-  const grocery = (key: GroceryUiKey) => groceryUi(locale, key);
 
   // The quote share button here was a plain wa.me deep link only — always
   // opens WhatsApp with the text pre-filled, but never actually sends.
@@ -171,6 +178,42 @@ export function AtomicRetailSalesPageV2() {
   const [message, setMessage] = useState("");
   const [lastBillId, setLastBillId] = useState<string | null>(null);
   const [pendingSaleId, setPendingSaleId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+  const [activeMolecule, setActiveMolecule] = useState<string | null>(null);
+  const [rxIntake, setRxIntake] = useState<RxClinicalIntake>({
+    doctorName: "",
+    doctorSlmc: "",
+    patientName: "",
+    patientAge: "",
+    dosageInstructions: "",
+    prescriptionRef: "",
+  });
+
+  useEffect(() => {
+    if (org.sector === "grocery") {
+      setViewMode("grid");
+      return;
+    }
+    try {
+      const saved = localStorage.getItem("lakbiz-pos-view-mode");
+      if (saved === "table" || saved === "grid") {
+        setViewMode(saved);
+      } else if (org.sector === "pharmacy") {
+        setViewMode("table");
+      }
+    } catch {
+      if (org.sector === "pharmacy") setViewMode("table");
+    }
+  }, [org.sector]);
+
+  const handleSetViewMode = (mode: "grid" | "table") => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem("lakbiz-pos-view-mode", mode);
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     try {
@@ -184,7 +227,7 @@ export function AtomicRetailSalesPageV2() {
         : "";
       setMessage(
         groceryPos
-          ? `${groceryUi(locale, "completedBill")}${saved.billNo ? ` · ${saved.billNo}` : ""}${paymentNote}. ${locale === "si" ? "තොගය සහ ගෙවීම එකම ගනුදෙනුවක සුරකින ලදී." : locale === "ta" ? "கட்டணமும் சரக்கும் ஒரே பரிவர்த்தனையில் பதிவு செய்யப்பட்டன." : "Payment and inventory were committed in one transaction."}`
+          ? `${groceryUi(locale, "completedBill")}${saved.billNo ? ` · ${saved.billNo}` : ""}${paymentNote}. ${locale === "si" ? "තොගය සහ ගෙවීම එකම transaction එකක සුරකින ලදී." : locale === "ta" ? "கட்டணமும் சரக்கும் ஒரே transaction-ல் பதிவு செய்யப்பட்டன." : "Payment and inventory were committed in one transaction."}`
           : si
           ? `විකිණීම සම්පූර්ණයි${saved.billNo ? ` · ${saved.billNo}` : ""}${paymentNote}. තොගය සහ ගෙවීම එකම transaction එකක සුරකින ලදී.`
           : `Sale completed${saved.billNo ? ` · ${saved.billNo}` : ""}${paymentNote}. Payment and inventory were committed in one transaction.`,
@@ -297,15 +340,30 @@ export function AtomicRetailSalesPageV2() {
     });
   };
 
-  const inStock = data.products.filter((product) => product.active && product.stockQty > 0);
+  const inStock = data.products.filter((product) =>
+    product.active && product.stockQty > 0 && (!groceryPos || product.sellPrice > 0)
+  );
+  const moleculeFiltered = activeMolecule
+    ? inStock.filter((product) => {
+        const gen = String(product.customFields.genericName ?? "").trim().toLowerCase();
+        return gen === activeMolecule.trim().toLowerCase();
+      })
+    : inStock;
   const query = search.trim().toLowerCase();
-  const searched = query ? inStock.filter((product) => productSearchText(product, groceryPos).includes(query)) : inStock;
+  const searched = query ? moleculeFiltered.filter((product) => productSearchText(product, groceryPos).includes(query)) : moleculeFiltered;
   const categoryFiltered = fastRetail && categoryFilter !== "all"
     ? searched.filter((product) => groceryPos ? matchesGroceryCategory(product, categoryFilter) : product.category === categoryFilter)
     : searched;
   const filtered = !conditionRelevant || conditionFilter === "all"
     ? categoryFiltered
     : categoryFiltered.filter((product) => product.condition === conditionFilter);
+
+  const hasRxItems = lines.some((line) =>
+    org.sector === "pharmacy" && boolField(line.product.customFields.requiresPrescription)
+  );
+  const isRxVerified = Boolean(
+    rxIntake.doctorName.trim() && rxIntake.doctorSlmc.trim()
+  );
   const categoryCounts = new Map<string, number>();
   if (fastRetail) {
     for (const product of inStock) {
@@ -481,10 +539,17 @@ export function AtomicRetailSalesPageV2() {
     setSaving(true);
     setMessage("");
 
+    const rxSummary = rxIntake.doctorName.trim()
+      ? `[Rx: Dr. ${rxIntake.doctorName.trim()} · ${rxIntake.doctorSlmc.trim()}${rxIntake.patientAge ? ` · Age: ${rxIntake.patientAge}` : ""}${rxIntake.dosageInstructions ? ` · Sig: ${rxIntake.dosageInstructions}` : ""}]`
+      : "";
+    const customerNamePayload = buyerName
+      ? (rxSummary ? `${buyerName} ${rxSummary}` : buyerName)
+      : (rxSummary ? `${rxIntake.patientName.trim() || "Patient"} ${rxSummary}` : undefined);
+
     const result = await finalizeSaleWithTenders(org.id, {
       saleId,
       customerId: customerId || undefined,
-      customerName: buyerName || undefined,
+      customerName: customerNamePayload,
       discount: discountClamped,
       lines: atomicLines,
       tenders: tenderPlan.tenders,
@@ -555,10 +620,35 @@ export function AtomicRetailSalesPageV2() {
             </div>
           </section>
         ) : <ProPageHeader
-          eyebrow={org.sector === "pharmacy" ? (si ? "ආරක්ෂිත Pharmacy POS" : "Protected Pharmacy POS") : t("sales.pos_eyebrow")}
-          title={t("sales.title")}
-          description={org.sector === "pharmacy" ? (si ? "Prescription, FEFO batch සහ ගෙවීම එකම checkout transaction එකක පාලනය කරයි." : "Prescription checks, FEFO batch allocation and payment commit in one checkout transaction.") : (si ? "ගෙවීම සහ තොගය එකම checkout transaction එකක සුරකියි." : "Payment and stock commit together in one checkout transaction.")}
-          actions={<><ProBadge tone="emerald">Atomic checkout</ProBadge><ProButton href="/stock" variant="secondary">{t("sales.add_stock_link")}</ProButton>{lastBillId && <ProButton href={`/bills/${lastBillId}`} variant="dark">{t("sales.view_bill")}</ProButton>}</>}
+          eyebrow={groceryPos ? (si ? "Grocery POS / බිල්පත්" : "Grocery POS / Billing") : org.sector === "pharmacy" ? (si ? "ආරක්ෂිත Pharmacy POS" : "Protected Pharmacy POS") : t("sales.pos_eyebrow")}
+          title={groceryPos ? (si ? "වේගවත් Grocery Checkout" : "Fast grocery checkout") : t("sales.title")}
+          description={
+            org.sector === "pharmacy"
+              ? (si ? "Prescription, FEFO batch සහ ගෙවීම එකම checkout transaction එකක පාලනය කරයි." : "Prescription checks, FEFO batch allocation and payment commit in one checkout transaction.")
+              : groceryPos
+                ? (si ? "Barcode scan කරන්න, භාණ්ඩය තෝරන්න සහ එක click එකකින් බිල්පත සම්පූර්ණ කරන්න." : "Scan a barcode, choose products and complete a Sri Lankan retail bill in one place.")
+                : (si ? "ගෙවීම සහ තොගය එකම checkout transaction එකක සුරකියි." : "Payment and stock commit together in one checkout transaction.")
+          }
+          actions={
+            <>
+              {!org.isAuthenticated && org.sector === "pharmacy" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    seedPharmacyCatalog(org.id);
+                    window.location.reload();
+                  }}
+                  className="rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-800 transition shadow-sm"
+                >
+                  💊 Load All 8 Sample Medicines
+                </button>
+              )}
+              <ProBadge tone="emerald">Atomic checkout</ProBadge>
+              {groceryPos && <GroceryStarterCatalogueButton compact />}
+              <ProButton href="/stock" variant="secondary">{t("sales.add_stock_link")}</ProButton>
+              {lastBillId && <ProButton href={`/bills/${lastBillId}`} variant="dark">{t("sales.view_bill")}</ProButton>}
+            </>
+          }
         />}
 
         <WriteDisabledHint className="mb-5" />
@@ -632,6 +722,97 @@ export function AtomicRetailSalesPageV2() {
             </>
           )}
         </section>
+        {(org.sector === "pharmacy" || hasRxItems) && (
+          <div className="mt-6 rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50/90 via-emerald-50/50 to-slate-50 p-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-600 font-serif text-base font-bold text-white shadow-sm">
+                  ℞
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-950">
+                    {si ? "වෛද්‍ය වට්ටෝරු සටහන (Prescription Intake)" : "Clinical Prescription (Rx) Intake"}
+                  </h3>
+                  <p className="text-[11px] font-medium text-slate-500">
+                    {si ? "වෛද්‍යවරයාගේ නම සහ SLMC අංකය ඇතුළත් කර Rx ඖෂධ විකිණීම තහවුරු කරන්න." : "Capture Prescribing Doctor & SLMC Registration for dispensing records."}
+                  </p>
+                </div>
+              </div>
+              <div>
+                {isRxVerified ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    {si ? "SLMC තහවුරු විය ✓" : "SLMC Verified ✓"}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
+                    {si ? "වෛද්‍ය විස්තර අවශ්‍යයි" : "Doctor & SLMC Required"}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label className="mb-1 block text-[11px] font-bold text-slate-600">
+                  {si ? "වෛද්‍යවරයාගේ නම" : "Prescribing Doctor"}
+                </label>
+                <input
+                  type="text"
+                  value={rxIntake.doctorName}
+                  onChange={(e) => setRxIntake((prev) => ({ ...prev, doctorName: e.target.value }))}
+                  placeholder={si ? "උදා. Dr. K. Perera" : "e.g. Dr. K. Perera"}
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-bold text-slate-600">
+                  {si ? "SLMC ලියාපදිංචි අංකය" : "Doctor SLMC Reg No."}
+                </label>
+                <input
+                  type="text"
+                  value={rxIntake.doctorSlmc}
+                  onChange={(e) => setRxIntake((prev) => ({ ...prev, doctorSlmc: e.target.value }))}
+                  placeholder="e.g. SLMC-28490"
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 font-mono text-xs font-bold text-slate-900 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-bold text-slate-600">
+                  {si ? "රෝගියාගේ නම / වයස" : "Patient Name & Age"}
+                </label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={rxIntake.patientName}
+                    onChange={(e) => setRxIntake((prev) => ({ ...prev, patientName: e.target.value }))}
+                    placeholder={selectedCustomer?.name || walkInName || "Patient name"}
+                    className="h-9 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
+                  />
+                  <input
+                    type="text"
+                    value={rxIntake.patientAge}
+                    onChange={(e) => setRxIntake((prev) => ({ ...prev, patientAge: e.target.value }))}
+                    placeholder="Age"
+                    className="h-9 w-14 rounded-lg border border-slate-200 bg-white px-2 text-center text-xs font-bold text-slate-900 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-bold text-slate-600">
+                  {si ? "මාත්‍රා උපදෙස් (Sig)" : "Dosage Directions (Sig)"}
+                </label>
+                <input
+                  type="text"
+                  value={rxIntake.dosageInstructions}
+                  onChange={(e) => setRxIntake((prev) => ({ ...prev, dosageInstructions: e.target.value }))}
+                  placeholder={si ? "උදා. 1 TDS x 5 days" : "e.g. 1 TDS x 5 days"}
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {inStock.length === 0 ? (
           <section className="mt-6">
@@ -661,9 +842,31 @@ export function AtomicRetailSalesPageV2() {
           <section className={`mt-5 grid gap-5 ${groceryPos ? "lg:grid-cols-[minmax(0,1fr)_minmax(340px,390px)]" : "xl:grid-cols-[1.45fr_0.85fr]"}`}>
             <div className="space-y-4">
               <ProCard
-                title={t("sales.products_title")}
-                eyebrow={t("sales.fast_checkout_eyebrow")}
-                action={<ProBadge tone="emerald">{inStock.length} available</ProBadge>}
+                title={groceryPos ? grocery("popularProducts") : t("sales.products_title")}
+                eyebrow={groceryPos ? grocery("fastCheckout") : t("sales.fast_checkout_eyebrow")}
+                action={
+                  <div className="flex items-center gap-2">
+                    {!groceryPos && <div className="flex rounded-lg border border-slate-200 bg-slate-100 p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => handleSetViewMode("table")}
+                        className={`rounded-md px-2.5 py-1 text-xs font-bold transition ${viewMode === "table" ? "bg-white text-teal-800 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+                        title="High-density table view"
+                      >
+                        ☰ {si ? "වගුව" : "Table"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetViewMode("grid")}
+                        className={`rounded-md px-2.5 py-1 text-xs font-bold transition ${viewMode === "grid" ? "bg-white text-teal-800 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+                        title="Visual cards view"
+                      >
+                        ☵ {si ? "කාඩ්පත්" : "Grid"}
+                      </button>
+                    </div>}
+                    <ProBadge tone="emerald">{inStock.length} available</ProBadge>
+                  </div>
+                }
               >
                 {!groceryPos && <div className="relative">
                   <input
@@ -687,12 +890,31 @@ export function AtomicRetailSalesPageV2() {
                       org.sector === "pharmacy"
                         ? (si ? "ඖෂධය, generic නම, brand, strength, code හෝ barcode…" : "Search medicine, generic, brand, strength, code or barcode…")
                         : fastRetail
-                          ? (si ? "Barcode scan කරන්න හෝ භාණ්ඩය, brand හෝ code සොයන්න…" : "Scan barcode or search product, brand or code…")
+                          ? grocery("searchPlaceholder")
                           : t("sales.search_placeholder")
                     }
                     className={`h-12 w-full rounded-xl border px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:bg-white ${groceryPos ? "border-blue-100 bg-blue-50/55 focus:border-blue-400 focus:ring-4 focus:ring-blue-100" : "border-slate-200 bg-slate-50 focus:border-teal-300 focus:ring-4 focus:ring-teal-100"}`}
                   />
                 </div>}
+
+                {activeMolecule && (
+                  <div className="mt-3 flex items-center justify-between rounded-xl border border-teal-200 bg-teal-50 px-3.5 py-2 text-xs font-bold text-teal-950">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">💊</span>
+                      <span>
+                        {si ? "සමාන Generic අණුක පෙළගැස්ම:" : "Equivalent Molecule Filter:"}{" "}
+                        <span className="font-extrabold text-teal-800 underline">{activeMolecule}</span> ({filtered.length} {si ? "වෙළඳ නාම පවතී" : "brands in stock"})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveMolecule(null)}
+                      className="rounded-lg bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-sm hover:bg-rose-50 hover:text-rose-700"
+                    >
+                      ✕ {si ? "ඉවත් කරන්න" : "Clear Filter"}
+                    </button>
+                  </div>
+                )}
 
                 {fastRetail && (
                   <div className={`flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${groceryPos ? "" : "mt-3"}`}>
@@ -701,7 +923,7 @@ export function AtomicRetailSalesPageV2() {
                       onClick={() => { setCategoryFilter("all"); setResultLimit(30); }}
                       className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold ${categoryFilter === "all" ? groceryPos ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md shadow-blue-200" : "bg-teal-600 text-white" : "border border-slate-200 bg-white text-slate-600"}`}
                     >
-                      {groceryPos ? grocery("allProducts") : si ? "සියල්ල" : "All"} <span className="opacity-70">{inStock.length}</span>
+                      {grocery("allProducts")} <span className="opacity-70">{inStock.length}</span>
                     </button>
                     {categories.map((category) => (
                       <button
@@ -733,15 +955,160 @@ export function AtomicRetailSalesPageV2() {
                 )}
               </ProCard>
 
-                {filtered.length === 0 ? (
-                  <ProCard><ProEmptyState title={groceryPos ? categoryFilter === "all" ? grocery("noMatchingProducts") : grocery("emptyCategory") : t("sales.no_match")} description={groceryPos ? grocery("emptyCategoryHint") : t("sales.search_no_match_desc")} /></ProCard>
+              {filtered.length === 0 ? (
+                <ProCard>
+                  <div className={groceryPos ? "py-2" : "py-8 text-center"}>
+                    {groceryPos ? (
+                      <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-dashed border-blue-200 bg-gradient-to-r from-blue-50/70 via-white to-violet-50/70 px-5 py-5 text-center sm:flex-row sm:text-left">
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">{categoryFilter === "all" ? grocery("noMatchingProducts") : grocery("emptyCategory")}</p>
+                          <p className="mt-1 text-xs leading-5 text-slate-500">{grocery("emptyCategoryHint")}</p>
+                        </div>
+                        <Link href="/stock" className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 px-4 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700">{grocery("openStock")}</Link>
+                      </div>
+                    ) : <ProEmptyState title={t("sales.no_match")} description={t("sales.search_no_match_desc")} />}
+                    {inStock.length === 0 && (
+                      <div className="mt-5 inline-flex flex-col items-center gap-2 rounded-xl border border-teal-200 bg-teal-50/80 p-5 shadow-sm">
+                        <p className="text-xs font-semibold text-teal-900">
+                          {si ? "මෙම ශාඛාවේ තවමත් භාණ්ඩ හෝ ඖෂධ නොමැත." : "No products or medicines loaded in local database."}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            seedPharmacyCatalog(org.id);
+                            window.location.reload();
+                          }}
+                          className="mt-1 inline-flex items-center gap-2 rounded-lg bg-teal-700 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-teal-800 transition"
+                        >
+                          💊 {si ? "නියැදි ඖෂධ 8 ක් පූරණය කරන්න (Amoxil, Augmentin, Panadol, Losec...)" : "Load 8 Sample Pharmacy Medicines (Amoxil, Augmentin, Panadol, Losec...)"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </ProCard>
+              ) : viewMode === "table" ? (
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                        <tr>
+                          <th className="px-3.5 py-2.5 whitespace-nowrap">{si ? "ඖෂධය / භාණ්ඩය" : "Medicine / Product"}</th>
+                          {org.sector === "pharmacy" && (
+                            <th className="px-3.5 py-2.5 whitespace-nowrap">{si ? "Generic / අණුක නම" : "Generic Molecule"}</th>
+                          )}
+                          <th className="px-3.5 py-2.5 whitespace-nowrap">{si ? "කාණ්ඩය" : "Category"}</th>
+                          <th className="px-3.5 py-2.5 text-right whitespace-nowrap">{si ? "තොගය" : "Stock"}</th>
+                          <th className="px-3.5 py-2.5 text-right whitespace-nowrap">{si ? "මිල (රු.)" : "Price"}</th>
+                          <th className="px-3.5 py-2.5 text-center whitespace-nowrap">{si ? "ප්‍රමාණය" : "Quantity"}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                        {visibleProducts.map((product) => {
+                          const qty = cart[product.id] ?? 0;
+                          const selected = qty > 0;
+                          const unitPrice = effectiveUnitPrice(product, customerId, data, priceOverrides[product.id]);
+                          const rx = org.sector === "pharmacy" && boolField(product.customFields.requiresPrescription);
+                          const genericName = String(product.customFields.genericName ?? "").trim();
+                          const strength = String(product.customFields.strength ?? "").trim();
+
+                          return (
+                            <tr
+                              key={product.id}
+                              className={`transition hover:bg-teal-50/50 ${selected ? "bg-teal-50/80 font-semibold text-slate-900" : ""}`}
+                            >
+                              <td className="px-3.5 py-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-slate-950">{product.name}</span>
+                                  {rx && <ProBadge tone="amber">Rx</ProBadge>}
+                                  {conditionRelevant && <ProductConditionBadge condition={product.condition} />}
+                                </div>
+                                <div className="text-[10px] text-slate-400">
+                                  {product.sku ? `${product.sku} · ` : ""}{product.customFields.packSize ? String(product.customFields.packSize) : ""}
+                                </div>
+                              </td>
+                              {org.sector === "pharmacy" && (
+                                <td className="px-3.5 py-2">
+                                  {genericName ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-medium text-slate-700">
+                                        {genericName}{strength ? ` ${strength}` : ""}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveMolecule(genericName)}
+                                        className="rounded bg-teal-50 px-1.5 py-0.5 text-[9px] font-bold text-teal-700 hover:bg-teal-100"
+                                        title={`Find all ${genericName} brands`}
+                                      >
+                                        Alt ⎘
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-400">—</span>
+                                  )}
+                                </td>
+                              )}
+                              <td className="px-3.5 py-2 text-slate-500">{product.category || "General"}</td>
+                              <td className="px-3.5 py-2 text-right whitespace-nowrap">
+                                <span className={`font-mono text-xs font-bold ${product.stockQty <= 5 ? "text-amber-700" : "text-slate-700"}`}>
+                                  {product.stockQty}
+                                </span>
+                              </td>
+                              <td className="px-3.5 py-2 text-right whitespace-nowrap font-mono font-bold text-slate-950">
+                                {formatLkr(unitPrice)}
+                              </td>
+                              <td className="px-3.5 py-2">
+                                <div className="flex items-center justify-center gap-1">
+                                  <div className="flex items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                                    <button
+                                      type="button"
+                                      aria-label={`Decrease ${product.name}`}
+                                      onClick={() => setQty(product.id, qty - 1, product.stockQty)}
+                                      className="flex h-7 w-7 items-center justify-center font-bold text-slate-600 hover:bg-white"
+                                    >−</button>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={product.stockQty}
+                                      step="any"
+                                      value={qty || ""}
+                                      onChange={(event) => setQty(product.id, Number(event.target.value), product.stockQty)}
+                                      className="h-7 w-10 border-x border-slate-200 bg-white text-center text-xs font-bold outline-none"
+                                    />
+                                    <button
+                                      type="button"
+                                      aria-label={`Increase ${product.name}`}
+                                      onClick={() => setQty(product.id, qty + 1, product.stockQty)}
+                                      className="flex h-7 w-7 items-center justify-center font-bold text-teal-700 hover:bg-white"
+                                    >+</button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {fastRetail && filtered.length > visibleProducts.length && (
+                    <div className="border-t border-slate-100 p-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => setResultLimit((value) => value + 30)}
+                        className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-teal-50 hover:text-teal-800"
+                      >
+                        {si ? "තවත් භාණ්ඩ පෙන්වන්න" : "Show more products"} ({visibleProducts.length} / {filtered.length})
+                      </button>
+                    </div>
+                  )}
+                </div>
               ) : (
-                <div className={fastRetail ? groceryPos ? "grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6" : "grid gap-2 md:grid-cols-2 2xl:grid-cols-3" : "grid gap-3 md:grid-cols-2"}>
+                <div className={fastRetail ? groceryPos ? "grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6" : "grid gap-2 md:grid-cols-2 2xl:grid-cols-3" : "grid gap-3 md:grid-cols-2"}>
                   {visibleProducts.map((product) => {
                     const qty = cart[product.id] ?? 0;
                     const selected = qty > 0;
                     const unitPrice = effectiveUnitPrice(product, customerId, data, priceOverrides[product.id]);
                     const rx = org.sector === "pharmacy" && boolField(product.customFields.requiresPrescription);
+                    const genericName = String(product.customFields.genericName ?? "").trim();
                     return (
                       <article
                         key={product.id}
@@ -766,10 +1133,22 @@ export function AtomicRetailSalesPageV2() {
                                 : <>{product.sku ? `${product.sku} · ` : ""}{product.category || "General"}</>}
                             </p>
                             {org.sector === "pharmacy" && (
-                              <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-500">
-                                {[product.customFields.genericName, product.customFields.strength, product.customFields.brand, product.customFields.packSize]
-                                  .filter(Boolean).map(String).join(" · ") || (si ? "Batch පාලිත තොග" : "Batch-controlled stock")}
-                              </p>
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                <p className="text-[11px] leading-4 text-slate-500">
+                                  {[product.customFields.genericName, product.customFields.strength, product.customFields.brand, product.customFields.packSize]
+                                    .filter(Boolean).map(String).join(" · ") || (si ? "Batch පාලිත තොග" : "Batch-controlled stock")}
+                                </p>
+                                {genericName && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveMolecule(genericName)}
+                                    className="rounded bg-teal-50 px-1.5 py-0.5 text-[9px] font-bold text-teal-700 hover:bg-teal-100"
+                                    title={`Find equivalent ${genericName} brands`}
+                                  >
+                                    Alt ⎘
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
                           <div className="shrink-0 text-right">
@@ -846,60 +1225,188 @@ export function AtomicRetailSalesPageV2() {
                   <ProEmptyState title={groceryPos ? grocery("noItemsSelected") : t("sales.no_selected")} description={groceryPos ? grocery("chooseProducts") : t("sales.choose_products_desc")} />
                 ) : (
                   <div className="max-h-[30rem] space-y-3 overflow-y-auto pr-1">
-                    {lines.map((line) => (
-                      <div key={line.product.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex min-w-0 flex-1 gap-2.5">
-                            {groceryPos && (
-                              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-blue-100 bg-gradient-to-br from-white to-blue-50">
-                                <GroceryProductArt
-                                  name={line.product.name}
-                                  category={line.product.category}
-                                  imageUrl={typeof line.product.customFields.imageUrl === "string" ? line.product.customFields.imageUrl : undefined}
-                                  className="h-full w-full p-1"
-                                />
-                              </div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-bold text-slate-950">{groceryPos ? groceryProductLabel(line.product, locale) : line.product.name}</p>
-                              {groceryPos ? (
-                                <div className="mt-1.5 inline-flex items-center overflow-hidden rounded-lg border border-slate-200 bg-white">
-                                  <button type="button" aria-label={`${grocery("decrease")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, line.qty - 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-slate-600 hover:bg-slate-50">−</button>
-                                  <span className="flex h-7 min-w-8 items-center justify-center border-x border-slate-200 px-1 text-xs font-bold text-slate-900">{line.qty}</span>
-                                  <button type="button" aria-label={`${grocery("increase")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, line.qty + 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-teal-700 hover:bg-teal-50">+</button>
+                    {lines.map((line) => {
+                      const isPharmacy = org.sector === "pharmacy";
+                      const rawPack = typeof line.product.customFields.packSize === "boolean" ? undefined : line.product.customFields.packSize;
+                      const packaging = isPharmacy ? parsePharmacyPackaging(rawPack, String(line.product.customFields.unit || "tab")) : null;
+                      const uom = packaging ? formatUomBreakdown(line.qty, packaging) : null;
+                      return (
+                        <div key={line.product.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex min-w-0 flex-1 gap-2.5">
+                              {groceryPos && (
+                                <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-blue-100 bg-gradient-to-br from-white to-blue-50">
+                                  <GroceryProductArt
+                                    name={line.product.name}
+                                    category={line.product.category}
+                                    imageUrl={typeof line.product.customFields.imageUrl === "string" ? line.product.customFields.imageUrl : undefined}
+                                    className="h-full w-full p-1"
+                                  />
                                 </div>
-                              ) : <p className="mt-0.5 text-xs font-semibold text-slate-500">× {line.qty}</p>}
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-bold text-slate-950 break-words leading-snug">{groceryPos ? groceryProductLabel(line.product, locale) : line.product.name}</p>
+                                <div className="mt-1.5 flex items-center gap-2">
+                                {/* Quantity stepper [- | input | +] */}
+                                <div className="inline-flex items-center rounded-lg border border-slate-300 bg-white shadow-sm">
+                                  <button
+                                    type="button"
+                                    onClick={() => setQty(line.product.id, line.qty - 1, line.product.stockQty)}
+                                    className="flex h-7 w-7 items-center justify-center rounded-l-lg text-xs font-bold text-slate-700 hover:bg-slate-100 active:bg-slate-200 transition"
+                                    title={groceryPos ? grocery("decrease") : si ? "1 කින් අඩු කරන්න" : "Decrease by 1"}
+                                  >
+                                    −
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={line.product.stockQty}
+                                    value={line.qty}
+                                    onChange={(event) => setQty(line.product.id, Number(event.target.value), line.product.stockQty)}
+                                    className="h-7 w-12 border-x border-slate-200 text-center text-xs font-bold text-slate-950 outline-none"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setQty(line.product.id, line.qty + 1, line.product.stockQty)}
+                                    className="flex h-7 w-7 items-center justify-center rounded-r-lg text-xs font-bold text-slate-700 hover:bg-slate-100 active:bg-slate-200 transition"
+                                    title={groceryPos ? grocery("increase") : si ? "1 කින් වැඩි කරන්න" : "Increase by 1"}
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                                <span className="text-[11px] font-semibold text-slate-500">
+                                  {line.qty} {groceryPos ? groceryUnitLabel(line.product.customFields.unitVariant ?? line.product.customFields.unit, locale) : String(line.product.customFields.unit || (si ? "ඒකක" : "units"))}
+                                </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-sm font-bold text-slate-950">{formatLkr(line.unitPrice * line.qty)}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setQty(line.product.id, 0, line.product.stockQty)}
+                                  className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                                  title={groceryPos ? grocery("removeItem") : si ? "මෙම කාඩ්පත ලදුපතෙන් ඉවත් කරන්න" : "Remove card from bill"}
+                                  aria-label={groceryPos ? grocery("removeItem") : "Remove item"}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                              <span className="text-[10px] text-slate-400">@ {formatLkr(line.unitPrice)}</span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <p className="shrink-0 font-mono text-sm font-bold text-slate-950">{formatLkr(line.unitPrice * line.qty)}</p>
-                            {groceryPos && <button type="button" aria-label={`${grocery("removeItem")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, 0, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center rounded-lg text-sm font-bold text-slate-400 transition hover:bg-rose-50 hover:text-rose-600">×</button>}
-                          </div>
+                          {isPharmacy && packaging && (
+                            <div className="mt-2.5 rounded-lg border border-teal-100 bg-white p-2.5">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="font-semibold text-slate-500">{si ? "ඇසුරුම් බෙදීම:" : "Dispensing breakdown:"}</span>
+                                <span className="font-bold text-teal-800">{uom?.formatted}</span>
+                              </div>
+                              <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">
+                                {/* Box add / remove controls */}
+                                {packaging.totalUnitsPerBox > 1 && (
+                                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                                    <span className="text-slate-600 font-medium">Box ({packaging.totalUnitsPerBox} {packaging.unitLabel}s)</span>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        disabled={line.qty < packaging.totalUnitsPerBox}
+                                        onClick={() => setQty(line.product.id, line.qty - packaging.totalUnitsPerBox, line.product.stockQty)}
+                                        className="rounded border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                                        title={`Subtract 1 Box (${packaging.totalUnitsPerBox} ${packaging.unitLabel}s)`}
+                                      >
+                                        −1 Box
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setQty(line.product.id, line.qty + packaging.totalUnitsPerBox, line.product.stockQty)}
+                                        className="rounded border border-teal-200 bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-700 hover:bg-teal-100 transition"
+                                        title={`Add 1 Box (${packaging.totalUnitsPerBox} ${packaging.unitLabel}s)`}
+                                      >
+                                        +1 Box
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Strip add / remove controls */}
+                                {packaging.hasSubUnits && packaging.unitsPerStrip && (
+                                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                                    <span className="text-slate-600 font-medium">Strip ({packaging.unitsPerStrip} {packaging.unitLabel}s)</span>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        disabled={line.qty < packaging.unitsPerStrip}
+                                        onClick={() => setQty(line.product.id, line.qty - packaging.unitsPerStrip!, line.product.stockQty)}
+                                        className="rounded border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                                        title={`Subtract 1 Strip (${packaging.unitsPerStrip} ${packaging.unitLabel}s)`}
+                                      >
+                                        −1 Strip
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setQty(line.product.id, line.qty + packaging.unitsPerStrip!, line.product.stockQty)}
+                                        className="rounded border border-teal-200 bg-teal-50 px-2 py-0.5 text-[10px] font-bold text-teal-700 hover:bg-teal-100 transition"
+                                        title={`Add 1 Strip (${packaging.unitsPerStrip} ${packaging.unitLabel}s)`}
+                                      >
+                                        +1 Strip
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Single unit add / remove controls */}
+                                <div className="flex items-center justify-between gap-2 text-[11px]">
+                                  <span className="text-slate-600 font-medium">Single {packaging.unitLabel}</span>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      disabled={line.qty <= 0}
+                                      onClick={() => setQty(line.product.id, line.qty - 1, line.product.stockQty)}
+                                      className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-700 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                                      title={`Subtract 1 ${packaging.unitLabel}`}
+                                    >
+                                      −1 {packaging.unitLabel}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setQty(line.product.id, line.qty + 1, line.product.stockQty)}
+                                      className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-700 hover:bg-slate-100 transition"
+                                      title={`Add 1 ${packaging.unitLabel}`}
+                                    >
+                                      +1 {packaging.unitLabel}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          <label className="mt-3 flex items-center justify-between gap-2 text-xs font-bold text-slate-500">
+                            {t("sales.unit_price")}
+                            <input
+                              type="number"
+                              min={0}
+                              step="any"
+                              value={line.unitPrice}
+                              onChange={(event) => {
+                                setPriceOverrides((current) => ({ ...current, [line.product.id]: Math.max(0, Number(event.target.value)) }));
+                                setPendingSaleId(null);
+                              }}
+                              className="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-right text-xs font-bold text-slate-700 outline-none focus:border-teal-300"
+                            />
+                          </label>
+                          {advancedRetail && (
+                            <AdvancedSaleSelector
+                              productId={line.product.id}
+                              qty={line.qty}
+                              value={inventoryStates[line.product.id]?.selection}
+                              onChange={(next) => setInventoryStates((current) => ({ ...current, [line.product.id]: next }))}
+                              externalPrescriptionVerified={isRxVerified}
+                            />
+                          )}
                         </div>
-                        <label className="mt-3 flex items-center justify-between gap-2 text-xs font-bold text-slate-500">
-                          {t("sales.unit_price")}
-                          <input
-                            type="number"
-                            min={0}
-                            step="any"
-                            value={line.unitPrice}
-                            onChange={(event) => {
-                              setPriceOverrides((current) => ({ ...current, [line.product.id]: Math.max(0, Number(event.target.value)) }));
-                              setPendingSaleId(null);
-                            }}
-                            className="w-28 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-right text-xs font-bold text-slate-700 outline-none focus:border-teal-300"
-                          />
-                        </label>
-                        {advancedRetail && (
-                          <AdvancedSaleSelector
-                            productId={line.product.id}
-                            qty={line.qty}
-                            value={inventoryStates[line.product.id]?.selection}
-                            onChange={(next) => setInventoryStates((current) => ({ ...current, [line.product.id]: next }))}
-                          />
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 

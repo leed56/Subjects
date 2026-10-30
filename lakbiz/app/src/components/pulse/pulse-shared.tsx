@@ -125,7 +125,7 @@ const STAT_VALUE_TONE: Record<StatTone, string> = {
  * that isn't cheaply available for most of these stats. */
 export function StatCard({ label, value, hint, tone = "default" }: { label: string; value: string; hint: string; tone?: StatTone }) {
   return (
-    <div className="w-[13.5rem] shrink-0 snap-start rounded-2xl border border-slate-800 bg-slate-900 p-4">
+    <div className="w-[13.5rem] md:w-full shrink-0 md:shrink snap-start rounded-2xl border border-slate-800 bg-slate-900 p-4">
       <p className="text-xs font-semibold text-slate-400">{label}</p>
       <p className={`mt-1.5 text-2xl font-bold tracking-[-0.02em] ${STAT_VALUE_TONE[tone]}`}>{value}</p>
       <p className={`mt-1 text-xs font-medium ${tone === "danger" ? "text-rose-400" : "text-slate-500"}`}>{hint}</p>
@@ -261,7 +261,7 @@ export function PulseShell({
       {/* Not sticky — a pinned header on a page this short adds a seam for
           no real benefit; Alerts/More in the bottom tab bar already cover
           the same reachability on mobile. */}
-      <div className="mx-auto max-w-md min-h-screen border-x border-slate-800/70">
+      <div className="mx-auto max-w-md md:max-w-3xl lg:max-w-5xl min-h-screen border-x border-slate-800/70 shadow-2xl">
         <header className="border-b border-slate-800/70 bg-slate-900/80 backdrop-blur-xl">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
             <div className="flex min-w-0 items-center gap-2.5">
@@ -338,19 +338,27 @@ export function AttentionList({ actions }: { actions: PulseAction[] }) {
       {visible.map((action) => {
         const tone = action.tone === "danger" ? "bg-rose-400/10 text-rose-400" : "bg-amber-400/10 text-amber-400";
         return (
-          <div key={action.key} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 px-3.5 py-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}>
+          <div key={action.key} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/50 p-3.5 transition hover:border-slate-700">
+            <div className="flex min-w-0 items-start gap-3 flex-1">
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone} mt-0.5`}>
                 <action.Icon className="h-4.5 w-4.5" />
               </span>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-100">{action.title}</p>
-                <p className="truncate text-xs text-slate-400">{action.detail}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-slate-100 break-words leading-snug" title={action.title}>
+                  {action.title}
+                </p>
+                <p className="mt-1 text-xs text-slate-400 break-words leading-relaxed" title={action.detail}>
+                  {action.detail}
+                </p>
               </div>
             </div>
             <Link
               href={action.href}
-              className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-bold ${action.tone === "danger" ? "border-rose-400/30 text-rose-400 hover:bg-rose-400/10" : "border-amber-400/30 text-amber-400 hover:bg-amber-400/10"}`}
+              className={`self-start sm:self-center shrink-0 rounded-lg border px-3.5 py-1.5 text-xs font-bold transition ${
+                action.tone === "danger"
+                  ? "border-rose-400/30 text-rose-400 hover:bg-rose-400/10"
+                  : "border-amber-400/30 text-amber-400 hover:bg-amber-400/10"
+              }`}
             >
               {action.actionLabel}
             </Link>

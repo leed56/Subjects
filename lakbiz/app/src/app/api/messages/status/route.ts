@@ -8,6 +8,16 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  * decide whether to show those channels at all). `configured` is kept
  * for existing callers (Text.lk); `whatsappConfigured` is additive. */
 export async function GET() {
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  ) {
+    return NextResponse.json({
+      configured: false,
+      whatsappConfigured: false,
+    });
+  }
+
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },

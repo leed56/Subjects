@@ -98,11 +98,26 @@ export function StockCommandHeader({
 
       {categories.length > 0 && (
         <div className={`border-t px-4 py-3 sm:px-6 ${grocery ? "border-emerald-100 bg-white/55" : "border-white/[0.07] bg-black/[0.08]"}`}>
-          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <button type="button" onClick={() => onCategoryChange("all")} className={`shrink-0 rounded-xl px-3 py-2 text-xs font-semibold transition ${selectedCategory === "all" ? grocery ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-sm" : "bg-teal-500 text-white" : grocery ? "border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700" : "border border-white/[0.08] bg-white/[0.035] text-slate-400 hover:bg-white/[0.07] hover:text-white"}`}>{grocery ? groceryCategoryLabel("All Products", locale) : "All"} <span className="ml-1 opacity-70">{itemCount}</span></button>
+          <div aria-label={grocery ? groceryCategoryLabel("Product categories", locale) : "Product categories"} className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              aria-pressed={selectedCategory === "all"}
+              onClick={() => onCategoryChange("all")}
+              className={`inline-flex max-w-full items-center gap-1.5 rounded-xl px-3 py-2 text-left text-xs font-semibold leading-snug transition ${selectedCategory === "all" ? grocery ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-sm" : "bg-teal-500 text-white" : grocery ? "border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700" : "border border-white/[0.08] bg-white/[0.035] text-slate-400 hover:bg-white/[0.07] hover:text-white"}`}
+            >
+              <span>{grocery ? groceryCategoryLabel("All Products", locale) : "All"}</span>
+              <span className="shrink-0 opacity-70">{itemCount}</span>
+            </button>
             {categories.map((category) => (
-              <button key={category.name} type="button" onClick={() => onCategoryChange(category.name)} className={`shrink-0 rounded-xl px-3 py-2 text-xs font-semibold transition ${selectedCategory === category.name ? grocery ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-sm" : "bg-teal-500 text-white" : grocery ? "border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700" : "border border-white/[0.08] bg-white/[0.035] text-slate-400 hover:bg-white/[0.07] hover:text-white"}`}>
-                {grocery ? groceryCategoryLabel(category.name, locale) : category.name} <span className="ml-1 opacity-70">{category.count}</span>
+              <button
+                key={category.name}
+                type="button"
+                aria-pressed={selectedCategory === category.name}
+                onClick={() => onCategoryChange(category.name)}
+                className={`inline-flex max-w-full items-center gap-1.5 rounded-xl px-3 py-2 text-left text-xs font-semibold leading-snug transition ${selectedCategory === category.name ? grocery ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-sm" : "bg-teal-500 text-white" : grocery ? "border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700" : "border border-white/[0.08] bg-white/[0.035] text-slate-400 hover:bg-white/[0.07] hover:text-white"}`}
+              >
+                <span className="min-w-0">{grocery ? groceryCategoryLabel(category.name, locale) : category.name}</span>
+                <span className="shrink-0 opacity-70">{category.count}</span>
               </button>
             ))}
           </div>

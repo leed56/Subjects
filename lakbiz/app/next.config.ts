@@ -7,9 +7,11 @@ import type { NextConfig } from "next";
 // in production and this session cannot render-test against a live deploy.
 // Tightening this to a nonce-based policy is a recommended, separately
 // verified follow-up (see docs/ARCHITECTURE_AUDIT.md).
+const isDev = process.env.NODE_ENV !== "production";
+
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://*.supabase.co",
   "font-src 'self' data:",

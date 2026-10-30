@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useAuth } from "@/components/auth-provider";
 import { AcAlertsBell } from "@/components/ac-alerts-bell";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { LOCALE_NAMES, nextLocale } from "@/lib/i18n/translations";
@@ -11,10 +10,10 @@ import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useShopNav } from "@/components/shell/use-shop-nav";
 import { useBottomBarOccupied } from "@/components/shell/bottom-bar-overlay";
 import { NAV_ICON_BY_HREF } from "@/components/shell/nav-icons";
-import { MenuIcon, CloseIcon, SettingsIcon, SignOutIcon, BellIcon } from "@/components/ui/icons";
-import { initialsFor } from "@/lib/format";
+import { MenuIcon, CloseIcon, SettingsIcon, BellIcon } from "@/components/ui/icons";
 import type { NavItem } from "@/lib/nav-sections";
 import { useCriticalAlertCount } from "@/lib/dashboard/use-critical-alert-count";
+import { WorkspaceProfileMenu } from "@/components/shell/workspace-profile-menu";
 
 function navLabel(item: NavItem, locale: "si" | "en" | "ta", t: (key: string) => string): string {
   if (locale === "si" && item.labelSi) return item.labelSi;
@@ -28,7 +27,6 @@ function navLabel(item: NavItem, locale: "si" | "en" | "ta", t: (key: string) =>
 export function MobileNav() {
   const pathname = usePathname();
   const { locale, setLocale, t } = useLocale();
-  const { user, logout } = useAuth();
   const { isPlatformAdmin, org } = useSubscription();
   const { sections, managementItems } = useShopNav();
   const bottomBarOccupied = useBottomBarOccupied();
@@ -86,11 +84,6 @@ export function MobileNav() {
   const openDrawer = () => {
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setOpen(true);
-  };
-
-  const handleLogout = async () => {
-    await logout();
-    window.location.href = "/login";
   };
 
   const renderItem = (item: NavItem) => {
@@ -175,18 +168,7 @@ export function MobileNav() {
 
           <div className="border-t border-slate-200/80 bg-slate-50/70 p-3.5">
             {managementItems.length > 0 && <div className="mb-3 grid grid-cols-2 gap-1.5">{managementItems.map((item) => { const Icon=NAV_ICON_BY_HREF[item.href]??SettingsIcon; return <Link key={item.href} href={item.href} onClick={()=>setOpen(false)} className="flex min-h-11 items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-semibold text-slate-600 hover:bg-white hover:text-slate-950"><Icon className="h-4 w-4 shrink-0 text-slate-400"/><span className="truncate">{navLabel(item,locale,t)}</span></Link>; })}</div>}
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-xs font-bold text-teal-800">{initialsFor(org.name, user?.email)}</span>
-              <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-950">{org.name}</p><p className="mt-0.5 truncate text-xs text-slate-500">{user?.email}</p></div>
-            </div>
-            {user ? (
-              <button type="button" onClick={() => { setOpen(false); void handleLogout(); }} className="mt-2.5 flex min-h-11 w-full items-center gap-2 rounded-xl px-3.5 py-3 text-sm font-medium text-rose-600 transition hover:bg-rose-50"><SignOutIcon className="h-4.5 w-4.5" />{t("sub.sign_out")}</button>
-            ) : (
-              // Anonymous visitors land here in the local/demo experience —
-              // the drawer had no way back to a real account at all before
-              // this, only a Sign out button gated behind `user`.
-              <Link href="/login" onClick={() => setOpen(false)} className="mt-2.5 flex min-h-11 w-full items-center justify-center rounded-xl bg-teal-600 px-3.5 py-3 text-sm font-semibold text-white transition hover:bg-teal-700">{t("sub.sign_in")}</Link>
-            )}
+            <WorkspaceProfileMenu appearance="light" />
           </div>
         </div>
       </div>

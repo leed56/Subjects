@@ -6,6 +6,7 @@ import { ProductForm } from "@/components/product-form";
 import { StockCommandHeader } from "@/components/stock/stock-command-header";
 import { GroceryProductArt } from "@/components/sales/grocery-product-art";
 import { GroceryStarterCatalogueButton } from "@/components/grocery/starter-catalogue-button";
+import { GrindingMillCatalogueButton } from "@/components/grocery/grinding-mill-catalogue-button";
 import { ExportActions } from "@/components/export/export-actions";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { AppShell } from "@/components/shell/app-shell";
@@ -170,8 +171,7 @@ export default function StockPage() {
       name,
       count: data.products.filter((p) => p.active && (p.category || "Other") === name).length,
     }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-    .slice(0, 10);
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   const stockInProduct = stockInId ? data.products.find((p) => p.id === stockInId) : null;
   const stockOutProduct = stockOutId ? data.products.find((p) => p.id === stockOutId) : null;
   const stockInQtyNumber = Number(stockInQty) || 0;
@@ -488,6 +488,7 @@ export default function StockPage() {
         />
 
         <WriteDisabledHint className="mb-4" />
+        <GrindingMillCatalogueButton />
 
         <FilterBar>
           <SearchInput value={search} onChange={setSearch} placeholder={t("stock.search_placeholder")} className="min-w-[220px] flex-1" />

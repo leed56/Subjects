@@ -1027,8 +1027,12 @@ function useAppStoreState(): AppStoreValue {
       let newStockLogIds: string[] = [];
 
       if (existingId) {
+        const prevLogIds = new Set(data.stockLogs.map((log) => log.id));
         next = updateProduct(data, existingId, normalized);
         productId = existingId;
+        newStockLogIds = next.stockLogs
+          .filter((log) => !prevLogIds.has(log.id))
+          .map((log) => log.id);
       } else {
         if (!canAddProduct(data)) {
           return { ok: false, error: "Product limit reached" };

@@ -17,7 +17,9 @@ import {
 import { formatLkr, formatLkrCompact } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { AppData } from "@/lib/store/types";
+import { useAppStore } from "@/lib/store/use-app-store";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
+import { DEMO_PHARMACY_PRODUCTS, seedPharmacyCatalog } from "@/lib/pharmacy-demo-seed";
 import {
   buildRetailDashboardIntelligence,
   type DashboardPeriod,
@@ -93,6 +95,9 @@ const copy = {
     lotUnavailable: "Batch intelligence is temporarily unavailable; core inventory remains available.",
     loadingBatchData: "Loading batch & expiry data…",
     operationalHealth: "Inventory readiness",
+    groceryReadiness: "Shelf readiness",
+    groceryReadinessHint: "Products ready to sell",
+    openPos: "Open POS",
     allClear: "All clear",
     needsReview: "Needs review",
     needsDisposal: "Needs disposal",
@@ -156,13 +161,24 @@ const copy = {
     lotUnavailable: "බැච් තොරතුරු තාවකාලිකව ලබාගත නොහැක. මූලික තොග දත්ත ක්‍රියාත්මකයි.",
     loadingBatchData: "බැච් සහ කල් ඉකුත් දත්ත පූරණය වෙමින්…",
     operationalHealth: "තොග සූදානම",
+    groceryReadiness: "රාක්ක සූදානම",
+    groceryReadinessHint: "විකිණීමට සූදානම් භාණ්ඩ",
+    openPos: "POS විවෘත කරන්න",
     allClear: "සියල්ල පැහැදිලිය",
     needsReview: "සමාලෝචනය අවශ්‍යයි",
     needsDisposal: "ඉවත් කිරීම අවශ්‍යයි",
   },
 } as const;
 
-type KpiTone = "default" | "teal" | "warning" | "danger" | "navy";
+type KpiTone = "default" | "teal" | "warning" | "danger" | "navy" | "sky" | "violet";
+
+const GROCERY_ACCENTS = [
+  "from-teal-500 to-emerald-400",
+  "from-sky-500 to-cyan-400",
+  "from-violet-500 to-fuchsia-400",
+  "from-amber-500 to-orange-400",
+  "from-rose-500 to-pink-400",
+] as const;
 
 function Surface({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
@@ -194,8 +210,10 @@ function KpiCard({ label, value, hint, tone = "default", icon, fullValue, trendP
     warning: "border-amber-200/90 bg-amber-50/65 text-slate-950",
     danger: "border-rose-200/90 bg-rose-50/60 text-slate-950",
     navy: "border-slate-800 bg-[#101d30] text-white",
+    sky: "border-sky-200/90 bg-gradient-to-br from-sky-50 via-white to-cyan-50 text-slate-950",
+    violet: "border-violet-200/90 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 text-slate-950",
   };
-  const iconTone = tone === "navy" ? "bg-white/10 text-teal-300" : tone === "warning" ? "bg-amber-100 text-amber-700" : tone === "danger" ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-600";
+  const iconTone = tone === "navy" ? "bg-white/10 text-teal-300" : tone === "warning" ? "bg-amber-100 text-amber-700" : tone === "danger" ? "bg-rose-100 text-rose-700" : tone === "sky" ? "bg-sky-100 text-sky-700" : tone === "violet" ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-600";
   // Danger-tone cards (blocked batches, expired lots) are the ones an
   // owner needs to see first, not just eventually notice by their color —
   // a stronger shadow, a visible ring and a quiet pulsing dot on the icon
@@ -284,7 +302,7 @@ function PeriodSelector({ period, onChange, locale }: { period: DashboardPeriod;
   );
 }
 
-function SalesTrend({ intel, canSeeFinancials }: { intel: RetailDashboardIntelligence; canSeeFinancials: boolean }) {
+function SalesTrend({ intel, canSeeFinancials, colorful = false }: { intel: RetailDashboardIntelligence; canSeeFinancials: boolean; colorful?: boolean }) {
   const max = Math.max(1, ...intel.trend.map((point) => point.revenue));
   return (
     <div className="px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
@@ -323,7 +341,7 @@ function SalesTrend({ intel, canSeeFinancials }: { intel: RetailDashboardIntelli
         </div>
       </div>
       <div className="flex h-44 items-end gap-2 sm:gap-3" role="img" aria-label="Seven-day sales chart">
-        {intel.trend.map((point) => {
+        {intel.trend.map((point, index) => {
           // A genuinely zero-revenue day used to render as the same ~3%
           // sliver as a real-but-tiny sale — indistinguishable from "no
           // data yet" at a glance. Zero now gets its own dashed-outline
@@ -343,7 +361,11 @@ function SalesTrend({ intel, canSeeFinancials }: { intel: RetailDashboardIntelli
                   </div>
                 ) : (
                   <div
-                    className="w-full max-w-10 rounded-lg bg-teal-500/90 shadow-[0_6px_18px_rgba(13,148,136,0.18)] transition-[height]"
+                    className={`w-full max-w-10 rounded-lg shadow-[0_6px_18px_rgba(13,148,136,0.18)] transition-[height] ${
+                      colorful
+                        ? `bg-gradient-to-t ${GROCERY_ACCENTS[index % GROCERY_ACCENTS.length]}`
+                        : "bg-teal-500/90"
+                    }`}
                     style={{ height: `${height}%` }}
                     title={`${point.label}: ${formatLkr(point.revenue)}`}
                   />
@@ -406,7 +428,7 @@ function AttentionPanel({ sector, intel, text, lotsLoading }: { sector: RetailSe
           return (
             <Link key={row.key} href={row.href} className={`group flex items-center gap-3 rounded-xl border px-3.5 py-3 transition ${rowStyle}`}>
               <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dot}`} />
-              <span className={`min-w-0 flex-1 truncate text-sm font-medium ${isUrgent ? "text-rose-950" : "text-slate-700"}`}>{row.title}</span>
+              <span className={`min-w-0 flex-1 text-sm font-medium break-words leading-snug ${isUrgent ? "text-rose-950" : "text-slate-700"}`}>{row.title}</span>
               <span className={`rounded-lg px-2 py-1 text-xs font-bold tabular-nums ${badgeStyle}`}>{row.count}</span>
               <ChevronRightIcon className={`h-4 w-4 transition group-hover:translate-x-0.5 ${isUrgent ? "text-rose-300 group-hover:text-rose-500" : "text-slate-300 group-hover:text-slate-500"}`} />
             </Link>
@@ -417,20 +439,27 @@ function AttentionPanel({ sector, intel, text, lotsLoading }: { sector: RetailSe
   );
 }
 
-function CategoryMix({ intel, text }: { intel: RetailDashboardIntelligence; text: (typeof copy)["en"] | (typeof copy)["si"] }) {
+function CategoryMix({ intel, text, colorful = false }: { intel: RetailDashboardIntelligence; text: (typeof copy)["en"] | (typeof copy)["si"]; colorful?: boolean }) {
   const max = Math.max(1, ...intel.categoryMix.map((item) => item.share));
   return (
     <Surface className="overflow-hidden">
       <SectionTitle title={text.categoryMix} hint={text.categoryMixHint} />
       <div className="space-y-4 p-5 sm:p-6">
-        {intel.categoryMix.length === 0 ? <p className="text-sm text-slate-500">{text.noRows}</p> : intel.categoryMix.map((item) => (
+        {intel.categoryMix.length === 0 ? <p className="text-sm text-slate-500">{text.noRows}</p> : intel.categoryMix.map((item, index) => (
           <div key={item.category}>
             <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
               <span className="truncate font-semibold text-slate-700">{item.category}</span>
               <span className="tabular-nums text-slate-500">{item.share.toFixed(0)}%</span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-              <div className="h-full rounded-full bg-slate-700" style={{ width: `${Math.max(4, (item.share / max) * 100)}%` }} />
+              <div
+                className={`h-full rounded-full ${
+                  colorful
+                    ? `bg-gradient-to-r ${GROCERY_ACCENTS[index % GROCERY_ACCENTS.length]}`
+                    : "bg-slate-700"
+                }`}
+                style={{ width: `${Math.max(4, (item.share / max) * 100)}%` }}
+              />
             </div>
           </div>
         ))}
@@ -439,7 +468,7 @@ function CategoryMix({ intel, text }: { intel: RetailDashboardIntelligence; text
   );
 }
 
-function Movers({ intel, text }: { intel: RetailDashboardIntelligence; text: (typeof copy)["en"] | (typeof copy)["si"] }) {
+function Movers({ intel, text, colorful = false }: { intel: RetailDashboardIntelligence; text: (typeof copy)["en"] | (typeof copy)["si"]; colorful?: boolean }) {
   const maxQty = Math.max(1, ...intel.topMovers.map((item) => item.qty));
   return (
     <Surface className="overflow-hidden">
@@ -449,16 +478,25 @@ function Movers({ intel, text }: { intel: RetailDashboardIntelligence; text: (ty
           <p className="py-6 text-sm text-slate-500">{intel.periodTransactions > 0 ? text.noLineDetail : text.noSales}</p>
         ) : intel.topMovers.slice(0, 6).map((item, index) => (
           <div key={item.productId} className="flex items-center gap-3 py-3.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-xs font-bold text-slate-500">{index + 1}</span>
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-xs font-bold ${
+              colorful ? "bg-teal-100 text-teal-800" : "bg-slate-100 text-slate-500"
+            }`}>{index + 1}</span>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-3">
-                <p className="truncate text-sm font-semibold text-slate-800">{item.name}</p>
+                <p className="text-sm font-semibold text-slate-800 break-words leading-snug">{item.name}</p>
                 <p className="shrink-0 text-xs font-semibold tabular-nums text-slate-700">{item.qty} {text.unitsSold}</p>
               </div>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full rounded-full bg-teal-500" style={{ width: `${Math.max(5, (item.qty / maxQty) * 100)}%` }} />
+                <div
+                  className={`h-full rounded-full ${
+                    colorful
+                      ? `bg-gradient-to-r ${GROCERY_ACCENTS[index % GROCERY_ACCENTS.length]}`
+                      : "bg-teal-500"
+                  }`}
+                  style={{ width: `${Math.max(5, (item.qty / maxQty) * 100)}%` }}
+                />
               </div>
-              <p className="mt-1.5 truncate text-[11px] text-slate-400">{item.category} · {item.stockQty} {text.inStock}</p>
+              <p className="mt-1.5 text-[11px] text-slate-500 break-words">{item.category} · {item.stockQty} {text.inStock}</p>
             </div>
           </div>
         ))}
@@ -478,9 +516,9 @@ function ReorderQueue({ intel, text }: { intel: RetailDashboardIntelligence; tex
             param handling. */}
         {intel.reorderQueue.length === 0 ? <p className="py-6 text-sm text-slate-500">{text.noRows}</p> : intel.reorderQueue.slice(0, 6).map((item) => (
           <Link href={`/stock?q=${encodeURIComponent(item.name)}`} key={item.productId} className="group flex items-center justify-between gap-4 py-3.5">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-800 group-hover:text-teal-700">{item.name}</p>
-              <p className="mt-0.5 truncate text-[11px] text-slate-400">{item.category}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-slate-800 group-hover:text-teal-700 break-words leading-snug">{item.name}</p>
+              <p className="mt-0.5 text-[11px] text-slate-500 break-words">{item.category}</p>
             </div>
             <div className="shrink-0 text-right">
               <p className={`text-sm font-bold tabular-nums ${item.stockQty <= 0 ? "text-rose-600" : "text-amber-700"}`}>{item.stockQty} {item.unit}</p>
@@ -547,9 +585,9 @@ function ExpiryControl({ intel, text, lotError, loading }: { intel: RetailDashbo
                       through from a count-only KPI. */}
                   {intel.expiryQueue.slice(0, 5).map((item) => (
                     <Link key={item.id} href={`/stock/advanced?product=${encodeURIComponent(item.productId)}`} className="group flex items-center justify-between gap-4 py-3 transition hover:bg-slate-50/70">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-800 group-hover:text-teal-700">{item.productName}</p>
-                        <p className="mt-0.5 truncate text-[11px] text-slate-400">Batch {item.batchNo} · {item.expiryDate}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-800 group-hover:text-teal-700 break-words leading-snug">{item.productName}</p>
+                        <p className="mt-0.5 text-[11px] text-slate-500 break-words">Batch {item.batchNo} · {item.expiryDate}</p>
                       </div>
                       <span className={`shrink-0 rounded-lg px-2 py-1 text-xs font-bold tabular-nums ${item.daysToExpiry <= 30 ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>{item.daysToExpiry} {text.days}</span>
                     </Link>
@@ -626,8 +664,8 @@ function RecentActivity({ intel, text }: { intel: RetailDashboardIntelligence; t
           <div key={item.id} className="flex items-center gap-3 py-3.5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">{iconFor(item.type)}</span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-slate-800">{item.title}</p>
-              <p className="mt-0.5 truncate text-[11px] text-slate-400">{item.subtitle} · {new Date(item.date).toLocaleDateString("en-LK", { day: "numeric", month: "short" })}</p>
+              <p className="text-sm font-semibold text-slate-800 break-words leading-snug">{item.title}</p>
+              <p className="mt-0.5 text-[11px] text-slate-500 break-words">{item.subtitle} · {new Date(item.date).toLocaleDateString("en-LK", { day: "numeric", month: "short" })}</p>
             </div>
             {item.amount != null && <p className="shrink-0 text-xs font-semibold tabular-nums text-slate-700">{formatLkr(item.amount)}</p>}
           </div>
@@ -671,6 +709,7 @@ function FinancialStrip({ intel, text }: { intel: RetailDashboardIntelligence; t
 export function RetailCommandCenter({ data, sector }: { data: AppData; sector: RetailSector }) {
   const { locale } = useLocale();
   const { org, canSeeFinancials, isReadOnly } = useSubscription();
+  const { saveProductToCloud } = useAppStore();
   // No Tamil copy yet for this retail (pharmacy/grocery/mobile/electronics/
   // footwear) command centre — falls back to English rather than indexing
   // a `ta` key that doesn't exist. Not translated to Sinhala either; this
@@ -720,39 +759,122 @@ export function RetailCommandCenter({ data, sector }: { data: AppData; sector: R
 
   return (
     <div className="space-y-5 pb-8">
-      <div className="relative overflow-hidden rounded-[22px] border border-slate-800 bg-[#0b1728] px-5 py-6 text-white shadow-[0_24px_60px_rgba(15,23,42,0.18)] sm:px-7 sm:py-7">
+      <div className={`relative overflow-hidden rounded-[22px] border p-6 text-white shadow-[0_24px_60px_rgba(15,23,42,0.18)] sm:p-8 ${
+        isPharmacy
+          ? "border-slate-800 bg-[#0b1728]"
+          : "border-teal-900 bg-gradient-to-br from-[#0b1f32] via-[#075e58] to-[#138271]"
+      }`}>
         <div className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-teal-400/[0.07] blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 left-1/3 h-40 w-80 rounded-full bg-sky-400/[0.04] blur-3xl" />
-        <div className="relative grid gap-6 xl:grid-cols-[1fr_auto] xl:items-end">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <span className="rounded-full border border-teal-300/15 bg-teal-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-teal-300">{isPharmacy ? text.pharmacyEyebrow : text.groceryEyebrow}</span>
-              <span className="inline-flex items-center gap-1.5 text-xs text-slate-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />{text.live}</span>
-              {isReadOnly && <span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-300">Read only</span>}
-            </div>
-            <h1 className="mt-4 truncate text-3xl font-semibold tracking-[-0.045em] sm:text-[2.15rem]">{shopName}</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{isPharmacy ? text.pharmacySubtitle : text.grocerySubtitle}</p>
-            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-500">
-              <span className="inline-flex items-center gap-1.5"><CalendarIcon className="h-4 w-4" />{date}</span>
-              <span>{intel.activeSkuCount.toLocaleString()} {text.activeSkus}</span>
-              {isPharmacy && <span>{intel.medicineCount.toLocaleString()} {text.medicines}</span>}
-            </div>
+        {!isPharmacy && (
+          <>
+            <div className="pointer-events-none absolute -left-16 bottom-0 h-48 w-48 rounded-full bg-amber-300/15 blur-3xl" />
+            <div className="pointer-events-none absolute right-1/4 top-5 h-24 w-24 rounded-full bg-fuchsia-300/15 blur-3xl" />
+          </>
+        )}
+        {/* Header Top Meta Bar */}
+        <div className="relative flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] pb-4">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="rounded-full border border-teal-300/20 bg-teal-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-teal-300">
+              {isPharmacy ? text.pharmacyEyebrow : text.groceryEyebrow}
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              {text.live}
+            </span>
+            {isReadOnly && (
+              <span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-300">
+                Read only
+              </span>
+            )}
           </div>
-          <div className="flex flex-wrap items-center gap-2.5 xl:justify-end">
-            <Link href="/sales" className="inline-flex h-11 items-center gap-2 rounded-xl bg-teal-500 px-4 text-sm font-semibold text-white shadow-[0_10px_26px_rgba(20,184,166,0.22)] transition hover:bg-teal-400"><PlusIcon className="h-4 w-4" />{text.newSale}</Link>
-            <Link href="/stock" className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.055] px-4 text-sm font-semibold text-slate-100 transition hover:bg-white/[0.09]"><StockIcon className="h-4 w-4 text-teal-300" />{text.addStock}</Link>
-            <Link href={isPharmacy ? "/stock/advanced" : "/suppliers"} className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/10 px-4 text-sm font-semibold text-slate-300 transition hover:bg-white/[0.055] hover:text-white">{isPharmacy ? <BillsIcon className="h-4 w-4" /> : <SuppliersIcon className="h-4 w-4" />}{isPharmacy ? text.batchControl : text.suppliers}</Link>
+          <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-slate-400">
+            <span className="inline-flex items-center gap-1.5 text-slate-300">
+              <CalendarIcon className="h-4 w-4 text-slate-400" />
+              {date}
+            </span>
+            <span className="h-3 w-px bg-white/15" />
+            <span><strong className="text-white">{intel.activeSkuCount.toLocaleString()}</strong> {text.activeSkus}</span>
+            {isPharmacy && (
+              <>
+                <span className="h-3 w-px bg-white/15" />
+                <span><strong className="text-white">{intel.medicineCount.toLocaleString()}</strong> {text.medicines}</span>
+              </>
+            )}
+            {!isPharmacy && (
+              <>
+                <span className="h-3 w-px bg-white/15" />
+                <span className="rounded-full bg-amber-300/15 px-2 py-1 text-amber-100"><strong>{intel.lowStockCount}</strong> {text.lowStock.toLowerCase()}</span>
+                <span className="rounded-full bg-rose-300/15 px-2 py-1 text-rose-100"><strong>{intel.outOfStockCount}</strong> {text.outOfStock.toLowerCase()}</span>
+              </>
+            )}
           </div>
         </div>
-        <div className="relative mt-6 grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center">
-          <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3.5 py-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300"><CheckIcon className="h-5 w-5" /></div>
+
+        {/* Hero Title & Action Buttons */}
+        <div className="relative mt-5 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 max-w-2xl">
+            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl lg:text-4xl">
+              {shopName}
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-slate-300 sm:text-base">
+              {isPharmacy ? text.pharmacySubtitle : text.grocerySubtitle}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            {!org.isAuthenticated && (
+              <button
+                type="button"
+                onClick={() => {
+                  seedPharmacyCatalog(org.id);
+                  window.location.assign("/sales");
+                }}
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-[0_10px_26px_rgba(5,150,105,0.25)] transition hover:bg-emerald-500 active:scale-[0.98]"
+              >
+                💊 Load Sample Medicines
+              </button>
+            )}
+            <Link
+              href="/sales"
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-teal-500 px-4 text-sm font-semibold text-white shadow-[0_10px_26px_rgba(20,184,166,0.22)] transition hover:bg-teal-400 active:scale-[0.98]"
+            >
+              <PlusIcon className="h-4 w-4" />{isPharmacy ? text.newSale : text.openPos}
+            </Link>
+            <Link
+              href="/stock"
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/15 bg-white/[0.06] px-4 text-sm font-semibold text-slate-100 transition hover:bg-white/[0.1] active:scale-[0.98]"
+            >
+              <StockIcon className="h-4 w-4 text-teal-300" />{text.addStock}
+            </Link>
+            <Link
+              href={isPharmacy ? "/stock/advanced" : "/suppliers"}
+              className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/15 bg-white/[0.04] px-4 text-sm font-semibold text-slate-300 transition hover:bg-white/[0.08] hover:text-white active:scale-[0.98]"
+            >
+              {isPharmacy ? <BillsIcon className="h-4 w-4" /> : <SuppliersIcon className="h-4 w-4" />}{isPharmacy ? text.batchControl : text.suppliers}
+            </Link>
+          </div>
+        </div>
+
+        {/* Operational Health Badge & Contained Progress */}
+        <div className="relative mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/[0.08] bg-white/[0.035] px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-400/10 text-emerald-300">
+              <CheckIcon className="h-4.5 w-4.5" />
+            </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">{text.operationalHealth}</p>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums text-white">{readiness}%</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{isPharmacy ? text.operationalHealth : text.groceryReadiness}</p>
+              <p className="text-sm font-semibold text-white">
+                <span className="text-base tabular-nums font-bold text-emerald-400">{readiness}%</span> — {isPharmacy ? "Inventory & dispensing readiness" : text.groceryReadinessHint}
+              </p>
             </div>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${readiness}%` }} /></div>
+          <div className="flex items-center gap-3">
+            <div className="h-2 w-36 sm:w-48 overflow-hidden rounded-full bg-white/[0.08]">
+              <div className="h-full rounded-full bg-emerald-400 transition-all duration-500" style={{ width: `${readiness}%` }} />
+            </div>
+            <span className="text-xs font-semibold tabular-nums text-emerald-400">{readiness}%</span>
+          </div>
         </div>
       </div>
 
@@ -769,7 +891,7 @@ export function RetailCommandCenter({ data, sector }: { data: AppData; sector: R
           icon={<SalesIcon className="h-4 w-4" />}
           href="/sales"
         />
-        <KpiCard label={text.activeSkus} value={intel.activeSkuCount.toLocaleString()} hint={isPharmacy ? `${intel.medicineCount} ${text.medicines.toLowerCase()}` : text.recorded} tone="default" icon={<StockIcon className="h-4 w-4" />} href="/stock" />
+        <KpiCard label={text.activeSkus} value={intel.activeSkuCount.toLocaleString()} hint={isPharmacy ? `${intel.medicineCount} ${text.medicines.toLowerCase()}` : text.recorded} tone={isPharmacy ? "default" : "sky"} icon={<StockIcon className="h-4 w-4" />} href="/stock" />
         <KpiCard label={text.lowStock} value={String(intel.lowStockCount)} hint={`${intel.outOfStockCount} ${text.outOfStock.toLowerCase()}`} tone={intel.lowStockCount > 0 ? "warning" : "default"} icon={<AlertTriangleIcon className="h-4 w-4" />} href="/stock?filter=low-stock" />
         {isPharmacy ? (
           <>
@@ -795,10 +917,10 @@ export function RetailCommandCenter({ data, sector }: { data: AppData; sector: R
             />
           </>
         ) : (
-          <KpiCard label={text.averageBasket} value={formatLkrCompact(intel.averageBasket)} fullValue={formatLkr(intel.averageBasket)} hint={`${intel.periodTransactions} ${text.transactions.toLowerCase()} · ${intel.periodLabel}`} tone="teal" icon={<BillsIcon className="h-4 w-4" />} />
+          <KpiCard label={text.averageBasket} value={formatLkrCompact(intel.averageBasket)} fullValue={formatLkr(intel.averageBasket)} hint={`${intel.periodTransactions} ${text.transactions.toLowerCase()} · ${intel.periodLabel}`} tone="violet" icon={<BillsIcon className="h-4 w-4" />} />
         )}
         {canSeeFinancials ? (
-          <KpiCard label={text.stockValue} value={formatLkrCompact(intel.inventoryCostValue ?? 0)} fullValue={formatLkr(intel.inventoryCostValue ?? 0)} hint={text.financialHint} tone="teal" icon={<StockIcon className="h-4 w-4" />} href="/stock" />
+          <KpiCard label={text.stockValue} value={formatLkrCompact(intel.inventoryCostValue ?? 0)} fullValue={formatLkr(intel.inventoryCostValue ?? 0)} hint={text.financialHint} tone={isPharmacy ? "teal" : "teal"} icon={<StockIcon className="h-4 w-4" />} href="/stock" />
         ) : (
           <KpiCard label={text.sellValue} value={formatLkrCompact(intel.inventorySellValue)} fullValue={formatLkr(intel.inventorySellValue)} hint={`${intel.outOfStockCount} ${text.outOfStock.toLowerCase()}`} tone="teal" icon={<SalesIcon className="h-4 w-4" />} href="/stock" />
         )}
@@ -816,7 +938,7 @@ export function RetailCommandCenter({ data, sector }: { data: AppData; sector: R
               </div>
             }
           />
-          <SalesTrend intel={intel} canSeeFinancials={canSeeFinancials} />
+          <SalesTrend intel={intel} canSeeFinancials={canSeeFinancials} colorful={!isPharmacy} />
         </Surface>
         <AttentionPanel sector={sector} intel={intel} text={text} lotsLoading={lotsLoading} />
       </div>
@@ -835,8 +957,8 @@ export function RetailCommandCenter({ data, sector }: { data: AppData; sector: R
       ) : (
         <>
           <div className="grid gap-5 xl:grid-cols-2">
-            <Movers intel={intel} text={text} />
-            <CategoryMix intel={intel} text={text} />
+            <Movers intel={intel} text={text} colorful />
+            <CategoryMix intel={intel} text={text} colorful />
           </div>
           <div className="grid gap-5 xl:grid-cols-2">
             <ReorderQueue intel={intel} text={text} />

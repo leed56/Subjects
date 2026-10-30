@@ -105,6 +105,20 @@ export function updateProduct(
   id: string,
   input: ProductInput,
 ): AppData {
+  const previous = data.products.find((product) => product.id === id);
+  if (!previous) return data;
+  const stockDelta = input.stockQty - previous.stockQty;
+  const adjustment: StockLog[] = Number.isFinite(stockDelta) && stockDelta !== 0
+    ? [{
+        id: newId(),
+        productId: id,
+        productName: input.name.trim(),
+        type: stockDelta > 0 ? "in" : "out",
+        qty: Math.abs(stockDelta),
+        note: `Manual stock correction from ${previous.stockQty} to ${input.stockQty}`,
+        date: new Date().toISOString(),
+      }]
+    : [];
   return {
     ...data,
     products: data.products.map((p) =>
@@ -129,6 +143,7 @@ export function updateProduct(
           }
         : p,
     ),
+    stockLogs: [...adjustment, ...data.stockLogs],
   };
 }
 
@@ -139,12 +154,9 @@ export function deleteProduct(data: AppData, id: string): AppData {
   };
 }
 
-/** Every StockLog-producing stock-quantity change in the app funnels
- * through this one function (HVAC platform Phase 3) — adjustStock,
- * writeOffStock, returnStockToSupplier below, and createPurchase further
- * down all call it, so "one place writes stockQty + a matching log" stays
- * true as movement kinds grow. `direction` says which way qty moves;
- * everything else is metadata carried straight onto the StockLog row. */
+/** Movement workflows funnel through this helper. Direct quantity edits in
+ * updateProduct create their own correction log; both paths sync stock and a
+ * matching StockLog together. `direction` says which way qty moves. */
 function applyStockMovement(
   data: AppData,
   params: {
@@ -1796,6 +1808,9 @@ export function createSale(
     .map(({ productId, qty, unitPrice }) => {
       const product = data.products.find((p) => p.id === productId);
       if (!product || qty <= 0 || product.stockQty < qty) return null;
+      // Grocery catalogue templates are intentionally unpriced and inactive.
+      // A direct sale action must not bypass the POS visibility rule.
+      if (product.sectorId === "grocery" && (!product.active || product.sellPrice <= 0 || (unitPrice != null && unitPrice <= 0))) return null;
       const price =
         unitPrice != null && unitPrice >= 0 ? unitPrice : product.sellPrice;
       return {

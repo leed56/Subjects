@@ -27,6 +27,7 @@ type Props = {
   qty: number;
   value?: SaleInventorySelection;
   onChange: (next: AdvancedSaleLineState) => void;
+  externalPrescriptionVerified?: boolean;
 };
 
 function identityLabel(unit: SaleInventoryOptions["units"][number]): string {
@@ -50,20 +51,21 @@ function prescriptionFlag(value: unknown): boolean {
   return false;
 }
 
-export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props) {
+export function AdvancedSaleSelector({ productId, qty, value, onChange, externalPrescriptionVerified }: Props) {
   const { locale } = useLocale();
   const { data } = useAppStore();
   const si = locale === "si";
   const [options, setOptions] = useState<SaleInventoryOptions | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [prescriptionVerified, setPrescriptionVerified] = useState(false);
+  const [localPrescriptionVerified, setLocalPrescriptionVerified] = useState(false);
+  const prescriptionVerified = Boolean(externalPrescriptionVerified || localPrescriptionVerified);
   const selection = value ?? {};
   const product = data?.products.find((row) => row.id === productId);
   const prescriptionRequired = prescriptionFlag(product?.customFields.requiresPrescription);
 
   useEffect(() => {
-    setPrescriptionVerified(false);
+    setLocalPrescriptionVerified(false);
   }, [productId]);
 
   useEffect(() => {
@@ -178,7 +180,7 @@ export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props)
           {si ? "මෙම විකිණීම සාමාන්‍ය stock quantity මත දිගටම සිදුවේ." : "This sale will continue on the existing aggregate stock quantity."}
         </div>
         {prescriptionRequired && (
-          <PrescriptionCheck si={si} checked={prescriptionVerified} onChange={setPrescriptionVerified} />
+          <PrescriptionCheck si={si} checked={prescriptionVerified} onChange={setLocalPrescriptionVerified} />
         )}
       </div>
     );
@@ -194,7 +196,7 @@ export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props)
 
   if (mode === "simple") {
     return prescriptionRequired ? (
-      <PrescriptionCheck si={si} checked={prescriptionVerified} onChange={setPrescriptionVerified} />
+      <PrescriptionCheck si={si} checked={prescriptionVerified} onChange={setLocalPrescriptionVerified} />
     ) : null;
   }
 
@@ -232,7 +234,7 @@ export function AdvancedSaleSelector({ productId, qty, value, onChange }: Props)
       </div>
 
       {prescriptionRequired && (
-        <PrescriptionCheck si={si} checked={prescriptionVerified} onChange={setPrescriptionVerified} compact />
+        <PrescriptionCheck si={si} checked={prescriptionVerified} onChange={setLocalPrescriptionVerified} compact />
       )}
 
       {needsVariant && (
