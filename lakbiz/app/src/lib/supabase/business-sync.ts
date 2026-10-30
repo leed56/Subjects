@@ -56,6 +56,11 @@ export async function fetchOrgSyncGeneration(organizationId: string): Promise<nu
     console.warn("[sync] get_org_sync_generation:", error.message);
     return -1;
   }
+  // The SQL function returns NULL when the caller is not an organization
+  // member. Number(null) is 0, which would incorrectly authorize a snapshot
+  // as generation zero; treat missing data as an authorization/read failure.
+  if (data == null) return -1;
+
   const n = Number(data);
   return Number.isSafeInteger(n) && n >= 0 ? n : -1;
 }
