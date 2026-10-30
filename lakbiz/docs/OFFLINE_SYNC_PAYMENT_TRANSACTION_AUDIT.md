@@ -65,3 +65,35 @@ For future edit/delete support, prefer immutable ledger semantics: post a linked
 ## Release decision
 
 The existing snapshot paths are protective against stale-balance overwrites but are not a complete financial posting implementation. Do not mark customer/supplier/contractor payment cloud balance synchronization complete, and do not release payment edit/delete controls, until the atomic transaction design is implemented and authenticated staging tests pass.
+
+
+## Live database permission audit (read-only inspection, 2026-10-30)
+
+The linked LakBiz Supabase project was inspected using read-only schema, migration-history, function-definition, and `pg_policies` queries. No rows were changed.
+
+The live database currently enforces different payment permissions by ledger:
+
+| Ledger | Insert/update/delete roles | Module check | Read visibility |
+|---|---|---|---|
+| Customer payments | owner, manager, data_entry, cashier | customers | org member in those roles |
+| Supplier payments | owner only | suppliers | owner/manager financial visibility |
+| Contractor payments | owner only | ac_jobs | `can_see_org_financials` |
+
+Additional verified facts:
+
+- Supplier master records are owner-write and financial-read restricted; this matches the existing supplier payment write policy.
+- Contractor payout writes are owner-only. Contractor master writes allow owner/manager, but the contractor financial columns are masked for users who fail `can_see_org_financials`.
+- The live `can_see_org_financials(uuid)` function currently returns true only for an organization member whose role is `owner`. This is stricter than the earlier migration comment describing owner/manager visibility; the live function and live policies are the operative behavior.
+- `contractor_payments` has no direct foreign key from `contractor_id` to `contractors_base`; the posting transaction must explicitly verify the contractor belongs to the supplied organization.
+- The current customer payment table stores a text payment ID, organization/customer IDs, customer name, numeric amount, timestamp, method and note. Supplier payments have the analogous supplier fields. Contractor payments use a date payment_date and also have updated_at.
+- Existing payment table policies allow UPDATE and DELETE for the roles above, but the application audit did not find dedicated edit/delete workflows. Database capability must not be mistaken for a supported product workflow.
+
+### Consequence for transaction implementation
+
+Do not apply one shared permission list to all three posting functions. Preserve the live per-ledger role/module matrix exactly unless a separately reviewed product permission change is requested. In particular, do not widen supplier or contractor payout writes to managers merely because they can edit contractor master records. Any function that writes a financial balance must independently enforce the same effective financial authorization and organization scoping as the relevant table policies.
+
+The contractor transaction must also resolve a design issue before implementation: contractor payable is derived from completed contractor-job subcontract costs minus payouts, while the current contractor payment table has no contractor foreign key and the current contractor base balance is masked for non-financial users. The transaction must verify the job-accrual definition and serialization rules before applying a payout delta.
+
+## Implementation gate
+
+The current inspection is sufficient to define the authorization constraints, but not sufficient to safely write a production-ready RPC. Before adding SQL, inspect the full role/module helper definitions, contractor completion/status rules and all triggers affecting customer/supplier/contractor balances. Then add database-level tests for each allowed and denied role, duplicate operation IDs, cross-organization IDs, rollback, and concurrent posting. Keep the implementation in the repository only until authenticated staging validation is available.
