@@ -188,3 +188,35 @@ The current supplier screen still calls `recordSupplierPaymentToCloud`. That pro
 7. Add authenticated staging tests for the helper's financial + supplier + stock authorization, bank module authorization, cross-organization IDs, LKR/non-LKR rules, overpayment, duplicate replay, altered replay payload, insufficient bank balance, and full rollback.
 
 No settlement function was invoked for posting, no database object or row was changed, and no production write was made during this audit.
+
+
+## 2026-10-30 — purchase invoice settlement integration boundary
+
+A fresh read-only schema inspection of the linked `nexus-erp` project and the current app source found a material model boundary that must be resolved before wiring the supplier payment modal to the settlement RPCs.
+
+### Existing app workflow
+
+- `lakbiz/app/src/app/suppliers/page.tsx` opens a supplier-wide payment modal with only amount and payment method.
+- Its handler calls `recordSupplierPaymentToCloud(supplierId, amount, method)`.
+- `AppData` models the current GRN as `Purchase`; its cloud header is `public.purchases` and its lines are `public.purchase_lines`.
+- The current purchase-order workflow is separately represented by `PurchaseOrder` / `public.purchase_orders` and `public.purchase_order_lines`.
+
+### Live invoice-authority model
+
+The live database contains a separate invoice/receipt workflow:
+
+- `purchase_receipt_invoices` (UUID invoice ID, purchase-order ID, supplier ID, supplier invoice number/date, currency, minor-unit totals, exchange recognition rate).
+- `purchase_invoice_receipts` links an invoice to one or more `purchase_order_receipts`.
+- `purchase_receipt_invoice_lines` stores receipt-line allocations and costs.
+- `purchase_invoice_cash_settlements` and `purchase_invoice_bank_settlements` store immutable settlement requests.
+- `purchase_invoice_settings` controls whether invoice authority is enabled for an organization.
+
+The live invoice tables are therefore not the existing GRN `purchases` / `purchase_lines` records. Invoice records are anchored to purchase-order receipts. The app's current supplier modal has no invoice ID, receipt allocation, currency, or bank-FX payload and cannot safely call the settlement RPCs.
+
+### Safe integration decision
+
+Do not connect the existing supplier-wide modal directly to `settle_purchase_invoice_cash_atomic` or `settle_purchase_invoice_bank_atomic`. Doing so would risk settling an invoice that is not represented in the current app state, or mixing the legacy supplier-payment ledger with the invoice-authority ledger.
+
+Before implementation, the app needs a first-class read model and UI for purchase-order receipts and their linked supplier invoices, including outstanding amounts computed from authoritative settlement snapshots. The settlement UI should be launched from that invoice detail, not from the generic supplier balance. It must submit a stable UUID and exact canonical payload to the existing atomic RPC, then refresh the authoritative invoice/supplier/bank state. It must not also create a legacy `supplier_payments` row.
+
+For now this is an audit-only finding: no schema, data, or production rows were changed. No settlement was submitted.
