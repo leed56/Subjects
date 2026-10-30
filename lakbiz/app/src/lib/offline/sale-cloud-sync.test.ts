@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   captureSaleCloudSyncError,
   selectNewSaleStockLogs,
+  omitCustomerCreditBalance,
 } from "./sale-cloud-sync";
 
 describe("captureSaleCloudSyncError", () => {
@@ -50,5 +51,19 @@ describe("selectNewSaleStockLogs", () => {
 
   it("does not include non-sale movements even if their IDs are supplied", () => {
     expect(selectNewSaleStockLogs(logs, ["manual-log"])).toEqual([]);
+  });
+});
+
+describe("omitCustomerCreditBalance", () => {
+  it("keeps customer details but excludes the stale financial balance", () => {
+    expect(omitCustomerCreditBalance([
+      { id: "customer-1", name: "Customer", credit_balance: 1250, phone: "0770000000" },
+    ])).toEqual([
+      { id: "customer-1", name: "Customer", phone: "0770000000" },
+    ]);
+  });
+
+  it("handles an empty customer list", () => {
+    expect(omitCustomerCreditBalance([])).toEqual([]);
   });
 });
