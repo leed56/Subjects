@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { preserveExistingBankBalances, preserveExistingSupplierBalances } from "./financial-balance-sync";
+import { preserveExistingBankBalances, preserveExistingSupplierBalances, preserveExistingContractorBalances } from "./financial-balance-sync";
 
 describe("preserveExistingBankBalances", () => {
   it("keeps the cloud balance for existing accounts", () => {
@@ -56,5 +56,34 @@ describe("preserveExistingSupplierBalances", () => {
         [{ id: "supplier-1", payable_balance: "invalid" }],
       ),
     ).toEqual([{ id: "supplier-1", payableBalance: 40 }]);
+  });
+});
+
+describe("preserveExistingContractorBalances", () => {
+  it("keeps the cloud payable balance for existing contractors", () => {
+    expect(
+      preserveExistingContractorBalances(
+        [{ id: "contractor-1", payableBalance: 25 }],
+        [{ id: "contractor-1", payable_balance: "180.25" }],
+      ),
+    ).toEqual([{ id: "contractor-1", payableBalance: 180.25 }]);
+  });
+
+  it("keeps the local opening balance for new contractors", () => {
+    expect(
+      preserveExistingContractorBalances(
+        [{ id: "contractor-new", payableBalance: 500 }],
+        [{ id: "contractor-old", payable_balance: "80" }],
+      ),
+    ).toEqual([{ id: "contractor-new", payableBalance: 500 }]);
+  });
+
+  it("handles the masked zero value returned to members without financial visibility", () => {
+    expect(
+      preserveExistingContractorBalances(
+        [{ id: "contractor-1", payableBalance: 25 }],
+        [{ id: "contractor-1", payable_balance: 0 }],
+      ),
+    ).toEqual([{ id: "contractor-1", payableBalance: 0 }]);
   });
 });
