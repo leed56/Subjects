@@ -34,5 +34,9 @@ export async function captureSaleCloudSyncError(
 export function omitCustomerCreditBalance<
   T extends { credit_balance?: unknown },
 >(rows: T[]): Array<Omit<T, "credit_balance">> {
-  return rows.map(({ credit_balance: _creditBalance, ...row }) => row);
+  return rows.map((row) => {
+    const { credit_balance: _creditBalance, ...safeRow } = row;
+    void _creditBalance;
+    return safeRow;
+  });
 }
