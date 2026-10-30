@@ -159,3 +159,32 @@ The current supplier screen still calls `recordSupplierPaymentToCloud`. That pro
 - For organizations without invoice authority, the existing legacy supplier payment path remains a separate case; its role and balance semantics still need a domain-safe atomic implementation.
 - Before wiring the invoice settlement flow, inspect the live RPC grants and the full helper definition, then implement the UI/provider integration with stable IDs and reconciliation from the returned authoritative result. Add authenticated tests for allowed/denied roles, replay, outstanding limits, insufficient bank funds, cross-organization IDs and rollback.
 - No RPC was called for posting, no database object or row was changed, and no production write was made during this audit.
+
+
+## Settlement RPC security and app-path verification (live database and source audit, read-only)
+
+### Function execution boundary
+
+- Both settlement writers and both settlement read helpers are `SECURITY DEFINER`, owned by `postgres`, and set an empty search path. Their fully qualified object references are therefore important and were checked in the live definitions.
+- All four functions have explicit EXECUTE grants to `authenticated` and `service_role`; no EXECUTE grant to `anon` or `PUBLIC` was found in the effective ACL.
+- Both settlement writers call `inventory_internal.require_purchase_authority`. That helper explicitly rejects a null `auth.uid()`, requires `can_see_org_financials(organization)`, and requires write access to both `suppliers` and `stock`. It also requires atomic purchase-receipt settings to be enabled.
+- The bank settlement additionally requires `org_member_can_write_module(organization,'banking')`.
+- The cash settlement function itself does not repeat the banking check, which is appropriate for cash. Both writers separately require the purchase-invoice settings to be enabled.
+
+### Application path confirmed
+
+- `lakbiz/app/src/app/suppliers/page.tsx` invokes `recordSupplierPaymentToCloud` for the supplier payment action.
+- `lakbiz/app/src/lib/store/app-store-provider.tsx` creates the local supplier payment, persists it, then calls `syncSupplierPaymentSnapshot`. The inspected flow does not invoke either invoice settlement RPC.
+- No invoice-specific settlement action was found in the supplier page or the provider file inspected. Do not simply replace the current supplier payment RPC call with an invoice settlement call: the existing UI payment is supplier-wide and does not carry a purchase invoice ID or stable settlement request shape.
+
+### Integration requirements clarified
+
+1. Keep legacy supplier payments unavailable for invoice-authority organizations; require the user to select an outstanding receipt invoice.
+2. Use cash settlement only for LKR invoices. For bank settlement, require banking module write access and provide account ID, foreign amount, exchange rate, fee and date.
+3. Generate and persist a stable settlement UUID before the first network request. Reuse it on retries, and reject accidental reuse with changed request fields.
+4. Reconcile the local supplier payable and invoice settlement state from the returned authoritative RPC result/read snapshot. Do not also write a legacy `supplier_payments` row or independently subtract the balance locally and later replay a conflicting snapshot.
+5. The RPCs use invoice-specific settlement ledgers and check outstanding totals while holding the invoice row lock. The bank flow also locks the bank account and writes a corresponding bank transaction.
+6. Build a separate offline-pending settlement queue only if its replay preserves the same stable ID and canonical request. Until then, do not claim invoice-authority supplier settlements are safely supported offline.
+7. Add authenticated staging tests for the helper's financial + supplier + stock authorization, bank module authorization, cross-organization IDs, LKR/non-LKR rules, overpayment, duplicate replay, altered replay payload, insufficient bank balance, and full rollback.
+
+No settlement function was invoked for posting, no database object or row was changed, and no production write was made during this audit.
