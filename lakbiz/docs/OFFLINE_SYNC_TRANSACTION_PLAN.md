@@ -390,3 +390,37 @@ Automated database tests must cover: auth missing; membership missing; subscript
 
 No migration or RPC was created or applied in this step. The repo currently exposes no verified local Supabase test harness from the inspected paths, and the linked live database is not a safe test target. The next implementation step is to establish an isolated local/staging test database and test harness, then implement and verify the migration there.
 
+## 16. Live sale-credit transaction discovery — supersedes assumptions in Section 15
+
+A read-only inspection of the linked `nexus-erp` database on 2026-10-30 found an existing, production-installed transaction that already handles customer receivable increases for POS sales. This materially changes the payment-RPC design.
+
+### Existing sale transaction
+
+- The live database has `public.finalize_sale_with_tenders(uuid,text,text,text,numeric,jsonb,jsonb)`.
+- It acquires `SELECT ... FROM public.organizations ... FOR UPDATE` before processing the sale.
+- When a customer is supplied, it locks that customer row with `FOR UPDATE` and checks the organization ID.
+- It validates the credit tender against the customer's current balance and credit limit.
+- It inserts the sale, lines and tenders, applies `customers.credit_balance = credit_balance + v_credit_amount`, and increments `organizations.sync_generation` before returning.
+- The function is a single Postgres transaction; failures roll back the sale and related effects together.
+- The live wrapper `finalize_sale_with_private_tenders` routes new sales into this finalizer and includes the same organization-scoped permissions and tender processing.
+
+This confirms the sale side already follows the organization-then-customer lock order required for a safe customer payment. The payment transaction must follow that exact order; it must not introduce a different lock order.
+
+### Revised customer-payment implementation direction
+
+Section 15's proposed RPC signature is only a preliminary design and must not be implemented verbatim. Before writing the migration:
+
+1. Match the live sale finalizer's permission checks and lock order: organization row first, then customer row.
+2. Verify the client currently deployed on this PR branch calls the correct live finalizer version, and verify the exact RPC contract and response shape.
+3. Add a customer-payment transaction that is idempotent on the client-generated payment ID, validates the immutable payload, locks organization then customer, inserts the payment, applies the existing zero-floor receivable reduction, and increments generation once.
+4. Make the payment replay path return without repeating the balance reduction.
+5. Confirm that all other live functions that mutate `customers.credit_balance` use compatible locking and are included in the transaction audit. The read-only search also found return-settlement and textile cheque-exception paths that update this field; they need review before declaring customer receivables fully serialized.
+6. Keep full-snapshot sync from overwriting `credit_balance`, and migrate the two-request payment client helper only after the RPC and tests are in place.
+
+### Scope and safety
+
+- Read-only database catalog/function inspection only; no business rows were read.
+- No SQL migration, RPC, or production data was changed.
+- The live database already contains many migrations beyond the earlier source snapshot, including POS tender/atomic-sale and general-ledger migrations. The repository migration history and deployed client must be reconciled before generating a new migration; do not assume the old schema-only audit describes the whole live system.
+- Supabase's current recommended local database testing path is the CLI with pgTAP: start the local stack, then run `supabase test db`. The official documentation states tests run in individual transactions and roll back. Source: https://supabase.com/docs/guides/local-development/testing/overview and https://supabase.com/docs/reference/cli/supabase-test-db.
+
