@@ -97,3 +97,33 @@ The contractor transaction must also resolve a design issue before implementatio
 ## Implementation gate
 
 The current inspection is sufficient to define the authorization constraints, but not sufficient to safely write a production-ready RPC. Before adding SQL, inspect the full role/module helper definitions, contractor completion/status rules and all triggers affecting customer/supplier/contractor balances. Then add database-level tests for each allowed and denied role, duplicate operation IDs, cross-organization IDs, rollback, and concurrent posting. Keep the implementation in the repository only until authenticated staging validation is available.
+
+
+## Balance trigger and invoice-authority audit (live database, read-only)
+
+The live trigger definitions were inspected for customer, supplier, contractor, payment-ledger, and AC-job tables. No database rows or schema objects were changed.
+
+### Customer balances
+
+- The only trigger found on `customers` is the generic `updated_at` timestamp trigger.
+- No customer-payment trigger applies a payment amount to `customers.credit_balance`.
+- Therefore the customer payment posting transaction must explicitly lock the customer row, insert the payment, and apply the signed balance delta itself in the same transaction. It must be coordinated with the sale/credit workflow so concurrent credit sales and receipts cannot overwrite one another.
+
+### Supplier balances — important separate authority
+
+- The `suppliers` table has an invoice-authority guard. When `purchase_invoice_settings.enabled` is true, authenticated/anonymous direct changes to `payable_balance` are rejected with the message that supplier payable changes require the atomic invoice/settlement workflow.
+- Legacy `supplier_payments` inserts/updates/deletes are also blocked for those organizations while invoice authority is enabled.
+- A verified internal function, `inventory_internal.record_purchase_receipt_invoice_atomic`, locks the purchase order, deliveries, relevant products and supplier, then increases supplier payable as part of receipt-invoice posting.
+- This means a generic supplier-payment RPC that directly updates `suppliers.payable_balance` would conflict with the enabled invoice-authority design. Supplier payment posting must first branch on invoice-authority mode and use/extend the dedicated invoice settlement workflow with its existing bank, invoice and idempotency invariants. Do not bypass its guards or write the supplier balance directly.
+
+### Contractor payable accruals
+
+- `ac_jobs_base` has no trigger that automatically accrues contractor payable when a job becomes completed.
+- The job view trigger preserves subcontract cost for callers without financial visibility; a separate base-table trigger also protects subcontract cost and contractor payable balance from non-financial updates.
+- Contractor payments have only an `updated_at` trigger; there is no trigger applying a payout to contractor payable.
+- The database schema stores `assignee_type`, `assignee_id`, `subcontract_cost`, and `status` on AC jobs, while contractor payments store contractor ID and amount. The contractor payment table has no contractor foreign key.
+- Thus contractor payable is not presently a database-maintained ledger total. A safe posting design needs a single serialized rule for completed-job accrual and payout, including how job completion/status changes and subcontract-cost edits are coordinated. A payment-only delta RPC would not solve this race.
+
+### Updated implementation decision
+
+Do not implement three superficially similar payment RPCs yet. Customer payment posting can be designed around a locked customer balance, but supplier payment posting must respect invoice-authority mode and contractor posting needs a defined authoritative accrual ledger/locking boundary. These are separate domain transactions, not one generic balance-update function. The current application should continue to treat the affected cloud payment balances as not fully reconciled until those domain-specific transaction paths and authenticated staging tests exist.
