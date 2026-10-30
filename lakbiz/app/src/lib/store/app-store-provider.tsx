@@ -73,6 +73,7 @@ import {
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { isBrowserOnline, useOnlineStatus } from "@/lib/offline/connectivity";
 import { captureSaleCloudSyncError } from "@/lib/offline/sale-cloud-sync";
+import { captureCloudPushResult } from "@/lib/offline/cloud-push-result";
 import {
   bumpOfflinePendingChange,
   clearOfflinePendingSync,
@@ -583,7 +584,7 @@ function useAppStoreState(): AppStoreValue {
       if (!payload || !org.id || !isBrowserOnline()) return;
 
       setCloudSyncing(true);
-      void executeCloudPush(payload, org.id).then(({ err, conflict }) => {
+      void captureCloudPushResult(() => executeCloudPush(payload, org.id!)).then(({ err, conflict }) => {
         if (conflict) return;
         setCloudSyncing(false);
         setCloudSyncError(err);
@@ -611,7 +612,7 @@ function useAppStoreState(): AppStoreValue {
         retryTimerRef.current = null;
       }
 
-      void executeCloudPush(payload, org.id).then(({ err, conflict }) => {
+      void captureCloudPushResult(() => executeCloudPush(payload, org.id!)).then(({ err, conflict }) => {
         if (conflict) return;
         setCloudSyncing(false);
         setCloudSyncError(err);
