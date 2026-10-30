@@ -480,3 +480,38 @@ A further comparison of the linked Supabase migration history with `lakbiz/supab
 
 **Current decision:** no speculative replacement functions or migration were added. The branch does not contain the deployed schema foundation needed to make a complete, safe financial fix. No live database changes were made. This is a stop-ship compatibility blocker, not a claim that the financial paths have been fixed.
 
+
+
+## 19. Live routine privilege and call-chain verification
+
+A further read-only catalog pass retrieved exact routine signatures, security attributes, configuration, ACLs, and definition lengths for the remaining financial writers and textile sale chain.
+
+### Routine security and execute grants
+
+All nine inspected routines are SECURITY DEFINER with search_path=public:
+
+| Routine | Authenticated EXECUTE | service_role EXECUTE | PUBLIC/anon grant visible |
+|---|---:|---:|---:|
+| apply_sale_return_exchange(uuid,uuid,uuid,text) | Yes | Yes | No |
+| settle_sale_return_credit(uuid,uuid,uuid,text,numeric,text,text,text) | Yes | Yes | No |
+| transition_textile_cheque(uuid,text,text) | Yes | Yes | No |
+| finalize_sale_with_tenders(uuid,text,text,text,numeric,jsonb,jsonb) | No | Yes | No |
+| finalize_sale_with_private_tenders_v3(uuid,text,text,text,numeric,jsonb,jsonb) | Yes | Yes | No |
+| finalize_textile_sale(uuid,text,text,text,numeric,jsonb,jsonb) | Yes | Yes | No |
+| finalize_textile_sale_v2(uuid,text,text,text,numeric,jsonb,jsonb) | Yes | Yes | No |
+| finalize_textile_sale_v3(uuid,text,text,text,numeric,jsonb,jsonb) | Yes | Yes | No |
+| finalize_textile_sale_v4(uuid,text,text,text,numeric,jsonb,jsonb) | Yes | Yes | No |
+
+The catalog ACLs explicitly listed postgres, authenticated where shown, and service_role; no PUBLIC grant appeared. The base finalize_sale_with_tenders is not directly executable by authenticated clients, while the private-tender facade is. This is an important boundary to preserve when recovering or rebuilding migrations.
+
+### Why the textile wrapper needs special care
+
+The live definitions have materially different sizes and responsibilities: finalize_textile_sale is 8,330 characters, v2 2,568, v3 876, and v4 2,366. They are not interchangeable aliases. The v4 wrapper performs customer/credit/cheque pre-validation and then delegates through earlier textile layers into the private POS tender facade and underlying POS finalizer. A replacement must preserve each layer's reservation, roll inventory, pricing, tender normalization, replay and permission behavior.
+
+### Source recovery status
+
+A follow-up repository search checked the default branch's complete tracked tree for sale-return, textile atomic-sale, general-ledger and cheque migration paths, and checked the dedicated live-schema-drift branch's migration directory. No authoritative copies of the deployed 2026 financial migration files were found there. The PR branch's migration history alone is therefore not sufficient to reconstruct their original source or intended deployment ordering.
+
+### Decision
+
+This remains a read-only audit. No production SQL, grants, functions, data, or migration history were changed. Do not create replacement migrations by guessing from current function bodies: the complete historical migration ordering and dependencies remain unknown. The next safe recovery source must be the original deployment repository/artifact or a verified database backup/source-control export that contains the exact applied migration SQL. Once recovered, validate it in a disposable local database before editing any financial routine.
