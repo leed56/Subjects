@@ -1114,16 +1114,23 @@ async function productsWithPreservedBuyPrices(
   organizationId: string,
   products: AppData["products"],
   preserveBuyPrices?: boolean,
-): Promise<AppData["products"]> {
+): Promise<AppData["products"] | null> {
   if (!preserveBuyPrices) return products;
   const supabase = createBrowserClient();
-  if (!supabase) return products;
-  const { data: rows } = await supabase
+  if (!supabase) return null;
+  const { data: rows, error } = await supabase
     .from("products")
     .select("id, buy_price")
     .eq("organization_id", organizationId);
+  // A financial-restricted client must never fall back to stale local buy
+  // prices when the authoritative read fails; that would overwrite values
+  // the client is not allowed to see.
+  if (error || !rows) {
+    console.warn("[sync] Could not verify product buy prices:", error?.message);
+    return null;
+  }
   const buyMap = new Map(
-    (rows ?? []).map((row) => [row.id as string, num(row.buy_price)]),
+    rows.map((row) => [row.id as string, num(row.buy_price)]),
   );
   return products.map((p) => ({
     ...p,
@@ -1264,6 +1271,7 @@ export async function syncProductSnapshot(
     data.products,
     options?.preserveBuyPrices,
   );
+  if (!products) return "Could not verify product costs. Cloud sync was paused to protect financial data.";
   const rows = productRowsFromList(
     organizationId,
     products.filter((p) => productIds.includes(p.id)),
@@ -1290,6 +1298,7 @@ export async function syncProductsSnapshot(
     data.products,
     options?.preserveBuyPrices,
   );
+  if (!products) return "Could not verify product costs. Cloud sync was paused to protect financial data.";
   const err = await upsertMaskedViewRows(
     "products",
     organizationId,
@@ -1339,6 +1348,7 @@ export async function syncSaleSnapshot(
     data.products,
     options?.preserveBuyPrices,
   );
+  if (!products) return "Could not verify product costs. Cloud sync was paused to protect financial data.";
   const prodErr = await upsertMaskedViewRows(
     "products",
     organizationId,
