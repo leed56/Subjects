@@ -195,6 +195,7 @@ export default function SalesPage() {
 
     setSaving(true);
     setMessage("");
+    try {
     const result = await createSaleToCloud(
       lines.map((l) => ({
         productId: l.product.id,
@@ -216,7 +217,6 @@ export default function SalesPage() {
         postDated: payment === "cheque" ? postDated : undefined,
       },
     );
-    setSaving(false);
 
     if (!result.ok || !result.saleId) {
       setMessage(result.error ?? t("sales.failed"));
@@ -242,6 +242,11 @@ export default function SalesPage() {
                 : t("sales.saved"),
     );
     setTimeout(() => setMessage(""), 6000);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : t("sales.failed"));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const inStock = data.products.filter((p) => p.stockQty > 0 && p.active);
