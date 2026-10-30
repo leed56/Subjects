@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { preserveExistingBankBalances, preserveExistingSupplierBalances, preserveExistingContractorBalances } from "./financial-balance-sync";
+import { preserveExistingBankBalances, preserveExistingSupplierBalances, preserveExistingContractorBalances, omitCustomerCreditBalance } from "./financial-balance-sync";
 
 describe("preserveExistingBankBalances", () => {
   it("keeps the cloud balance for existing accounts", () => {
