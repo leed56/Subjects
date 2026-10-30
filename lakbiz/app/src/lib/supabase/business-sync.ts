@@ -2365,19 +2365,34 @@ export async function pushBusinessData(
   let products = data.products;
   if (options?.preserveBuyPrices) {
     const supabase = createBrowserClient();
-    if (supabase) {
-      const { data: rows } = await supabase
-        .from("products")
-        .select("id, buy_price")
-        .eq("organization_id", organizationId);
-      const buyMap = new Map(
-        (rows ?? []).map((row) => [row.id as string, num(row.buy_price)]),
-      );
-      products = data.products.map((p) => ({
-        ...p,
-        buyPrice: buyMap.has(p.id) ? buyMap.get(p.id)! : p.buyPrice,
-      }));
+    if (!supabase) {
+      return {
+        error: "Could not verify protected product costs. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
     }
+
+    const { data: rows, error } = await supabase
+      .from("products")
+      .select("id, buy_price")
+      .eq("organization_id", organizationId);
+    if (error || !rows) {
+      console.warn("[LakBiz] Full sync paused: protected product costs could not be verified.", error);
+      return {
+        error: "Could not verify protected product costs. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+
+    const buyMap = new Map(
+      rows.map((row) => [row.id as string, num(row.buy_price)]),
+    );
+    products = data.products.map((p) => ({
+      ...p,
+      buyPrice: buyMap.has(p.id) ? buyMap.get(p.id)! : p.buyPrice,
+    }));
   }
 
   const productRows = products.map((p) => ({
