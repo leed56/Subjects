@@ -44,6 +44,46 @@ describe("createSale duplicate product lines", () => {
     ).toBe(6);
   });
 
+
+  it("rejects the entire sale if any requested line is invalid", () => {
+    const data = {
+      ...emptyAppData(),
+      products: [makeProduct(10)],
+    };
+
+    const next = createSale(
+      data,
+      [
+        { productId: "product-1", qty: 2 },
+        { productId: "missing-product", qty: 1 },
+      ],
+      "cash",
+    );
+
+    expect(next).toBe(data);
+    expect(next.sales).toHaveLength(0);
+    expect(next.products[0].stockQty).toBe(10);
+    expect(next.stockLogs).toHaveLength(0);
+  });
+
+  it("rejects non-finite quantities and prices without partial writes", () => {
+    const data = {
+      ...emptyAppData(),
+      products: [makeProduct(10)],
+    };
+
+    const next = createSale(
+      data,
+      [{ productId: "product-1", qty: 1, unitPrice: Number.POSITIVE_INFINITY }],
+      "cash",
+    );
+
+    expect(next).toBe(data);
+    expect(next.sales).toHaveLength(0);
+    expect(next.products[0].stockQty).toBe(10);
+    expect(next.stockLogs).toHaveLength(0);
+  });
+
   it("rejects the whole sale when duplicate lines exceed available stock", () => {
     const data = {
       ...emptyAppData(),
