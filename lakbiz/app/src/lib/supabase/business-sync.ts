@@ -36,6 +36,7 @@ import { preserveExistingBankBalances, preserveExistingSupplierBalances, preserv
 import {
   selectNewSaleStockLogs,
 } from "@/lib/offline/sale-cloud-sync";
+import { isValidSyncGeneration, isSameSyncGeneration } from "./sync-generation";
 
 export type CloudPushResult = {
   error: string | null;
@@ -3078,7 +3079,7 @@ export async function syncBusinessData(
   localGeneration: number,
 ): Promise<SyncBusinessResult> {
   const cloudGen = await fetchOrgSyncGeneration(organizationId);
-  if (!Number.isSafeInteger(cloudGen) || cloudGen < 0) {
+  if (!isValidSyncGeneration(cloudGen)) {
     return {
       data: local,
       error: "Cloud sync version could not be verified. Sync was paused to protect your records.",
@@ -3255,6 +3256,16 @@ export async function pullRemoteIfNewer(
     fetchOrgSyncGeneration(organizationId),
   ]);
 
+  if (!isValidSyncGeneration(cloudGen)) {
+    return {
+      data: local,
+      cloudTs,
+      cloudGen: -1,
+      refreshed: false,
+      error: "Cloud sync version could not be verified. Refresh was paused to protect your records.",
+    };
+  }
+
   const generationAhead = cloudGen > lastKnownGeneration;
   const timestampAhead = cloudTs > lastKnownCloudTs;
 
@@ -3275,6 +3286,17 @@ export async function pullRemoteIfNewer(
       cloudGen,
       refreshed: false,
       error: "Could not load cloud data",
+    };
+  }
+
+  const confirmedCloudGen = await fetchOrgSyncGeneration(organizationId);
+  if (!isSameSyncGeneration(cloudGen, confirmedCloudGen)) {
+    return {
+      data: local,
+      cloudTs,
+      cloudGen: confirmedCloudGen,
+      refreshed: false,
+      error: "Cloud data changed while it was loading. Refresh was paused to protect your records.",
     };
   }
 
