@@ -32,6 +32,7 @@ import {
 } from "@/lib/offline/sync-conflict";
 import { localDataWatermark } from "./sync-watermark";
 import { fetchAllPages } from "./pagination";
+import { preserveExistingBankBalances } from "./financial-balance-sync";
 import {
   selectNewSaleStockLogs,
   omitCustomerCreditBalance,
@@ -2433,7 +2434,32 @@ export async function pushBusinessData(
     payable_balance: s.payableBalance,
   }));
 
-  const bankRows = data.bankAccounts.map((b) => ({
+  let bankAccounts = data.bankAccounts;
+  if (bankAccounts.length > 0) {
+    const supabase = createBrowserClient();
+    if (!supabase) {
+      return {
+        error: "Could not verify bank balances. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+    const { data: existingBankRows, error: bankReadError } = await supabase
+      .from("bank_accounts")
+      .select("id, balance")
+      .eq("organization_id", organizationId);
+    if (bankReadError || !existingBankRows) {
+      console.warn("[LakBiz] Full sync paused: bank balances could not be verified.", bankReadError);
+      return {
+        error: "Could not verify bank balances. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+    bankAccounts = preserveExistingBankBalances(bankAccounts, existingBankRows);
+  }
+
+  const bankRows = bankAccounts.map((b) => ({
     id: b.id,
     organization_id: organizationId,
     bank_name: b.bankName,
