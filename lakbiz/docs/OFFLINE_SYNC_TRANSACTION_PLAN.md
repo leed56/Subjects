@@ -543,3 +543,48 @@ The live `supabase_migrations.schema_migrations` table contains corresponding mi
 ### Safety decision
 
 No candidate migration has been copied to PR #89 or applied to any database. No production SQL or data was changed. This branch is now the primary recovery lead, not yet a verified deployment source. Continue with read-only comparison before creating any new migration or changing financial functions.
+
+
+## 21. Candidate migration-to-live routine comparison
+
+A read-only comparison was performed against the candidate SQL in `codex/premium-platform-enhancements` and the live `nexus-erp` catalog.
+
+### Confirmed source mapping
+
+The candidate migration names map to these live migration ledger entries (the live version is authoritative for the deployed ledger):
+
+| Candidate source file | Live migration version | Live migration name |
+| --- | --- | --- |
+| `20260822000008_sale_returns.sql` | `20260822134757` | `sale_returns` |
+| `20260822000009_sale_return_credit_notes.sql` | `20260822134905` | `sale_return_credit_notes` |
+| `20260822000010_sale_return_settlement_hardening.sql` | `20260823033032` | `sale_return_settlement_hardening` |
+| `20260822000012_safe_sale_exchange.sql` | `20260822135159` | `safe_sale_exchange` |
+| `20260822000014_sale_tender_ledger.sql` | `20260822135532` | `sale_tender_ledger` |
+| `20260822000015_private_pos_payment_routing.sql` | `20260822135635` | `private_pos_payment_routing` |
+| `20260822000016_private_tender_idempotency_facade.sql` | `20260822135647` | `private_tender_idempotency_facade` |
+| `20260824000003_textile_atomic_sales.sql` | `20260824180153` | `textile_atomic_sales` |
+| `20261011062938_general_ledger_foundation.sql` | `20261011094954` | `general_ledger_foundation` |
+
+This gives us a deterministic name-to-version map for the inspected entries. It does not prove that the current branch file is byte-for-byte the exact artifact applied to production.
+
+### Live routine comparison: return settlement
+
+The candidate `sale_return_settlement_hardening` migration defines `public.settle_sale_return_credit(uuid,uuid,uuid,text,numeric,text,text,text)`. Its core function body matches the live routine's observed logic: financial-owner check, settlement type and positive amount validation, replay lookup, return row lock, credit-note lookup, customer row lock for receivable reduction, bank-account lock for bank refunds, settlement insert, status recalculation, and generation increment for receivable/bank changes.
+
+The candidate includes an explanatory comment in the replay branch that is absent from the live `pg_get_functiondef` output. The executable statements observed are otherwise aligned in the inspected definition. Importantly, this function locks the return/customer or bank rows but does not acquire the organization coordination lock first. It therefore remains a legacy writer that must be considered in any shared organization-lock rollout.
+
+### Candidate call-chain inventory
+
+The candidate files define distinct routines, not one interchangeable wrapper:
+
+- `safe_sale_exchange.sql`: `apply_sale_return_exchange`
+- `sale_return_credit_notes.sql`: `issue_sale_return_credit_note`, `settle_sale_return_credit`
+- `sale_tender_ledger.sql`: `finalize_sale_with_tenders`
+- `private_pos_payment_routing.sql`: `configure_pos_bank_route`, `finalize_sale_with_private_tenders`
+- `private_tender_idempotency_facade.sql`: `finalize_sale_with_private_tenders_v2`
+
+The live catalog previously showed a v3 private-tender facade and multiple textile wrapper versions. This is a concrete indication that the candidate branch may not contain the final deployed revision for every routine. The exact latest wrapper migration must be identified before recovery.
+
+### Safety decision
+
+The candidate source is now partially mapped and one important live routine has been compared. Do not bulk-copy the candidate migration directory. Continue mapping every live routine and migration to the candidate branch's later follow-up migrations, including return settlement, cheque transitions, POS v3 facade, textile wrappers, and general-ledger bridge. No database writes or production changes were made.
