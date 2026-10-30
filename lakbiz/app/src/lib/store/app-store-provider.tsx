@@ -1559,6 +1559,10 @@ function useAppStoreState(): AppStoreValue {
       }
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
 
+      if (isOnline && (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured())) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
       const prevPaymentsLen = data.supplierPayments.length;
       const next = recordSupplierPayment(data, supplierId, amount, method, note);
       if (next.supplierPayments.length === prevPaymentsLen) {
@@ -1577,10 +1581,6 @@ function useAppStoreState(): AppStoreValue {
           refreshOfflinePendingState(org.id);
         }
         return { ok: true };
-      }
-
-      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
-        return { ok: false, error: "Cloud not connected" };
       }
 
       const err = await syncSupplierPaymentSnapshot(org.id, next, paymentId);
@@ -1640,6 +1640,10 @@ function useAppStoreState(): AppStoreValue {
       if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
 
+      if (isOnline && (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured())) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
       const prevPaymentsLen = data.customerPayments.length;
       const next = recordCustomerPayment(data, customerId, amount, method, note);
       if (next.customerPayments.length === prevPaymentsLen) {
@@ -1657,10 +1661,6 @@ function useAppStoreState(): AppStoreValue {
           refreshOfflinePendingState(org.id);
         }
         return { ok: true };
-      }
-
-      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
-        return { ok: false, error: "Cloud not connected" };
       }
 
       const err = await syncCustomerPaymentSnapshot(org.id, next, paymentId);
