@@ -32,7 +32,7 @@ import {
 } from "@/lib/offline/sync-conflict";
 import { localDataWatermark } from "./sync-watermark";
 import { fetchAllPages } from "./pagination";
-import { preserveExistingBankBalances, preserveExistingSupplierBalances, preserveExistingContractorBalances } from "./financial-balance-sync";
+import { preserveExistingBankBalances, preserveExistingSupplierBalances, preserveExistingContractorBalances, omitCustomerCreditBalance } from "./financial-balance-sync";
 import {
   selectNewSaleStockLogs,
 } from "@/lib/offline/sale-cloud-sync";
