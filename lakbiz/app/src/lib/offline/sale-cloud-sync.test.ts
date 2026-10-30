@@ -29,3 +29,27 @@ describe("captureSaleCloudSyncError", () => {
     ).resolves.toBe("Cloud sync failed");
   });
 });
+
+ 
+describe("selectNewSaleStockLogs", () => {
+  const logs = [
+    { id: "sale-log-1", type: "sale", note: "Bill 12345678" },
+    { id: "unrelated-sale-log", type: "sale", note: "Bill 12345678-extra" },
+    { id: "manual-log", type: "in", note: "Manual adjustment" },
+  ];
+
+  it("selects only exact IDs belonging to this sale", async () => {
+    const { selectNewSaleStockLogs } = await import("./sale-cloud-sync");
+    expect(selectNewSaleStockLogs(logs, ["sale-log-1"])).toEqual([logs[0]]);
+  });
+
+  it("does not fall back to bill text when IDs are missing", async () => {
+    const { selectNewSaleStockLogs } = await import("./sale-cloud-sync");
+    expect(selectNewSaleStockLogs(logs, [])).toEqual([]);
+  });
+
+  it("does not include non-sale movements even if their IDs are supplied", async () => {
+    const { selectNewSaleStockLogs } = await import("./sale-cloud-sync");
+    expect(selectNewSaleStockLogs(logs, ["manual-log"])).toEqual([]);
+  });
+});
