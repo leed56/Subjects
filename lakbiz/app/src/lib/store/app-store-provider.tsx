@@ -1131,10 +1131,18 @@ function useAppStoreState(): AppStoreValue {
         return { ok: false, error: "Cloud not connected" };
       }
 
-      const err = await syncSaleSnapshot(cloudOrgId, next, saleId, {
-        preserveBuyPrices: !canSeeFinancials,
-        newAcJobIds,
-      });
+      // The local sale is already persisted. Treat thrown network/client
+      // errors exactly like returned cloud errors so the POS never invites
+      // the operator to submit the same sale a second time.
+      let err: string | null;
+      try {
+        err = await syncSaleSnapshot(cloudOrgId, next, saleId, {
+          preserveBuyPrices: !canSeeFinancials,
+          newAcJobIds,
+        });
+      } catch (error) {
+        err = error instanceof Error ? error.message : "Cloud sync failed";
+      }
       if (err) {
         setCloudSyncError(err);
         touchOfflinePending(cloudOrgId);
