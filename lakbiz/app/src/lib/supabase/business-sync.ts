@@ -41,17 +41,19 @@ export type CloudPushResult = {
 
 export async function fetchOrgSyncGeneration(organizationId: string): Promise<number> {
   const supabase = createBrowserClient();
-  if (!supabase) return 0;
+  // A missing/failed generation RPC must never look like generation zero.
+  // Callers pass this sentinel through to pushBusinessData, which fails closed.
+  if (!supabase) return -1;
 
   const { data, error } = await supabase.rpc("get_org_sync_generation", {
     p_org_id: organizationId,
   });
   if (error) {
     console.warn("[sync] get_org_sync_generation:", error.message);
-    return 0;
+    return -1;
   }
   const n = Number(data);
-  return Number.isFinite(n) && n >= 0 ? n : 0;
+  return Number.isSafeInteger(n) && n >= 0 ? n : -1;
 }
 
 async function advanceOrgSyncGeneration(
@@ -66,12 +68,7 @@ async function advanceOrgSyncGeneration(
     p_seen_generation: seenGeneration,
   });
   if (error) {
-    if (
-      error.message.includes("try_advance_org_sync_generation") ||
-      error.message.includes("get_org_sync_generation")
-    ) {
-      return { ok: true, generation: seenGeneration };
-    }
+    // Never silently disable optimistic concurrency when the RPC is absent.
     console.warn("[sync] try_advance_org_sync_generation:", error.message);
     return { ok: false, generation: seenGeneration };
   }
@@ -2328,6 +2325,17 @@ export async function pushBusinessData(
 ): Promise<CloudPushResult> {
   const seenGeneration =
     options?.seenGeneration ?? (await fetchOrgSyncGeneration(organizationId));
+
+  // A full snapshot must not write if the cloud generation cannot be verified.
+  // This protects installations with a missing, denied, or broken generation RPC.
+  if (!Number.isSafeInteger(seenGeneration) || seenGeneration < 0) {
+    return {
+      error: "Cloud sync version could not be verified. Sync was paused to protect your records.",
+      stale: false,
+      generation: seenGeneration,
+    };
+  }
+
   let products = data.products;
   if (options?.preserveBuyPrices) {
     const supabase = createBrowserClient();
