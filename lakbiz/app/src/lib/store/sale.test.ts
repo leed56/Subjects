@@ -8,7 +8,7 @@ function makeProduct(stockQty: number): Product {
     id: "product-1",
     name: "Test product",
     category: "general",
-    sectorId: "retail",
+    sectorId: "grocery",
     condition: "new",
     buyPrice: 50,
     sellPrice: 100,
