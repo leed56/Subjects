@@ -392,6 +392,7 @@ function useAppStoreState(): AppStoreValue {
   const skipConflictCheckRef = useRef(false);
   const scheduleRetryPushRef = useRef<() => void>(() => {});
   const latestDataRef = useRef<AppData | null>(null);
+  const saleSubmissionInFlightRef = useRef(false);
 
   const raiseSyncConflict = useCallback(
     (local: AppData, remote: AppData, cloudTs: number) => {
@@ -1084,6 +1085,11 @@ function useAppStoreState(): AppStoreValue {
       options?: SaleOptions,
     ): Promise<{ ok: boolean; saleId?: string; error?: string }> => {
       if (!data) return { ok: false, error: "Not ready" };
+      if (saleSubmissionInFlightRef.current) {
+        return { ok: false, error: "A sale is already being submitted." };
+      }
+      saleSubmissionInFlightRef.current = true;
+      try {
       if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
       if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
@@ -1140,6 +1146,9 @@ function useAppStoreState(): AppStoreValue {
       setCloudSyncError(null);
       scheduleCloudPush(next);
       return { ok: true, saleId };
+      } finally {
+        saleSubmissionInFlightRef.current = false;
+      }
     },
     [
       data,
