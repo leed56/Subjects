@@ -1578,16 +1578,16 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline) {
         if (org.id) {
           bumpOfflinePendingChange(org.id);
-          refreshOfflinePendingState(org.id);
+          refreshOfflinePendingState(org.id!);
         }
         return { ok: true };
       }
 
-      const err = await syncSupplierPaymentSnapshot(org.id, next, paymentId);
+      const err = await syncSupplierPaymentSnapshot(org.id!, next, paymentId);
       if (err) {
         setCloudSyncError(err);
-        touchOfflinePending(org.id);
-        refreshOfflinePendingState(org.id);
+        touchOfflinePending(org.id!);
+        refreshOfflinePendingState(org.id!);
         scheduleCloudPush(next);
         return { ok: false, error: err };
       }
@@ -1658,16 +1658,16 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline) {
         if (org.id) {
           bumpOfflinePendingChange(org.id);
-          refreshOfflinePendingState(org.id);
+          refreshOfflinePendingState(org.id!);
         }
         return { ok: true };
       }
 
-      const err = await syncCustomerPaymentSnapshot(org.id, next, paymentId);
+      const err = await syncCustomerPaymentSnapshot(org.id!, next, paymentId);
       if (err) {
         setCloudSyncError(err);
-        touchOfflinePending(org.id);
-        refreshOfflinePendingState(org.id);
+        touchOfflinePending(org.id!);
+        refreshOfflinePendingState(org.id!);
         scheduleCloudPush(next);
         return { ok: false, error: err };
       }
@@ -1720,7 +1720,7 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline) {
         if (org.id) {
           bumpOfflinePendingChange(org.id);
-          refreshOfflinePendingState(org.id);
+          refreshOfflinePendingState(org.id!);
         }
         return { ok: true };
       }
@@ -1775,7 +1775,7 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline) {
         if (org.id) {
           bumpOfflinePendingChange(org.id);
-          refreshOfflinePendingState(org.id);
+          refreshOfflinePendingState(org.id!);
         }
         return { ok: true };
       }
@@ -1829,7 +1829,7 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline) {
         if (org.id) {
           bumpOfflinePendingChange(org.id);
-          refreshOfflinePendingState(org.id);
+          refreshOfflinePendingState(org.id!);
         }
         return { ok: true };
       }
@@ -1885,7 +1885,7 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline) {
         if (org.id) {
           bumpOfflinePendingChange(org.id);
-          refreshOfflinePendingState(org.id);
+          refreshOfflinePendingState(org.id!);
         }
         return { ok: true };
       }
@@ -1897,8 +1897,8 @@ function useAppStoreState(): AppStoreValue {
       const err = await syncJobItemSnapshot(org.id, next, itemId);
       if (err) {
         setCloudSyncError(err);
-        touchOfflinePending(org.id);
-        refreshOfflinePendingState(org.id);
+        touchOfflinePending(org.id!);
+        refreshOfflinePendingState(org.id!);
         scheduleCloudPush(next);
         return { ok: false, error: err };
       }
@@ -1916,8 +1916,8 @@ function useAppStoreState(): AppStoreValue {
         });
         if (stockErr) {
           setCloudSyncError(stockErr);
-          touchOfflinePending(org.id);
-          refreshOfflinePendingState(org.id);
+          touchOfflinePending(org.id!);
+          refreshOfflinePendingState(org.id!);
           scheduleCloudPush(next);
           return { ok: false, error: stockErr };
         }
@@ -1966,7 +1966,7 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline) {
         if (org.id) {
           bumpOfflinePendingChange(org.id);
-          refreshOfflinePendingState(org.id);
+          refreshOfflinePendingState(org.id!);
         }
         return { ok: true };
       }
@@ -1978,8 +1978,8 @@ function useAppStoreState(): AppStoreValue {
       const err = await deleteJobItemFromCloud(org.id, id);
       if (err) {
         setCloudSyncError(err);
-        touchOfflinePending(org.id);
-        refreshOfflinePendingState(org.id);
+        touchOfflinePending(org.id!);
+        refreshOfflinePendingState(org.id!);
         scheduleCloudPush(next);
         return { ok: false, error: err };
       }
@@ -1996,8 +1996,8 @@ function useAppStoreState(): AppStoreValue {
         });
         if (stockErr) {
           setCloudSyncError(stockErr);
-          touchOfflinePending(org.id);
-          refreshOfflinePendingState(org.id);
+          touchOfflinePending(org.id!);
+          refreshOfflinePendingState(org.id!);
           scheduleCloudPush(next);
           return { ok: false, error: stockErr };
         }
