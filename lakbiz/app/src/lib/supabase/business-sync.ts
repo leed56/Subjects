@@ -32,7 +32,7 @@ import {
 } from "@/lib/offline/sync-conflict";
 import { localDataWatermark } from "./sync-watermark";
 import { fetchAllPages } from "./pagination";
-import { preserveExistingBankBalances } from "./financial-balance-sync";
+import { preserveExistingBankBalances, preserveExistingSupplierBalances } from "./financial-balance-sync";
 import {
   selectNewSaleStockLogs,
   omitCustomerCreditBalance,
@@ -2423,7 +2423,32 @@ export async function pushBusinessData(
 
   const customerRows = customerRowsForOrg(organizationId, data.customers);
 
-  const supplierRows = data.suppliers.map((s) => ({
+  let suppliers = data.suppliers;
+  if (suppliers.length > 0) {
+    const supabase = createBrowserClient();
+    if (!supabase) {
+      return {
+        error: "Could not verify supplier balances. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+    const { data: existingSupplierRows, error: supplierReadError } = await supabase
+      .from("suppliers")
+      .select("id, payable_balance")
+      .eq("organization_id", organizationId);
+    if (supplierReadError || !existingSupplierRows) {
+      console.warn("[LakBiz] Full sync paused: supplier balances could not be verified.", supplierReadError);
+      return {
+        error: "Could not verify supplier balances. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+    suppliers = preserveExistingSupplierBalances(suppliers, existingSupplierRows);
+  }
+
+  const supplierRows = suppliers.map((s) => ({
     id: s.id,
     organization_id: organizationId,
     name: s.name,
