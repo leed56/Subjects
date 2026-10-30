@@ -1706,10 +1706,39 @@ export function createSale(
   paymentMethod: Sale["paymentMethod"],
   options: SaleOptions = {},
 ): AppData {
+  // Validate aggregate demand per product before accepting any lines.
+  // Checking each line independently permits duplicate lines to oversell stock.
+  if (lines.length === 0) return data;
+
+  const requestedQtyByProduct = new Map<string, number>();
+  for (const { productId, qty, unitPrice } of lines) {
+    const product = data.products.find((p) => p.id === productId);
+    if (
+      !product ||
+      !Number.isFinite(qty) ||
+      qty <= 0 ||
+      !Number.isFinite(product.stockQty) ||
+      (unitPrice != null && !Number.isFinite(unitPrice))
+    ) {
+      return data;
+    }
+    const requestedQty = (requestedQtyByProduct.get(productId) ?? 0) + qty;
+    if (!Number.isFinite(requestedQty)) return data;
+    requestedQtyByProduct.set(productId, requestedQty);
+  }
+  if (
+    [...requestedQtyByProduct].some(([productId, qty]) => {
+      const product = data.products.find((p) => p.id === productId);
+      return !product || product.stockQty < qty;
+    })
+  ) {
+    return data;
+  }
+
   const saleLines = lines
     .map(({ productId, qty, unitPrice }) => {
       const product = data.products.find((p) => p.id === productId);
-      if (!product || qty <= 0 || product.stockQty < qty) return null;
+      if (!product || !Number.isFinite(qty) || qty <= 0) return null;
       const price =
         unitPrice != null && unitPrice >= 0 ? unitPrice : product.sellPrice;
       return {
@@ -1723,6 +1752,10 @@ export function createSale(
     .filter(Boolean) as Sale["lines"];
 
   if (saleLines.length === 0) return data;
+
+  if (options.discount != null && !Number.isFinite(options.discount)) {
+    return data;
+  }
 
   let working = data;
   let resolvedCustomerId = options.customerId;
@@ -1757,6 +1790,7 @@ export function createSale(
   }
 
   const grossInclusive = saleLines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
+  if (!Number.isFinite(grossInclusive)) return data;
   const discount = Math.min(
     Math.max(0, Math.round((options.discount ?? 0) * 100) / 100),
     grossInclusive,
@@ -1769,6 +1803,13 @@ export function createSale(
   const profit =
     saleLines.reduce((s, l) => s + (l.unitPrice - l.buyPrice) * l.qty, 0) -
     discount;
+  if (
+    !Number.isFinite(discount) ||
+    !Number.isFinite(total) ||
+    !Number.isFinite(profit)
+  ) {
+    return data;
+  }
 
   const customer = resolvedCustomerId
     ? working.customers.find((c) => c.id === resolvedCustomerId)
@@ -1829,9 +1870,13 @@ export function createSale(
     chequeId,
   };
 
-  const qtyByProduct = new Map(
-    saleLines.map((l) => [l.productId, l.qty] as const),
-  );
+  const qtyByProduct = new Map<string, number>();
+  for (const line of saleLines) {
+    qtyByProduct.set(
+      line.productId,
+      (qtyByProduct.get(line.productId) ?? 0) + line.qty,
+    );
+  }
 
   const stockLogs: StockLog[] = saleLines.map((line) => ({
     id: newId(),

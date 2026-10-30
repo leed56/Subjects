@@ -72,6 +72,8 @@ import {
 } from "@/lib/supabase/sync-watermark";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { isBrowserOnline, useOnlineStatus } from "@/lib/offline/connectivity";
+import { captureSaleCloudSyncError } from "@/lib/offline/sale-cloud-sync";
+import { captureCloudPushResult } from "@/lib/offline/cloud-push-result";
 import {
   bumpOfflinePendingChange,
   clearOfflinePendingSync,
@@ -392,6 +394,7 @@ function useAppStoreState(): AppStoreValue {
   const skipConflictCheckRef = useRef(false);
   const scheduleRetryPushRef = useRef<() => void>(() => {});
   const latestDataRef = useRef<AppData | null>(null);
+  const saleSubmissionInFlightRef = useRef(false);
 
   const raiseSyncConflict = useCallback(
     (local: AppData, remote: AppData, cloudTs: number) => {
@@ -581,7 +584,7 @@ function useAppStoreState(): AppStoreValue {
       if (!payload || !org.id || !isBrowserOnline()) return;
 
       setCloudSyncing(true);
-      void executeCloudPush(payload, org.id).then(({ err, conflict }) => {
+      void captureCloudPushResult(() => executeCloudPush(payload, org.id!)).then(({ err, conflict }) => {
         if (conflict) return;
         setCloudSyncing(false);
         setCloudSyncError(err);
@@ -609,7 +612,7 @@ function useAppStoreState(): AppStoreValue {
         retryTimerRef.current = null;
       }
 
-      void executeCloudPush(payload, org.id).then(({ err, conflict }) => {
+      void captureCloudPushResult(() => executeCloudPush(payload, org.id!)).then(({ err, conflict }) => {
         if (conflict) return;
         setCloudSyncing(false);
         setCloudSyncError(err);
@@ -1084,11 +1087,25 @@ function useAppStoreState(): AppStoreValue {
       options?: SaleOptions,
     ): Promise<{ ok: boolean; saleId?: string; error?: string }> => {
       if (!data) return { ok: false, error: "Not ready" };
+      if (saleSubmissionInFlightRef.current) {
+        return { ok: false, error: "A sale is already being submitted." };
+      }
+      saleSubmissionInFlightRef.current = true;
+      try {
       if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
       if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+      // Do not mutate the local ledger for an online sale if this session
+      // cannot possibly submit it to the organization's cloud database.
+      if (
+        isOnline &&
+        (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured())
+      ) {
+        return { ok: false, error: "Cloud not connected" };
+      }
 
       const prevJobIds = new Set(data.acJobs.map((job) => job.id));
+      const prevStockLogIds = new Set(data.stockLogs.map((log) => log.id));
       const prevSalesLen = data.sales.length;
       const next = createSale(data, lines, paymentMethod, options ?? {});
       if (next.sales.length === prevSalesLen) {
@@ -1099,6 +1116,9 @@ function useAppStoreState(): AppStoreValue {
       const newAcJobIds = next.acJobs
         .filter((job) => !prevJobIds.has(job.id))
         .map((job) => job.id);
+      const newStockLogIds = next.stockLogs
+        .filter((log) => !prevStockLogIds.has(log.id))
+        .map((log) => log.id);
 
       setData(next);
       latestDataRef.current = next;
@@ -1112,25 +1132,39 @@ function useAppStoreState(): AppStoreValue {
         return { ok: true, saleId };
       }
 
-      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
+      const cloudOrgId = org.id;
+      if (!cloudOrgId) {
         return { ok: false, error: "Cloud not connected" };
       }
 
-      const err = await syncSaleSnapshot(org.id, next, saleId, {
-        preserveBuyPrices: !canSeeFinancials,
-        newAcJobIds,
-      });
+      // The local sale is already persisted. Treat thrown network/client
+      // errors exactly like returned cloud errors so the POS never invites
+      // the operator to submit the same sale a second time.
+      const err = await captureSaleCloudSyncError(() =>
+        syncSaleSnapshot(cloudOrgId, next, saleId, {
+          preserveBuyPrices: !canSeeFinancials,
+          newAcJobIds,
+          newStockLogIds,
+        }),
+      );
       if (err) {
         setCloudSyncError(err);
-        touchOfflinePending(org.id);
-        refreshOfflinePendingState(org.id);
+        touchOfflinePending(cloudOrgId);
+        refreshOfflinePendingState(cloudOrgId);
         scheduleCloudPush(next);
-        return { ok: false, error: err };
+        // The sale is already committed to local storage. Returning failure
+        // leaves the POS cart intact and invites the operator to submit the
+        // same sale again. Report local success; cloudSyncError and the
+        // pending-sync state communicate that cloud confirmation is pending.
+        return { ok: true, saleId };
       }
 
       setCloudSyncError(null);
       scheduleCloudPush(next);
       return { ok: true, saleId };
+      } finally {
+        saleSubmissionInFlightRef.current = false;
+      }
     },
     [
       data,
@@ -1525,6 +1559,10 @@ function useAppStoreState(): AppStoreValue {
       }
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
 
+      if (isOnline && (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured())) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
       const prevPaymentsLen = data.supplierPayments.length;
       const next = recordSupplierPayment(data, supplierId, amount, method, note);
       if (next.supplierPayments.length === prevPaymentsLen) {
@@ -1540,20 +1578,16 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline) {
         if (org.id) {
           bumpOfflinePendingChange(org.id);
-          refreshOfflinePendingState(org.id);
+          refreshOfflinePendingState(org.id!);
         }
         return { ok: true };
       }
 
-      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
-        return { ok: false, error: "Cloud not connected" };
-      }
-
-      const err = await syncSupplierPaymentSnapshot(org.id, next, paymentId);
+      const err = await syncSupplierPaymentSnapshot(org.id!, next, paymentId);
       if (err) {
         setCloudSyncError(err);
-        touchOfflinePending(org.id);
-        refreshOfflinePendingState(org.id);
+        touchOfflinePending(org.id!);
+        refreshOfflinePendingState(org.id!);
         scheduleCloudPush(next);
         return { ok: false, error: err };
       }
@@ -1606,6 +1640,10 @@ function useAppStoreState(): AppStoreValue {
       if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
 
+      if (isOnline && (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured())) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
       const prevPaymentsLen = data.customerPayments.length;
       const next = recordCustomerPayment(data, customerId, amount, method, note);
       if (next.customerPayments.length === prevPaymentsLen) {
@@ -1620,20 +1658,16 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline) {
         if (org.id) {
           bumpOfflinePendingChange(org.id);
-          refreshOfflinePendingState(org.id);
+          refreshOfflinePendingState(org.id!);
         }
         return { ok: true };
       }
 
-      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
-        return { ok: false, error: "Cloud not connected" };
-      }
-
-      const err = await syncCustomerPaymentSnapshot(org.id, next, paymentId);
+      const err = await syncCustomerPaymentSnapshot(org.id!, next, paymentId);
       if (err) {
         setCloudSyncError(err);
-        touchOfflinePending(org.id);
-        refreshOfflinePendingState(org.id);
+        touchOfflinePending(org.id!);
+        refreshOfflinePendingState(org.id!);
         scheduleCloudPush(next);
         return { ok: false, error: err };
       }
@@ -1686,7 +1720,7 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline) {
         if (org.id) {
           bumpOfflinePendingChange(org.id);
-          refreshOfflinePendingState(org.id);
+          refreshOfflinePendingState(org.id!);
         }
         return { ok: true };
       }
@@ -1741,7 +1775,7 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline) {
         if (org.id) {
           bumpOfflinePendingChange(org.id);
-          refreshOfflinePendingState(org.id);
+          refreshOfflinePendingState(org.id!);
         }
         return { ok: true };
       }
@@ -1795,7 +1829,7 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline) {
         if (org.id) {
           bumpOfflinePendingChange(org.id);
-          refreshOfflinePendingState(org.id);
+          refreshOfflinePendingState(org.id!);
         }
         return { ok: true };
       }
@@ -1851,7 +1885,7 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline) {
         if (org.id) {
           bumpOfflinePendingChange(org.id);
-          refreshOfflinePendingState(org.id);
+          refreshOfflinePendingState(org.id!);
         }
         return { ok: true };
       }
@@ -1863,8 +1897,8 @@ function useAppStoreState(): AppStoreValue {
       const err = await syncJobItemSnapshot(org.id, next, itemId);
       if (err) {
         setCloudSyncError(err);
-        touchOfflinePending(org.id);
-        refreshOfflinePendingState(org.id);
+        touchOfflinePending(org.id!);
+        refreshOfflinePendingState(org.id!);
         scheduleCloudPush(next);
         return { ok: false, error: err };
       }
@@ -1882,8 +1916,8 @@ function useAppStoreState(): AppStoreValue {
         });
         if (stockErr) {
           setCloudSyncError(stockErr);
-          touchOfflinePending(org.id);
-          refreshOfflinePendingState(org.id);
+          touchOfflinePending(org.id!);
+          refreshOfflinePendingState(org.id!);
           scheduleCloudPush(next);
           return { ok: false, error: stockErr };
         }
@@ -1932,7 +1966,7 @@ function useAppStoreState(): AppStoreValue {
       if (!isOnline) {
         if (org.id) {
           bumpOfflinePendingChange(org.id);
-          refreshOfflinePendingState(org.id);
+          refreshOfflinePendingState(org.id!);
         }
         return { ok: true };
       }
@@ -1944,8 +1978,8 @@ function useAppStoreState(): AppStoreValue {
       const err = await deleteJobItemFromCloud(org.id, id);
       if (err) {
         setCloudSyncError(err);
-        touchOfflinePending(org.id);
-        refreshOfflinePendingState(org.id);
+        touchOfflinePending(org.id!);
+        refreshOfflinePendingState(org.id!);
         scheduleCloudPush(next);
         return { ok: false, error: err };
       }
@@ -1962,8 +1996,8 @@ function useAppStoreState(): AppStoreValue {
         });
         if (stockErr) {
           setCloudSyncError(stockErr);
-          touchOfflinePending(org.id);
-          refreshOfflinePendingState(org.id);
+          touchOfflinePending(org.id!);
+          refreshOfflinePendingState(org.id!);
           scheduleCloudPush(next);
           return { ok: false, error: stockErr };
         }

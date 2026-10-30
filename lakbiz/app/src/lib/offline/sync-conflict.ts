@@ -172,7 +172,37 @@ export function localHasUnsyncedRecordsFromData(
   local: AppData,
   remote: AppData,
 ): boolean {
-  return localHasUnsyncedRecords(summarizeSyncConflict(local, remote));
+  // Protect every persisted collection, not only sales, purchases, customers
+  // and jobs. A local-only bank transaction, stock movement, payment, cheque,
+  // transfer or job-cost row is just as important as a local-only invoice.
+  const hasLocalOnly = <T extends { id: string }>(localRows: T[], remoteRows: T[]) => {
+    const remoteIds = idSet(remoteRows);
+    return localRows.some((row) => !remoteIds.has(row.id));
+  };
+
+  return (
+    hasLocalOnly(local.products, remote.products) ||
+    hasLocalOnly(local.sales, remote.sales) ||
+    hasLocalOnly(local.stockLogs, remote.stockLogs) ||
+    hasLocalOnly(local.customers, remote.customers) ||
+    hasLocalOnly(local.customerPayments, remote.customerPayments) ||
+    hasLocalOnly(local.customerProductPrices, remote.customerProductPrices) ||
+    hasLocalOnly(local.suppliers, remote.suppliers) ||
+    hasLocalOnly(local.purchases, remote.purchases) ||
+    hasLocalOnly(local.purchaseOrders, remote.purchaseOrders) ||
+    hasLocalOnly(local.supplierPayments, remote.supplierPayments) ||
+    hasLocalOnly(local.acJobs, remote.acJobs) ||
+    hasLocalOnly(local.jobItems, remote.jobItems) ||
+    hasLocalOnly(local.jobStatusHistory, remote.jobStatusHistory) ||
+    hasLocalOnly(local.technicians, remote.technicians) ||
+    hasLocalOnly(local.contractors, remote.contractors) ||
+    hasLocalOnly(local.contractorPayments, remote.contractorPayments) ||
+    hasLocalOnly(local.vehicles, remote.vehicles) ||
+    hasLocalOnly(local.bankAccounts, remote.bankAccounts) ||
+    hasLocalOnly(local.bankTransactions, remote.bankTransactions) ||
+    hasLocalOnly(local.bankTransfers, remote.bankTransfers) ||
+    hasLocalOnly(local.cheques, remote.cheques)
+  );
 }
 
 /** Apply a cloud snapshot without discarding unsynced local rows. */

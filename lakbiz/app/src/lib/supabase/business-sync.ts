@@ -31,6 +31,12 @@ import {
   mergePullWithLocal,
 } from "@/lib/offline/sync-conflict";
 import { localDataWatermark } from "./sync-watermark";
+import { fetchAllPages } from "./pagination";
+import { preserveExistingBankBalances, preserveExistingSupplierBalances, preserveExistingContractorBalances, omitCustomerCreditBalance } from "./financial-balance-sync";
+import {
+  selectNewSaleStockLogs,
+} from "@/lib/offline/sale-cloud-sync";
+import { isValidSyncGeneration, isSameSyncGeneration } from "./sync-generation";
 
 export type CloudPushResult = {
   error: string | null;
@@ -40,17 +46,24 @@ export type CloudPushResult = {
 
 export async function fetchOrgSyncGeneration(organizationId: string): Promise<number> {
   const supabase = createBrowserClient();
-  if (!supabase) return 0;
+  // A missing/failed generation RPC must never look like generation zero.
+  // Callers pass this sentinel through to pushBusinessData, which fails closed.
+  if (!supabase) return -1;
 
   const { data, error } = await supabase.rpc("get_org_sync_generation", {
     p_org_id: organizationId,
   });
   if (error) {
     console.warn("[sync] get_org_sync_generation:", error.message);
-    return 0;
+    return -1;
   }
+  // The SQL function returns NULL when the caller is not an organization
+  // member. Number(null) is 0, which would incorrectly authorize a snapshot
+  // as generation zero; treat missing data as an authorization/read failure.
+  if (data == null) return -1;
+
   const n = Number(data);
-  return Number.isFinite(n) && n >= 0 ? n : 0;
+  return Number.isSafeInteger(n) && n >= 0 ? n : -1;
 }
 
 async function advanceOrgSyncGeneration(
@@ -65,18 +78,24 @@ async function advanceOrgSyncGeneration(
     p_seen_generation: seenGeneration,
   });
   if (error) {
-    if (
-      error.message.includes("try_advance_org_sync_generation") ||
-      error.message.includes("get_org_sync_generation")
-    ) {
-      return { ok: true, generation: seenGeneration };
-    }
+    // Never silently disable optimistic concurrency when the RPC is absent.
     console.warn("[sync] try_advance_org_sync_generation:", error.message);
     return { ok: false, generation: seenGeneration };
   }
 
-  const n = Number(data);
+  // The RPC must return exactly the next generation. In particular, do not
+  // let Number(null) or an unexpected payload masquerade as a successful CAS.
+  const n = typeof data === "number" || typeof data === "string" ? Number(data) : NaN;
   if (n === -1) {
+    const current = await fetchOrgSyncGeneration(organizationId);
+    return { ok: false, generation: current };
+  }
+  if (
+    !Number.isSafeInteger(n) ||
+    n !== seenGeneration + 1 ||
+    !Number.isSafeInteger(seenGeneration + 1)
+  ) {
+    console.warn("[sync] try_advance_org_sync_generation returned an invalid generation");
     const current = await fetchOrgSyncGeneration(organizationId);
     return { ok: false, generation: current };
   }
@@ -180,6 +199,17 @@ export async function pullBusinessData(
   const supabase = createBrowserClient();
   if (!supabase) return null;
 
+  // Bracket the multi-request snapshot with the organization generation.
+  // This detects generation-advancing writes that complete during the pull.
+  // It is NOT a database snapshot or an in-progress writer lock: the current
+  // multi-request push advances generation only after its table writes finish,
+  // so a pull can still overlap an unfinished push and observe intermediate
+  // rows while both generation reads return the old value. Keep this guard as
+  // a partial safeguard; atomic server-side snapshot transactions/shared
+  // writer coordination are still required before claiming snapshot isolation.
+  const snapshotGeneration = await fetchOrgSyncGeneration(organizationId);
+  if (snapshotGeneration < 0) return null;
+
   const [
     productsRes,
     customersRes,
@@ -207,67 +237,125 @@ export async function pullBusinessData(
     vehiclesRes,
     business,
   ] = await Promise.all([
-    supabase.from("products").select("*").eq("organization_id", organizationId),
-    supabase.from("customers").select("*").eq("organization_id", organizationId),
-    supabase.from("suppliers").select("*").eq("organization_id", organizationId),
-    supabase.from("sales").select("*").eq("organization_id", organizationId),
-    supabase.from("sale_lines").select("*").eq("organization_id", organizationId),
-    supabase.from("purchases").select("*").eq("organization_id", organizationId),
-    supabase
-      .from("purchase_lines")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("purchase_orders")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("purchase_order_lines")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("customer_payments")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("customer_product_prices")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("supplier_payments")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase.from("stock_logs").select("*").eq("organization_id", organizationId),
-    supabase
-      .from("bank_accounts")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("bank_transactions")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase
-      .from("bank_transfers")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase.from("cheques").select("*").eq("organization_id", organizationId),
-    supabase.from("ac_jobs").select("*").eq("organization_id", organizationId),
-    supabase.from("job_items").select("*").eq("organization_id", organizationId),
-    supabase
-      .from("job_status_history")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase.from("technicians").select("*").eq("organization_id", organizationId),
-    supabase.from("contractors").select("*").eq("organization_id", organizationId),
-    supabase
-      .from("contractor_payments")
-      .select("*")
-      .eq("organization_id", organizationId),
-    supabase.from("vehicles").select("*").eq("organization_id", organizationId),
+    fetchAllPages((from, to) =>
+      supabase.from("products").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("customers").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("suppliers").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("sales").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("sale_lines").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("purchases").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("purchase_lines").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("purchase_orders").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("purchase_order_lines").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("customer_payments").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("customer_product_prices").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("supplier_payments").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("stock_logs").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("bank_accounts").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("bank_transactions").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("bank_transfers").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("cheques").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("ac_jobs").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("job_items").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("job_status_history").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("technicians").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("contractors").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("contractor_payments").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
+    fetchAllPages((from, to) =>
+      supabase.from("vehicles").select("*").eq("organization_id", organizationId).range(from, to),
+    ),
     fetchOrgShopSettings(organizationId),
   ]);
 
-  if (productsRes.error || customersRes.error || salesRes.error) {
+  // A partial snapshot must never be treated as an empty table. If any
+  // business-table read fails, abort the pull so callers cannot overwrite
+  // local data with an incomplete cloud snapshot.
+  const tableReads = [
+    ["products", productsRes],
+    ["customers", customersRes],
+    ["suppliers", suppliersRes],
+    ["sales", salesRes],
+    ["sale_lines", saleLinesRes],
+    ["purchases", purchasesRes],
+    ["purchase_lines", purchaseLinesRes],
+    ["purchase_orders", purchaseOrdersRes],
+    ["purchase_order_lines", purchaseOrderLinesRes],
+    ["customer_payments", customerPaymentsRes],
+    ["customer_product_prices", customerProductPricesRes],
+    ["supplier_payments", supplierPaymentsRes],
+    ["stock_logs", stockLogsRes],
+    ["bank_accounts", bankAccountsRes],
+    ["bank_transactions", bankTransactionsRes],
+    ["bank_transfers", bankTransfersRes],
+    ["cheques", chequesRes],
+    ["ac_jobs", acJobsRes],
+    ["job_items", jobItemsRes],
+    ["job_status_history", jobStatusHistoryRes],
+    ["technicians", techniciansRes],
+    ["contractors", contractorsRes],
+    ["contractor_payments", contractorPaymentsRes],
+    ["vehicles", vehiclesRes],
+  ] as const;
+  const failedReads = tableReads.filter(([, result]) => result.error);
+  if (failedReads.length > 0) {
+    for (const [label, result] of failedReads) {
+      console.warn(`[pullBusinessData] ${label}:`, result.error?.message);
+    }
+    return null;
+  }
+
+  // Independent PostgREST reads are not a database snapshot. Confirm no
+  // generation change occurred while the 24 business tables were being read.
+  const confirmedGeneration = await fetchOrgSyncGeneration(organizationId);
+  if (confirmedGeneration !== snapshotGeneration) {
+    console.warn(
+      "[pullBusinessData] Organization changed during snapshot; rejecting mixed snapshot",
+    );
     return null;
   }
 
@@ -1067,16 +1155,23 @@ async function productsWithPreservedBuyPrices(
   organizationId: string,
   products: AppData["products"],
   preserveBuyPrices?: boolean,
-): Promise<AppData["products"]> {
+): Promise<AppData["products"] | null> {
   if (!preserveBuyPrices) return products;
   const supabase = createBrowserClient();
-  if (!supabase) return products;
-  const { data: rows } = await supabase
+  if (!supabase) return null;
+  const { data: rows, error } = await supabase
     .from("products")
     .select("id, buy_price")
     .eq("organization_id", organizationId);
+  // A financial-restricted client must never fall back to stale local buy
+  // prices when the authoritative read fails; that would overwrite values
+  // the client is not allowed to see.
+  if (error || !rows) {
+    console.warn("[sync] Could not verify product buy prices:", error?.message);
+    return null;
+  }
   const buyMap = new Map(
-    (rows ?? []).map((row) => [row.id as string, num(row.buy_price)]),
+    rows.map((row) => [row.id as string, num(row.buy_price)]),
   );
   return products.map((p) => ({
     ...p,
@@ -1217,6 +1312,7 @@ export async function syncProductSnapshot(
     data.products,
     options?.preserveBuyPrices,
   );
+  if (!products) return "Could not verify product costs. Cloud sync was paused to protect financial data.";
   const rows = productRowsFromList(
     organizationId,
     products.filter((p) => productIds.includes(p.id)),
@@ -1243,6 +1339,7 @@ export async function syncProductsSnapshot(
     data.products,
     options?.preserveBuyPrices,
   );
+  if (!products) return "Could not verify product costs. Cloud sync was paused to protect financial data.";
   const err = await upsertMaskedViewRows(
     "products",
     organizationId,
@@ -1272,12 +1369,22 @@ export async function syncSaleSnapshot(
   organizationId: string,
   data: AppData,
   saleId: string,
-  options?: { preserveBuyPrices?: boolean; newAcJobIds?: string[] },
+  options?: {
+    preserveBuyPrices?: boolean;
+    newAcJobIds?: string[];
+    newStockLogIds?: string[];
+  },
 ): Promise<string | null> {
   const sale = data.sales.find((row) => row.id === saleId);
   if (!sale) return "Sale not found locally";
 
-  const custErr = await syncCustomersSnapshot(organizationId, data.customers);
+  // Sale sync must not mirror a whole customer snapshot: credit_balance is
+  // financial state and may have changed on another device. Update only
+  // customer details here; the sale transaction must post the credit delta.
+  const customerRows = omitCustomerCreditBalance(
+    customerRowsForOrg(organizationId, data.customers),
+  );
+  const custErr = await upsertOrgRows("customers", customerRows);
   if (custErr) return custErr;
 
   const productIds = [
@@ -1288,6 +1395,7 @@ export async function syncSaleSnapshot(
     data.products,
     options?.preserveBuyPrices,
   );
+  if (!products) return "Could not verify product costs. Cloud sync was paused to protect financial data.";
   const prodErr = await upsertMaskedViewRows(
     "products",
     organizationId,
@@ -1310,9 +1418,11 @@ export async function syncSaleSnapshot(
   );
   if (linesErr) return linesErr;
 
-  const billTag = sale.id.slice(0, 8);
-  const saleLogs = data.stockLogs.filter(
-    (log) => log.type === "sale" && log.note?.includes(billTag),
+  // Use the exact IDs created by this local sale. Matching a truncated bill
+  // tag can accidentally include an unrelated stock movement.
+  const saleLogs = selectNewSaleStockLogs(
+    data.stockLogs,
+    options?.newStockLogIds ?? [],
   );
   if (saleLogs.length > 0) {
     const logErr = await upsertOrgRows(
@@ -1609,12 +1719,35 @@ export async function syncSupplierPaymentSnapshot(
   const payment = data.supplierPayments.find((row) => row.id === paymentId);
   if (!payment) return "Payment not found locally";
 
-  const supErr = await syncSuppliersSnapshot(organizationId, data.suppliers);
-  if (supErr) return supErr;
-
-  return upsertOrgRows("supplier_payments", [
+  // Persist the payment ledger entry before mirroring the derived supplier
+  // balance. If the second request fails, retrying the idempotent payment
+  // upsert is safe and the balance is not changed without its ledger record.
+  const paymentErr = await upsertOrgRows("supplier_payments", [
     supplierPaymentRow(organizationId, payment),
   ]);
+  if (paymentErr) return paymentErr;
+
+  if (data.suppliers.length === 0) return null;
+
+  const supabase = createBrowserClient();
+  if (!supabase) {
+    return "Payment was saved, but supplier balances could not be verified. Retry sync to finish.";
+  }
+  const { data: existingRows, error: readError } = await supabase
+    .from("suppliers")
+    .select("id, payable_balance")
+    .eq("organization_id", organizationId);
+  if (readError || !existingRows) {
+    console.warn("[LakBiz] Supplier payment saved, but balances could not be verified.", readError);
+    return "Payment was saved, but supplier balances could not be verified. Retry sync to finish.";
+  }
+
+  const safeSuppliers = preserveExistingSupplierBalances(data.suppliers, existingRows);
+  const supplierErr = await upsertOrgRows(
+    "suppliers",
+    supplierRowsForOrg(organizationId, safeSuppliers),
+  );
+  return supplierErr;
 }
 
 function customerPaymentRow(
@@ -1642,12 +1775,22 @@ export async function syncCustomerPaymentSnapshot(
   const payment = data.customerPayments.find((row) => row.id === paymentId);
   if (!payment) return "Payment not found locally";
 
-  const custErr = await syncCustomersSnapshot(organizationId, data.customers);
-  if (custErr) return custErr;
-
-  return upsertOrgRows("customer_payments", [
+  // Save the payment ledger first. Then refresh customer details without
+  // copying a possibly stale offline credit balance or pruning other devices.
+  const paymentErr = await upsertOrgRows("customer_payments", [
     customerPaymentRow(organizationId, payment),
   ]);
+  if (paymentErr) return paymentErr;
+
+  const customerRows = omitCustomerCreditBalance(
+    customerRowsForOrg(organizationId, data.customers),
+  );
+  const customerErr = await upsertOrgRows("customers", customerRows);
+  if (customerErr) {
+    console.warn("[LakBiz] Customer payment saved, but customer details could not be refreshed.", customerErr);
+    return "Payment was saved, but customer details could not be refreshed. Retry sync to finish.";
+  }
+  return null;
 }
 
 function jobStatusHistoryRow(
@@ -1810,18 +1953,32 @@ export async function syncContractorPaymentSnapshot(
   const payment = data.contractorPayments.find((row) => row.id === paymentId);
   if (!payment) return "Payment not found locally";
 
+  const paymentErr = await upsertOrgRows("contractor_payments", [
+    contractorPaymentRow(organizationId, payment),
+  ]);
+  if (paymentErr) return paymentErr;
+
   if (data.contractors.length > 0) {
+    const supabase = createBrowserClient();
+    if (!supabase) return "Could not verify contractor balances. Payment was saved; contractor snapshot was paused.";
+    const { data: existingRows, error: readError } = await supabase
+      .from("contractors")
+      .select("id, payable_balance")
+      .eq("organization_id", organizationId);
+    if (readError || !existingRows) {
+      console.warn("[LakBiz] Contractor payment saved, but balances could not be verified.", readError);
+      return "Payment was saved, but contractor balances could not be verified. Retry sync to finish.";
+    }
+    const safeContractors = preserveExistingContractorBalances(data.contractors, existingRows);
     const contractorErr = await upsertMaskedViewRows(
       "contractors",
       organizationId,
-      contractorRowsFromList(organizationId, data.contractors),
+      contractorRowsFromList(organizationId, safeContractors),
     );
     if (contractorErr) return contractorErr;
   }
 
-  return upsertOrgRows("contractor_payments", [
-    contractorPaymentRow(organizationId, payment),
-  ]);
+  return null;
 }
 
 function bankAccountRow(
@@ -1917,15 +2074,16 @@ export async function syncBankTransactionSnapshot(
   const txn = data.bankTransactions.find((row) => row.id === txnId);
   if (!txn) return "Transaction not found locally";
 
-  const account = data.bankAccounts.find((row) => row.id === txn.accountId);
-  if (account) {
-    const accountErr = await upsertBankAccounts(organizationId, [account]);
-    if (accountErr) return accountErr;
-  }
-
-  return upsertOrgRows("bank_transactions", [
+  // Write the ledger entry first. Never publish a new account balance if
+  // its corresponding transaction failed to persist.
+  const transactionErr = await upsertOrgRows("bank_transactions", [
     bankTransactionRow(organizationId, txn),
   ]);
+  if (transactionErr) return transactionErr;
+
+  const account = data.bankAccounts.find((row) => row.id === txn.accountId);
+  if (!account) return null;
+  return upsertBankAccounts(organizationId, [account]);
 }
 
 /** Remove a bank transaction and sync the updated account balance to Supabase. */
@@ -1959,16 +2117,19 @@ export async function syncBankTransferSnapshot(
   const transfer = data.bankTransfers.find((row) => row.id === transferId);
   if (!transfer) return "Transfer not found locally";
 
+  // Persist the transfer ledger row before either derived account balance.
+  // A failed ledger write must not leave balances reflecting a transfer that
+  // the cloud cannot see.
+  const transferErr = await upsertOrgRows("bank_transfers", [
+    bankTransferRow(organizationId, transfer),
+  ]);
+  if (transferErr) return transferErr;
+
   const accounts = data.bankAccounts.filter(
     (row) =>
       row.id === transfer.fromAccountId || row.id === transfer.toAccountId,
   );
-  const accountErr = await upsertBankAccounts(organizationId, accounts);
-  if (accountErr) return accountErr;
-
-  return upsertOrgRows("bank_transfers", [
-    bankTransferRow(organizationId, transfer),
-  ]);
+  return upsertBankAccounts(organizationId, accounts);
 }
 
 /** Upsert a cheque register row directly to Supabase. */
@@ -2279,22 +2440,48 @@ export async function pushBusinessData(
 ): Promise<CloudPushResult> {
   const seenGeneration =
     options?.seenGeneration ?? (await fetchOrgSyncGeneration(organizationId));
+
+  // A full snapshot must not write if the cloud generation cannot be verified.
+  // This protects installations with a missing, denied, or broken generation RPC.
+  if (!Number.isSafeInteger(seenGeneration) || seenGeneration < 0) {
+    return {
+      error: "Cloud sync version could not be verified. Sync was paused to protect your records.",
+      stale: false,
+      generation: seenGeneration,
+    };
+  }
+
   let products = data.products;
   if (options?.preserveBuyPrices) {
     const supabase = createBrowserClient();
-    if (supabase) {
-      const { data: rows } = await supabase
-        .from("products")
-        .select("id, buy_price")
-        .eq("organization_id", organizationId);
-      const buyMap = new Map(
-        (rows ?? []).map((row) => [row.id as string, num(row.buy_price)]),
-      );
-      products = data.products.map((p) => ({
-        ...p,
-        buyPrice: buyMap.has(p.id) ? buyMap.get(p.id)! : p.buyPrice,
-      }));
+    if (!supabase) {
+      return {
+        error: "Could not verify protected product costs. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
     }
+
+    const { data: rows, error } = await supabase
+      .from("products")
+      .select("id, buy_price")
+      .eq("organization_id", organizationId);
+    if (error || !rows) {
+      console.warn("[LakBiz] Full sync paused: protected product costs could not be verified.", error);
+      return {
+        error: "Could not verify protected product costs. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+
+    const buyMap = new Map(
+      rows.map((row) => [row.id as string, num(row.buy_price)]),
+    );
+    products = data.products.map((p) => ({
+      ...p,
+      buyPrice: buyMap.has(p.id) ? buyMap.get(p.id)! : p.buyPrice,
+    }));
   }
 
   const productRows = products.map((p) => ({
@@ -2317,7 +2504,32 @@ export async function pushBusinessData(
 
   const customerRows = customerRowsForOrg(organizationId, data.customers);
 
-  const supplierRows = data.suppliers.map((s) => ({
+  let suppliers = data.suppliers;
+  if (suppliers.length > 0) {
+    const supabase = createBrowserClient();
+    if (!supabase) {
+      return {
+        error: "Could not verify supplier balances. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+    const { data: existingSupplierRows, error: supplierReadError } = await supabase
+      .from("suppliers")
+      .select("id, payable_balance")
+      .eq("organization_id", organizationId);
+    if (supplierReadError || !existingSupplierRows) {
+      console.warn("[LakBiz] Full sync paused: supplier balances could not be verified.", supplierReadError);
+      return {
+        error: "Could not verify supplier balances. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+    suppliers = preserveExistingSupplierBalances(suppliers, existingSupplierRows);
+  }
+
+  const supplierRows = suppliers.map((s) => ({
     id: s.id,
     organization_id: organizationId,
     name: s.name,
@@ -2328,7 +2540,32 @@ export async function pushBusinessData(
     payable_balance: s.payableBalance,
   }));
 
-  const bankRows = data.bankAccounts.map((b) => ({
+  let bankAccounts = data.bankAccounts;
+  if (bankAccounts.length > 0) {
+    const supabase = createBrowserClient();
+    if (!supabase) {
+      return {
+        error: "Could not verify bank balances. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+    const { data: existingBankRows, error: bankReadError } = await supabase
+      .from("bank_accounts")
+      .select("id, balance")
+      .eq("organization_id", organizationId);
+    if (bankReadError || !existingBankRows) {
+      console.warn("[LakBiz] Full sync paused: bank balances could not be verified.", bankReadError);
+      return {
+        error: "Could not verify bank balances. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+    bankAccounts = preserveExistingBankBalances(bankAccounts, existingBankRows);
+  }
+
+  const bankRows = bankAccounts.map((b) => ({
     id: b.id,
     organization_id: organizationId,
     bank_name: b.bankName,
@@ -2548,7 +2785,32 @@ export async function pushBusinessData(
     hourly_rate: tch.hourlyRate ?? null,
   }));
 
-  const contractorRows = data.contractors.map((c) => ({
+  let contractors = data.contractors;
+  if (contractors.length > 0) {
+    const supabase = createBrowserClient();
+    if (!supabase) {
+      return {
+        error: "Could not verify contractor balances. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+    const { data: existingContractorRows, error: contractorReadError } = await supabase
+      .from("contractors")
+      .select("id, payable_balance")
+      .eq("organization_id", organizationId);
+    if (contractorReadError || !existingContractorRows) {
+      console.warn("[LakBiz] Full sync paused: contractor balances could not be verified.", contractorReadError);
+      return {
+        error: "Could not verify contractor balances. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+    contractors = preserveExistingContractorBalances(contractors, existingContractorRows);
+  }
+
+  const contractorRows = contractors.map((c) => ({
     id: c.id,
     organization_id: organizationId,
     name: c.name,
@@ -2817,8 +3079,39 @@ export async function syncBusinessData(
   localGeneration: number,
 ): Promise<SyncBusinessResult> {
   const cloudGen = await fetchOrgSyncGeneration(organizationId);
+  if (!isValidSyncGeneration(cloudGen)) {
+    return {
+      data: local,
+      error: "Cloud sync version could not be verified. Sync was paused to protect your records.",
+      generation: -1,
+      conflictRemote: null,
+    };
+  }
+
   const cloud = await pullBusinessData(organizationId, local.business);
-  const cloudHasData = cloud != null && !isEmptyBusinessData(cloud);
+  if (cloud === null) {
+    return {
+      data: local,
+      error: "Cloud data could not be read completely or its version changed. Sync was paused to protect your records.",
+      generation: cloudGen,
+      conflictRemote: null,
+    };
+  }
+
+  // pullBusinessData brackets its own independent table reads. Also ensure
+  // that the version used by this sync decision is the same version that was
+  // current before that pull; otherwise the decision could use a mismatched
+  // generation even though the pull itself was internally stable.
+  const confirmedCloudGen = await fetchOrgSyncGeneration(organizationId);
+  if (confirmedCloudGen !== cloudGen) {
+    return {
+      data: local,
+      error: "Cloud data changed while sync was starting. Sync was paused to protect your records.",
+      generation: confirmedCloudGen,
+      conflictRemote: null,
+    };
+  }
+  const cloudHasData = !isEmptyBusinessData(cloud);
   const localHasData = !isEmptyBusinessData(local);
 
   if (!cloudHasData && localHasData) {
@@ -2963,6 +3256,16 @@ export async function pullRemoteIfNewer(
     fetchOrgSyncGeneration(organizationId),
   ]);
 
+  if (!isValidSyncGeneration(cloudGen)) {
+    return {
+      data: local,
+      cloudTs,
+      cloudGen: -1,
+      refreshed: false,
+      error: "Cloud sync version could not be verified. Refresh was paused to protect your records.",
+    };
+  }
+
   const generationAhead = cloudGen > lastKnownGeneration;
   const timestampAhead = cloudTs > lastKnownCloudTs;
 
@@ -2983,6 +3286,17 @@ export async function pullRemoteIfNewer(
       cloudGen,
       refreshed: false,
       error: "Could not load cloud data",
+    };
+  }
+
+  const confirmedCloudGen = await fetchOrgSyncGeneration(organizationId);
+  if (!isSameSyncGeneration(cloudGen, confirmedCloudGen)) {
+    return {
+      data: local,
+      cloudTs,
+      cloudGen: confirmedCloudGen,
+      refreshed: false,
+      error: "Cloud data changed while it was loading. Refresh was paused to protect your records.",
     };
   }
 

@@ -195,53 +195,58 @@ export default function SalesPage() {
 
     setSaving(true);
     setMessage("");
-    const result = await createSaleToCloud(
-      lines.map((l) => ({
-        productId: l.product.id,
-        qty: l.qty,
-        unitPrice: l.unitPrice,
-      })),
-      payment,
-      {
-        customerId: customerId || undefined,
-        customerName: buyerName.trim() || undefined,
-        buyerPhone: buyerPhone.trim() || undefined,
-        buyerAddress: buyerAddress.trim() || undefined,
-        addToCustomers: showAcBuyerPanel && addToCustomers && !customerId,
-        createInstallJob: showAcBuyerPanel && createInstallJob,
-        discount: discountClamped || undefined,
-        chequeNo: payment === "cheque" ? chequeNo : undefined,
-        chequeBank: payment === "cheque" ? chequeBank : undefined,
-        chequeDate: payment === "cheque" ? chequeDate : undefined,
-        postDated: payment === "cheque" ? postDated : undefined,
-      },
-    );
-    setSaving(false);
+    try {
+      const result = await createSaleToCloud(
+        lines.map((l) => ({
+          productId: l.product.id,
+          qty: l.qty,
+          unitPrice: l.unitPrice,
+        })),
+        payment,
+        {
+          customerId: customerId || undefined,
+          customerName: buyerName.trim() || undefined,
+          buyerPhone: buyerPhone.trim() || undefined,
+          buyerAddress: buyerAddress.trim() || undefined,
+          addToCustomers: showAcBuyerPanel && addToCustomers && !customerId,
+          createInstallJob: showAcBuyerPanel && createInstallJob,
+          discount: discountClamped || undefined,
+          chequeNo: payment === "cheque" ? chequeNo : undefined,
+          chequeBank: payment === "cheque" ? chequeBank : undefined,
+          chequeDate: payment === "cheque" ? chequeDate : undefined,
+          postDated: payment === "cheque" ? postDated : undefined,
+        },
+      );
 
-    if (!result.ok || !result.saleId) {
-      setMessage(result.error ?? t("sales.failed"));
-      return;
+      if (!result.ok || !result.saleId) {
+        setMessage(result.error ?? t("sales.failed"));
+        return;
+      }
+
+      const saleId = result.saleId;
+      resetAfterSale();
+      setLastBillId(saleId);
+      const savedCustomer = showAcBuyerPanel && addToCustomers && !customerId;
+      const savedJob = showAcBuyerPanel && createInstallJob;
+      setMessage(
+        savedCustomer && savedJob
+          ? t("sales.saved_with_customer_and_job")
+          : savedCustomer
+            ? t("sales.saved_with_customer")
+            : savedJob
+              ? t("sales.saved_with_job")
+              : payment === "credit"
+                ? t("sales.credit_saved")
+                : payment === "cheque"
+                  ? t("sales.cheque_saved")
+                  : t("sales.saved"),
+      );
+      setTimeout(() => setMessage(""), 6000);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : t("sales.failed"));
+    } finally {
+      setSaving(false);
     }
-
-    const saleId = result.saleId;
-    resetAfterSale();
-    setLastBillId(saleId);
-    const savedCustomer = showAcBuyerPanel && addToCustomers && !customerId;
-    const savedJob = showAcBuyerPanel && createInstallJob;
-    setMessage(
-      savedCustomer && savedJob
-        ? t("sales.saved_with_customer_and_job")
-        : savedCustomer
-          ? t("sales.saved_with_customer")
-          : savedJob
-            ? t("sales.saved_with_job")
-            : payment === "credit"
-              ? t("sales.credit_saved")
-              : payment === "cheque"
-                ? t("sales.cheque_saved")
-                : t("sales.saved"),
-    );
-    setTimeout(() => setMessage(""), 6000);
   };
 
   const inStock = data.products.filter((p) => p.stockQty > 0 && p.active);
