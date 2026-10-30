@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { preserveExistingBankBalances } from "./financial-balance-sync";
+import { preserveExistingBankBalances, preserveExistingSupplierBalances } from "./financial-balance-sync";
 
 describe("preserveExistingBankBalances", () => {
   it("keeps the cloud balance for existing accounts", () => {
@@ -27,5 +27,34 @@ describe("preserveExistingBankBalances", () => {
         [{ id: "bank-1", balance: "invalid" }],
       ),
     ).toEqual([{ id: "bank-1", balance: 50 }]);
+  });
+});
+
+describe("preserveExistingSupplierBalances", () => {
+  it("keeps the cloud payable balance for existing suppliers", () => {
+    expect(
+      preserveExistingSupplierBalances(
+        [{ id: "supplier-1", payableBalance: 40 }],
+        [{ id: "supplier-1", payable_balance: "215.50" }],
+      ),
+    ).toEqual([{ id: "supplier-1", payableBalance: 215.5 }]);
+  });
+
+  it("keeps the local opening balance for new suppliers", () => {
+    expect(
+      preserveExistingSupplierBalances(
+        [{ id: "supplier-new", payableBalance: 700 }],
+        [{ id: "supplier-old", payable_balance: "90" }],
+      ),
+    ).toEqual([{ id: "supplier-new", payableBalance: 700 }]);
+  });
+
+  it("does not use invalid cloud payable balances", () => {
+    expect(
+      preserveExistingSupplierBalances(
+        [{ id: "supplier-1", payableBalance: 40 }],
+        [{ id: "supplier-1", payable_balance: "invalid" }],
+      ),
+    ).toEqual([{ id: "supplier-1", payableBalance: 40 }]);
   });
 });
