@@ -32,6 +32,7 @@ import {
 } from "@/lib/offline/sync-conflict";
 import { localDataWatermark } from "./sync-watermark";
 import { fetchAllPages } from "./pagination";
+import { selectNewSaleStockLogs } from "@/lib/offline/sale-cloud-sync";
 
 export type CloudPushResult = {
   error: string | null;
@@ -1318,7 +1319,11 @@ export async function syncSaleSnapshot(
   organizationId: string,
   data: AppData,
   saleId: string,
-  options?: { preserveBuyPrices?: boolean; newAcJobIds?: string[] },
+  options?: {
+    preserveBuyPrices?: boolean;
+    newAcJobIds?: string[];
+    newStockLogIds?: string[];
+  },
 ): Promise<string | null> {
   const sale = data.sales.find((row) => row.id === saleId);
   if (!sale) return "Sale not found locally";
@@ -1356,9 +1361,11 @@ export async function syncSaleSnapshot(
   );
   if (linesErr) return linesErr;
 
-  const billTag = sale.id.slice(0, 8);
-  const saleLogs = data.stockLogs.filter(
-    (log) => log.type === "sale" && log.note?.includes(billTag),
+  // Use the exact IDs created by this local sale. Matching a truncated bill
+  // tag can accidentally include an unrelated stock movement.
+  const saleLogs = selectNewSaleStockLogs(
+    data.stockLogs,
+    options?.newStockLogIds ?? [],
   );
   if (saleLogs.length > 0) {
     const logErr = await upsertOrgRows(
