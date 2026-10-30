@@ -1708,14 +1708,23 @@ export function createSale(
 ): AppData {
   // Validate aggregate demand per product before accepting any lines.
   // Checking each line independently permits duplicate lines to oversell stock.
+  if (lines.length === 0) return data;
+
   const requestedQtyByProduct = new Map<string, number>();
-  for (const { productId, qty } of lines) {
+  for (const { productId, qty, unitPrice } of lines) {
     const product = data.products.find((p) => p.id === productId);
-    if (!product || !Number.isFinite(qty) || qty <= 0) continue;
-    requestedQtyByProduct.set(
-      productId,
-      (requestedQtyByProduct.get(productId) ?? 0) + qty,
-    );
+    if (
+      !product ||
+      !Number.isFinite(qty) ||
+      qty <= 0 ||
+      !Number.isFinite(product.stockQty) ||
+      (unitPrice != null && !Number.isFinite(unitPrice))
+    ) {
+      return data;
+    }
+    const requestedQty = (requestedQtyByProduct.get(productId) ?? 0) + qty;
+    if (!Number.isFinite(requestedQty)) return data;
+    requestedQtyByProduct.set(productId, requestedQty);
   }
   if (
     [...requestedQtyByProduct].some(([productId, qty]) => {
