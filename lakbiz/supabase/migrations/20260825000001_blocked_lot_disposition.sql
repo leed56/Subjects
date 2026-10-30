@@ -88,7 +88,10 @@ begin
       using errcode = '23514';
   end if;
 
-  select p.id, p.name into v_product
+  -- Lock the aggregate product row and read its quantity before changing
+  -- either record. Refuse inconsistent data instead of clamping the product
+  -- total while logging/removing the full lot quantity.
+  select p.id, p.name, p.stock_qty into v_product
   from public.products_base p
   where p.id = v_lot.product_id
     and p.organization_id = p_organization_id
@@ -110,8 +113,13 @@ begin
   -- quantity — the same "physical quantity leaves aggregate stock exactly
   -- once" rule resolve_inventory_return_hold's write-off branch follows.
   if v_lot.qty_on_hand > 0 then
+    if coalesce(v_product.stock_qty, 0) < v_lot.qty_on_hand then
+      raise exception 'Batch quantity exceeds aggregate product stock; reconcile stock before disposition'
+        using errcode = '23514';
+    end if;
+
     update public.products_base
-    set stock_qty = greatest(0, stock_qty - v_lot.qty_on_hand),
+    set stock_qty = stock_qty - v_lot.qty_on_hand,
         updated_at = now()
     where id = v_lot.product_id
       and organization_id = p_organization_id;
@@ -157,4 +165,4 @@ revoke all on function public.resolve_blocked_lot(uuid, uuid, text, text) from p
 grant execute on function public.resolve_blocked_lot(uuid, uuid, text, text) to authenticated;
 
 comment on function public.resolve_blocked_lot(uuid, uuid, text, text) is
-  'Owner/manager controlled terminal disposition for a quarantined, recalled or expired batch: dispose (write off) or return to supplier. Zeroes the batch''s qty_on_hand and decrements aggregate product stock exactly once; does not support releasing a batch back to available.';
+  'Owner/manager controlled terminal disposition for a quarantined, recalled or expired batch: dispose (write off) or return to supplier. Zeroes the batch''s qty_on_hand and decrements aggregate product stock exactly once; refuses inconsistent aggregate stock rather than silently clamping it. Does not support releasing a batch back to available.';
