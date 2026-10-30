@@ -199,3 +199,21 @@ PR #89 remains draft until:
 - User explicitly approves merge/deployment.
 
 **Current status:** planning only. Existing generation checks, pagination, fail-closed pull behaviour, and local-only record preservation remain useful safeguards, but the cross-request concurrency and atomicity problem is not yet fixed.
+
+
+## 10. Follow-up source audit — direct writes do not participate in generation
+
+A fresh source scan of `business-sync.ts` confirms that `advanceOrgSyncGeneration` is called only from the full-snapshot `pushBusinessData` path (two branches: multi-member completion and single-member completion). The eager direct-write helpers do not advance the organization generation.
+
+Consequences:
+
+- The generation bracket added to `pullBusinessData` does not detect direct writes at all.
+- Even adding a generation increment after each eager helper would not make a multi-request helper atomic: a pull could overlap its intermediate requests before the final increment.
+- A pre-increment plus post-increment is also insufficient as a lock; the pull can start after the pre-increment and still overlap the writer.
+- Do not patch this by sprinkling generation increments through client helpers. It would create more version churn without providing transaction isolation.
+
+### Next implementation unit
+
+The first database implementation should be a narrowly scoped, operation-specific transaction primitive for one well-understood workflow, not a generic snapshot writer. Before choosing that workflow, finish the migration-level trigger and policy trace for its affected tables and add local Postgres integration tests. The transaction must lock the organization row before reading the expected generation, perform the allowlisted writes, and increment generation in the same transaction. The full-snapshot RPC and every multi-request direct operation must ultimately use the same organization-row lock so their commits serialize.
+
+**Status:** source-audit finding only. No SQL or live database changes were made. Existing direct writes remain outside the generation protocol; PR #89 must remain draft.
