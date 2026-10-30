@@ -1087,6 +1087,14 @@ function useAppStoreState(): AppStoreValue {
       if (syncConflict) return { ok: false, error: "Sync conflict — resolve it first." };
       if (isReadOnly || !can("write")) return { ok: false, error: "Read-only mode" };
       if (!isOnline && !can("offline")) return { ok: false, error: "Offline" };
+      // Do not mutate the local ledger for an online sale if this session
+      // cannot possibly submit it to the organization's cloud database.
+      if (
+        isOnline &&
+        (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured())
+      ) {
+        return { ok: false, error: "Cloud not connected" };
+      }
 
       const prevJobIds = new Set(data.acJobs.map((job) => job.id));
       const prevSalesLen = data.sales.length;
@@ -1110,10 +1118,6 @@ function useAppStoreState(): AppStoreValue {
           refreshOfflinePendingState(org.id);
         }
         return { ok: true, saleId };
-      }
-
-      if (!org.id || !org.isAuthenticated || !user || !isSupabaseConfigured()) {
-        return { ok: false, error: "Cloud not connected" };
       }
 
       const err = await syncSaleSnapshot(org.id, next, saleId, {
