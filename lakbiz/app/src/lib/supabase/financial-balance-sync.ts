@@ -18,3 +18,21 @@ export function preserveExistingBankBalances<
   });
 }
 
+/**
+ * Preserve the cloud payable balance for suppliers already present in the
+ * cloud. Offline snapshots may contain an older derived balance.
+ */
+export function preserveExistingSupplierBalances<
+  T extends { id: string; payableBalance: number },
+  R extends { id: string; payable_balance: unknown },
+>(suppliers: T[], existingRows: R[]): T[] {
+  const existingBalances = new Map(
+    existingRows.map((row) => [row.id, Number(row.payable_balance)]),
+  );
+  return suppliers.map((supplier) => {
+    const balance = existingBalances.get(supplier.id);
+    return balance === undefined || !Number.isFinite(balance)
+      ? supplier
+      : { ...supplier, payableBalance: balance };
+  });
+}
