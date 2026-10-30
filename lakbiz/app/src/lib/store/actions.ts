@@ -1706,10 +1706,30 @@ export function createSale(
   paymentMethod: Sale["paymentMethod"],
   options: SaleOptions = {},
 ): AppData {
+  // Validate aggregate demand per product before accepting any lines.
+  // Checking each line independently permits duplicate lines to oversell stock.
+  const requestedQtyByProduct = new Map<string, number>();
+  for (const { productId, qty } of lines) {
+    const product = data.products.find((p) => p.id === productId);
+    if (!product || !Number.isFinite(qty) || qty <= 0) continue;
+    requestedQtyByProduct.set(
+      productId,
+      (requestedQtyByProduct.get(productId) ?? 0) + qty,
+    );
+  }
+  if (
+    [...requestedQtyByProduct].some(([productId, qty]) => {
+      const product = data.products.find((p) => p.id === productId);
+      return !product || product.stockQty < qty;
+    })
+  ) {
+    return data;
+  }
+
   const saleLines = lines
     .map(({ productId, qty, unitPrice }) => {
       const product = data.products.find((p) => p.id === productId);
-      if (!product || qty <= 0 || product.stockQty < qty) return null;
+      if (!product || !Number.isFinite(qty) || qty <= 0) return null;
       const price =
         unitPrice != null && unitPrice >= 0 ? unitPrice : product.sellPrice;
       return {
@@ -1829,9 +1849,13 @@ export function createSale(
     chequeId,
   };
 
-  const qtyByProduct = new Map(
-    saleLines.map((l) => [l.productId, l.qty] as const),
-  );
+  const qtyByProduct = new Map<string, number>();
+  for (const line of saleLines) {
+    qtyByProduct.set(
+      line.productId,
+      (qtyByProduct.get(line.productId) ?? 0) + line.qty,
+    );
+  }
 
   const stockLogs: StockLog[] = saleLines.map((line) => ({
     id: newId(),
