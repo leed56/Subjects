@@ -515,3 +515,31 @@ A follow-up repository search checked the default branch's complete tracked tree
 ### Decision
 
 This remains a read-only audit. No production SQL, grants, functions, data, or migration history were changed. Do not create replacement migrations by guessing from current function bodies: the complete historical migration ordering and dependencies remain unknown. The next safe recovery source must be the original deployment repository/artifact or a verified database backup/source-control export that contains the exact applied migration SQL. Once recovered, validate it in a disposable local database before editing any financial routine.
+
+
+## 20. Recovery lead found in an existing repository branch
+
+A broader Git branch sweep found that `codex/premium-platform-enhancements` contains a substantial 2026 migration set that is absent from this PR branch and from `main`. This corrects the earlier conclusion that no migration source was discoverable anywhere in the repository.
+
+The candidate branch includes SQL files for the live database's return, safe-exchange, tender-ledger, private POS routing, textile atomic-sales and general-ledger features. Examples inspected directly include:
+
+- `20260822000008_sale_returns.sql`
+- `20260822000009_sale_return_credit_notes.sql`
+- `20260822000010_sale_return_settlement_hardening.sql`
+- `20260822000012_safe_sale_exchange.sql`
+- `20260822000014_sale_tender_ledger.sql`
+- `20260824000003_textile_atomic_sales.sql`
+- `20261011062938_general_ledger_foundation.sql`
+
+The live `supabase_migrations.schema_migrations` table contains corresponding migration names, but the recorded version timestamps differ from the candidate branch filenames. For example, live `general_ledger_foundation` is recorded as `20261011094954`, while the candidate file is named `20261011062938_general_ledger_foundation.sql`. Other live 20260822/20260824 migrations also have different recorded version prefixes from the candidate branch's filenames.
+
+### What this establishes — and what it does not
+
+- We now have a plausible in-repository source for much of the deployed SQL, so recovery is no longer blocked by a total absence of candidate files.
+- The branch is not automatically authoritative for the exact SQL deployed to production: timestamp/version mismatches mean the migration files cannot simply be copied into PR #89 under their current names or treated as the exact applied migration history.
+- Some candidate branch migrations may be later revisions or include additional migrations not present in the live history. The branch also contains duplicate timestamp prefixes for distinct migration files, which must be reconciled before using it as a clean migration chain.
+- The next verification must map every live migration name to a candidate file, compare each candidate function/table/policy definition with the current live catalog, and inspect the candidate branch commit history for the actual deployment lineage. Only verified files should be recovered, preserving the live migration version ledger and append-only ordering.
+
+### Safety decision
+
+No candidate migration has been copied to PR #89 or applied to any database. No production SQL or data was changed. This branch is now the primary recovery lead, not yet a verified deployment source. Continue with read-only comparison before creating any new migration or changing financial functions.
