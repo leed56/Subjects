@@ -32,7 +32,7 @@ import {
 } from "@/lib/offline/sync-conflict";
 import { localDataWatermark } from "./sync-watermark";
 import { fetchAllPages } from "./pagination";
-import { preserveExistingBankBalances, preserveExistingSupplierBalances, preserveExistingContractorBalances } from "./financial-balance-sync";
+import { preserveExistingBankBalances, preserveExistingSupplierBalances, preserveExistingContractorBalances, omitCustomerCreditBalance } from "./financial-balance-sync";
 import {
   selectNewSaleStockLogs,
   omitCustomerCreditBalance,
@@ -1718,12 +1718,22 @@ export async function syncCustomerPaymentSnapshot(
   const payment = data.customerPayments.find((row) => row.id === paymentId);
   if (!payment) return "Payment not found locally";
 
-  const custErr = await syncCustomersSnapshot(organizationId, data.customers);
-  if (custErr) return custErr;
-
-  return upsertOrgRows("customer_payments", [
+  // Save the payment ledger first. Then refresh customer details without
+  // copying a possibly stale offline credit balance or pruning other devices.
+  const paymentErr = await upsertOrgRows("customer_payments", [
     customerPaymentRow(organizationId, payment),
   ]);
+  if (paymentErr) return paymentErr;
+
+  const customerRows = omitCustomerCreditBalance(
+    customerRowsForOrg(organizationId, data.customers),
+  );
+  const customerErr = await upsertOrgRows("customers", customerRows);
+  if (customerErr) {
+    console.warn("[LakBiz] Customer payment saved, but customer details could not be refreshed.", customerErr);
+    return "Payment was saved, but customer details could not be refreshed. Retry sync to finish.";
+  }
+  return null;
 }
 
 function jobStatusHistoryRow(
