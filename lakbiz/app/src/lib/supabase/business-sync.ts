@@ -32,7 +32,7 @@ import {
 } from "@/lib/offline/sync-conflict";
 import { localDataWatermark } from "./sync-watermark";
 import { fetchAllPages } from "./pagination";
-import { preserveExistingBankBalances, preserveExistingSupplierBalances } from "./financial-balance-sync";
+import { preserveExistingBankBalances, preserveExistingSupplierBalances, preserveExistingContractorBalances } from "./financial-balance-sync";
 import {
   selectNewSaleStockLogs,
   omitCustomerCreditBalance,
@@ -1886,18 +1886,32 @@ export async function syncContractorPaymentSnapshot(
   const payment = data.contractorPayments.find((row) => row.id === paymentId);
   if (!payment) return "Payment not found locally";
 
+  const paymentErr = await upsertOrgRows("contractor_payments", [
+    contractorPaymentRow(organizationId, payment),
+  ]);
+  if (paymentErr) return paymentErr;
+
   if (data.contractors.length > 0) {
+    const supabase = createBrowserClient();
+    if (!supabase) return "Could not verify contractor balances. Payment was saved; contractor snapshot was paused.";
+    const { data: existingRows, error: readError } = await supabase
+      .from("contractors")
+      .select("id, payable_balance")
+      .eq("organization_id", organizationId);
+    if (readError || !existingRows) {
+      console.warn("[LakBiz] Contractor payment saved, but balances could not be verified.", readError);
+      return "Payment was saved, but contractor balances could not be verified. Retry sync to finish.";
+    }
+    const safeContractors = preserveExistingContractorBalances(data.contractors, existingRows);
     const contractorErr = await upsertMaskedViewRows(
       "contractors",
       organizationId,
-      contractorRowsFromList(organizationId, data.contractors),
+      contractorRowsFromList(organizationId, safeContractors),
     );
     if (contractorErr) return contractorErr;
   }
 
-  return upsertOrgRows("contractor_payments", [
-    contractorPaymentRow(organizationId, payment),
-  ]);
+  return null;
 }
 
 function bankAccountRow(
@@ -2704,7 +2718,32 @@ export async function pushBusinessData(
     hourly_rate: tch.hourlyRate ?? null,
   }));
 
-  const contractorRows = data.contractors.map((c) => ({
+  let contractors = data.contractors;
+  if (contractors.length > 0) {
+    const supabase = createBrowserClient();
+    if (!supabase) {
+      return {
+        error: "Could not verify contractor balances. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+    const { data: existingContractorRows, error: contractorReadError } = await supabase
+      .from("contractors")
+      .select("id, payable_balance")
+      .eq("organization_id", organizationId);
+    if (contractorReadError || !existingContractorRows) {
+      console.warn("[LakBiz] Full sync paused: contractor balances could not be verified.", contractorReadError);
+      return {
+        error: "Could not verify contractor balances. Cloud sync was paused to protect financial data.",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+    contractors = preserveExistingContractorBalances(contractors, existingContractorRows);
+  }
+
+  const contractorRows = contractors.map((c) => ({
     id: c.id,
     organization_id: organizationId,
     name: c.name,
