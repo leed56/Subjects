@@ -127,3 +127,35 @@ The live trigger definitions were inspected for customer, supplier, contractor, 
 ### Updated implementation decision
 
 Do not implement three superficially similar payment RPCs yet. Customer payment posting can be designed around a locked customer balance, but supplier payment posting must respect invoice-authority mode and contractor posting needs a defined authoritative accrual ledger/locking boundary. These are separate domain transactions, not one generic balance-update function. The current application should continue to treat the affected cloud payment balances as not fully reconciled until those domain-specific transaction paths and authenticated staging tests exist.
+
+
+## Existing invoice-authority supplier settlement RPC audit (live database, read-only)
+
+A further read-only inspection found that invoice-authority mode already has dedicated atomic settlement functions in the live database. This narrows the supplier design gap: the database settlement workflow exists, but the ordinary supplier-payment screen is not currently wired to it.
+
+### Existing functions
+
+- `public.settle_purchase_invoice_cash_atomic(organization_id, settlement_id, invoice_id, amount, payment_date, note)`
+  - Calls `inventory_internal.require_purchase_authority` and requires invoice-authority settings to be enabled.
+  - Validates a positive two-decimal amount, date and note; derives a canonical request and takes an advisory transaction lock on the stable settlement ID.
+  - Replays an identical settlement ID safely and rejects reuse with different details.
+  - Locks the invoice row, checks invoice currency/date and outstanding amount, then locks the supplier row.
+  - Inserts the cash-settlement ledger row and decreases supplier payable in the same database transaction.
+- `public.settle_purchase_invoice_bank_atomic(organization_id, settlement_id, invoice_id, account_id, foreign_amount, exchange_rate, fee, payment_date, note)`
+  - Calls the purchase-authority helper and additionally requires banking module write access and invoice-authority settings.
+  - Validates amount, FX rate, fee and date; uses a stable settlement ID with canonical-request idempotency.
+  - Locks the invoice, supplier and bank account; checks invoice outstanding, supplier payable and available bank funds.
+  - Writes the bank-settlement ledger and updates supplier payable and bank balance within the same transaction. It also records the paid amount, fee and exchange difference.
+- Read helpers `get_purchase_invoice_settlement` and `get_purchase_invoice_bank_settlement_snapshot` require authenticated financial visibility and return the settlement/invoice/balance data needed for reconciliation.
+
+### Application integration gap
+
+The current supplier screen still calls `recordSupplierPaymentToCloud`. That provider path locally records a legacy supplier payment and calls `syncSupplierPaymentSnapshot`; it does not call either invoice settlement RPC. The supplier page does not currently expose a verified invoice-specific settlement flow in the inspected application paths.
+
+### Revised supplier implementation decision
+
+- For organizations with invoice authority enabled, supplier payments must be posted against a specific invoice through the existing cash or bank settlement RPC. Do not route these payments through the legacy `supplier_payments` snapshot path.
+- For bank settlements, preserve the separate banking module permission check and account balance/fee rules.
+- For organizations without invoice authority, the existing legacy supplier payment path remains a separate case; its role and balance semantics still need a domain-safe atomic implementation.
+- Before wiring the invoice settlement flow, inspect the live RPC grants and the full helper definition, then implement the UI/provider integration with stable IDs and reconciliation from the returned authoritative result. Add authenticated tests for allowed/denied roles, replay, outstanding limits, insufficient bank funds, cross-organization IDs and rollback.
+- No RPC was called for posting, no database object or row was changed, and no production write was made during this audit.
