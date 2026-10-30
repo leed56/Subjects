@@ -1753,6 +1753,10 @@ export function createSale(
 
   if (saleLines.length === 0) return data;
 
+  if (options.discount != null && !Number.isFinite(options.discount)) {
+    return data;
+  }
+
   let working = data;
   let resolvedCustomerId = options.customerId;
   let resolvedName = options.customerName?.trim();
@@ -1786,6 +1790,7 @@ export function createSale(
   }
 
   const grossInclusive = saleLines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
+  if (!Number.isFinite(grossInclusive)) return data;
   const discount = Math.min(
     Math.max(0, Math.round((options.discount ?? 0) * 100) / 100),
     grossInclusive,
@@ -1798,6 +1803,13 @@ export function createSale(
   const profit =
     saleLines.reduce((s, l) => s + (l.unitPrice - l.buyPrice) * l.qty, 0) -
     discount;
+  if (
+    !Number.isFinite(discount) ||
+    !Number.isFinite(total) ||
+    !Number.isFinite(profit)
+  ) {
+    return data;
+  }
 
   const customer = resolvedCustomerId
     ? working.customers.find((c) => c.id === resolvedCustomerId)
