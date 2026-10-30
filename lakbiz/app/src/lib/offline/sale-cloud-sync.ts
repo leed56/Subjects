@@ -25,3 +25,14 @@ export async function captureSaleCloudSyncError(
     return error instanceof Error ? error.message : "Cloud sync failed";
   }
 }
+
+/**
+ * Sale sync may update customer contact details, but credit_balance is a
+ * financial value and must not be overwritten from a possibly stale device
+ * snapshot. The authoritative balance needs a transactional sale posting.
+ */
+export function omitCustomerCreditBalance<
+  T extends { credit_balance?: unknown },
+>(rows: T[]): Array<Omit<T, "credit_balance">> {
+  return rows.map(({ credit_balance: _creditBalance, ...row }) => row);
+}
