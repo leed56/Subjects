@@ -36,3 +36,23 @@ export function preserveExistingSupplierBalances<
       : { ...supplier, payableBalance: balance };
   });
 }
+/**
+ * Preserve the authoritative contractor payable balance when syncing an
+ * offline snapshot. The masked contractors view returns zero to members
+ * without financial visibility; its write trigger independently preserves
+ * the underlying balance for those members.
+ */
+export function preserveExistingContractorBalances<
+  T extends { id: string; payableBalance: number },
+  R extends { id: string; payable_balance: unknown },
+>(contractors: T[], existingRows: R[]): T[] {
+  const existingBalances = new Map(
+    existingRows.map((row) => [row.id, Number(row.payable_balance)]),
+  );
+  return contractors.map((contractor) => {
+    const balance = existingBalances.get(contractor.id);
+    return balance === undefined || !Number.isFinite(balance)
+      ? contractor
+      : { ...contractor, payableBalance: balance };
+  });
+}
