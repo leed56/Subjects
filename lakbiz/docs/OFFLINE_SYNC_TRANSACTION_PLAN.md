@@ -293,3 +293,35 @@ Every future operation RPC that mutates synchronized business data must follow t
 - Any new privileged RPC requires an explicit `auth.uid()` check, strict organization membership and role/module checks, a fixed safe search path, narrowly scoped grants (revoke from `PUBLIC` and `anon`; grant only to `authenticated` where appropriate), and security-advisor review. Do not add a generic arbitrary-table writer.
 - No migration has been applied to the linked database. This section records the required protocol and source findings only.
 
+## 13. Live schema and policy verification for customer-payment RPC
+
+A read-only catalog audit was run against the linked LakBiz Supabase project `nexus-erp` (PostgreSQL 17). No rows were read from customer or payment business tables, and no database writes were issued.
+
+### Confirmed live schema
+
+- `organizations.sync_generation` exists as `bigint NOT NULL DEFAULT 0`.
+- `customers.id` and `customer_payments.id` are text primary keys; both tables also carry a non-null organization UUID.
+- `customers.credit_balance` is `numeric NOT NULL DEFAULT 0`.
+- `customer_payments.amount` is `numeric NOT NULL`; payment_date is timestamptz; method is text with default `cash`.
+- The customer payment foreign keys separately reference `customers(id)` and `organizations(id)`. They do not enforce that the referenced customer belongs to the same organization as the payment. The RPC must explicitly validate that relationship.
+- The only customer trigger found is the generic `BEFORE UPDATE` updated_at trigger. No payment trigger changes credit_balance.
+- There is no database CHECK constraint on payment amount or method in the inspected table constraints. The RPC must enforce both.
+
+### Confirmed live authorization
+
+- Customer-payment INSERT, UPDATE and DELETE policies require `org_member_can_write_module(organization_id, 'customers')` and role in owner, manager, data_entry or cashier.
+- Customer-payment SELECT additionally checks organization membership and the same role allowlist.
+- `org_member_can_write_module` checks membership plus `org_has_module`; it does not itself enforce the subscription write gate.
+- `org_member_can_write` checks membership plus `org_can_write`.
+- `org_member_role_in` compares the authenticated user's membership role. The RPC must require non-null `auth.uid()` and apply all three checks: `org_member_can_write`, module access, and the role allowlist. Do not rely on module access alone for subscription write authorization.
+
+### Implementation implications
+
+- Keep the payment ID as text in the RPC signature to match the existing client-generated IDs and table primary key.
+- Validate the payment's customer ID and organization together with an explicit `customers.id = p_customer_id AND customers.organization_id = p_org_id` lookup under row lock.
+- Use the actual client PaymentMethod allowlist: `cash`, `bank_transfer`, `card`, `cheque`.
+- Reject non-finite, zero and negative amounts before writing.
+- Idempotency lookup must compare the full immutable payment payload. A matching existing payment returns the existing committed result without a second balance decrement; a mismatched payload using the same ID is rejected.
+- The organization lock remains the outer lock; lock the customer row after it. All competing financial writers must eventually follow the same order.
+- The live database has not been changed. The RPC and test suite remain unimplemented pending a local/staging migration workflow where the full authorization, retry and concurrency behavior can be executed safely.
+
