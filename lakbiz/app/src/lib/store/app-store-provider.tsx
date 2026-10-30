@@ -1120,14 +1120,19 @@ function useAppStoreState(): AppStoreValue {
         return { ok: true, saleId };
       }
 
-      const err = await syncSaleSnapshot(org.id, next, saleId, {
+      const cloudOrgId = org.id;
+      if (!cloudOrgId) {
+        return { ok: false, error: "Cloud not connected" };
+      }
+
+      const err = await syncSaleSnapshot(cloudOrgId, next, saleId, {
         preserveBuyPrices: !canSeeFinancials,
         newAcJobIds,
       });
       if (err) {
         setCloudSyncError(err);
-        touchOfflinePending(org.id);
-        refreshOfflinePendingState(org.id);
+        touchOfflinePending(cloudOrgId);
+        refreshOfflinePendingState(cloudOrgId);
         scheduleCloudPush(next);
         return { ok: false, error: err };
       }
