@@ -1140,7 +1140,11 @@ function useAppStoreState(): AppStoreValue {
         touchOfflinePending(cloudOrgId);
         refreshOfflinePendingState(cloudOrgId);
         scheduleCloudPush(next);
-        return { ok: false, error: err };
+        // The sale is already committed to local storage. Returning failure
+        // leaves the POS cart intact and invites the operator to submit the
+        // same sale again. Report local success; cloudSyncError and the
+        // pending-sync state communicate that cloud confirmation is pending.
+        return { ok: true, saleId };
       }
 
       setCloudSyncError(null);
