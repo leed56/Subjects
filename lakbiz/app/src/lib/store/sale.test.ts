@@ -45,6 +45,43 @@ describe("createSale duplicate product lines", () => {
   });
 
 
+
+  it("rejects sale calculations that overflow finite input values", () => {
+    const data = {
+      ...emptyAppData(),
+      products: [makeProduct(Number.MAX_VALUE)],
+    };
+
+    const next = createSale(
+      data,
+      [{ productId: "product-1", qty: Number.MAX_VALUE, unitPrice: Number.MAX_VALUE }],
+      "cash",
+    );
+
+    expect(next).toBe(data);
+    expect(next.sales).toHaveLength(0);
+    expect(next.products[0].stockQty).toBe(Number.MAX_VALUE);
+    expect(next.stockLogs).toHaveLength(0);
+  });
+
+  it("rejects a non-finite discount", () => {
+    const data = {
+      ...emptyAppData(),
+      products: [makeProduct(5)],
+    };
+
+    const next = createSale(
+      data,
+      [{ productId: "product-1", qty: 1 }],
+      "cash",
+      { discount: Number.NaN },
+    );
+
+    expect(next).toBe(data);
+    expect(next.sales).toHaveLength(0);
+    expect(next.products[0].stockQty).toBe(5);
+  });
+
   it("rejects the entire sale if any requested line is invalid", () => {
     const data = {
       ...emptyAppData(),
