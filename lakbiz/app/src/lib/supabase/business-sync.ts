@@ -267,7 +267,40 @@ export async function pullBusinessData(
     fetchOrgShopSettings(organizationId),
   ]);
 
-  if (productsRes.error || customersRes.error || salesRes.error) {
+  // A partial snapshot must never be treated as an empty table. If any
+  // business-table read fails, abort the pull so callers cannot overwrite
+  // local data with an incomplete cloud snapshot.
+  const tableReads = [
+    ["products", productsRes],
+    ["customers", customersRes],
+    ["suppliers", suppliersRes],
+    ["sales", salesRes],
+    ["sale_lines", saleLinesRes],
+    ["purchases", purchasesRes],
+    ["purchase_lines", purchaseLinesRes],
+    ["purchase_orders", purchaseOrdersRes],
+    ["purchase_order_lines", purchaseOrderLinesRes],
+    ["customer_payments", customerPaymentsRes],
+    ["customer_product_prices", customerProductPricesRes],
+    ["supplier_payments", supplierPaymentsRes],
+    ["stock_logs", stockLogsRes],
+    ["bank_accounts", bankAccountsRes],
+    ["bank_transactions", bankTransactionsRes],
+    ["bank_transfers", bankTransfersRes],
+    ["cheques", chequesRes],
+    ["ac_jobs", acJobsRes],
+    ["job_items", jobItemsRes],
+    ["job_status_history", jobStatusHistoryRes],
+    ["technicians", techniciansRes],
+    ["contractors", contractorsRes],
+    ["contractor_payments", contractorPaymentsRes],
+    ["vehicles", vehiclesRes],
+  ] as const;
+  const failedReads = tableReads.filter(([, result]) => result.error);
+  if (failedReads.length > 0) {
+    for (const [label, result] of failedReads) {
+      console.warn(`[pullBusinessData] ${label}:`, result.error?.message);
+    }
     return null;
   }
 
@@ -2818,7 +2851,15 @@ export async function syncBusinessData(
 ): Promise<SyncBusinessResult> {
   const cloudGen = await fetchOrgSyncGeneration(organizationId);
   const cloud = await pullBusinessData(organizationId, local.business);
-  const cloudHasData = cloud != null && !isEmptyBusinessData(cloud);
+  if (cloud === null) {
+    return {
+      data: local,
+      error: "Cloud data could not be read completely. Sync was paused to protect your records.",
+      generation: cloudGen,
+      conflictRemote: null,
+    };
+  }
+  const cloudHasData = !isEmptyBusinessData(cloud);
   const localHasData = !isEmptyBusinessData(local);
 
   if (!cloudHasData && localHasData) {
