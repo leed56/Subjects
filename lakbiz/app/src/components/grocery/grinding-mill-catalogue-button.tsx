@@ -78,7 +78,7 @@ export function GrindingMillCatalogueButton() {
     inFlightSku.current = next.sku ?? next.name;
     void saveProductToCloud(next).then((result) => {
       inFlightSku.current = null;
-      if (!result.ok && result.error !== "Cloud not connected") {
+      if (!result.ok) {
         setError(result.error ?? labels.error);
         setQueue([]);
         setSaving(false);
