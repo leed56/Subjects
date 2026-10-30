@@ -183,7 +183,13 @@ export async function pullBusinessData(
   if (!supabase) return null;
 
   // Bracket the multi-request snapshot with the organization generation.
-  // If a sync commits while table reads are in flight, reject the mixed view.
+  // This detects generation-advancing writes that complete during the pull.
+  // It is NOT a database snapshot or an in-progress writer lock: the current
+  // multi-request push advances generation only after its table writes finish,
+  // so a pull can still overlap an unfinished push and observe intermediate
+  // rows while both generation reads return the old value. Keep this guard as
+  // a partial safeguard; atomic server-side snapshot transactions/shared
+  // writer coordination are still required before claiming snapshot isolation.
   const snapshotGeneration = await fetchOrgSyncGeneration(organizationId);
   if (snapshotGeneration < 0) return null;
 
