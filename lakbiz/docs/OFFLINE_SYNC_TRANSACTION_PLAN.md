@@ -325,3 +325,30 @@ A read-only catalog audit was run against the linked LakBiz Supabase project `ne
 - The organization lock remains the outer lock; lock the customer row after it. All competing financial writers must eventually follow the same order.
 - The live database has not been changed. The RPC and test suite remain unimplemented pending a local/staging migration workflow where the full authorization, retry and concurrency behavior can be executed safely.
 
+## 14. Customer-payment client integration audit
+
+The customer payment UI and local action were traced through the current branch.
+
+### Confirmed client behavior
+
+- The customer payment dialog uses `PAYMENT_OPTIONS.filter((m) => m !== "credit")`. The accepted receipt methods are therefore exactly `cash`, `bank_transfer`, `card`, and `cheque`. The shared `PaymentMethod` type also contains `credit`, but it is intentionally excluded from this receipt dialog. The RPC must reject `credit`.
+- `recordCustomerPayment` generates a new local payment ID, records customer name/date/method/note, and reduces local credit balance with `Math.max(0, balance - amount)`.
+- The online provider persists the local state first, then calls `syncCustomerPaymentSnapshot(organizationId, next, paymentId)`.
+- The current cloud helper performs two independent upserts: first `customer_payments`, then customer details with `credit_balance` omitted. It does not apply the payment to the server-side credit balance.
+- If the payment upsert succeeds but the customer-details upsert fails, the helper returns an error and the provider schedules a general cloud push. The payment ID is already stored in local AppData, which is useful for retry, but the current direct helper has no transactional exactly-once balance effect.
+- If the first payment upsert fails, the provider also schedules a general cloud push. This is an additional reason to ensure snapshot reconciliation cannot independently reapply payment balance effects after the atomic RPC is introduced.
+
+### Required migration boundary
+
+1. Keep the existing client-generated payment ID and pass it unchanged to the RPC for online writes and offline retries.
+2. The RPC method allowlist is the four UI receipt methods above; do not accept the broader TypeScript union value `credit`.
+3. Move online persistence to one atomic RPC call. Do not call the legacy two-upsert helper after the RPC.
+4. Preserve local-first behavior while offline, but queue/retry the same payment ID and immutable payload. Do not manufacture a new ID on retry.
+5. Make general snapshot push incapable of changing customer credit balance or creating a second financial effect for a payment already committed through the RPC.
+6. The existing UI currently reports the local action as successful before cloud persistence completes. Keep the user-facing distinction clear: local/offline saved versus cloud committed; do not display a cloud success until the RPC confirms it.
+7. Preserve the current zero-floor balance behavior unless a separately approved accounting rule changes overpayments. The database transaction must lock the customer and calculate the balance from the server's current value, never from the stale client snapshot.
+
+### Current implementation status
+
+This section is a source audit only. The legacy helper and provider are not changed yet. No RPC migration has been created or applied, and no production database writes were made.
+
