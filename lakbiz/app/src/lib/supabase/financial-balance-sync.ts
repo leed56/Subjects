@@ -56,3 +56,10 @@ export function preserveExistingContractorBalances<
       : { ...contractor, payableBalance: balance };
   });
 }
+
+/** Remove a derived customer balance from payment-related detail snapshots. */
+export function omitCustomerCreditBalance<T extends { credit_balance?: unknown }>(
+  rows: T[],
+): Omit<T, "credit_balance">[] {
+  return rows.map(({ credit_balance: _creditBalance, ...row }) => row);
+}
