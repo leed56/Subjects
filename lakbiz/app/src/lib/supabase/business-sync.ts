@@ -82,8 +82,19 @@ async function advanceOrgSyncGeneration(
     return { ok: false, generation: seenGeneration };
   }
 
-  const n = Number(data);
+  // The RPC must return exactly the next generation. In particular, do not
+  // let Number(null) or an unexpected payload masquerade as a successful CAS.
+  const n = typeof data === "number" || typeof data === "string" ? Number(data) : NaN;
   if (n === -1) {
+    const current = await fetchOrgSyncGeneration(organizationId);
+    return { ok: false, generation: current };
+  }
+  if (
+    !Number.isSafeInteger(n) ||
+    n !== seenGeneration + 1 ||
+    !Number.isSafeInteger(seenGeneration + 1)
+  ) {
+    console.warn("[sync] try_advance_org_sync_generation returned an invalid generation");
     const current = await fetchOrgSyncGeneration(organizationId);
     return { ok: false, generation: current };
   }
@@ -3067,12 +3078,35 @@ export async function syncBusinessData(
   localGeneration: number,
 ): Promise<SyncBusinessResult> {
   const cloudGen = await fetchOrgSyncGeneration(organizationId);
+  if (!Number.isSafeInteger(cloudGen) || cloudGen < 0) {
+    return {
+      data: local,
+      error: "Cloud sync version could not be verified. Sync was paused to protect your records.",
+      generation: -1,
+      conflictRemote: null,
+    };
+  }
+
   const cloud = await pullBusinessData(organizationId, local.business);
   if (cloud === null) {
     return {
       data: local,
-      error: "Cloud data could not be read completely. Sync was paused to protect your records.",
+      error: "Cloud data could not be read completely or its version changed. Sync was paused to protect your records.",
       generation: cloudGen,
+      conflictRemote: null,
+    };
+  }
+
+  // pullBusinessData brackets its own independent table reads. Also ensure
+  // that the version used by this sync decision is the same version that was
+  // current before that pull; otherwise the decision could use a mismatched
+  // generation even though the pull itself was internally stable.
+  const confirmedCloudGen = await fetchOrgSyncGeneration(organizationId);
+  if (confirmedCloudGen !== cloudGen) {
+    return {
+      data: local,
+      error: "Cloud data changed while sync was starting. Sync was paused to protect your records.",
+      generation: confirmedCloudGen,
       conflictRemote: null,
     };
   }
