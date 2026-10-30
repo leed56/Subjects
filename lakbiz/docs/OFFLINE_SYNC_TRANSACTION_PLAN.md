@@ -261,3 +261,35 @@ A focused trace of the current customer-payment flow identifies both the missing
 
 **Implementation decision:** customer payment is a suitable first domain operation because its schema and role policy are comparatively narrow, but it must not be switched to a new RPC until the shared organization-lock/generation contract and local database test harness are in place. No production migration, RPC deployment or data mutation is authorized by this audit.
 
+## 12. Shared organization transaction-lock contract
+
+The existing generation migration confirms that `sync_generation` is stored directly on `public.organizations`. The current `try_advance_org_sync_generation` performs a conditional `UPDATE` only when called, after the client has already sent its business-table writes. That update acquires a row lock too late to protect those earlier requests. It is an optimistic compare-and-increment, not a transaction entry lock.
+
+### Required transaction sequence
+
+Every future operation RPC that mutates synchronized business data must follow the same in-transaction sequence:
+
+1. Reject a null `auth.uid()`; never accept a caller-supplied user ID as the actor.
+2. Acquire `SELECT ... FOR UPDATE` on the matching `public.organizations` row. Do not expose a standalone “lock organization” RPC: a lock released at the end of that RPC cannot protect later client requests.
+3. While holding that lock, validate organization membership, subscription write status, module permission and the operation-specific role allowlist. Reuse the existing authorization helpers only after verifying their definitions and behavior against the target migration set.
+4. Read `sync_generation` from the locked row and compare it with the caller's expected generation. A mismatch returns a stale result before any business write.
+5. Validate all IDs and organization ownership, then perform the allowlisted operation writes.
+6. Increment `organizations.sync_generation` exactly once in the same transaction and return the committed generation/result.
+7. Let any exception roll back both business writes and the generation increment.
+
+### Lock ordering and compatibility
+
+- The organization row is the outer coordination lock. Every transaction-aware business writer and the future full-snapshot transaction must acquire it before locking customer, sale, inventory, bank or other domain rows.
+- Domain rows should then be locked in a deterministic order (for example, sorted IDs) to reduce deadlocks when an operation touches more than one row.
+- Do not add a second, independent per-customer lock protocol that can be acquired before the organization lock; that creates inconsistent lock ordering between payment and full sync.
+- The legacy `try_advance_org_sync_generation` RPC must not be treated as transaction protection. Once all writers have migrated, deprecate it or restrict its role to an explicitly documented compatibility use.
+- A transaction-aware writer cannot serialize with a legacy multi-request writer merely by taking the organization lock. Until all writers—including full snapshot push and eager direct-write helpers—use the same lock in their own database transaction, mixed old/new operation concurrency remains unsafe.
+- Keep the current client path unchanged until the RPC is deployed to an authorized staging environment and concurrency/authorization tests pass.
+
+### Migration review findings
+
+- The current generation helpers are `SECURITY DEFINER` functions in `public`, with `search_path = public`; their execute privileges are revoked from `PUBLIC` and granted to `authenticated`.
+- The existing `try_advance_org_sync_generation` checks `org_member_can_write` but does not itself compare the generation before the caller's preceding multi-request writes. It also does not apply the operation-specific module/role policy by itself.
+- Any new privileged RPC requires an explicit `auth.uid()` check, strict organization membership and role/module checks, a fixed safe search path, narrowly scoped grants (revoke from `PUBLIC` and `anon`; grant only to `authenticated` where appropriate), and security-advisor review. Do not add a generic arbitrary-table writer.
+- No migration has been applied to the linked database. This section records the required protocol and source findings only.
+
