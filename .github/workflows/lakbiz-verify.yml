@@ -11,6 +11,7 @@ on:
       - main
       - claude/job-parts-materials
       - claude/global-premium-ui
+      - claude/world-class-banking-ui
     paths:
       - "lakbiz/app/**"
       - "lakbiz/supabase/migrations/**"
