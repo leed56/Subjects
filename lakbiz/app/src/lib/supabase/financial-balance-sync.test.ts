@@ -87,3 +87,17 @@ describe("preserveExistingContractorBalances", () => {
     ).toEqual([{ id: "contractor-1", payableBalance: 0 }]);
   });
 });
+
+describe("omitCustomerCreditBalance", () => {
+  it("keeps customer details but excludes stale credit balances", () => {
+    expect(
+      omitCustomerCreditBalance([
+        { id: "customer-1", name: "Customer", credit_balance: 950, phone: "123" },
+      ]),
+    ).toEqual([{ id: "customer-1", name: "Customer", phone: "123" }]);
+  });
+
+  it("supports an empty customer list", () => {
+    expect(omitCustomerCreditBalance([])).toEqual([]);
+  });
+});
