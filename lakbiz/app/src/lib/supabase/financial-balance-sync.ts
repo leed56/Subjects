@@ -61,5 +61,9 @@ export function preserveExistingContractorBalances<
 export function omitCustomerCreditBalance<T extends { credit_balance?: unknown }>(
   rows: T[],
 ): Omit<T, "credit_balance">[] {
-  return rows.map(({ credit_balance: _creditBalance, ...row }) => row);
+  return rows.map((row) => {
+    const safeRow = { ...row };
+    delete safeRow.credit_balance;
+    return safeRow;
+  });
 }
