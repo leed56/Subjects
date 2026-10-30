@@ -352,3 +352,41 @@ The customer payment UI and local action were traced through the current branch.
 
 This section is a source audit only. The legacy helper and provider are not changed yet. No RPC migration has been created or applied, and no production database writes were made.
 
+## 15. Atomic customer-payment RPC design — implementation gate
+
+The source and live catalog audits are sufficient to define the transaction shape, but not yet to safely ship the function.
+
+### Transaction contract
+
+Proposed signature (not created yet):
+
+`public.record_customer_payment_atomic(p_org_id uuid, p_payment_id text, p_customer_id text, p_customer_name text, p_amount numeric, p_payment_date timestamptz, p_method text, p_note text)`
+
+The function should be a single transaction with this order:
+
+1. Require a non-null `auth.uid()`.
+2. Lock the matching organization row using `SELECT ... FOR UPDATE`; fail if it does not exist.
+3. Require `org_member_can_write(p_org_id)`, `org_member_can_write_module(p_org_id, 'customers')`, and `org_member_role_in(p_org_id, array['owner','manager','data_entry','cashier'])`.
+4. Validate nonblank payment/customer IDs, positive finite amount within `numeric(14,2)`, and method in `cash`, `bank_transfer`, `card`, `cheque`. The UI excludes `credit`.
+5. Check for an existing payment ID in the same organization. If the immutable payload matches, return an idempotent replay result without another balance decrement. If it differs, reject ID reuse. A same ID owned by another organization must not be exposed or modified.
+6. Lock the customer row using both customer ID and organization ID. Reject missing or cross-organization customer.
+7. Insert the payment row and update `customers.credit_balance = greatest(0, credit_balance - p_amount)` and `updated_at = now()`.
+8. Increment `organizations.sync_generation` exactly once, in the same transaction, and return the new generation and resulting balance.
+
+The organization lock is always acquired before the customer lock. Any other transaction-aware organization writer must use the same outer lock. Legacy multi-request writers are not made safe merely by this RPC existing.
+
+### Important unresolved correctness points
+
+- **Payment timestamp equality:** The local client stores an ISO timestamp, but Postgres `timestamptz` normalizes instants. Idempotency comparison should compare timestamp instants, not raw string formatting.
+- **Customer name:** The UI stores a customer-name snapshot in the payment row. Decide whether RPC accepts it as an immutable historical snapshot or derives it from the locked customer row. Deriving it server-side avoids spoofed/mismatched names and remains consistent with the existing local action at time of payment only if the UI sends/validates the expected name.
+- **Cross-organization duplicate ID:** Because `customer_payments.id` is globally primary-keyed, duplicate detection must avoid leaking another organization's payment details. Reject generically if the ID is already occupied by a row outside this org.
+- **Overpayment:** Preserve the existing zero-floor behavior; do not reject payment amounts greater than current balance without a product decision.
+- **Customer balance writers:** Credit-sale creation and any other customer balance mutations must be audited and migrated to the same organization-then-customer lock protocol. Otherwise a payment-only lock cannot prevent lost updates from legacy writers.
+- **Snapshot push:** The full-snapshot path and direct customer upsert paths must be checked to ensure they cannot overwrite `credit_balance` or reapply the same payment. A safe RPC alone does not complete the whole migration.
+
+### Test gate before migration rollout
+
+Automated database tests must cover: auth missing; membership missing; subscription suspended; module disabled; disallowed role; valid payment; duplicate identical retry; conflicting ID reuse; cross-org customer; globally colliding ID; zero/negative/NaN/infinite/overflow amount; unsupported method; rollback after a forced failure; two concurrent payments; and interaction with concurrent credit-sale updates.
+
+No migration or RPC was created or applied in this step. The repo currently exposes no verified local Supabase test harness from the inspected paths, and the linked live database is not a safe test target. The next implementation step is to establish an isolated local/staging test database and test harness, then implement and verify the migration there.
+
