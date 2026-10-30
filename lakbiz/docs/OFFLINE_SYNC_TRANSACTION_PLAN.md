@@ -217,3 +217,47 @@ Consequences:
 The first database implementation should be a narrowly scoped, operation-specific transaction primitive for one well-understood workflow, not a generic snapshot writer. Before choosing that workflow, finish the migration-level trigger and policy trace for its affected tables and add local Postgres integration tests. The transaction must lock the organization row before reading the expected generation, perform the allowlisted writes, and increment generation in the same transaction. The full-snapshot RPC and every multi-request direct operation must ultimately use the same organization-row lock so their commits serialize.
 
 **Status:** source-audit finding only. No SQL or live database changes were made. Existing direct writes remain outside the generation protocol; PR #89 must remain draft.
+
+## 11. Customer-payment transaction contract — first operation candidate
+
+A focused trace of the current customer-payment flow identifies both the missing cloud-side effect and the authorization contract. This is a source/migration audit only; no SQL or live database changes were made.
+
+### Current behavior
+
+- The local `recordCustomerPayment` action creates a new payment ID, prepends a payment row, and reduces the selected customer's `creditBalance` with a zero floor.
+- The online provider calls `syncCustomerPaymentSnapshot`.
+- That helper upserts the `customer_payments` row first, then upserts customer contact/details after removing `credit_balance`.
+- The two cloud writes are separate requests. The payment can persist even if the second request fails.
+- Omitting `credit_balance` is necessary to prevent a stale device snapshot from overwriting the financial balance, but this helper has no server-side balance-decrement operation. The current path therefore does not mirror the local payment's balance effect to the cloud.
+- The full snapshot writer also upserts payment rows separately from customer rows; it must not become an alternate way to apply financial balance effects.
+
+### Existing schema and permission evidence
+
+- `public.customer_payments` has a text primary key, organization ID, customer ID, customer name, positive-intended numeric amount, payment timestamp, method and note. Its customer foreign key is not a composite organization/customer constraint.
+- `public.customers.credit_balance` is numeric(14,2), non-null, default zero.
+- The role-aware RLS migration grants customer-payment insert/update/delete to owner, manager, data_entry and cashier when `org_member_can_write_module(organization_id, 'customers')` and `org_member_role_in(...)` both pass.
+- The customer table has its own role/module write policies. The RPC must retain the same role and module semantics rather than accepting a caller-supplied actor identity.
+- The source audit did not find a customer-payment trigger that adjusts customer credit balance. Do not assume a trigger supplies the missing effect.
+
+### Required RPC contract before switching the client
+
+1. Accept a stable payment ID (the current payment row ID can serve as the idempotency key), organization ID, customer ID, amount, method, timestamp and note. Do not accept a client-computed resulting balance.
+2. Require an authenticated actor; validate the existing Customers module and role permissions in the database operation.
+3. Lock the organization coordination row first, using the same lock protocol intended for full sync and other domain RPCs. Compare the expected generation while holding the lock.
+4. Verify that the customer exists in the supplied organization. The existing foreign key alone does not prove this because it references customer ID only.
+5. Validate amount is finite and greater than zero, and validate method against the app's supported payment methods.
+6. Insert the payment and reduce `customers.credit_balance` by the amount with a zero floor in the same PostgreSQL transaction. A failure in either mutation must roll back both.
+7. Make retries idempotent: if the payment ID already exists for the same organization and identical immutable payload, return the original success without reducing the balance again. If the ID exists with a different customer or payload, reject it as an idempotency conflict.
+8. Advance the organization generation in the same transaction. Never use a post-commit client-side generation compare as a substitute.
+9. Return a structured result that distinguishes committed, already-committed, stale-generation, permission-denied, validation and idempotency-conflict outcomes.
+
+### Client migration and tests
+
+- Keep local-first behavior: the local payment remains saved when cloud posting fails, and the same stable payment ID is retried.
+- Replace the current two-request helper with exactly one RPC call. Do not follow it with a customer snapshot that could overwrite financial state.
+- Ensure full-snapshot sync cannot independently apply payment effects or overwrite `credit_balance`; the transaction RPC is the only online posting path for new customer payments.
+- Add local PostgreSQL tests for successful posting, duplicate retry, conflicting reuse of payment ID, wrong-organization customer ID, missing auth, each disallowed role/module case, invalid amount/method, rollback on customer update failure, and two concurrent payments against one customer.
+- Add client tests proving a failed RPC retains the local payment and retry reuses the same payment ID.
+
+**Implementation decision:** customer payment is a suitable first domain operation because its schema and role policy are comparatively narrow, but it must not be switched to a new RPC until the shared organization-lock/generation contract and local database test harness are in place. No production migration, RPC deployment or data mutation is authorized by this audit.
+
