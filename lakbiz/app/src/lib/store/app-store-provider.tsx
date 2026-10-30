@@ -72,6 +72,7 @@ import {
 } from "@/lib/supabase/sync-watermark";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { isBrowserOnline, useOnlineStatus } from "@/lib/offline/connectivity";
+import { captureSaleCloudSyncError } from "@/lib/offline/sale-cloud-sync";
 import {
   bumpOfflinePendingChange,
   clearOfflinePendingSync,
@@ -1134,15 +1135,12 @@ function useAppStoreState(): AppStoreValue {
       // The local sale is already persisted. Treat thrown network/client
       // errors exactly like returned cloud errors so the POS never invites
       // the operator to submit the same sale a second time.
-      let err: string | null;
-      try {
-        err = await syncSaleSnapshot(cloudOrgId, next, saleId, {
+      const err = await captureSaleCloudSyncError(() =>
+        syncSaleSnapshot(cloudOrgId, next, saleId, {
           preserveBuyPrices: !canSeeFinancials,
           newAcJobIds,
-        });
-      } catch (error) {
-        err = error instanceof Error ? error.message : "Cloud sync failed";
-      }
+        }),
+      );
       if (err) {
         setCloudSyncError(err);
         touchOfflinePending(cloudOrgId);
