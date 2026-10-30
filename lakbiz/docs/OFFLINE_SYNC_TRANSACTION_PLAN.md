@@ -424,3 +424,38 @@ Section 15's proposed RPC signature is only a preliminary design and must not be
 - The live database already contains many migrations beyond the earlier source snapshot, including POS tender/atomic-sale and general-ledger migrations. The repository migration history and deployed client must be reconciled before generating a new migration; do not assume the old schema-only audit describes the whole live system.
 - Supabase's current recommended local database testing path is the CLI with pgTAP: start the local stack, then run `supabase test db`. The official documentation states tests run in individual transactions and roll back. Source: https://supabase.com/docs/guides/local-development/testing/overview and https://supabase.com/docs/reference/cli/supabase-test-db.
 
+## 17. POS lock-order verification and remaining customer-balance writers
+
+A second read-only inspection retrieved the complete live definitions of the POS sale functions and searched the live public functions that reference `customers.credit_balance`.
+
+### Confirmed POS behavior
+
+- `public.finalize_sale_with_tenders` checks the sales module and the owner/manager/data_entry/cashier role allowlist.
+- It locks the organization row with `FOR UPDATE` before the customer row.
+- It then locks the selected customer with `FOR UPDATE`, scoped by both customer ID and organization ID.
+- It validates the credit limit using the locked customer's current `credit_balance`.
+- It applies the credit-sale increment and increments organization sync generation in the same function transaction.
+- `public.finalize_sale_with_private_tenders` is a wrapper that performs POS tender normalization and delegates to the finalizer. It does not itself acquire the organization lock before its preliminary customer lookup; the underlying finalizer still takes the organization lock and re-reads/locks the customer before changing balance. The preliminary read is not used to calculate the credit balance.
+
+### Other live functions found referencing customer credit balance
+
+1. `public.apply_sale_return_exchange`: locks the replacement sale and return-related records, then locks the customer and reduces credit balance; it increments organization generation. It does not visibly take the organization coordination lock first in the inspected definition.
+2. `public.settle_sale_return_credit`: locks return records and then customer before receivable reduction; generation advances for receivable reduction and bank refund. It does not visibly take the organization lock first.
+3. `public.transition_textile_cheque`: locks cheque, then reads linked sale, then increases customer credit balance on bounced/returned received cheques. It does not visibly take the organization lock first or increment organization generation in the inspected definition.
+4. `public.finalize_textile_sale_v4`: locks the customer for credit/cheque validation, then delegates to `finalize_textile_sale_v3`; the wrapper itself does not visibly acquire the organization lock before that customer lock. The delegated transaction implementation needs separate lock-order verification.
+5. `public.finalize_sale_with_tenders`: confirmed organization-first then customer lock as described above.
+
+The search also found `public.allocate_textile_customer_payment`, which locks the payment and textile receivables but does not itself change `customers.credit_balance`; it allocates an already-recorded payment to textile receivables and requires owner/manager role.
+
+### Important correction to the shared-lock conclusion
+
+The POS finalizer is a good reference for customer payment, but **not every live customer-balance writer follows the same visible outer organization-lock protocol**. A new payment RPC that locks organization then customer will serialize correctly with the POS finalizer, but it does not by itself serialize safely with legacy return and textile cheque paths that lock domain rows/customer without first acquiring the organization lock. These writers must be migrated or proven safe through their complete call graph before claiming a globally consistent lock protocol.
+
+### Customer-payment client integration details
+
+The branch's `recordCustomerPayment` creates a stable payment ID in local state, stores the customer name snapshot, amount, ISO timestamp, method and note, and subtracts locally with a zero floor. The current cloud helper still uses two PostgREST upserts: payment ledger first, then customer details with credit balance omitted. The provider schedules a general snapshot push after the helper succeeds or fails. This is still the precise client migration point; no code path has been changed in this audit.
+
+### Safe next step
+
+Before adding the new RPC, inspect and reconcile the complete definitions/call graphs for the return-settlement and textile cheque functions above, including their callers and any nested functions. Then implement a coordinated lock-order migration for all writers in one tested migration set, or formally isolate the first RPC rollout to organizations/features where those legacy writers cannot run. Do not deploy a payment-only lock and claim all customer receivables are concurrency-safe.
+
