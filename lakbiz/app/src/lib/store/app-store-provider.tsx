@@ -1105,6 +1105,7 @@ function useAppStoreState(): AppStoreValue {
       }
 
       const prevJobIds = new Set(data.acJobs.map((job) => job.id));
+      const prevStockLogIds = new Set(data.stockLogs.map((log) => log.id));
       const prevSalesLen = data.sales.length;
       const next = createSale(data, lines, paymentMethod, options ?? {});
       if (next.sales.length === prevSalesLen) {
@@ -1115,6 +1116,9 @@ function useAppStoreState(): AppStoreValue {
       const newAcJobIds = next.acJobs
         .filter((job) => !prevJobIds.has(job.id))
         .map((job) => job.id);
+      const newStockLogIds = next.stockLogs
+        .filter((log) => !prevStockLogIds.has(log.id))
+        .map((log) => log.id);
 
       setData(next);
       latestDataRef.current = next;
@@ -1140,6 +1144,7 @@ function useAppStoreState(): AppStoreValue {
         syncSaleSnapshot(cloudOrgId, next, saleId, {
           preserveBuyPrices: !canSeeFinancials,
           newAcJobIds,
+          newStockLogIds,
         }),
       );
       if (err) {
