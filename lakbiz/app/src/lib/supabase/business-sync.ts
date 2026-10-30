@@ -1689,7 +1689,27 @@ export async function syncSupplierPaymentSnapshot(
   ]);
   if (paymentErr) return paymentErr;
 
-  return syncSuppliersSnapshot(organizationId, data.suppliers);
+  if (data.suppliers.length === 0) return null;
+
+  const supabase = createBrowserClient();
+  if (!supabase) {
+    return "Payment was saved, but supplier balances could not be verified. Retry sync to finish.";
+  }
+  const { data: existingRows, error: readError } = await supabase
+    .from("suppliers")
+    .select("id, payable_balance")
+    .eq("organization_id", organizationId);
+  if (readError || !existingRows) {
+    console.warn("[LakBiz] Supplier payment saved, but balances could not be verified.", readError);
+    return "Payment was saved, but supplier balances could not be verified. Retry sync to finish.";
+  }
+
+  const safeSuppliers = preserveExistingSupplierBalances(data.suppliers, existingRows);
+  const supplierErr = await upsertOrgRows(
+    "suppliers",
+    supplierRowsForOrg(organizationId, safeSuppliers),
+  );
+  return supplierErr;
 }
 
 function customerPaymentRow(
