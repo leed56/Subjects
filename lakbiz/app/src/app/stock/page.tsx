@@ -1,13 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ProductForm } from "@/components/product-form";
 import { StockCommandHeader } from "@/components/stock/stock-command-header";
 import { GroceryProductArt } from "@/components/sales/grocery-product-art";
-import { GroceryStarterCatalogueButton } from "@/components/grocery/starter-catalogue-button";
-import { GrindingMillCatalogueButton } from "@/components/grocery/grinding-mill-catalogue-button";
-import { GroceryMeatCatalogueButton } from "@/components/grocery/meat-catalogue-button";
 import { ExportActions } from "@/components/export/export-actions";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { AppShell } from "@/components/shell/app-shell";
@@ -102,6 +99,7 @@ export default function StockPage() {
   // sale picker, which already ignore inactive items — with an explicit
   // toggle to review/reactivate them instead of losing them silently.
   const [showInactive, setShowInactive] = useState(false);
+  const autoRevealedInactive = useRef(false);
   // HVAC platform Phase 12 — a real filtered view of exactly what needs
   // reordering, not just the metric-card count that existed before.
   const [showLowStockOnly, setShowLowStockOnly] = useState(() => searchParams.get("filter") === "low-stock");
@@ -124,6 +122,14 @@ export default function StockPage() {
   useEffect(() => {
     if (!conditionFilterRelevant && conditionFilter !== "all") setConditionFilter("all");
   }, [conditionFilterRelevant, conditionFilter]);
+
+  useEffect(() => {
+    if (!ready || !data || autoRevealedInactive.current) return;
+    autoRevealedInactive.current = true;
+    if (org.sector === "grocery" && data.products.length > 0 && data.products.every((product) => !product.active)) {
+      setShowInactive(true);
+    }
+  }, [data, org.sector, ready]);
 
   if (!ready || !data) {
     return (
@@ -167,13 +173,13 @@ export default function StockPage() {
   const outOfStockCount = data.products.filter((p) => p.active && p.stockQty <= 0).length;
   const inventoryValue = data.products.reduce((sum, p) => sum + p.stockQty * p.buyPrice, 0);
   const sellValue = data.products.reduce((sum, p) => sum + p.stockQty * p.sellPrice, 0);
-  const categoryCounts = [...new Set(data.products.filter((p) => p.active).map((p) => p.category || "Other"))]
+  const categoryProducts = data.products.filter((product) => showInactive || product.active);
+  const categoryCounts = [...new Set(categoryProducts.map((p) => p.category || "Other"))]
     .map((name) => ({
       name,
-      count: data.products.filter((p) => p.active && (p.category || "Other") === name).length,
+      count: categoryProducts.filter((p) => (p.category || "Other") === name).length,
     }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-    .slice(0, 10);
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   const stockInProduct = stockInId ? data.products.find((p) => p.id === stockInId) : null;
   const stockOutProduct = stockOutId ? data.products.find((p) => p.id === stockOutId) : null;
   const stockInQtyNumber = Number(stockInQty) || 0;
@@ -451,6 +457,7 @@ export default function StockPage() {
           sector={org.sector}
           shopName={data.business.name || org.name || "LakBiz"}
           itemCount={data.products.length}
+          readyCount={data.products.filter((product) => product.active && product.stockQty > 0 && (org.sector !== "grocery" || product.sellPrice > 0)).length}
           lowStockCount={lowStock.length}
           outOfStockCount={outOfStockCount}
           costValue={inventoryValue}
@@ -490,8 +497,6 @@ export default function StockPage() {
         />
 
         <WriteDisabledHint className="mb-4" />
-        <GrindingMillCatalogueButton />
-        <GroceryMeatCatalogueButton />
 
         <FilterBar>
           <SearchInput value={search} onChange={setSearch} placeholder={t("stock.search_placeholder")} className="min-w-[220px] flex-1" />
@@ -557,18 +562,7 @@ export default function StockPage() {
             icon={<StockIcon className="h-6 w-6" />}
             title={t("stock.no_stock")}
             description={t("stock.no_stock_hint")}
-            action={org.sector === "grocery" ? (
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <GroceryStarterCatalogueButton />
-                <button type="button" onClick={openCreate} className="rounded-lg border border-teal-200 bg-white px-4 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50">
-                  {t("stock.add_item")}
-                </button>
-              </div>
-            ) : (
-              <button type="button" onClick={openCreate} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700">
-                {t("stock.add_item")}
-              </button>
-            )}
+            action={<button type="button" onClick={openCreate} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700">{t("stock.add_item")}</button>}
           />
         ) : (
           <>
