@@ -9,6 +9,7 @@ import { GroceryCatalogArt, type GroceryCatalogArtKind } from "@/components/sale
 /* eslint-disable @next/next/no-img-element */
 
 const PRODUCT_IMAGES: ReadonlyArray<{ terms: readonly string[]; src: string }> = [
+  { terms: ["monosodium glutamate", "aji no moto", "ajinomoto", "ajinamoto", "ajinomota", "msg powder", "msg seasoning", "msg"], src: "/images/grocery/ajinomoto-msg.svg" },
   { terms: ["green chilli", "green chili"], src: "/images/grocery/green-chilli.png" },
   { terms: ["chicken liver"], src: "/images/grocery/meat/chicken-parts.svg" },
   { terms: ["broiler parent chicken", "parent chicken"], src: "/images/grocery/meat/broiler-parent-chicken.svg" },
@@ -36,8 +37,9 @@ const PRODUCT_IMAGES: ReadonlyArray<{ terms: readonly string[]; src: string }> =
   { terms: ["fresh milk", "milk", "කිරි"], src: "/images/grocery/fresh-milk.png" },
 ];
 
-// Keep dedicated meat-cut artwork ahead of family-level category art.
-const SPECIFIC_PRODUCT_IMAGES = PRODUCT_IMAGES.slice(1, 10);
+// Give the exact MSG product asset priority over category-level spice art.
+// Keep dedicated meat-cut artwork ahead of family-level category art as well.
+const SPECIFIC_PRODUCT_IMAGES = [PRODUCT_IMAGES[0], ...PRODUCT_IMAGES.slice(2, 11)];
 
 const CATEGORY_IMAGES: ReadonlyArray<{ terms: readonly string[]; src: string }> = [
   { terms: ["fruit"], src: "/images/grocery/apple.png" },
@@ -133,7 +135,7 @@ const CATALOG_ART_RULES: ReadonlyArray<{ terms: readonly string[]; kind: Grocery
   { terms: ["goraka"], kind: "goraka" },
   { terms: ["kurudu", "cinnamon stick", "cinnamon bark"], kind: "cinnamon" },
   { terms: ["chilli pieces", "chilli flakes", "chili flakes", "dried chilli"], kind: "chilli" },
-  { terms: ["aba ata", "kasa kasa ata", "kottamalli ata", "mun ata", "udu ata", "coriander seed", "cumin seed", "fennel seed", "mustard seed", "poppy seed", "black pepper", "kali miris", "maduru", "karabu nati", "ajinamoto", "karadamungu", "suduru"], kind: "spice-seeds" },
+  { terms: ["aba ata", "kasa kasa ata", "kottamalli ata", "mun ata", "udu ata", "coriander seed", "cumin seed", "fennel seed", "mustard seed", "poppy seed", "black pepper", "kali miris", "maduru", "karabu nati", "karadamungu", "suduru"], kind: "spice-seeds" },
   { terms: ["aba kudu", "bedapu miris kudu", "beema kudu", "miris kudu", "mas karry kudu", "malu curry kudu", "thunpaha", "curry powder", "masala", "spice powder", "chilli powder", "chili powder", "turmeric powder", "knor seasoning", "seasoning powder", "all purpose seasoning", "freelan rasam", "rashika mixer"], kind: "spice-powder" },
 ];
 
