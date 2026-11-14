@@ -11,6 +11,7 @@ export function StockCommandHeader({
   sector,
   shopName,
   itemCount,
+  readyCount,
   lowStockCount,
   outOfStockCount,
   costValue,
@@ -25,6 +26,7 @@ export function StockCommandHeader({
   sector: SectorId;
   shopName: string;
   itemCount: number;
+  readyCount: number;
   lowStockCount: number;
   outOfStockCount: number;
   costValue: number;
@@ -39,7 +41,9 @@ export function StockCommandHeader({
   const { locale } = useLocale();
   const grocery = sector === "grocery";
   const text = (key: Parameters<typeof groceryUi>[1], fallback: string) => grocery ? groceryUi(locale, key) : fallback;
-  const health = itemCount > 0 ? Math.max(0, Math.round(((itemCount - lowStockCount) / itemCount) * 100)) : 100;
+  const health = grocery
+    ? itemCount > 0 ? Math.max(0, Math.min(100, Math.round((readyCount / itemCount) * 100))) : 0
+    : itemCount > 0 ? Math.max(0, Math.round(((itemCount - lowStockCount) / itemCount) * 100)) : 100;
   const sectorCopy = grocery
     ? (locale === "si" ? "වේගයෙන් අලෙවි වන සිල්ලර තොගය, කාණ්ඩ අනුව නැවත පිරවීම සහ පැහැදිලි තොග දෘශ්‍යතාව සමඟ." : locale === "ta" ? "விரைவாக விற்பனையாகும் மளிகை சரக்கை வகைப்படி நிரப்பவும் அதன் நிலையைத் தெளிவாகப் பார்க்கவும்." : "Fast-moving grocery inventory with category-led replenishment and stock visibility.")
     : sector === "pharmacy"
@@ -67,7 +71,7 @@ export function StockCommandHeader({
 
         <div className="relative mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <div className={`rounded-2xl border p-4 ${grocery ? "border-white bg-white/80 shadow-sm" : "border-white/[0.08] bg-white/[0.045]"}`}>
-            <div className="flex items-center justify-between gap-3"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">{grocery ? (locale === "si" ? "සක්‍රිය නාමාවලිය" : locale === "ta" ? "செயலில் உள்ள பட்டியல்" : "Active catalogue") : "Active catalogue"}</p><StockIcon className="h-4 w-4 text-slate-500" /></div>
+            <div className="flex items-center justify-between gap-3"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">{grocery ? (locale === "si" ? "භාණ්ඩ නාමාවලිය" : locale === "ta" ? "பொருள் பட்டியல்" : "Product catalogue") : "Active catalogue"}</p><StockIcon className="h-4 w-4 text-slate-500" /></div>
             <p className="mt-3 text-2xl font-semibold tracking-[-0.04em] tabular-nums">{itemCount.toLocaleString()}</p>
             <p className="mt-1 text-xs text-slate-500">{filteredCount === itemCount ? (grocery ? (locale === "si" ? "සම්පූර්ණ තොගය" : locale === "ta" ? "முழு சரக்கு" : "Complete inventory") : "Complete inventory") : `${filteredCount.toLocaleString()} ${grocery ? (locale === "si" ? "වත්මන් දර්ශනයේ" : locale === "ta" ? "தற்போதைய காட்சியில்" : "in current view") : "in current view"}`}</p>
           </div>
@@ -98,11 +102,26 @@ export function StockCommandHeader({
 
       {categories.length > 0 && (
         <div className={`border-t px-4 py-3 sm:px-6 ${grocery ? "border-emerald-100 bg-white/55" : "border-white/[0.07] bg-black/[0.08]"}`}>
-          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <button type="button" onClick={() => onCategoryChange("all")} className={`shrink-0 rounded-xl px-3 py-2 text-xs font-semibold transition ${selectedCategory === "all" ? grocery ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-sm" : "bg-teal-500 text-white" : grocery ? "border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700" : "border border-white/[0.08] bg-white/[0.035] text-slate-400 hover:bg-white/[0.07] hover:text-white"}`}>{grocery ? groceryCategoryLabel("All Products", locale) : "All"} <span className="ml-1 opacity-70">{itemCount}</span></button>
+          <div aria-label={grocery ? groceryCategoryLabel("Product categories", locale) : "Product categories"} className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              aria-pressed={selectedCategory === "all"}
+              onClick={() => onCategoryChange("all")}
+              className={`inline-flex max-w-full items-center gap-1.5 rounded-xl px-3 py-2 text-left text-xs font-semibold leading-snug transition ${selectedCategory === "all" ? grocery ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-sm" : "bg-teal-500 text-white" : grocery ? "border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700" : "border border-white/[0.08] bg-white/[0.035] text-slate-400 hover:bg-white/[0.07] hover:text-white"}`}
+            >
+              <span>{grocery ? groceryCategoryLabel("All Products", locale) : "All"}</span>
+              <span className="shrink-0 opacity-70">{itemCount}</span>
+            </button>
             {categories.map((category) => (
-              <button key={category.name} type="button" onClick={() => onCategoryChange(category.name)} className={`shrink-0 rounded-xl px-3 py-2 text-xs font-semibold transition ${selectedCategory === category.name ? grocery ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-sm" : "bg-teal-500 text-white" : grocery ? "border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700" : "border border-white/[0.08] bg-white/[0.035] text-slate-400 hover:bg-white/[0.07] hover:text-white"}`}>
-                {grocery ? groceryCategoryLabel(category.name, locale) : category.name} <span className="ml-1 opacity-70">{category.count}</span>
+              <button
+                key={category.name}
+                type="button"
+                aria-pressed={selectedCategory === category.name}
+                onClick={() => onCategoryChange(category.name)}
+                className={`inline-flex max-w-full items-center gap-1.5 rounded-xl px-3 py-2 text-left text-xs font-semibold leading-snug transition ${selectedCategory === category.name ? grocery ? "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-sm" : "bg-teal-500 text-white" : grocery ? "border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700" : "border border-white/[0.08] bg-white/[0.035] text-slate-400 hover:bg-white/[0.07] hover:text-white"}`}
+              >
+                <span className="min-w-0">{grocery ? groceryCategoryLabel(category.name, locale) : category.name}</span>
+                <span className="shrink-0 opacity-70">{category.count}</span>
               </button>
             ))}
           </div>

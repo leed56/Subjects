@@ -29,7 +29,6 @@ import {
   groceryUnitLabel,
 } from "@/lib/grocery-localization";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
-import { GroceryStarterCatalogueButton } from "@/components/grocery/starter-catalogue-button";
 import { GroceryProductArt } from "@/components/sales/grocery-product-art";
 
 const RETAIL_GRADIENTS = [
@@ -214,7 +213,7 @@ function LowStock({ intel, data }: { intel: RetailDashboardIntelligence; data: A
           const label = groceryProductLabel({ name: item.name, sku: source?.sku }, locale);
           return (
             <Link href={`/stock?q=${encodeURIComponent(item.name)}`} key={item.productId} className="group flex items-center gap-3 py-3.5">
-              <span className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br ${RETAIL_GRADIENTS[index % RETAIL_GRADIENTS.length]}`}><GroceryProductArt name={item.name} category={item.category} className="h-full w-full p-1" /></span>
+              <span className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br ${RETAIL_GRADIENTS[index % RETAIL_GRADIENTS.length]}`}><GroceryProductArt name={item.name} sku={source?.sku} barcode={typeof source?.customFields.barcode === "string" ? source.customFields.barcode : undefined} imageUrl={typeof source?.customFields.imageUrl === "string" ? source.customFields.imageUrl : undefined} category={item.category} className="h-full w-full p-1" /></span>
               <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800 group-hover:text-blue-700">{label}</span><span className="block truncate text-[11px] text-slate-500">{groceryCategoryLabel(item.category, locale)}</span></span>
               <span className={`rounded-full px-2 py-1 text-[10px] font-bold tabular-nums ${exhausted ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>{item.stockQty} {groceryUnitLabel(item.unit, locale)} {text("itemsLeft")}</span>
             </Link>
@@ -239,7 +238,7 @@ function TopProducts({ intel, data }: { intel: RetailDashboardIntelligence; data
           return (
           <Link href={`/stock?q=${encodeURIComponent(item.name)}`} key={item.productId} className="group rounded-2xl border border-slate-100 bg-gradient-to-b from-slate-50 to-white p-3 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg">
             <div className="relative flex h-20 items-center justify-center overflow-hidden rounded-xl bg-[radial-gradient(circle_at_50%_30%,#ffffff_0%,#eff6ff_62%,#eef2ff_100%)]">
-              <GroceryProductArt name={item.name} category={item.category} className="h-full w-full p-1" />
+              <GroceryProductArt name={item.name} sku={source?.sku} barcode={typeof source?.customFields.barcode === "string" ? source.customFields.barcode : undefined} imageUrl={typeof source?.customFields.imageUrl === "string" ? source.customFields.imageUrl : undefined} category={item.category} className="h-full w-full p-1" />
               <span className={`absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-lg bg-gradient-to-br text-[10px] font-black text-white shadow-sm ${RETAIL_GRADIENTS[index % RETAIL_GRADIENTS.length]}`}>{index + 1}</span>
             </div>
             <p className="mt-2 truncate text-sm font-bold text-slate-800 group-hover:text-blue-700" title={label}>{label}</p>
@@ -371,11 +370,13 @@ export function GroceryCommandCenter({ data }: { data: AppData }) {
 
       <section className={`flex flex-col gap-4 rounded-[22px] border border-emerald-100 bg-[radial-gradient(circle_at_92%_20%,rgba(45,212,191,0.22),transparent_34%),linear-gradient(120deg,#ecfdf5,#f8fbff)] p-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)] sm:flex-row sm:items-center sm:justify-between ${intel.activeSkuCount === 0 ? "" : "hidden"}`}>
         <div>
-          <span className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">{locale === "si" ? "ඔබේ grocery වෙළඳසැල සකස් කිරීමට සූදානම්" : locale === "ta" ? "உங்கள் மளிகைக் கடை அமைக்கத் தயாராக உள்ளது" : "Your grocery is ready to set up"}</span>
-          <h2 className="mt-1 text-xl font-bold tracking-[-0.035em] text-slate-950">{locale === "si" ? "සංස්කරණය කළ හැකි ශ්‍රී ලංකා නාමාවලියකින් ආරම්භ කරන්න" : locale === "ta" ? "திருத்தக்கூடிய இலங்கை பட்டியலுடன் தொடங்கவும்" : "Start with an editable Sri Lankan catalogue"}</h2>
-          <p className="mt-1 text-sm text-slate-600">{locale === "si" ? "Starter භාණ්ඩ එක් වරක් එක් කර, පසුව Stock හි මිල, barcode, තොග ප්‍රමාණය සහ පින්තූර වෙනස් කරන්න." : locale === "ta" ? "Starter பொருட்களை ஒருமுறை சேர்த்து, பின்னர் சரக்கில் விலை, barcode, அளவு, படத்தை மாற்றவும்." : "Add the starter products once, then change every price, barcode, stock quantity and image in Stock."}</p>
+          <span className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">{locale === "si" ? "ඔබේ grocery නාමාවලිය සූදානම්" : locale === "ta" ? "உங்கள் மளிகைப் பட்டியல் தயார்" : "Grocery catalogue ready"}</span>
+          <h2 className="mt-1 text-xl font-bold tracking-[-0.035em] text-slate-950">{locale === "si" ? "ආරම්භක භාණ්ඩ Stock හි ඇත" : locale === "ta" ? "தொடக்கப் பொருட்கள் கையிருப்பில் உள்ளன" : "Starter products are in Stock"}</h2>
+          <p className="mt-1 text-sm text-slate-600">{locale === "si" ? "විකිණීමට පෙර ඔබේ සැබෑ මිල, barcode සහ ලැබුණු තොගය ඇතුළත් කර සක්‍රිය කරන්න." : locale === "ta" ? "விற்பனைக்கு முன் உங்கள் உண்மையான விலை, barcode மற்றும் பெற்ற சரக்கை உள்ளிட்டு செயல்படுத்தவும்." : "Enter real prices, barcodes and received stock in Stock before activating items for sale."}</p>
         </div>
-        <GroceryStarterCatalogueButton compact />
+        <Link href="/stock" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 py-2 text-sm font-bold text-white shadow-[0_8px_20px_rgba(79,70,229,0.18)] transition hover:brightness-105">
+          {locale === "si" ? "Stock වෙත යන්න" : locale === "ta" ? "சரக்குக்குச் செல்லவும்" : "Open Stock"}
+        </Link>
       </section>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">

@@ -31,6 +31,7 @@ export default function AdminCreateShopPage() {
     password: string;
     organizationId: string;
     sector: string;
+    catalogueSetup?: { status: "ready" | "needs_attention"; productCount: number; error?: string };
   } | null>(null);
 
   useEffect(() => {
@@ -85,6 +86,7 @@ export default function AdminCreateShopPage() {
         email: string;
         organizationId: string;
         sector: string;
+        catalogueSetup?: { status: "ready" | "needs_attention"; productCount: number; error?: string };
       };
       error?: string;
     };
@@ -101,6 +103,7 @@ export default function AdminCreateShopPage() {
       password,
       organizationId: json.shop.organizationId,
       sector: json.shop.sector,
+      catalogueSetup: json.shop.catalogueSetup,
     });
   };
 
@@ -110,6 +113,13 @@ export default function AdminCreateShopPage() {
         <div className="rounded-2xl border border-teal-800 bg-teal-950/40 p-6">
           <h2 className="text-xl font-bold text-white">{t("admin.shop_created")}</h2>
           <p className="mt-2 text-sm text-teal-100">{t("admin.shop_created_sub")}</p>
+          {created.sector === "grocery" && created.catalogueSetup && (
+            <div className={`mt-4 rounded-xl border px-4 py-3 text-sm ${created.catalogueSetup.status === "ready" ? "border-emerald-700/70 bg-emerald-950/40 text-emerald-100" : "border-amber-700/70 bg-amber-950/40 text-amber-100"}`}>
+              {created.catalogueSetup.status === "ready"
+                ? `${created.catalogueSetup.productCount} grocery, meat and grinding-mill products are available in Stock. They stay inactive with no prices, barcodes or stock until the owner enters real details.`
+                : `The shop was created, but grocery catalogue setup needs attention: ${created.catalogueSetup.error ?? "unknown setup error"}`}
+            </div>
+          )}
           <dl className="mt-6 space-y-3 text-sm">
             <div>
               <dt className="text-slate-400">{t("admin.login_url")}</dt>

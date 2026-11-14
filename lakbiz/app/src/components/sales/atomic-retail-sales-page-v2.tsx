@@ -7,7 +7,6 @@ import { setBottomBarOccupied } from "@/components/shell/bottom-bar-overlay";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { AdvancedSaleSelector, type AdvancedSaleLineState } from "@/components/sales/advanced-sale-selector";
 import { GroceryCategoryArt, GroceryProductArt } from "@/components/sales/grocery-product-art";
-import { GroceryStarterCatalogueButton } from "@/components/grocery/starter-catalogue-button";
 import {
   ProBadge,
   ProButton,
@@ -555,7 +554,6 @@ export function AtomicRetailSalesPageV2() {
                 <button type="button" disabled title={locale === "si" ? "රඳවාගත් බිල්පත් ඉක්මනින් පැමිණේ" : locale === "ta" ? "சேமித்த பில்களை மீட்டெடுப்பது விரைவில் வருகிறது" : "Saved bill recall is coming soon"} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/75 px-3 text-xs font-bold text-slate-400 disabled:cursor-not-allowed">{grocery("recallBill")}</button>
                 <button type="button" onClick={() => document.getElementById("grocery-pos-search")?.focus()} className="inline-flex h-12 items-center justify-center rounded-2xl border border-violet-100 bg-violet-50/90 px-3 text-xs font-bold text-violet-700 transition hover:bg-violet-100">{grocery("priceCheck")}</button>
                 <Link href="/stock" className="col-span-2 inline-flex h-10 items-center justify-center rounded-xl border border-blue-100 bg-white/75 px-3 text-xs font-bold text-blue-700 transition hover:bg-white sm:col-span-1 sm:h-12">{grocery("inventory")}</Link>
-                <GroceryStarterCatalogueButton compact />
               </div>
             </div>
           </section>
@@ -643,12 +641,11 @@ export function AtomicRetailSalesPageV2() {
             {groceryPos ? (
               <div className="flex flex-col gap-4 rounded-2xl border border-blue-100 bg-[radial-gradient(circle_at_top_right,_rgba(129,140,248,0.14),transparent_34%),linear-gradient(105deg,#f8fbff,#ffffff_54%,#eef6ff)] px-5 py-4 shadow-[0_10px_28px_rgba(59,130,246,0.07)] sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <span className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-700">{locale === "si" ? "පළමු සැකසුම" : locale === "ta" ? "முதல் அமைப்பு" : "First-time setup"}</span>
-                  <h2 className="mt-1 text-base font-bold tracking-[-0.025em] text-slate-950">{locale === "si" ? "විකිණිය හැකි සිල්ලර නාමාවලියක් එක් කරන්න" : locale === "ta" ? "விற்பனைக்கான மளிகைப் பட்டியலைச் சேர்க்கவும்" : "Add a sellable grocery catalogue"}</h2>
-                  <p className="mt-1 text-xs leading-5 text-slate-600">{locale === "si" ? "ඔබ තහවුරු කළ පසු පමණක් ආරම්භක භාණ්ඩ 16ක් එක් වේ. මිල, තීරු කේත, තොග සහ පින්තූර තොග පිටුවෙන් වෙනස් කළ හැක." : locale === "ta" ? "நீங்கள் உறுதிப்படுத்திய பிறகே 16 தொடக்கப் பொருட்கள் சேர்க்கப்படும். விலை, பட்டைக் குறியீடு, சரக்கு மற்றும் படங்களை சரக்குப் பக்கத்தில் மாற்றலாம்." : "Starter products are only added when you confirm. Prices, barcodes, stock and images stay editable in Stock."}</p>
+                  <span className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-700">{locale === "si" ? "නාමාවලිය සූදානම්" : locale === "ta" ? "பட்டியல் தயார்" : "Catalogue ready"}</span>
+                  <h2 className="mt-1 text-base font-bold tracking-[-0.025em] text-slate-950">{locale === "si" ? "ආරම්භක භාණ්ඩ Stock හි ඇත" : locale === "ta" ? "தொடக்கப் பொருட்கள் கையிருப்பில் உள்ளன" : "Starter products are in Stock"}</h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">{locale === "si" ? "විකිණීමට පෙර සැබෑ මිල, barcode සහ ලැබුණු තොගය ඇතුළත් කර සක්‍රිය කරන්න." : locale === "ta" ? "விற்பனைக்கு முன் உண்மையான விலை, barcode மற்றும் பெற்ற சரக்கை உள்ளிட்டு செயல்படுத்தவும்." : "Enter real prices, barcodes and received stock in Stock before activating these items for sale."}</p>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  <GroceryStarterCatalogueButton compact />
                   <ProButton href="/stock" variant="secondary">{t("sales.add_stock_link")}</ProButton>
                 </div>
               </div>
@@ -756,7 +753,7 @@ export function AtomicRetailSalesPageV2() {
                       >
                         {groceryPos && (
                           <div className="relative h-24 overflow-hidden border-b border-slate-100 bg-[radial-gradient(circle_at_50%_30%,#ffffff_0%,#eff6ff_62%,#eef2ff_100%)]">
-                            <GroceryProductArt name={product.name} category={product.category} imageUrl={typeof product.customFields.imageUrl === "string" ? product.customFields.imageUrl : undefined} className="h-full w-full" />
+                            <GroceryProductArt name={product.name} sku={product.sku} barcode={typeof product.customFields.barcode === "string" ? product.customFields.barcode : undefined} category={product.category} imageUrl={typeof product.customFields.imageUrl === "string" ? product.customFields.imageUrl : undefined} className="h-full w-full" />
                             <span className="absolute left-2 top-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-white/90 px-2 py-1 text-[9px] font-bold text-slate-600 shadow-sm" title={groceryCategoryLabel(product.category, locale) || "Grocery"}>{groceryCategoryLabel(product.category, locale) || "Grocery"}</span>
                           </div>
                         )}
@@ -861,6 +858,8 @@ export function AtomicRetailSalesPageV2() {
                               <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-blue-100 bg-gradient-to-br from-white to-blue-50">
                                 <GroceryProductArt
                                   name={line.product.name}
+                                  sku={line.product.sku}
+                                  barcode={typeof line.product.customFields.barcode === "string" ? line.product.customFields.barcode : undefined}
                                   category={line.product.category}
                                   imageUrl={typeof line.product.customFields.imageUrl === "string" ? line.product.customFields.imageUrl : undefined}
                                   className="h-full w-full p-1"
