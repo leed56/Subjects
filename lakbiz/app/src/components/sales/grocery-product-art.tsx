@@ -1,45 +1,43 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { GroceryCatalogArt, type GroceryCatalogArtKind } from "@/components/sales/grocery-catalog-art";
+import { useState } from "react";
 
-/* Owner-supplied image URLs are allowed, so render them with a regular img.
- * Unrecognized products use a neutral placeholder instead of borrowing art
- * from an unrelated category (for example, cosmetics showing a coconut). */
+/* Owner-supplied product photos use the regular img element because product
+ * assets may be uploaded to the shop or bundled with the catalogue. */
 /* eslint-disable @next/next/no-img-element */
 
-const PRODUCT_IMAGES: ReadonlyArray<{ terms: readonly string[]; src: string }> = [
-  { terms: ["monosodium glutamate", "aji no moto", "ajinomoto", "ajinamoto", "ajinomota", "msg powder", "msg seasoning", "msg"], src: "/images/grocery/ajinomoto-msg.svg" },
-  { terms: ["green chilli", "green chili"], src: "/images/grocery/green-chilli.png" },
-  { terms: ["chicken liver"], src: "/images/grocery/meat/chicken-parts.svg" },
-  { terms: ["broiler parent chicken", "parent chicken"], src: "/images/grocery/meat/broiler-parent-chicken.svg" },
-  { terms: ["chicken breast"], src: "/images/grocery/meat/chicken-breast.svg" },
-  { terms: ["chicken drumstick", "chicken drumsticks", "drumstick"], src: "/images/grocery/meat/chicken-drumsticks.svg" },
-  { terms: ["chicken parts"], src: "/images/grocery/meat/chicken-parts.svg" },
-  { terms: ["small sausage", "small sausages", "sausage small"], src: "/images/grocery/meat/sausages-small.svg" },
-  { terms: ["large sausage", "large sausages", "sausage large", "big sausage"], src: "/images/grocery/meat/sausages-large.svg" },
-  { terms: ["meatball", "meatballs"], src: "/images/grocery/meat/meatballs.svg" },
-  { terms: ["farm chicken"], src: "/images/grocery/meat/farm-chicken.svg" },
-  { terms: ["banana", "plantain", "කෙසෙල්"], src: "/images/grocery/banana.png" },
-  { terms: ["apple"], src: "/images/grocery/apple.png" },
-  { terms: ["tomato", "තක්කාලි"], src: "/images/grocery/tomato.png" },
-  { terms: ["potato", "අර්තාපල්"], src: "/images/grocery/potato.png" },
-  { terms: ["red onion", "onion", "ලූනු"], src: "/images/grocery/red-onion.png" },
-  { terms: ["carrot", "කැරට්"], src: "/images/grocery/carrot.png" },
-  { terms: ["ginger", "ඉඟුරු"], src: "/images/grocery/ginger.png" },
-  { terms: ["chicken", "poultry", "කුකුල්"], src: "/images/grocery/chicken.png" },
-  { terms: ["bread", "පාන්"], src: "/images/grocery/bread.png" },
-  { terms: ["wheat flour", "flour", "wheat", "පිටි"], src: "/images/grocery/wheat-flour.png" },
-  { terms: ["rice", "basmathi", "basmati", "samba", "keeri samba", "rathu kakulu", "kekulu", "හාල්", "සහල්"], src: "/images/grocery/rice.png" },
-  { terms: ["sugar", "seeni", "sini", "සීනි"], src: "/images/grocery/sugar.png" },
-  { terms: ["coconut", "පොල්"], src: "/images/grocery/coconut.png" },
-  { terms: ["egg", "බිත්තර"], src: "/images/grocery/eggs.png" },
-  { terms: ["fresh milk", "milk", "කිරි"], src: "/images/grocery/fresh-milk.png" },
+const BARCODE_PRODUCT_IMAGES: ReadonlyArray<{
+  barcodes: readonly string[];
+  terms: readonly string[];
+  src: string;
+}> = [
+  { barcodes: ["8697449910575"], terms: ["altunsa cola drink"], src: "/images/grocery/brands/altunsa-cola.jpg" },
+  { barcodes: ["8697449910735"], terms: ["altunsa mango drink"], src: "/images/grocery/brands/altunsa-mango.jpg" },
+  { barcodes: ["8697449910810"], terms: ["altunsa orange drink"], src: "/images/grocery/brands/altunsa-orange.jpg" },
+  { barcodes: ["4796022660587"], terms: ["abha colour liquid", "abha color liquid", "abha 5 minute hair colour"], src: "/images/grocery/brands/abha-colour-liquid-21ml.jpg" },
+  { barcodes: ["4796022661980"], terms: ["abha herbal black henna"], src: "/images/grocery/brands/abha-henna-black-10g.jpg" },
+  { barcodes: ["4792057036014"], terms: ["alli thosai mixture"], src: "/images/grocery/brands/alli-thosai-mixture-400g.jpg" },
 ];
 
-// Give the exact MSG product asset priority over category-level spice art.
-// Keep dedicated meat-cut artwork ahead of family-level category art as well.
-const SPECIFIC_PRODUCT_IMAGES = [PRODUCT_IMAGES[0], ...PRODUCT_IMAGES.slice(2, 11)];
+// These isolated photographs are for unbranded produce and bulk staples only.
+// Match the whole product name (optionally followed by a unit/quantity) so an
+// item such as Apple Hair Colour or Banana Chewing Gum cannot inherit fruit art.
+const COMMODITY_PHOTOS: ReadonlyArray<{ terms: readonly string[]; src: string }> = [
+  { terms: ["banana", "bananas", "plantain", "කෙසෙල්", "வாழைப்பழம்"], src: "/images/grocery/banana.png" },
+  { terms: ["apple", "apples", "ඇපල්", "ஆப்பிள்"], src: "/images/grocery/apple.png" },
+  { terms: ["tomato", "tomatoes", "තක්කාලි", "தக்காளி"], src: "/images/grocery/tomato.png" },
+  { terms: ["potato", "potatoes", "අර්තාපල්", "உருளைக்கிழங்கு"], src: "/images/grocery/potato.png" },
+  { terms: ["red onion", "onion", "ලූනු", "வெங்காயம்"], src: "/images/grocery/red-onion.png" },
+  { terms: ["carrot", "carrots", "කැරට්", "கேரட்"], src: "/images/grocery/carrot.png" },
+  { terms: ["ginger", "ඉඟුරු", "இஞ்சி"], src: "/images/grocery/ginger.png" },
+  { terms: ["green chilli", "green chili", "අමු මිරිස්", "பச்சை மிளகாய்"], src: "/images/grocery/green-chilli.png" },
+  { terms: ["bread", "පාන්", "ரொட்டி"], src: "/images/grocery/bread.png" },
+  { terms: ["wheat flour", "flour", "wheat", "පිටි", "மா"], src: "/images/grocery/wheat-flour.png" },
+  { terms: ["rice", "basmathi", "basmati", "samba", "keeri samba", "rathu kakulu", "kekulu", "හාල්", "සහල්", "அரிசி"], src: "/images/grocery/rice.png" },
+  { terms: ["sugar", "seeni", "sini", "සීනි", "சீனி"], src: "/images/grocery/sugar.png" },
+  { terms: ["coconut", "පොල්", "தேங்காய்"], src: "/images/grocery/coconut.png" },
+  { terms: ["egg", "eggs", "බිත්තර", "முட்டை"], src: "/images/grocery/eggs.png" },
+];
 
 const CATEGORY_IMAGES: ReadonlyArray<{ terms: readonly string[]; src: string }> = [
   { terms: ["fruit"], src: "/images/grocery/apple.png" },
@@ -53,92 +51,6 @@ const CATEGORY_IMAGES: ReadonlyArray<{ terms: readonly string[]; src: string }> 
   { terms: ["egg"], src: "/images/grocery/eggs.png" },
 ];
 
-const CATALOG_ART_RULES: ReadonlyArray<{ terms: readonly string[]; kind: GroceryCatalogArtKind }> = [
-  // Specific phrases are ordered before broad product words to avoid a brand
-  // name such as “Coconut Milk Powder” receiving the wrong milk or coconut art.
-  { terms: ["coconut milk powder", "coconut milkpowder", "coconut powder"], kind: "coconut-powder" },
-  { terms: ["sera coconut milk", "coconut milk"], kind: "coconut-milk" },
-  { terms: ["cinnamon oil", "motha banana essence", "motha banana assence", "motha banana", "banana essence", "banana assence", "motha caramel", "vanilla flavour", "vanilla flavor", "star vanilla flavour", "rose flavour", "rose fllavour", "rose flavor", "almond essence"], kind: "essence" },
-  { terms: ["fortune soya", "sunflower oil", "vegetable oil", "gingelly oil", "sesame oil", "edible oil", "polthel", "coconut oil", "locale polthel"], kind: "cooking-oil" },
-  { terms: ["milo drink", "chocolate milk", "chocolatemilk", "kotmale kiri vanila", "kotmale milk chocolate", "vanilla flavoured milk", "vanilla flav milk", "vanillaflavmilk", "strawberry milk", "flavoured milk", "flavored milk", "milk juice", "smak chocolate drink"], kind: "milk-drink" },
-  { terms: ["milkmaid", "condensed milk"], kind: "milk-can" },
-  { terms: ["yogurt drink", "yoghurt drink", "yog drink", "yog:drink", "yougut drink", "yoghurt", "yogurt"], kind: "yogurt" },
-  { terms: ["curd", "set kiri"], kind: "curd" },
-  { terms: ["cheese"], kind: "cheese" },
-  { terms: ["astra", "margarine", "butter", "fat spread"], kind: "butter" },
-  { terms: ["anchor milk", "anchor", "milk powder", "full cream milk powder", "ratthi", "maliban kiri", "kiri w f"], kind: "milk-powder" },
-  { terms: ["ice cream", "icecream", "chocolateicecream", "ice cup", "faluda ice", "kotmale milky berry", "milky pop", "kithul ice"], kind: "ice-cream" },
-  { terms: ["kelloggs oats", "kellogs chocos", "corn flakes", "samaposha", "oats", "cereal"], kind: "cereal" },
-  { terms: ["mixed fruit jam", "strawberry jam", "mango jam", "woodapple jam", "melon jam", "jam cup", "jam"], kind: "jam" },
-  { terms: ["motha baking powder", "baking powder", "cornflour", "corn flour", "custard powder", "jelly powder", "gelatine", "gelatin", "faluda mix", "icing sugar", "kurakkan flour", "kurakkan lus", "gram flour", "idli flour", "alli thosai mixture", "allie thosai mixture", "thosai mix", "thosai mixture", "kurakkan", "string hopper flour", "white rice flour", "rice flour", "atta flour", "prima flour", "wheat flour", "tetha hal piti"], kind: "baking" },
-  { terms: ["motha vanilla custard", "king custard", "motha jelly", "blackcurrant jelly", "orange jelly", "strawberry jelly"], kind: "baking" },
-  { terms: ["chicken sausagess", "chicken sausage", "sausages", "sausage", "hot dog"], kind: "sausage" },
-  { terms: ["maggi chicken", "chicken cube", "knor seasoning", "seasoning powder"], kind: "spice-powder" },
-  { terms: ["soya meat", "cuttlefish soya", "soya chicken", "devilled prawn soya", "soya"], kind: "soya" },
-  { terms: ["noodle", "kottu mee", "dagara noodles", "pasta", "prima stella chicken"], kind: "noodles" },
-  { terms: ["cuttlefish", "jack mackerel", "canned fish", "ocean star"], kind: "canned-fish" },
-  { terms: ["karawala", "dry fish", "katta", "keeramin"], kind: "dry-fish" },
-  { terms: ["tomato sauce", "tomato sause", "fish sauce", "fish sause", "soya sauce", "ketchup", "oyster sauce", "oyster sause", "dark sauce", "chilli sauce", "chille sauce", "mayonnaise", "mango chutney", "marmite", "sambal"], kind: "sauce" },
-  { terms: ["vinegar", "vinger", "vinakiri"], kind: "vinegar" },
-  { terms: ["rose water", "rosewater"], kind: "rose-water" },
-  { terms: ["apple juice", "mixed fruit nectar", "mixed fruit cordial", "orange cordial", "sunquick", "fruit nectar", "mango nectar", "woodapple nectar", "mango drink", "orange drink", "altunsa mango", "altunsa orange", "orange crush", "freshco lime", "fruit n nut", "fruit and nut drink", "fruit drink", "juice", "nectar"], kind: "juice" },
-  { terms: ["cola", "coca cola", "cocacola", "kik cola", "my cola"], kind: "cola" },
-  { terms: ["lemonade", "appa soda", "cream soda", "soda", "egb", "ginger beer", "orange barley", "portello", "necto", "sprite", "fanta"], kind: "soda" },
-  { terms: ["drinking water", "mineral water", "bottled water"], kind: "water" },
-  { terms: ["iced coffee", "ice coffee", "coffee drink", "smak coffee", "coffee", "nescafe", "nescafé"], kind: "coffee" },
-  { terms: ["watawala tea", "ratti kiri tea", "ratthi kiri tea", "tea bag", "tea"], kind: "tea" },
-  { terms: ["milo", "glucolin", "nestomalt", "nestomolt", "viva", "chocolate drink", "malt drink"], kind: "malt" },
-  { terms: ["little lion choco roll", "roll cake", "maderira cake", "madeira cake", "swiss roll", "cake", "watalappan", "pudding cup"], kind: "cake" },
-  { terms: ["biscuit", "biscut", "cracker", "wafer", "snacker", "cookie", "puff", "hacks original", "gem biscuit", "rusks"], kind: "biscuit" },
-  { terms: ["papadam", "papad", "murukku", "tipi tip", "tipitip", "papara", "chips", "crisps", "peanuts", "jambo", "popit", "snackers masala"], kind: "snack" },
-  { terms: ["perfume", "cologne", "body spray", "deodorant", "fogg", "rexona rose", "passy perfume"], kind: "perfume" },
-  { terms: ["shampoo", "conditioner", "dandex", "dandex hair faill", "lifebuoy storng", "sunsilk", "hair wash", "lifebuoy health shampoo", "clear shampoo", "kumarika shampoo"], kind: "shampoo" },
-  { terms: ["hair gel", "hair wax", "hair oil", "hair fall", "navarathna oil"], kind: "hair-care" },
-  { terms: ["baby talc", "talc", "deo talc", "paris talc", "khomba deo talc", "voodoo talc", "rani powder"], kind: "talc" },
-  { terms: ["vaseline", "baby cream", "face cream", "facial cream", "fair & lovely", "fair and lovely", "facewash", "facialwash", "face wash"], kind: "face-cream" },
-  { terms: ["abha herbal black henna", "amins black henna", "herbal black henna", "black henna", "henna", "mehendi"], kind: "henna" },
-  { terms: ["soap"], kind: "soap" },
-  { terms: ["colour liquid", "color liquid", "food colour", "food color", "green color", "green colour", "cochineal colour", "egg yellow powder food color"], kind: "colour" },
-  { terms: ["incense", "insence", "hadunkuru", "agarbathi", "sambrani", "kapuru"], kind: "incense" },
-  { terms: ["toothbrush", "tooth brush", "t.brush", "chooty brush"], kind: "toothbrush" },
-  { terms: ["toothpaste", "sensodyne", "clogard", "signal", "link sudantha", "supiriwiki"], kind: "toothpaste" },
-  { terms: ["sanitary pad", "pads", "napkin", "cotton feel", "fems", "eva", "8napkin"], kind: "sanitary" },
-  { terms: ["serviette", "tissue", "paper napkin"], kind: "serviette" },
-  { terms: ["paper cup", "paper plate", "garbage bag", "grocery bag", "tulip bag", "paper"], kind: "paper-goods" },
-  { terms: ["cotton buds", "cotton bud"], kind: "cotton-buds" },
-  { terms: ["bulb", "fibit led", "led bulb", "day light", "leyo led"], kind: "bulb" },
-  { terms: ["battery", "batery", "aa a1.5v", "laxapana aa"], kind: "battery" },
-  { terms: ["broom"], kind: "broom" },
-  { terms: ["bic easy", "bic comfort", "racer", "razor", "big racer"], kind: "razor" },
-  { terms: ["iodex", "balm", "siddhalepa"], kind: "ointment" },
-  { terms: ["detol", "dettol plaster", "panadol", "eno orange"], kind: "medicine" },
-  { terms: ["d.powder", "detergent powder", "washing powder", "surf excel", "surfexcel", "sunlight detergent", "sunlight d", "diva", "rin detergent", "sunny detergent", "blish wash", "bliss wash"], kind: "detergent" },
-  { terms: ["dishwash liquid", "dish wash liquid", "vim liquid", "comfort", "harpic", "lysol", "nilma", "unic", "toilet cleaner", "cleaner"], kind: "cleaning-liquid" },
-  { terms: ["ninja", "mortien", "mosquito vaporizer", "ratkill", "rat kill", "insect repellent", "insect spray"], kind: "insect-control" },
-  { terms: ["pen", "sharpener", "sello tape", "chalk", "atlas chooty", "hitline chalk"], kind: "stationery" },
-  { terms: ["gini petti", "match box", "matches", "lighter"], kind: "matches" },
-  { terms: ["tennis ball"], kind: "sports-ball" },
-  { terms: ["honey"], kind: "honey" },
-  { terms: ["chocolate", "choco", "cocoa", "chocalate"], kind: "chocolate" },
-  { terms: ["chewing gum", "center fruit", "lollipop", "toffee", "toffe", "jujubs", "marbles", "marbels"], kind: "gum" },
-  { terms: ["almond", "amond", "kaju", "cashew", "nut", "plums", "dates", "pottu kadala"], kind: "nuts" },
-  { terms: ["salt", "sudu lunu", "isi table salt"], kind: "salt" },
-  { terms: ["green peas", "peas"], kind: "peas" },
-  { terms: ["gotukola", "mukunuwanna"], kind: "leafy-greens" },
-  { terms: ["karawilla", "bitter gourd"], kind: "bitter-gourd" },
-  { terms: ["bandakka", "okra", "ladies finger"], kind: "okra" },
-  { terms: ["bonchi", "beans", "green bean"], kind: "beans" },
-  { terms: ["gowa", "cabbage"], kind: "cabbage" },
-  { terms: ["cassava", "casasava", "manioc"], kind: "cassava" },
-  { terms: ["dhal", "lentil"], kind: "dhal" },
-  { terms: ["curry leaves", "karapincha"], kind: "curry-leaves" },
-  { terms: ["goraka"], kind: "goraka" },
-  { terms: ["kurudu", "cinnamon stick", "cinnamon bark"], kind: "cinnamon" },
-  { terms: ["chilli pieces", "chilli flakes", "chili flakes", "dried chilli"], kind: "chilli" },
-  { terms: ["aba ata", "kasa kasa ata", "kottamalli ata", "mun ata", "udu ata", "coriander seed", "cumin seed", "fennel seed", "mustard seed", "poppy seed", "black pepper", "kali miris", "maduru", "karabu nati", "karadamungu", "suduru"], kind: "spice-seeds" },
-  { terms: ["aba kudu", "bedapu miris kudu", "beema kudu", "miris kudu", "mas karry kudu", "malu curry kudu", "thunpaha", "curry powder", "masala", "spice powder", "chilli powder", "chili powder", "turmeric powder", "knor seasoning", "seasoning powder", "all purpose seasoning", "freelan rasam", "rashika mixer"], kind: "spice-powder" },
-];
-
 function normalize(value: string): string {
   return value
     .normalize("NFKC")
@@ -150,34 +62,52 @@ function normalize(value: string): string {
 function containsTerm(value: string, term: string): boolean {
   const haystack = normalize(value);
   const needle = normalize(term);
-  // Sinhala and Tamil do not use whitespace-delimited morphology like English;
-  // substring matching preserves their localized product-name support.
+  if (!haystack || !needle) return false;
   if (/[\u0B80-\u0BFF\u0D80-\u0DFF]/u.test(needle)) return haystack.includes(needle);
-  if (needle.includes(" ") && haystack.replaceAll(" ", "").includes(needle.replaceAll(" ", ""))) return true;
-  return (` ${haystack} `).includes(` ${needle} `) || (` ${haystack} `).includes(` ${needle}s `);
+  return (` ${haystack} `).includes(` ${needle} `);
 }
 
-function productImageFor(name: string): string | undefined {
-  return PRODUCT_IMAGES.find((item) => item.terms.some((term) => containsTerm(name, term)))?.src;
+function quantityTailOnly(value: string, phrase: string): boolean {
+  const normalized = normalize(value);
+  const normalizedPhrase = normalize(phrase);
+  if (normalized === normalizedPhrase) return true;
+  if (!normalized.startsWith(`${normalizedPhrase} `)) return false;
+  const tail = normalized.slice(normalizedPhrase.length).trim();
+  return /^(?:\d+(?:\.\d+)?\s*)?(?:kg|g|mg|l|ml|pcs|pc|pack|packs|units?)?$/.test(tail);
 }
 
-function productCatalogArtFor(name: string): GroceryCatalogArtKind | undefined {
-  return CATALOG_ART_RULES.find((item) => item.terms.some((term) => containsTerm(name, term)))?.kind;
+function specificImageFor(name: string, sku?: string | null, barcode?: string | null): string | undefined {
+  const productCodes = [barcode, sku]
+    .map((code) => code?.trim())
+    .filter((code): code is string => Boolean(code));
+  const exactBarcodeMatch = BARCODE_PRODUCT_IMAGES.find((item) =>
+    item.barcodes.some((code) => productCodes.includes(code)),
+  );
+  if (exactBarcodeMatch) return exactBarcodeMatch.src;
+
+  const brandedNameMatch = BARCODE_PRODUCT_IMAGES.find((item) =>
+    item.terms.some((term) => containsTerm(name, term)),
+  );
+  if (brandedNameMatch) return brandedNameMatch.src;
+
+  // Ajinomoto is the shop's bulk monosodium-glutamate product. Its source row
+  // has a stock code rather than a retail barcode, so match the product name.
+  if (["ajinomoto", "ajinamoto", "ajinomota", "aji no moto", "monosodium glutamate", "msg powder"]
+    .some((term) => quantityTailOnly(name, term))) {
+    return "/images/grocery/brands/ajinomoto-msg-100g.jpg";
+  }
+
+  return COMMODITY_PHOTOS.find((item) => item.terms.some((term) => quantityTailOnly(name, term)))?.src;
 }
 
-function specificProductImageFor(name: string): string | undefined {
-  return SPECIFIC_PRODUCT_IMAGES.find((item) => item.terms.some((term) => containsTerm(name, term)))?.src;
-}
-
-function categoryImageFor(label: string): string | undefined {
+function imageForCategory(label: string): string | undefined {
   return CATEGORY_IMAGES.find((item) => item.terms.some((term) => containsTerm(label, term)))?.src;
 }
 
-function ProductArt({ source, fallback, className = "" }: { source?: string; fallback?: ReactNode; className?: string }) {
+function ProductArt({ source, className = "" }: { source?: string; className?: string }) {
   const [failedSource, setFailedSource] = useState<string | null>(null);
 
   if (!source || failedSource === source) {
-    if (fallback) return <>{fallback}</>;
     return (
       <span aria-hidden="true" className={`flex items-center justify-center rounded-xl bg-slate-100 text-slate-400 ${className}`}>
         <svg viewBox="0 0 48 48" fill="none" className="h-9 w-9" aria-hidden="true">
@@ -202,25 +132,23 @@ function ProductArt({ source, fallback, className = "" }: { source?: string; fal
 
 export function GroceryProductArt({
   name,
+  sku,
+  barcode,
   imageUrl,
   className = "",
 }: {
   name: string;
   category?: string;
+  sku?: string | null;
+  barcode?: string | null;
   imageUrl?: string;
   className?: string;
 }) {
   const ownerImage = imageUrl?.trim();
-  const appDefaultImage = ownerImage?.startsWith("/images/grocery/") ? undefined : ownerImage;
-  const specificImage = appDefaultImage ? undefined : specificProductImageFor(name);
-  const catalogArt = productCatalogArtFor(name);
-  const source = appDefaultImage || specificImage || (catalogArt ? undefined : productImageFor(name) || ownerImage);
-  const fallback = catalogArt ? <GroceryCatalogArt kind={catalogArt} className={className} /> : undefined;
-  if (!appDefaultImage && !specificImage && catalogArt) return fallback;
-  return <ProductArt source={source} fallback={fallback} className={className} />;
+  const source = ownerImage || specificImageFor(name, sku, barcode);
+  return <ProductArt source={source} className={className} />;
 }
 
 export function GroceryCategoryArt({ label, className = "" }: { label: string; className?: string }) {
-  return <ProductArt source={categoryImageFor(label)} className={className} />;
+  return <ProductArt source={imageForCategory(label)} className={className} />;
 }
-

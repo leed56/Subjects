@@ -213,7 +213,7 @@ function LowStock({ intel, data }: { intel: RetailDashboardIntelligence; data: A
           const label = groceryProductLabel({ name: item.name, sku: source?.sku }, locale);
           return (
             <Link href={`/stock?q=${encodeURIComponent(item.name)}`} key={item.productId} className="group flex items-center gap-3 py-3.5">
-              <span className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br ${RETAIL_GRADIENTS[index % RETAIL_GRADIENTS.length]}`}><GroceryProductArt name={item.name} category={item.category} className="h-full w-full p-1" /></span>
+              <span className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br ${RETAIL_GRADIENTS[index % RETAIL_GRADIENTS.length]}`}><GroceryProductArt name={item.name} sku={source?.sku} barcode={typeof source?.customFields.barcode === "string" ? source.customFields.barcode : undefined} imageUrl={typeof source?.customFields.imageUrl === "string" ? source.customFields.imageUrl : undefined} category={item.category} className="h-full w-full p-1" /></span>
               <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800 group-hover:text-blue-700">{label}</span><span className="block truncate text-[11px] text-slate-500">{groceryCategoryLabel(item.category, locale)}</span></span>
               <span className={`rounded-full px-2 py-1 text-[10px] font-bold tabular-nums ${exhausted ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}>{item.stockQty} {groceryUnitLabel(item.unit, locale)} {text("itemsLeft")}</span>
             </Link>
@@ -238,7 +238,7 @@ function TopProducts({ intel, data }: { intel: RetailDashboardIntelligence; data
           return (
           <Link href={`/stock?q=${encodeURIComponent(item.name)}`} key={item.productId} className="group rounded-2xl border border-slate-100 bg-gradient-to-b from-slate-50 to-white p-3 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg">
             <div className="relative flex h-20 items-center justify-center overflow-hidden rounded-xl bg-[radial-gradient(circle_at_50%_30%,#ffffff_0%,#eff6ff_62%,#eef2ff_100%)]">
-              <GroceryProductArt name={item.name} category={item.category} className="h-full w-full p-1" />
+              <GroceryProductArt name={item.name} sku={source?.sku} barcode={typeof source?.customFields.barcode === "string" ? source.customFields.barcode : undefined} imageUrl={typeof source?.customFields.imageUrl === "string" ? source.customFields.imageUrl : undefined} category={item.category} className="h-full w-full p-1" />
               <span className={`absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-lg bg-gradient-to-br text-[10px] font-black text-white shadow-sm ${RETAIL_GRADIENTS[index % RETAIL_GRADIENTS.length]}`}>{index + 1}</span>
             </div>
             <p className="mt-2 truncate text-sm font-bold text-slate-800 group-hover:text-blue-700" title={label}>{label}</p>

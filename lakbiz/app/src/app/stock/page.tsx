@@ -327,6 +327,8 @@ export default function StockPage() {
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-sky-100 bg-sky-50 p-1.5">
                 <GroceryProductArt
                   name={p.name}
+                  sku={p.sku}
+                  barcode={typeof p.customFields.barcode === "string" ? p.customFields.barcode : undefined}
                   category={p.category}
                   imageUrl={typeof p.customFields.imageUrl === "string" ? p.customFields.imageUrl : undefined}
                   className="h-full w-full"

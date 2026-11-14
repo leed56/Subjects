@@ -753,7 +753,7 @@ export function AtomicRetailSalesPageV2() {
                       >
                         {groceryPos && (
                           <div className="relative h-24 overflow-hidden border-b border-slate-100 bg-[radial-gradient(circle_at_50%_30%,#ffffff_0%,#eff6ff_62%,#eef2ff_100%)]">
-                            <GroceryProductArt name={product.name} category={product.category} imageUrl={typeof product.customFields.imageUrl === "string" ? product.customFields.imageUrl : undefined} className="h-full w-full" />
+                            <GroceryProductArt name={product.name} sku={product.sku} barcode={typeof product.customFields.barcode === "string" ? product.customFields.barcode : undefined} category={product.category} imageUrl={typeof product.customFields.imageUrl === "string" ? product.customFields.imageUrl : undefined} className="h-full w-full" />
                             <span className="absolute left-2 top-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-white/90 px-2 py-1 text-[9px] font-bold text-slate-600 shadow-sm" title={groceryCategoryLabel(product.category, locale) || "Grocery"}>{groceryCategoryLabel(product.category, locale) || "Grocery"}</span>
                           </div>
                         )}
@@ -858,6 +858,8 @@ export function AtomicRetailSalesPageV2() {
                               <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-blue-100 bg-gradient-to-br from-white to-blue-50">
                                 <GroceryProductArt
                                   name={line.product.name}
+                                  sku={line.product.sku}
+                                  barcode={typeof line.product.customFields.barcode === "string" ? line.product.customFields.barcode : undefined}
                                   category={line.product.category}
                                   imageUrl={typeof line.product.customFields.imageUrl === "string" ? line.product.customFields.imageUrl : undefined}
                                   className="h-full w-full p-1"
