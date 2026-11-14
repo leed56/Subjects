@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { GroceryCatalogArt, type GroceryCatalogArtKind } from "@/components/sales/grocery-catalog-art";
 
 /* Owner-supplied image URLs are allowed, so render them with a regular img.
@@ -68,7 +68,7 @@ const CATALOG_ART_RULES: ReadonlyArray<{ terms: readonly string[]; kind: Grocery
   { terms: ["ice cream", "icecream", "chocolateicecream", "ice cup", "faluda ice", "kotmale milky berry", "milky pop", "kithul ice"], kind: "ice-cream" },
   { terms: ["kelloggs oats", "kellogs chocos", "corn flakes", "samaposha", "oats", "cereal"], kind: "cereal" },
   { terms: ["mixed fruit jam", "strawberry jam", "mango jam", "woodapple jam", "melon jam", "jam cup", "jam"], kind: "jam" },
-  { terms: ["motha baking powder", "baking powder", "cornflour", "corn flour", "custard powder", "jelly powder", "gelatine", "gelatin", "faluda mix", "icing sugar", "kurakkan flour", "kurakkan lus", "gram flour", "idli flour", "thosai mixture", "kurakkan", "string hopper flour", "white rice flour", "rice flour", "atta flour", "prima flour", "wheat flour", "tetha hal piti"], kind: "baking" },
+  { terms: ["motha baking powder", "baking powder", "cornflour", "corn flour", "custard powder", "jelly powder", "gelatine", "gelatin", "faluda mix", "icing sugar", "kurakkan flour", "kurakkan lus", "gram flour", "idli flour", "alli thosai mixture", "allie thosai mixture", "thosai mix", "thosai mixture", "kurakkan", "string hopper flour", "white rice flour", "rice flour", "atta flour", "prima flour", "wheat flour", "tetha hal piti"], kind: "baking" },
   { terms: ["motha vanilla custard", "king custard", "motha jelly", "blackcurrant jelly", "orange jelly", "strawberry jelly"], kind: "baking" },
   { terms: ["chicken sausagess", "chicken sausage", "sausages", "sausage", "hot dog"], kind: "sausage" },
   { terms: ["maggi chicken", "chicken cube", "knor seasoning", "seasoning powder"], kind: "spice-powder" },
@@ -94,7 +94,7 @@ const CATALOG_ART_RULES: ReadonlyArray<{ terms: readonly string[]; kind: Grocery
   { terms: ["hair gel", "hair wax", "hair oil", "hair fall", "navarathna oil"], kind: "hair-care" },
   { terms: ["baby talc", "talc", "deo talc", "paris talc", "khomba deo talc", "voodoo talc", "rani powder"], kind: "talc" },
   { terms: ["vaseline", "baby cream", "face cream", "facial cream", "fair & lovely", "fair and lovely", "facewash", "facialwash", "face wash"], kind: "face-cream" },
-  { terms: ["black henna", "henna", "mehendi"], kind: "henna" },
+  { terms: ["abha herbal black henna", "amins black henna", "herbal black henna", "black henna", "henna", "mehendi"], kind: "henna" },
   { terms: ["soap"], kind: "soap" },
   { terms: ["colour liquid", "color liquid", "food colour", "food color", "green color", "green colour", "cochineal colour", "egg yellow powder food color"], kind: "colour" },
   { terms: ["incense", "insence", "hadunkuru", "agarbathi", "sambrani", "kapuru"], kind: "incense" },
@@ -171,10 +171,11 @@ function categoryImageFor(label: string): string | undefined {
   return CATEGORY_IMAGES.find((item) => item.terms.some((term) => containsTerm(label, term)))?.src;
 }
 
-function ProductArt({ source, className = "" }: { source?: string; className?: string }) {
+function ProductArt({ source, fallback, className = "" }: { source?: string; fallback?: ReactNode; className?: string }) {
   const [failedSource, setFailedSource] = useState<string | null>(null);
 
   if (!source || failedSource === source) {
+    if (fallback) return <>{fallback}</>;
     return (
       <span aria-hidden="true" className={`flex items-center justify-center rounded-xl bg-slate-100 text-slate-400 ${className}`}>
         <svg viewBox="0 0 48 48" fill="none" className="h-9 w-9" aria-hidden="true">
@@ -208,11 +209,13 @@ export function GroceryProductArt({
   className?: string;
 }) {
   const ownerImage = imageUrl?.trim();
-  const specificImage = ownerImage ? undefined : specificProductImageFor(name);
-  const catalogArt = ownerImage || specificImage ? undefined : productCatalogArtFor(name);
-  const source = ownerImage || specificImage || (catalogArt ? undefined : productImageFor(name));
-  if (catalogArt) return <GroceryCatalogArt kind={catalogArt} className={className} />;
-  return <ProductArt source={source} className={className} />;
+  const appDefaultImage = ownerImage?.startsWith("/images/grocery/") ? undefined : ownerImage;
+  const specificImage = appDefaultImage ? undefined : specificProductImageFor(name);
+  const catalogArt = productCatalogArtFor(name);
+  const source = appDefaultImage || specificImage || (catalogArt ? undefined : productImageFor(name) || ownerImage);
+  const fallback = catalogArt ? <GroceryCatalogArt kind={catalogArt} className={className} /> : undefined;
+  if (!appDefaultImage && !specificImage && catalogArt) return fallback;
+  return <ProductArt source={source} fallback={fallback} className={className} />;
 }
 
 export function GroceryCategoryArt({ label, className = "" }: { label: string; className?: string }) {
