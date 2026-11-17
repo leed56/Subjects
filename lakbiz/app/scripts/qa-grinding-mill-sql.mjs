@@ -8,6 +8,7 @@ const cashier = '22222222-2222-4222-8222-222222222222';
 const shopA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const shopB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const shopC = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const shopHvac = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const q = (s) => db.query(s);
 
 await db.exec(`
@@ -32,6 +33,7 @@ as $$select exists(select 1 from public.org_members m where m.organization_id=or
 create function public.org_member_can_write_module(org_id uuid, module_key text) returns boolean language sql stable
 as $$select exists(select 1 from public.org_members m where m.organization_id=org_id and m.user_id=auth.uid())$$;
 insert into public.organizations values ('${shopA}','grocery'),('${shopB}','grocery'),('${shopC}','grocery');
+insert into public.organizations values ('${shopHvac}','ac_hvac');
 insert into public.org_members values ('${shopA}','${owner}','owner'),('${shopB}','${owner}','owner'),('${shopC}','${owner}','owner'),('${shopA}','${cashier}','cashier');
 insert into public.plans values ('ample',null),('small',10);
 insert into public.subscriptions values ('${shopA}','ample'),('${shopB}','ample'),('${shopC}','small');
@@ -43,6 +45,7 @@ assert.deepEqual(await readiness(), { mill:false, meat:false });
 assert.equal((await q('select count(*)::int as n from public.products_base')).rows[0].n,0);
 const migration = readFileSync('../supabase/migrations/20261026083545_grocery_optional_mill_import_and_checkout_guards.sql','utf8');
 await db.exec(migration);
+await db.exec(readFileSync('../supabase/migrations/20261117120000_grocery_checkout_price_guard.sql','utf8'));
 assert.deepEqual(await readiness(), { mill:true, meat:false });
 const meatMigration = readFileSync('../supabase/migrations/20261026090000_grocery_optional_meat_catalogue.sql','utf8');
 await db.exec(meatMigration);
@@ -87,10 +90,14 @@ await q(`update public.products_base set sell_price=500 where id='${product}'`);
 await q(`update public.products_base set stock_qty=0 where id='${product}'`);
 try { await insertLine('nostock',500); assert.fail('zero stock should reject'); } catch(e) { assert.match(e.message,/inactive, unpriced or unavailable/); }
 await q(`update public.products_base set stock_qty=5 where id='${product}'`);
+try { await insertLine('zero-price',0); assert.fail('zero-priced line should reject'); } catch(e) { assert.match(e.message,/inactive, unpriced or unavailable/); }
+await q(`insert into public.sales_base values ('sale-hvac','${shopHvac}',null)`);
+await q(`insert into public.products_base(id,organization_id,name,sell_price,stock_qty,active) values ('hvac-product','${shopHvac}','HVAC test service',0,0,true)`);
+await q(`insert into public.sale_lines_base values ('hvac-zero-price','${shopHvac}','sale-hvac','hvac-product',1,0)`);
 await q(`select set_config('test.user_id','${cashier}',false)`);
 try { await readiness(); assert.fail('cashier readiness must reject'); } catch(e) { assert.match(e.message,/owner access/); }
 try { await callMeat(shopA); assert.fail('cashier meat import should reject'); } catch (e) { assert.match(e.message,/owner access/); }
 try { await insertLine('override',1); assert.fail('cashier override should reject'); } catch(e) { assert.match(e.message,/cashier price override/); }
 await insertLine('valid',500);
-console.log('Local PostgreSQL rehearsal passed: atomic 36-item mill and 9-item meat imports, rollback/retry, queued simultaneous calls, shop isolation, cap rollback, owner-only import, inactive/unpriced/stock guards, cashier price guard.');
+console.log('Local PostgreSQL rehearsal passed: atomic 36-item mill and 9-item meat imports, rollback/retry, queued simultaneous calls, shop isolation, cap rollback, owner-only import, inactive/unpriced/zero-price/stock guards, cashier price guard, and unchanged HVAC line behavior.');
 await db.close();
