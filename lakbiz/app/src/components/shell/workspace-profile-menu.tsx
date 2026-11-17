@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ChevronDownIcon, SignOutIcon } from "@/components/ui/icons";
@@ -16,6 +17,7 @@ const profileCopy = {
 
 /** A compact shop identity control with account details revealed on demand. */
 export function WorkspaceProfileMenu({ appearance = "dark" }: { appearance?: "dark" | "light" }) {
+  const router = useRouter();
   const { user, logout } = useAuth();
   const { org, isPlatformAdmin } = useSubscription();
   const { locale, t } = useLocale();
@@ -47,7 +49,7 @@ export function WorkspaceProfileMenu({ appearance = "dark" }: { appearance?: "da
   const handleLogout = async () => {
     setExpanded(false);
     await logout();
-    window.location.href = "/login";
+    router.replace("/login");
   };
 
   return (
