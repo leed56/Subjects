@@ -45,7 +45,7 @@ assert.deepEqual(await readiness(), { mill:false, meat:false });
 assert.equal((await q('select count(*)::int as n from public.products_base')).rows[0].n,0);
 const migration = readFileSync('../supabase/migrations/20261026083545_grocery_optional_mill_import_and_checkout_guards.sql','utf8');
 await db.exec(migration);
-await db.exec(readFileSync('../supabase/migrations/20261117120000_grocery_checkout_price_guard.sql','utf8'));
+await db.exec(readFileSync('../supabase/migrations/20261118065513_grocery_checkout_price_guard.sql','utf8'));
 assert.deepEqual(await readiness(), { mill:true, meat:false });
 const meatMigration = readFileSync('../supabase/migrations/20261026090000_grocery_optional_meat_catalogue.sql','utf8');
 await db.exec(meatMigration);
