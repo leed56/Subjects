@@ -34,6 +34,7 @@ import {
   groceryCategoryLabel,
   groceryProductLabel,
   groceryProductSearchText,
+  groceryQuantityLabel,
   groceryUi,
   groceryUnitLabel,
   type GroceryUiKey,
@@ -869,10 +870,15 @@ export function AtomicRetailSalesPageV2() {
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-bold text-slate-950">{groceryPos ? groceryProductLabel(line.product, locale) : line.product.name}</p>
                               {groceryPos ? (
-                                <div className="mt-1.5 inline-flex items-center overflow-hidden rounded-lg border border-slate-200 bg-white">
-                                  <button type="button" aria-label={`${grocery("decrease")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, line.qty - 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-slate-600 hover:bg-slate-50">−</button>
-                                  <span className="flex h-7 min-w-8 items-center justify-center border-x border-slate-200 px-1 text-xs font-bold text-slate-900">{line.qty}</span>
-                                  <button type="button" aria-label={`${grocery("increase")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, line.qty + 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-teal-700 hover:bg-teal-50">+</button>
+                                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                  <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+                                    <button type="button" aria-label={`${grocery("decrease")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, line.qty - 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-slate-600 hover:bg-slate-50">−</button>
+                                    <span className="flex h-7 min-w-8 items-center justify-center border-x border-slate-200 px-1 text-xs font-bold text-slate-900">{line.qty}</span>
+                                    <button type="button" aria-label={`${grocery("increase")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, line.qty + 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-teal-700 hover:bg-teal-50">+</button>
+                                  </div>
+                                  <span className="text-[10px] font-semibold text-slate-500">
+                                    {groceryQuantityLabel(line.qty, line.product.customFields.unitVariant ?? line.product.customFields.unit, locale)}
+                                  </span>
                                 </div>
                               ) : <p className="mt-0.5 text-xs font-semibold text-slate-500">× {line.qty}</p>}
                             </div>

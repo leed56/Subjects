@@ -223,6 +223,18 @@ export function groceryUnitLabel(value: unknown, locale: Locale): string {
   return unitLabels[source]?.[locale] ?? (source || ui.unit[locale]);
 }
 
+/** Makes the entered cart quantity explicit in its selling measure. */
+export function groceryQuantityLabel(quantity: number, unitVariant: unknown, locale: Locale): string {
+  const source = typeof unitVariant === "string" ? unitVariant.trim() : "";
+  if (source === "1 kg") return `${quantity} ${groceryUnitLabel("kg", locale)}`;
+  if (source === "1 L") return `${quantity} ${groceryUnitLabel("L", locale)}`;
+  if (["each", "kg", "L", "pcs", "pack"].includes(source)) {
+    return `${quantity} ${groceryUnitLabel(source, locale)}`;
+  }
+  if (quantity === 1 && source.startsWith("1 ")) return groceryUnitLabel(source, locale);
+  return `${quantity} × ${groceryUnitLabel(source || "each", locale)}`;
+}
+
 /** Search aliases include all three display languages while leaving custom
  * owner-created names intact. This makes scan/search independent of the UI
  * language without storing translated copies in tenant data. */

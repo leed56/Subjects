@@ -3,6 +3,7 @@ import {
   groceryCategoryLabel,
   groceryProductLabel,
   groceryProductSearchText,
+  groceryQuantityLabel,
   groceryUnitLabel,
 } from "@/lib/grocery-localization";
 import { GROCERY_STARTER_CATALOGUE } from "@/lib/grocery-starter-catalogue";
@@ -28,6 +29,14 @@ describe("grocery display localization", () => {
     expect(groceryCategoryLabel("Milk & Dairy", "ta")).toBe("பால் பொருட்கள்");
     expect(groceryUnitLabel("10 pack", "si")).toBe("බිත්තර 10 පැකට්ටුව");
     expect(groceryUnitLabel("1 L", "ta")).toBe("1 லிட்டர்");
+  });
+
+  it("shows the cart quantity in the product's selling measure", () => {
+    expect(groceryQuantityLabel(1, "1 kg", "en")).toBe("1 kg");
+    expect(groceryQuantityLabel(2, "1 kg", "en")).toBe("2 kg");
+    expect(groceryQuantityLabel(1, "1 kg", "si")).toBe("1 කිලෝග්‍රෑම්");
+    expect(groceryQuantityLabel(1, "1 kg", "ta")).toBe("1 கிலோ");
+    expect(groceryQuantityLabel(2, "250 g", "en")).toBe("2 × 250 g");
   });
 
   it("finds canonical products by English, Sinhala, Tamil, SKU and barcode", () => {
