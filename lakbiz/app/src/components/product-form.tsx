@@ -10,6 +10,7 @@ import {
 } from "@/lib/sector-fields";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { ProductReferenceCombobox } from "@/components/product-reference-combobox";
+import { BarcodeCameraScanner } from "@/components/product/barcode-camera-scanner";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import type { ProductInput } from "@/lib/store/types";
 
@@ -75,6 +76,7 @@ export function ProductForm({
   const { t, locale } = useLocale();
   const { canSeeFinancials } = useSubscription();
   const isSinhala = locale === "si";
+  const [barcodeScannerOpen, setBarcodeScannerOpen] = useState(false);
   const shopSectorId = lockedSectorId ?? defaultSectorId;
   const [form, setForm] = useState<FormState>(() => {
     if (initial) {
@@ -186,6 +188,13 @@ export function ProductForm({
   const sectorHint = isSinhala
     ? "ඔබේ ව්‍යාපාර වර්ගයට පමණක් අදාළ අමතර තොරතුරු."
     : "Additional identity and handling information used for this item.";
+  const barcodeLabel = locale === "si" ? "බාර්කෝඩ්" : locale === "ta" ? "பார்கோடு" : "Barcode";
+  const scanBarcodeLabel = locale === "si" ? "ස්කෑන් කරන්න" : locale === "ta" ? "ஸ்கேன் செய்" : "Scan";
+  const barcodeHint = locale === "si"
+    ? "එක් එක් භාණ්ඩය සහ පැකේජ ප්‍රමාණය සඳහා එක් වරක් ස්කෑන් කරන්න."
+    : locale === "ta"
+      ? "ஒவ்வொரு பொருள் மற்றும் பொதி அளவுக்கும் ஒருமுறை ஸ்கேன் செய்யவும்."
+      : "Scan once for each product and pack size.";
 
   return (
     <form data-product-form="true" onSubmit={handleSubmit} className="space-y-5 pb-24">
@@ -374,7 +383,37 @@ export function ProductForm({
 
           <div className="grid gap-4 sm:grid-cols-2">
             {sectorFields.map((field) =>
-              field.type === "boolean" ? (
+              field.key === "barcode" && effectiveSectorId === "grocery" ? (
+                <div key={field.key} className="min-w-0">
+                  <label htmlFor="product-barcode" className="block">
+                    <span className={fieldLabel}>{barcodeLabel}</span>
+                  </label>
+                  <div className="mt-1.5 flex min-w-0 gap-2">
+                    <input
+                      id="product-barcode"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={form.sectorCustom[field.key] ?? ""}
+                      placeholder="EAN / UPC"
+                      onChange={(e) => setSectorField(field.key, e.target.value)}
+                      className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.025)] outline-none transition placeholder:text-slate-400 focus:border-teal-400 focus:ring-4 focus:ring-teal-100/70"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setBarcodeScannerOpen(true)}
+                      className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-bold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100 focus:outline-none focus:ring-4 focus:ring-emerald-100"
+                      aria-label={scanBarcodeLabel}
+                    >
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 0 1 1-1h2m10 0h2a1 1 0 0 1 1 1v2M4 17v2a1 1 0 0 0 1 1h2m10 0h2a1 1 0 0 0 1-1v-2M8 8v8m3-8v8m3-8v8m3-8v8" />
+                      </svg>
+                      {scanBarcodeLabel}
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-xs leading-5 text-slate-500">{barcodeHint}</p>
+                </div>
+              ) : field.type === "boolean" ? (
                 <label key={field.key} className="flex min-h-11 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 sm:col-span-2">
                   <input
                     type="checkbox"
@@ -413,6 +452,17 @@ export function ProductForm({
           />
         </label>
       </section>
+
+      {barcodeScannerOpen && (
+        <BarcodeCameraScanner
+          locale={locale}
+          onDetected={(value) => {
+            setSectorField("barcode", value);
+            setBarcodeScannerOpen(false);
+          }}
+          onClose={() => setBarcodeScannerOpen(false)}
+        />
+      )}
 
       <div className="sticky bottom-[-1.25rem] z-20 -mx-5 -mb-5 flex items-center justify-between gap-3 border-t border-slate-200/80 bg-white/96 px-5 py-4 shadow-[0_-12px_30px_rgba(15,23,42,0.055)] backdrop-blur-xl">
         {onCancel ? (

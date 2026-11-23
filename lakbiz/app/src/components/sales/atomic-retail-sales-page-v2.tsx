@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { setBottomBarOccupied } from "@/components/shell/bottom-bar-overlay";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
+import { BarcodeCameraScanner } from "@/components/product/barcode-camera-scanner";
 import { AdvancedSaleSelector, type AdvancedSaleLineState } from "@/components/sales/advanced-sale-selector";
 import { GroceryCategoryArt, GroceryProductArt } from "@/components/sales/grocery-product-art";
 import {
@@ -153,6 +154,7 @@ export function AtomicRetailSalesPageV2() {
   const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
   const [inventoryStates, setInventoryStates] = useState<Record<string, AdvancedSaleLineState>>({});
   const [search, setSearch] = useState("");
+  const [barcodeScannerOpen, setBarcodeScannerOpen] = useState(false);
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [resultLimit, setResultLimit] = useState(30);
@@ -362,6 +364,29 @@ export function AtomicRetailSalesPageV2() {
     }
   };
 
+  const handlePosBarcodeDetected = (barcode: string) => {
+    const normalized = barcode.trim().toLowerCase();
+    const product = inStock.find((row) =>
+      (row.sku ?? "").trim().toLowerCase() === normalized ||
+      String(row.customFields.barcode ?? "").trim().toLowerCase() === normalized,
+    );
+    setBarcodeScannerOpen(false);
+    if (product) {
+      setMessage("");
+      addOne(product);
+      return;
+    }
+
+    setCategoryFilter("all");
+    setSearch(barcode);
+    setResultLimit(30);
+    setMessage(locale === "si"
+      ? "මෙම කේතයට ගැළපෙන සක්‍රිය භාණ්ඩයක් නැත. Stock හි භාණ්ඩයට barcode එක එක් කරන්න."
+      : locale === "ta"
+        ? "இந்தக் குறியீட்டிற்கு பொருந்தும் செயலில் உள்ள பொருள் இல்லை. Stock-இல் பொருளுக்கு பார்கோடைச் சேர்க்கவும்."
+        : "No active product matches this code. Add the barcode to the item in Stock first.");
+  };
+
   const resetPricingForCustomer = (id: string) => {
     setCustomerId(id);
     setPriceOverrides({});
@@ -529,6 +554,7 @@ export function AtomicRetailSalesPageV2() {
         {groceryPos ? (
           <section className="overflow-hidden rounded-[24px] border border-blue-100 bg-[radial-gradient(circle_at_92%_16%,rgba(129,140,248,0.24),transparent_28%),radial-gradient(circle_at_8%_100%,rgba(16,185,129,0.16),transparent_25%),linear-gradient(115deg,#f8fbff_0%,#edf5ff_56%,#faf5ff_100%)] p-4 shadow-[0_18px_44px_rgba(59,130,246,0.10)] sm:p-5">
             <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center">
+              <div className="flex min-w-0 flex-1 gap-2">
               <label className="relative block min-w-0 flex-1">
                 <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-lg text-blue-500">⌕</span>
                 <input
@@ -549,6 +575,18 @@ export function AtomicRetailSalesPageV2() {
                   className="h-12 w-full rounded-2xl border border-white/80 bg-white/90 pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-[0_8px_24px_rgba(37,99,235,0.09)] outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                 />
               </label>
+              <button
+                type="button"
+                onClick={() => setBarcodeScannerOpen(true)}
+                className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-bold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100 focus:outline-none focus:ring-4 focus:ring-emerald-100"
+                aria-label={locale === "si" ? "Barcode ස්කෑන් කරන්න" : locale === "ta" ? "பார்கோடை ஸ்கேன் செய்" : "Scan barcode with camera"}
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 0 1 1-1h2m10 0h2a1 1 0 0 1 1 1v2M4 17v2a1 1 0 0 0 1 1h2m10 0h2a1 1 0 0 0 1-1v-2M8 8v8m3-8v8m3-8v8m3-8v8" />
+                </svg>
+                {locale === "si" ? "ස්කෑන්" : locale === "ta" ? "ஸ்கேன்" : "Scan"}
+              </button>
+              </div>
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <button type="button" onClick={() => { setCart({}); setPendingSaleId(null); setMessage(""); }} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-3 text-xs font-bold text-white shadow-[0_10px_20px_rgba(16,185,129,0.22)] transition hover:brightness-105"><span className="text-base">＋</span>{grocery("newBill")}</button>
                 <button type="button" disabled title={locale === "si" ? "ඉක්මනින් පැමිණේ" : locale === "ta" ? "விரைவில் வருகிறது" : "Coming soon"} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/75 px-3 text-xs font-bold text-slate-400 disabled:cursor-not-allowed">{grocery("holdBill")}</button>
@@ -564,6 +602,8 @@ export function AtomicRetailSalesPageV2() {
           description={org.sector === "pharmacy" ? (si ? "Prescription, FEFO batch සහ ගෙවීම එකම checkout transaction එකක පාලනය කරයි." : "Prescription checks, FEFO batch allocation and payment commit in one checkout transaction.") : (si ? "ගෙවීම සහ තොගය එකම checkout transaction එකක සුරකියි." : "Payment and stock commit together in one checkout transaction.")}
           actions={<><ProBadge tone="emerald">Atomic checkout</ProBadge><ProButton href="/stock" variant="secondary">{t("sales.add_stock_link")}</ProButton>{lastBillId && <ProButton href={`/bills/${lastBillId}`} variant="dark">{t("sales.view_bill")}</ProButton>}</>}
         />}
+
+        {barcodeScannerOpen && <BarcodeCameraScanner locale={locale} onDetected={handlePosBarcodeDetected} onClose={() => setBarcodeScannerOpen(false)} />}
 
         <WriteDisabledHint className="mb-5" />
 
@@ -584,7 +624,9 @@ export function AtomicRetailSalesPageV2() {
               <ProStatCard
                 label={grocery("todaySales")}
                 value={formatLkr(groceryLiveMetrics.intelligence.todaySales)}
-                hint={groceryLiveMetrics.intelligence.todaySalesChangePct == null ? grocery("noBillsYet") : `${groceryLiveMetrics.intelligence.todaySalesChangePct >= 0 ? "▲" : "▼"} ${Math.abs(groceryLiveMetrics.intelligence.todaySalesChangePct).toFixed(0)}% ${locale === "si" ? "ඊයේට වඩා" : locale === "ta" ? "நேற்றை விட" : "vs yesterday"}`}
+                hint={groceryLiveMetrics.intelligence.todaySalesChangePct == null
+                  ? groceryLiveMetrics.intelligence.todayTransactions > 0 ? grocery("completedToday") : grocery("noBillsYet")
+                  : `${groceryLiveMetrics.intelligence.todaySalesChangePct >= 0 ? "▲" : "▼"} ${Math.abs(groceryLiveMetrics.intelligence.todaySalesChangePct).toFixed(0)}% ${locale === "si" ? "ඊයේට වඩා" : locale === "ta" ? "நேற்றை விட" : "vs yesterday"}`}
                 icon={<SalesIcon className="h-5 w-5" />}
                 tone="teal"
               />
