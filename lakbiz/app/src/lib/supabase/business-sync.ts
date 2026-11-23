@@ -751,9 +751,6 @@ export async function syncCustomersSnapshot(
   const supabase = createBrowserClient();
   if (!supabase) return "Supabase not configured";
 
-  if (!supabase) {
-    return { error: "Supabase not configured", stale: false, generation: seenGeneration };
-  }
   const { count: memberCount } = await supabase
     .from("org_members")
     .select("*", { count: "exact", head: true })
@@ -2872,6 +2869,9 @@ export async function pushBusinessData(
     purchaseOrderLineRows,
   );
   if (poErr) return { error: poErr, stale: false, generation: seenGeneration };
+  if (!supabase) {
+    return { error: "Supabase not configured", stale: false, generation: seenGeneration };
+  }
 
   const { count: memberCount } = await supabase
     .from("org_members")
