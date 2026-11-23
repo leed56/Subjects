@@ -2392,63 +2392,66 @@ export async function pushBusinessData(
 ): Promise<CloudPushResult> {
   const seenGeneration =
     options?.seenGeneration ?? (await fetchOrgSyncGeneration(organizationId));
-  const supabase = createBrowserClient();
-  if (!supabase) {
-    return { error: "Supabase not configured", stale: false, generation: seenGeneration };
+  let products = data.products;
+  if (data.products.length > 0) {
+    const supabase = createBrowserClient();
+    if (!supabase) {
+      return { error: "Supabase not configured", stale: false, generation: seenGeneration };
+    }
+  
+    const [{ data: cloudProducts, error: productsError }, { data: cloudStockLogs, error: logsError }] =
+      await Promise.all([
+        fetchAllPages((from, to) =>
+          supabase
+            .from("products")
+            .select("id, buy_price, stock_qty")
+            .eq("organization_id", organizationId)
+            .range(from, to),
+        ),
+        fetchAllPages((from, to) =>
+          supabase
+            .from("stock_logs")
+            .select("id")
+            .eq("organization_id", organizationId)
+            .range(from, to),
+        ),
+      ]);
+    if (productsError || logsError) {
+      return {
+        error: productsError?.message ?? logsError?.message ?? "Could not reconcile cloud inventory",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+  
+    const cloudProductById = new Map(
+      (cloudProducts ?? []).map((product) => [String(product.id), product]),
+    );
+    const cloudStockLogIds = new Set((cloudStockLogs ?? []).map((log) => String(log.id)));
+    const productsWithPendingMovements = new Set(
+      data.stockLogs
+        .filter((log) => !cloudStockLogIds.has(log.id))
+        .map((log) => log.productId),
+    );
+    // Stock is an inventory balance, not ordinary product metadata. Preserve the
+    // cloud balance unless this payload carries a movement the cloud has not
+    // seen yet; this prevents a delayed full snapshot from undoing a checkout or
+    // return that another request has already committed.
+    products = data.products.map((product) => {
+      const cloudProduct = cloudProductById.get(product.id);
+      return {
+        ...product,
+        buyPrice:
+          options?.preserveBuyPrices && cloudProduct
+            ? num(cloudProduct.buy_price)
+            : product.buyPrice,
+        stockQty:
+          cloudProduct && !productsWithPendingMovements.has(product.id)
+            ? num(cloudProduct.stock_qty)
+            : product.stockQty,
+      };
+    });
   }
-
-  const [{ data: cloudProducts, error: productsError }, { data: cloudStockLogs, error: logsError }] =
-    await Promise.all([
-      fetchAllPages((from, to) =>
-        supabase
-          .from("products")
-          .select("id, buy_price, stock_qty")
-          .eq("organization_id", organizationId)
-          .range(from, to),
-      ),
-      fetchAllPages((from, to) =>
-        supabase
-          .from("stock_logs")
-          .select("id")
-          .eq("organization_id", organizationId)
-          .range(from, to),
-      ),
-    ]);
-  if (productsError || logsError) {
-    return {
-      error: productsError?.message ?? logsError?.message ?? "Could not reconcile cloud inventory",
-      stale: false,
-      generation: seenGeneration,
-    };
-  }
-
-  const cloudProductById = new Map(
-    (cloudProducts ?? []).map((product) => [String(product.id), product]),
-  );
-  const cloudStockLogIds = new Set((cloudStockLogs ?? []).map((log) => String(log.id)));
-  const productsWithPendingMovements = new Set(
-    data.stockLogs
-      .filter((log) => !cloudStockLogIds.has(log.id))
-      .map((log) => log.productId),
-  );
-  // Stock is an inventory balance, not ordinary product metadata. Preserve the
-  // cloud balance unless this payload carries a movement the cloud has not
-  // seen yet; this prevents a delayed full snapshot from undoing a checkout or
-  // return that another request has already committed.
-  const products = data.products.map((product) => {
-    const cloudProduct = cloudProductById.get(product.id);
-    return {
-      ...product,
-      buyPrice:
-        options?.preserveBuyPrices && cloudProduct
-          ? num(cloudProduct.buy_price)
-          : product.buyPrice,
-      stockQty:
-        cloudProduct && !productsWithPendingMovements.has(product.id)
-          ? num(cloudProduct.stock_qty)
-          : product.stockQty,
-    };
-  });
 
   const productRows = products.map((p) => ({
     id: p.id,
