@@ -2,52 +2,76 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type BarcodeResult = { rawValue?: string };
-type BarcodeDetectorLike = {
-  detect: (source: HTMLVideoElement) => Promise<BarcodeResult[]>;
-};
-type BarcodeDetectorConstructor = {
-  new (options?: { formats?: string[] }): BarcodeDetectorLike;
-  getSupportedFormats?: () => Promise<string[]>;
-};
-type BarcodeWindow = Window & { BarcodeDetector?: BarcodeDetectorConstructor };
 type ScannerLocale = "en" | "si" | "ta";
-
-const COPY: Record<ScannerLocale, {
+type CameraErrorKey = "unsupported" | "permission" | "noCamera" | "cameraBusy" | "secure";
+type ScannerCopy = {
   title: string;
   hint: string;
-  secure: string;
-  unsupported: string;
-  permission: string;
+  idle: string;
+  starting: string;
+  start: string;
+  retry: string;
   close: string;
-}> = {
+} & Record<CameraErrorKey, string>;
+
+const COPY: Record<ScannerLocale, ScannerCopy> = {
   en: {
     title: "Scan product barcode",
     hint: "Place one product barcode inside the frame and hold the phone steady.",
-    secure: "Camera access needs a secure HTTPS connection. Open LakBiz using its secure link.",
-    unsupported: "Camera scanning is not supported by this browser. Use a Bluetooth scanner or enter the code manually.",
-    permission: "The camera could not start. Allow camera access in your browser settings, then try again.",
+    idle: "Tap Start camera to scan. Your browser will ask for camera permission.",
+    starting: "Opening camera…",
+    start: "Start camera",
+    retry: "Try again",
     close: "Close scanner",
+    secure: "Camera access needs a secure HTTPS connection. Open LakBiz using its secure link.",
+    unsupported: "This browser cannot open a camera. Try an up-to-date browser, use a Bluetooth scanner, or enter the code manually.",
+    permission: "Camera access is blocked. Open this site's permissions from the address bar, allow Camera, then tap Try again.",
+    noCamera: "No camera was found on this device. Use a camera-enabled device, a Bluetooth scanner, or enter the code manually.",
+    cameraBusy: "The camera is busy or unavailable. Close other apps using it, then tap Try again.",
   },
   si: {
     title: "භාණ්ඩයේ තීරු කේතය ස්කෑන් කරන්න",
     hint: "තීරු කේතය රාමුව තුළ තබා දුරකථනය නිශ්චලව තබන්න.",
-    secure: "කැමරාවට HTTPS ආරක්ෂිත සම්බන්ධතාවයක් අවශ්‍යයි. LakBiz ආරක්ෂිත සබැඳියෙන් විවෘත කරන්න.",
-    unsupported: "මෙම බ්‍රවුසරයේ කැමරා ස්කෑන් කිරීම සහාය නොදක්වයි. Bluetooth ස්කෑනරයක් භාවිතා කරන්න හෝ කේතය ඇතුළත් කරන්න.",
-    permission: "කැමරාව ආරම්භ කළ නොහැකි විය. බ්‍රවුසර සැකසුම්වලින් කැමරා අවසරය ලබා දී නැවත උත්සාහ කරන්න.",
+    idle: "ස්කෑන් කිරීමට “කැමරාව අරඹන්න” තට්ටු කරන්න. බ්‍රවුසරය කැමරා අවසරය විමසයි.",
+    starting: "කැමරාව ආරම්භ කරමින්…",
+    start: "කැමරාව අරඹන්න",
+    retry: "නැවත උත්සාහ කරන්න",
     close: "ස්කෑනරය වසන්න",
+    secure: "කැමරාවට HTTPS ආරක්ෂිත සම්බන්ධතාවයක් අවශ්‍යයි. LakBiz ආරක්ෂිත සබැඳියෙන් විවෘත කරන්න.",
+    unsupported: "මෙම බ්‍රවුසරයට කැමරාව විවෘත කළ නොහැක. යාවත්කාලීන බ්‍රවුසරයක් හෝ Bluetooth ස්කෑනරයක් භාවිතා කරන්න, නැතහොත් කේතය ඇතුළත් කරන්න.",
+    permission: "කැමරා අවසරය අවහිර වී ඇත. ලිපින තීරුව අසල අඩවි අවසර විවෘත කර කැමරාවට අවසර දෙන්න. පසුව නැවත උත්සාහ කරන්න.",
+    noCamera: "මෙම උපාංගයේ කැමරාවක් හමු නොවීය. කැමරාවක් ඇති උපාංගයක් හෝ Bluetooth ස්කෑනරයක් භාවිතා කරන්න, නැතහොත් කේතය ඇතුළත් කරන්න.",
+    cameraBusy: "කැමරාව වෙනත් යෙදුමකින් භාවිතා වේ හෝ ලබාගත නොහැක. එම යෙදුම වසා නැවත උත්සාහ කරන්න.",
   },
   ta: {
     title: "பொருள் பார்கோடை ஸ்கேன் செய்க",
     hint: "பார்கோடை சட்டகத்திற்குள் வைத்து தொலைபேசியை அசையாமல் பிடிக்கவும்.",
-    secure: "கேமராவுக்கு HTTPS பாதுகாப்பான இணைப்பு தேவை. பாதுகாப்பான இணைப்பில் LakBiz-ஐத் திறக்கவும்.",
-    unsupported: "இந்த உலாவியில் கேமரா ஸ்கேனிங் இல்லை. Bluetooth ஸ்கேனரைப் பயன்படுத்தவும் அல்லது குறியீட்டை உள்ளிடவும்.",
-    permission: "கேமராவைத் தொடங்க முடியவில்லை. உலாவி அமைப்புகளில் கேமரா அனுமதியை வழங்கி மீண்டும் முயற்சிக்கவும்.",
+    idle: "ஸ்கேன் செய்ய “கேமராவைத் தொடங்கு” என்பதைத் தட்டவும். உலாவி கேமரா அனுமதியைக் கேட்கும்.",
+    starting: "கேமரா தொடங்குகிறது…",
+    start: "கேமராவைத் தொடங்கு",
+    retry: "மீண்டும் முயற்சி செய்க",
     close: "ஸ்கேனரை மூடு",
+    secure: "கேமராவுக்கு HTTPS பாதுகாப்பான இணைப்பு தேவை. பாதுகாப்பான இணைப்பில் LakBiz-ஐத் திறக்கவும்.",
+    unsupported: "இந்த உலாவியால் கேமராவைத் திறக்க முடியவில்லை. புதுப்பிக்கப்பட்ட உலாவி அல்லது Bluetooth ஸ்கேனரைப் பயன்படுத்தவும், அல்லது குறியீட்டை உள்ளிடவும்.",
+    permission: "கேமரா அனுமதி தடுக்கப்பட்டுள்ளது. முகவரிப் பட்டியில் இந்த தளத்தின் அனுமதிகளைத் திறந்து கேமராவை அனுமதிக்கவும்; பின்னர் மீண்டும் முயற்சிக்கவும்.",
+    noCamera: "இந்த சாதனத்தில் கேமரா இல்லை. கேமரா உள்ள சாதனம் அல்லது Bluetooth ஸ்கேனரைப் பயன்படுத்தவும், அல்லது குறியீட்டை உள்ளிடவும்.",
+    cameraBusy: "கேமரா வேறு செயலியால் பயன்படுத்தப்படுகிறது அல்லது கிடைக்கவில்லை. அந்த செயலியை மூடி மீண்டும் முயற்சிக்கவும்.",
   },
 };
 
-const BARCODE_FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf", "qr_code"];
+type ReaderControls = { stop: () => void };
+
+function cameraErrorKey(error: unknown): CameraErrorKey {
+  const name =
+    typeof error === "object" && error !== null && "name" in error
+      ? String((error as { name?: unknown }).name ?? "")
+      : "";
+
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") return "noCamera";
+  if (name === "NotReadableError" || name === "TrackStartError") return "cameraBusy";
+  if (name === "NotAllowedError" || name === "SecurityError") return "permission";
+  return "unsupported";
+}
 
 export function BarcodeCameraScanner({
   locale,
@@ -59,130 +83,164 @@ export function BarcodeCameraScanner({
   onClose: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const controlsRef = useRef<ReaderControls | null>(null);
+  const mountedRef = useRef(false);
+  const detectedRef = useRef(false);
   const onDetectedRef = useRef(onDetected);
-  const [error, setError] = useState<string | null>(null);
+  const onCloseRef = useRef(onClose);
+  const [status, setStatus] = useState<"idle" | "starting" | "scanning" | "error">("idle");
+  const [error, setError] = useState<CameraErrorKey | null>(null);
   const copy = COPY[locale === "si" || locale === "ta" ? locale : "en"];
 
   useEffect(() => {
     onDetectedRef.current = onDetected;
-  }, [onDetected]);
+    onCloseRef.current = onClose;
+  }, [onClose, onDetected]);
 
   useEffect(() => {
-    let disposed = false;
-    let stream: MediaStream | null = null;
-    let timer = 0;
-    let detecting = false;
-
-    const stopCamera = () => {
-      window.clearTimeout(timer);
-      stream?.getTracks().forEach((track) => track.stop());
-      stream = null;
-    };
-
-    const startScanner = async () => {
-      if (!window.isSecureContext) {
-        setError(copy.secure);
-        return;
-      }
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setError(copy.unsupported);
-        return;
-      }
-
-      const Detector = (window as BarcodeWindow).BarcodeDetector;
-      if (!Detector) {
-        setError(copy.unsupported);
-        return;
-      }
-
-      try {
-        const supported = Detector.getSupportedFormats
-          ? await Detector.getSupportedFormats()
-          : BARCODE_FORMATS;
-        const formats = BARCODE_FORMATS.filter((format) => supported.includes(format));
-        const detector = new Detector(formats.length ? { formats } : undefined);
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
-        });
-        if (disposed) {
-          stopCamera();
-          return;
-        }
-
-        const video = videoRef.current;
-        if (!video) {
-          stopCamera();
-          return;
-        }
-        video.srcObject = stream;
-        await video.play();
-
-        const scanFrame = async () => {
-          if (disposed) return;
-          if (!detecting && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-            detecting = true;
-            try {
-              const results = await detector.detect(video);
-              const value = results.find((result) => result.rawValue?.trim())?.rawValue?.trim();
-              if (value) {
-                disposed = true;
-                stopCamera();
-                onDetectedRef.current(value);
-                return;
-              }
-            } catch {
-              // Retry on the next frame; a single blurred frame should not stop scanning.
-            } finally {
-              detecting = false;
-            }
-          }
-          if (!disposed) timer = window.setTimeout(() => void scanFrame(), 160);
-        };
-
-        void scanFrame();
-      } catch {
-        stopCamera();
-        if (!disposed) setError(copy.permission);
-      }
-    };
-
-    void startScanner();
-    return () => {
-      disposed = true;
-      stopCamera();
-      if (videoRef.current) videoRef.current.srcObject = null;
-    };
-  }, [copy.permission, copy.secure, copy.unsupported]);
-
-  useEffect(() => {
+    mountedRef.current = true;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") onCloseRef.current();
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+
+    return () => {
+      mountedRef.current = false;
+      window.removeEventListener("keydown", onKeyDown);
+      controlsRef.current?.stop();
+      controlsRef.current = null;
+      const video = videoRef.current;
+      const stream = video?.srcObject as MediaStream | null | undefined;
+      stream?.getTracks().forEach((track) => track.stop());
+      if (video) {
+        video.pause();
+        video.srcObject = null;
+      }
+    };
+  }, []);
+
+  const startScanner = async () => {
+    if (status === "starting" || status === "scanning") return;
+    detectedRef.current = false;
+    setError(null);
+    setStatus("starting");
+
+    if (!window.isSecureContext) {
+      setError("secure");
+      setStatus("error");
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError("unsupported");
+      setStatus("error");
+      return;
+    }
+
+    const video = videoRef.current;
+    if (!video) {
+      setError("unsupported");
+      setStatus("error");
+      return;
+    }
+
+    try {
+      const [{ BrowserMultiFormatReader }] = await Promise.all([
+        import("@zxing/browser"),
+      ]);
+      if (!mountedRef.current) return;
+
+      const reader = new BrowserMultiFormatReader();
+      const controls = await reader.decodeFromVideoDevice(
+        undefined,
+        video,
+        (result, _decodeError, scanControls) => {
+          const value = result?.getText().trim();
+          if (!value || detectedRef.current) return;
+          detectedRef.current = true;
+          scanControls?.stop();
+          onDetectedRef.current(value);
+        },
+      );
+
+      controlsRef.current = controls;
+      if (!mountedRef.current || detectedRef.current) {
+        controls.stop();
+        return;
+      }
+      setStatus("scanning");
+    } catch (startError) {
+      controlsRef.current?.stop();
+      controlsRef.current = null;
+      if (mountedRef.current) {
+        setError(cameraErrorKey(startError));
+        setStatus("error");
+      }
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="barcode-camera-title">
+    <div
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="barcode-camera-title"
+    >
       <section className="w-full max-w-lg rounded-t-[28px] border border-emerald-100 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.24)] sm:rounded-[28px]">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-emerald-700">LakBiz · Grocery</p>
-            <h2 id="barcode-camera-title" className="mt-1 text-lg font-bold text-slate-950">{copy.title}</h2>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-emerald-700">
+              LakBiz · Grocery
+            </p>
+            <h2 id="barcode-camera-title" className="mt-1 text-lg font-bold text-slate-950">
+              {copy.title}
+            </h2>
           </div>
-          <button type="button" onClick={onClose} className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex min-h-10 items-center rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
             {copy.close}
           </button>
         </div>
 
         <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-emerald-100 bg-slate-100">
-          <video ref={videoRef} className="h-full w-full object-cover" autoPlay muted playsInline aria-label={copy.hint} />
-          {!error && <div className="pointer-events-none absolute inset-[17%] rounded-2xl border-2 border-emerald-300 shadow-[0_0_0_999px_rgba(15,23,42,0.12)]" />}
-          {error && (
-            <div role="alert" className="absolute inset-0 flex items-center justify-center bg-sky-50/95 p-6 text-center text-sm font-medium leading-6 text-slate-700">
-              {error}
+          <video
+            ref={videoRef}
+            className="h-full w-full object-cover"
+            autoPlay
+            muted
+            playsInline
+            aria-label={copy.hint}
+          />
+          {status !== "scanning" && (
+            <div
+              className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-sky-50/95 p-6 text-center"
+              aria-live="polite"
+            >
+              <p
+                role={status === "error" ? "alert" : undefined}
+                className="max-w-sm text-sm font-medium leading-6 text-slate-700"
+              >
+                {status === "starting"
+                  ? copy.starting
+                  : status === "error" && error
+                    ? copy[error]
+                    : copy.idle}
+              </p>
+              {status !== "starting" && (
+                <button
+                  type="button"
+                  onClick={() => void startScanner()}
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200"
+                >
+                  {status === "error" ? copy.retry : copy.start}
+                </button>
+              )}
             </div>
+          )}
+          {status === "scanning" && (
+            <div className="pointer-events-none absolute inset-[17%] rounded-2xl border-2 border-emerald-300 shadow-[0_0_0_999px_rgba(15,23,42,0.12)]" />
           )}
         </div>
         <p className="mt-3 text-sm leading-6 text-slate-600">{copy.hint}</p>
@@ -190,4 +248,3 @@ export function BarcodeCameraScanner({
     </div>
   );
 }
-
