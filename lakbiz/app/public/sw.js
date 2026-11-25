@@ -4,7 +4,7 @@
  * user (or the same user in a different org) see stale tenant data while
  * offline. See docs/ARCHITECTURE_AUDIT.md, "Service worker" section.
  */
-const CACHE_VERSION = "lakbiz-v4";
+const CACHE_VERSION = "lakbiz-v5";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 
