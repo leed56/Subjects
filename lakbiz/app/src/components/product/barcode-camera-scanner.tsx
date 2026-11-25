@@ -153,7 +153,7 @@ export function BarcodeCameraScanner({
       ]);
       if (!mountedRef.current) return;
 
-      const hints = new Map<DecodeHintType, any>();
+      const hints = new Map();
       hints.set(DecodeHintType.POSSIBLE_FORMATS, [
         BarcodeFormat.EAN_13,
         BarcodeFormat.EAN_8,
