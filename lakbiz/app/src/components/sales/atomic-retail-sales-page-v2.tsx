@@ -381,10 +381,10 @@ export function AtomicRetailSalesPageV2() {
     setSearch(barcode);
     setResultLimit(30);
     setMessage(locale === "si"
-      ? "මෙම කේතයට ගැළපෙන සක්‍රිය භාණ්ඩයක් නැත. Stock හි භාණ්ඩයට barcode එක එක් කරන්න."
+      ? `තීරු කේතය ${barcode} කියවුණා. එයට ගැළපෙන සක්‍රිය භාණ්ඩයක් නැහැ. Stock හි එම භාණ්ඩයට මෙම කේතය එක් කරන්න.`
       : locale === "ta"
-        ? "இந்தக் குறியீட்டிற்கு பொருந்தும் செயலில் உள்ள பொருள் இல்லை. Stock-இல் பொருளுக்கு பார்கோடைச் சேர்க்கவும்."
-        : "No active product matches this code. Add the barcode to the item in Stock first.");
+        ? `பார்கோடு ${barcode} வாசிக்கப்பட்டது. இதற்குப் பொருந்தும் செயலில் உள்ள பொருள் இல்லை. Stock-இல் அந்தப் பொருளுக்கு இந்தக் குறியீட்டைச் சேர்க்கவும்.`
+        : `Scanned ${barcode}, but no active product matches it. Add this code to the product in Stock.`);
   };
 
   const resetPricingForCustomer = (id: string) => {
