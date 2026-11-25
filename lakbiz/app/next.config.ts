@@ -26,7 +26,7 @@ const SECURITY_HEADERS = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=()",
+    value: "camera=(self), microphone=(), geolocation=()",
   },
   // Belt-and-suspenders alongside frame-ancestors for older browsers.
   { key: "X-Frame-Options", value: "DENY" },
