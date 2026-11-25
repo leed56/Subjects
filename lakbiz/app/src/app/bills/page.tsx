@@ -96,6 +96,24 @@ export default function BillsPage() {
   const pageEnd = Math.min(pageStart + BILLS_PAGE_SIZE, bills.length);
 
   const canExport = can("export");
+  const canRecordReturn = org.isAuthenticated && (orgRole === "owner" || orgRole === "manager");
+  const invoiceManagementCopy = locale === "si"
+    ? {
+        recordReturn: "ආපසු භාරදීම සටහන් කරන්න",
+        guidanceTitle: "නිකුත් කළ බිල්පතක් නිවැරදි කරන්නේ කෙසේද?",
+        guidance: "නිකුත් කළ බිල්පත් ගිණුම් ඉතිහාසයේ තබාගනී. පාරිභෝගිකයා භාණ්ඩ සැබවින්ම ආපසු දුන් විට පමණක් ආපසු භාරදීම සටහන් කරන්න. සෘජුව සංස්කරණය කිරීම හෝ අවලංගු කිරීම දැනට නොමැත.",
+      }
+    : locale === "ta"
+      ? {
+          recordReturn: "திரும்பப் பெறுதலைப் பதிவு செய்",
+          guidanceTitle: "வழங்கிய பிலை எவ்வாறு சரிசெய்வது?",
+          guidance: "வழங்கிய பில்கள் கணக்குப் பதிவில் பாதுகாக்கப்படும். வாடிக்கையாளர் பொருளை உண்மையாகத் திருப்பிக் கொடுத்தால் மட்டும் திரும்பப் பெறுதலைப் பதிவு செய்யவும். நேரடித் திருத்தம் அல்லது ரத்து செய்வது தற்போது கிடையாது.",
+        }
+      : {
+          recordReturn: "Record return",
+          guidanceTitle: "Need to correct an issued bill?",
+          guidance: "Issued bills stay in the account history. Record a return only for goods the customer actually brought back. Direct edits and voids are not available yet.",
+        };
   const activeFilterCount = Number(paymentFilter !== "all") + Number(invoiceType !== "all");
   const salesExportLabels = {
     billNo: t("bills.bill_no"),
@@ -223,6 +241,10 @@ export default function BillsPage() {
             </ProCard>
           ) : (
             <ProCard title={t("bills.invoice_history")} action={<ProBadge tone="teal">{bills.length} {t("bills.invoices_count")}</ProBadge>}>
+              <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+                <p className="text-sm font-bold text-slate-900">{invoiceManagementCopy.guidanceTitle}</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">{invoiceManagementCopy.guidance}</p>
+              </div>
               <div className="mb-3">
                 <Pagination
                   page={currentPage}
@@ -277,6 +299,11 @@ export default function BillsPage() {
                               itself (invoice-view.tsx). */}
                           <div className="flex flex-wrap items-center justify-end gap-2">
                             <Link href={`/bills/${s.id}`} className="font-bold text-teal-700 hover:underline">{t("common.view_print")}</Link>
+                            {canRecordReturn && !isVehicle && (
+                              <Link href={`/bills/${s.id}/return`} className="inline-flex min-h-10 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 transition hover:bg-amber-100">
+                                {invoiceManagementCopy.recordReturn}
+                              </Link>
+                            )}
                             <MessageSendButton
                               phone={phone}
                               recipientName={s.customerName ?? t("common.customer")}
@@ -304,25 +331,40 @@ export default function BillsPage() {
               </div>
 
               <div className="grid gap-3 lg:hidden">
-                {pageBills.map((s) => (
-                  <Link key={s.id} href={`/bills/${s.id}`} className="block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-white">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-mono text-xs font-bold uppercase tracking-wide text-teal-700">{s.billNo ?? s.id.slice(0, 8)}</p>
-                          {vehicleSaleIds.has(s.id) && <ProBadge tone="teal">{t("nav.vehicles")}</ProBadge>}
+                {pageBills.map((s) => {
+                  const isVehicle = vehicleSaleIds.has(s.id);
+                  return (
+                    <article key={s.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-white">
+                      <Link href={`/bills/${s.id}`} className="block rounded-lg outline-none focus-visible:ring-4 focus-visible:ring-teal-100">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-mono text-xs font-bold uppercase tracking-wide text-teal-700">{s.billNo ?? s.id.slice(0, 8)}</p>
+                              {isVehicle && <ProBadge tone="teal">{t("nav.vehicles")}</ProBadge>}
+                            </div>
+                            <p className="mt-2 text-base font-bold text-slate-950">{s.customerName || t("bills.walk_in_customer")}</p>
+                            <p className="mt-1 text-xs font-semibold text-slate-500">{new Date(s.date).toLocaleString("en-LK")}</p>
+                          </div>
+                          <ProBadge tone="slate">{paymentLabel(t, s.paymentMethod)}</ProBadge>
                         </div>
-                        <p className="mt-2 text-base font-bold text-slate-950">{s.customerName || t("bills.walk_in_customer")}</p>
-                        <p className="mt-1 text-xs font-semibold text-slate-500">{new Date(s.date).toLocaleString("en-LK")}</p>
+                        <div className="mt-4 flex items-end justify-between">
+                          <p className="font-mono text-xl font-bold text-slate-950">{formatLkr(s.total)}</p>
+                          <span className="text-xs font-bold text-teal-700">{t("common.view_print")} →</span>
+                        </div>
+                      </Link>
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3">
+                        <Link href={`/bills/${s.id}`} className="inline-flex min-h-10 items-center font-bold text-teal-700 hover:underline">
+                          {t("common.view_print")}
+                        </Link>
+                        {canRecordReturn && !isVehicle && (
+                          <Link href={`/bills/${s.id}/return`} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 transition hover:bg-amber-100">
+                            {invoiceManagementCopy.recordReturn}
+                          </Link>
+                        )}
                       </div>
-                      <ProBadge tone="slate">{paymentLabel(t, s.paymentMethod)}</ProBadge>
-                    </div>
-                    <div className="mt-4 flex items-end justify-between border-t border-slate-200 pt-3">
-                      <p className="font-mono text-xl font-bold text-slate-950">{formatLkr(s.total)}</p>
-                      <p className="text-xs font-bold text-teal-700">{t("common.view_print")} →</p>
-                    </div>
-                  </Link>
-                ))}
+                    </article>
+                  );
+                })}
               </div>
 
               {bills.length > BILLS_PAGE_SIZE && (
