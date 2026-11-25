@@ -17,7 +17,7 @@ type ScannerCopy = {
 const COPY: Record<ScannerLocale, ScannerCopy> = {
   en: {
     title: "Scan product barcode",
-    hint: "Place one product barcode inside the frame and hold the phone steady.",
+    hint: "Hold the phone 10–20 cm from one barcode. Keep the bars sharp and tilt glossy packs to reduce glare.",
     idle: "Tap Start camera to scan. Your browser will ask for camera permission.",
     starting: "Opening camera…",
     start: "Start camera",
@@ -31,7 +31,7 @@ const COPY: Record<ScannerLocale, ScannerCopy> = {
   },
   si: {
     title: "භාණ්ඩයේ තීරු කේතය ස්කෑන් කරන්න",
-    hint: "තීරු කේතය රාමුව තුළ තබා දුරකථනය නිශ්චලව තබන්න.",
+    hint: "දුරකථනය තීරු කේතයෙන් සෙ.මී. 10–20ක් දුරින් තබන්න. තීරු පැහැදිලිව තබා, දිලිසෙන ඇසුරුමක් නම් ආලෝක පරාවර්තනය අඩු කිරීමට මඳක් ඇල කරන්න.",
     idle: "ස්කෑන් කිරීමට “කැමරාව අරඹන්න” තට්ටු කරන්න. බ්‍රවුසරය කැමරා අවසරය විමසයි.",
     starting: "කැමරාව ආරම්භ කරමින්…",
     start: "කැමරාව අරඹන්න",
@@ -45,7 +45,7 @@ const COPY: Record<ScannerLocale, ScannerCopy> = {
   },
   ta: {
     title: "பொருள் பார்கோடை ஸ்கேன் செய்க",
-    hint: "பார்கோடை சட்டகத்திற்குள் வைத்து தொலைபேசியை அசையாமல் பிடிக்கவும்.",
+    hint: "தொலைபேசியை பார்கோடிலிருந்து 10–20 செ.மீ. தொலைவில் வைக்கவும். பட்டைகள் தெளிவாக இருக்கட்டும்; பளபளப்பான பொட்டலத்தின் ஒளிப் பிரதிபலிப்பைக் குறைக்க சற்றே சாய்க்கவும்.",
     idle: "ஸ்கேன் செய்ய “கேமராவைத் தொடங்கு” என்பதைத் தட்டவும். உலாவி கேமரா அனுமதியைக் கேட்கும்.",
     starting: "கேமரா தொடங்குகிறது…",
     start: "கேமராவைத் தொடங்கு",
@@ -144,14 +144,39 @@ export function BarcodeCameraScanner({
     }
 
     try {
-      const [{ BrowserMultiFormatReader }] = await Promise.all([
+      const [
+        { BrowserMultiFormatReader },
+        { BarcodeFormat, DecodeHintType },
+      ] = await Promise.all([
         import("@zxing/browser"),
+        import("@zxing/library"),
       ]);
       if (!mountedRef.current) return;
 
-      const reader = new BrowserMultiFormatReader();
-      const controls = await reader.decodeFromVideoDevice(
-        undefined,
+      const hints = new Map<DecodeHintType, any>();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8,
+        BarcodeFormat.UPC_A,
+        BarcodeFormat.UPC_E,
+        BarcodeFormat.CODE_128,
+        BarcodeFormat.CODE_39,
+        BarcodeFormat.ITF,
+        BarcodeFormat.QR_CODE,
+      ]);
+      const reader = new BrowserMultiFormatReader(hints, {
+        delayBetweenScanAttempts: 120,
+        delayBetweenScanSuccess: 120,
+      });
+      const controls = await reader.decodeFromConstraints(
+        {
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30 },
+          },
+        },
         video,
         (result, _decodeError, scanControls) => {
           const value = result?.getText().trim();
@@ -240,7 +265,7 @@ export function BarcodeCameraScanner({
             </div>
           )}
           {status === "scanning" && (
-            <div className="pointer-events-none absolute inset-[17%] rounded-2xl border-2 border-emerald-300 shadow-[0_0_0_999px_rgba(15,23,42,0.12)]" />
+            <div className="pointer-events-none absolute inset-x-[9%] inset-y-[32%] rounded-2xl border-2 border-emerald-300 shadow-[0_0_0_999px_rgba(15,23,42,0.12)]" />
           )}
         </div>
         <p className="mt-3 text-sm leading-6 text-slate-600">{copy.hint}</p>
