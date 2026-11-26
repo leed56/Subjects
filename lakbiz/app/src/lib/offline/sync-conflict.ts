@@ -39,8 +39,14 @@ export function summarizeSyncConflict(
   local: AppData,
   remote: AppData,
 ): SyncConflictSummary {
-  const remoteSaleIds = idSet(remote.sales);
-  const localSaleIds = idSet(local.sales);
+  const voidedSaleIds = new Set([
+    ...local.voidedSales.map((sale) => sale.id),
+    ...remote.voidedSales.map((sale) => sale.id),
+  ]);
+  const localActiveSales = local.sales.filter((sale) => !voidedSaleIds.has(sale.id));
+  const remoteActiveSales = remote.sales.filter((sale) => !voidedSaleIds.has(sale.id));
+  const remoteSaleIds = idSet(remoteActiveSales);
+  const localSaleIds = idSet(localActiveSales);
   const remotePurchaseIds = idSet(remote.purchases);
   const localPurchaseIds = idSet(local.purchases);
   const remoteCustomerIds = idSet(remote.customers);
@@ -48,8 +54,8 @@ export function summarizeSyncConflict(
   const remoteAcJobIds = idSet(remote.acJobs);
   const localAcJobIds = idSet(local.acJobs);
 
-  const localOnlySales = countOnlyIn(local.sales, remoteSaleIds);
-  const remoteOnlySales = countOnlyIn(remote.sales, localSaleIds);
+  const localOnlySales = countOnlyIn(localActiveSales, remoteSaleIds);
+  const remoteOnlySales = countOnlyIn(remoteActiveSales, localSaleIds);
   const localOnlyPurchases = countOnlyIn(local.purchases, remotePurchaseIds);
   const remoteOnlyPurchases = countOnlyIn(remote.purchases, localPurchaseIds);
   const localOnlyCustomers = countOnlyIn(local.customers, remoteCustomerIds);
@@ -102,12 +108,15 @@ function mergeBusiness(local: AppData["business"], remote: AppData["business"]) 
 
 /** Union records by id — local wins when the same id exists on both sides. */
 export function mergeAppData(local: AppData, remote: AppData): AppData {
+  const voidedSales = mergeById(local.voidedSales, remote.voidedSales);
+  const voidedSaleIds = new Set(voidedSales.map((sale) => sale.id));
   return {
     business: mergeBusiness(local.business, remote.business),
     products: mergeById(local.products, remote.products),
-    sales: mergeById(local.sales, remote.sales).sort((a, b) =>
-      b.date.localeCompare(a.date),
-    ),
+    sales: mergeById(local.sales, remote.sales)
+      .filter((sale) => !voidedSaleIds.has(sale.id))
+      .sort((a, b) => b.date.localeCompare(a.date)),
+    voidedSales,
     stockLogs: mergeById(local.stockLogs, remote.stockLogs).sort((a, b) =>
       b.date.localeCompare(a.date),
     ),

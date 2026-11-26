@@ -39,6 +39,42 @@ export default function BillDetailPage() {
   }
 
   const sale = data.sales.find((s) => s.id === id);
+  const voidedSale = data.voidedSales.find((s) => s.id === id);
+  if (!sale && voidedSale && orgRole === "owner") {
+    return (
+      <AppShell>
+        <ProMain>
+          <ProPageHeader
+            eyebrow="Owner audit record"
+            title={`Voided test bill ${voidedSale.billNo ?? voidedSale.id}`}
+            description={`Marked ${new Date(voidedSale.voidedAt).toLocaleString("en-LK")} · ${voidedSale.customerName || "Walk-in customer"}`}
+            actions={<ProButton href="/bills" variant="secondary">← {t("bills.all_bills")}</ProButton>}
+          />
+          <div role="note" className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950">
+            <p className="font-bold">Test transaction excluded from active sales.</p>
+            <p className="mt-1">No cash changed hands. No refund or settlement was recorded.</p>
+            <p className="mt-1">The original invoice, physical-return record, and credit note remain preserved in the audit history. This test is excluded from active sales, return, and revenue totals.</p>
+            <p className="mt-2 text-amber-800"><span className="font-semibold">Reason:</span> {voidedSale.voidReason}</p>
+          </div>
+          <ProCard title="Original test details" eyebrow="Audit only">
+            <div className="mb-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Recorded bill value</p><p className="mt-1 font-mono text-xl font-bold">{formatLkr(voidedSale.total)}</p></div>
+              <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Tender recorded on invoice</p><p className="mt-1 text-xl font-bold">{paymentLabel(t, voidedSale.paymentMethod)}</p><p className="text-xs text-slate-500">No money exchanged</p></div>
+              <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Original date</p><p className="mt-1 font-semibold">{new Date(voidedSale.date).toLocaleString("en-LK")}</p></div>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {voidedSale.lines.map((line, index) => (
+                <div key={`${line.productId}-${index}`} className="flex items-center justify-between gap-4 py-3 text-sm">
+                  <span className="font-semibold text-slate-800">{line.productName}</span>
+                  <span className="shrink-0 text-slate-600">{line.qty} × {formatLkr(line.unitPrice)}</span>
+                </div>
+              ))}
+            </div>
+          </ProCard>
+        </ProMain>
+      </AppShell>
+    );
+  }
   if (!sale) {
     return (
       <AppShell>

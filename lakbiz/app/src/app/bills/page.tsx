@@ -385,6 +385,39 @@ export default function BillsPage() {
           )}
         </section>
 
+        {orgRole === "owner" && data.voidedSales.length > 0 && (
+          <section className="mt-5">
+            <ProCard
+              title="Voided test bills"
+              eyebrow="Owner audit history"
+              action={<ProBadge tone="amber">{data.voidedSales.length} archived</ProBadge>}
+            >
+              <p className="mb-4 text-sm leading-6 text-slate-600">
+                These test transactions are excluded from active sales and financial totals. Original invoices and linked return documents remain preserved for audit.
+              </p>
+              <div className="space-y-3">
+                {data.voidedSales.map((sale) => (
+                  <Link
+                    key={sale.id}
+                    href={`/bills/${sale.id}`}
+                    className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50/50 p-4 transition hover:border-amber-300 hover:bg-amber-50 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-mono text-sm font-bold text-slate-900">{sale.billNo ?? sale.id}</p>
+                      <p className="mt-1 truncate text-sm font-semibold text-slate-700">{sale.lines.map((line) => line.productName).join(", ")}</p>
+                      <p className="mt-1 text-xs text-slate-500">{new Date(sale.voidedAt).toLocaleString("en-LK")} · {sale.voidReason}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center justify-between gap-4 sm:justify-end">
+                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">Test · voided</span>
+                      <span className="font-mono font-bold text-slate-900">{formatLkr(sale.total)}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </ProCard>
+          </section>
+        )}
+
         {data.sales.length > 0 && (
           <section className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4" aria-label={t("bills.archive_eyebrow")}>
             <ProStatCard label={t("bills.count")} value={String(data.sales.length)} hint={t("bills.invoices_issued")} icon={<BillsIcon className="h-5 w-5" />} tone="teal" />

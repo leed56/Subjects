@@ -41,17 +41,29 @@ export async function fetchOrgReturnAccountingAdjustments(
   const supabase = createBrowserClient();
   if (!supabase) return { data: [], error: "Supabase not configured" };
 
-  const noteResult = await supabase
-    .from("sale_credit_notes")
-    .select(
-      "id, credit_note_no, return_id, sale_id, issued_at, gross_credit, output_vat_reversal, net_revenue_reversal",
-    )
-    .eq("organization_id", organizationId)
-    .order("issued_at", { ascending: true });
+  const [noteResult, voidedSalesResult] = await Promise.all([
+    supabase
+      .from("sale_credit_notes")
+      .select(
+        "id, credit_note_no, return_id, sale_id, issued_at, gross_credit, output_vat_reversal, net_revenue_reversal",
+      )
+      .eq("organization_id", organizationId)
+      .order("issued_at", { ascending: true }),
+    supabase
+      .from("grocery_test_sale_voids")
+      .select("sale_id")
+      .eq("organization_id", organizationId),
+  ]);
 
   if (noteResult.error) return { data: [], error: noteResult.error.message };
+  if (voidedSalesResult.error) return { data: [], error: voidedSalesResult.error.message };
 
-  const base: ReturnAccountingAdjustment[] = (noteResult.data ?? []).map((row) => ({
+  const voidedSaleIds = new Set(
+    (voidedSalesResult.data ?? []).map((row) => String(row.sale_id)),
+  );
+  const base: ReturnAccountingAdjustment[] = (noteResult.data ?? [])
+    .filter((row) => !voidedSaleIds.has(String(row.sale_id)))
+    .map((row) => ({
     creditNoteId: String(row.id),
     creditNoteNo: String(row.credit_note_no ?? row.id),
     returnId: String(row.return_id),
@@ -60,7 +72,7 @@ export async function fetchOrgReturnAccountingAdjustments(
     grossCredit: Number(row.gross_credit ?? 0),
     outputVatReversal: Number(row.output_vat_reversal ?? 0),
     netRevenueReversal: Number(row.net_revenue_reversal ?? 0),
-  }));
+    }));
 
   if (!includeOwnerFinancials || base.length === 0) {
     return { data: base, error: null };

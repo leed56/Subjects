@@ -74,7 +74,7 @@ export async function fetchOrgSaleReturnControl(
   const supabase = createBrowserClient();
   if (!supabase) return { rows: [], summary: emptySummary, error: "Supabase not configured" };
 
-  const [returnResult, noteResult, settlementResult] = await Promise.all([
+  const [returnResult, noteResult, settlementResult, voidedSalesResult] = await Promise.all([
     supabase
       .from("sale_returns")
       .select(
@@ -96,13 +96,20 @@ export async function fetchOrgSaleReturnControl(
       )
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: true }),
+    supabase
+      .from("grocery_test_sale_voids")
+      .select("sale_id")
+      .eq("organization_id", organizationId),
   ]);
 
-  const error = returnResult.error ?? noteResult.error ?? settlementResult.error;
+  const error = returnResult.error ?? noteResult.error ?? settlementResult.error ?? voidedSalesResult.error;
   if (error) return { rows: [], summary: emptySummary, error: error.message };
 
+  const voidedSaleIds = new Set(
+    (voidedSalesResult.data ?? []).map((row) => String(row.sale_id)),
+  );
   const noteByReturn = new Map<string, SaleCreditNoteRecord>();
-  for (const row of noteResult.data ?? []) {
+  for (const row of (noteResult.data ?? []).filter((item) => !voidedSaleIds.has(String(item.sale_id)))) {
     noteByReturn.set(String(row.return_id), {
       id: String(row.id),
       creditNoteNo: String(row.credit_note_no),
@@ -135,7 +142,9 @@ export async function fetchOrgSaleReturnControl(
     settlementsByReturn.set(returnId, list);
   }
 
-  const rows: SaleReturnControlRow[] = (returnResult.data ?? []).map((row) => {
+  const rows: SaleReturnControlRow[] = (returnResult.data ?? [])
+    .filter((row) => !voidedSaleIds.has(String(row.sale_id)))
+    .map((row) => {
     const returnId = String(row.id);
     const creditNote = noteByReturn.get(returnId) ?? null;
     const settlements = settlementsByReturn.get(returnId) ?? [];

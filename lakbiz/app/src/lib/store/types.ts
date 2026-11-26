@@ -347,6 +347,13 @@ export interface Sale {
   chequeId?: string;
 }
 
+/** Immutable owner audit entry for a sale explicitly identified as a test. */
+export interface VoidedTestSale extends Sale {
+  voidReason: string;
+  voidedAt: string;
+  voidedBy: string;
+}
+
 /** "in"/"out" = manual adjustment (Stock In / Stock Out); "sale" and
  * "purchase" are existing/renamed-going-forward automatic movements;
  * the rest are new (HVAC platform Phase 3). Old rows saved with "in" for
@@ -629,6 +636,7 @@ export interface AppData {
   business: BusinessInfo;
   products: Product[];
   sales: Sale[];
+  voidedSales: VoidedTestSale[];
   stockLogs: StockLog[];
   customers: Customer[];
   customerPayments: CustomerPayment[];

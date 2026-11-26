@@ -35,6 +35,7 @@ export const emptyAppData = (): AppData => ({
   business: defaultBusiness(),
   products: [],
   sales: [],
+  voidedSales: [],
   stockLogs: [],
   customers: [],
   customerPayments: [],
@@ -112,6 +113,12 @@ export function parseAppData(parsed: Partial<AppData>): AppData {
     })),
     customerProductPrices: parsed.customerProductPrices ?? [],
     sales: (parsed.sales ?? []).map(normalizeSale),
+    voidedSales: (parsed.voidedSales ?? []).map((sale) => ({
+      ...normalizeSale(sale),
+      voidReason: sale.voidReason ?? "Voided test transaction",
+      voidedAt: sale.voidedAt ?? sale.date,
+      voidedBy: sale.voidedBy ?? "",
+    })),
     purchases: (parsed.purchases ?? []).map(normalizePurchase),
     acJobs: (parsed.acJobs ?? []).map((job) => ({
       ...job,

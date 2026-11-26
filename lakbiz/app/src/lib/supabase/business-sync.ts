@@ -158,6 +158,7 @@ export function isEmptyBusinessData(data: AppData): boolean {
   return (
     data.products.length === 0 &&
     data.sales.length === 0 &&
+    data.voidedSales.length === 0 &&
     data.customers.length === 0 &&
     data.suppliers.length === 0 &&
     data.purchases.length === 0 &&
@@ -191,6 +192,7 @@ export async function pullBusinessData(
     customersRes,
     suppliersRes,
     salesRes,
+    voidedSalesRes,
     saleLinesRes,
     purchasesRes,
     purchaseLinesRes,
@@ -217,6 +219,7 @@ export async function pullBusinessData(
     fetchAllPages((from, to) => supabase.from("customers").select("*").eq("organization_id", organizationId).range(from, to)),
     fetchAllPages((from, to) => supabase.from("suppliers").select("*").eq("organization_id", organizationId).range(from, to)),
     fetchAllPages((from, to) => supabase.from("sales").select("*").eq("organization_id", organizationId).range(from, to)),
+    fetchAllPages((from, to) => supabase.from("grocery_test_sale_voids").select("sale_id, bill_no, reason, voided_by, voided_at").eq("organization_id", organizationId).range(from, to)),
     fetchAllPages((from, to) => supabase.from("sale_lines").select("*").eq("organization_id", organizationId).range(from, to)),
     fetchAllPages((from, to) => supabase.from("purchases").select("*").eq("organization_id", organizationId).range(from, to)),
     fetchAllPages((from, to) => supabase.from("purchase_lines").select("*").eq("organization_id", organizationId).range(from, to)),
@@ -290,6 +293,39 @@ export async function pullBusinessData(
     purchaseOrderLinesByPo.set(line.purchase_order_id, list);
   }
 
+  const voidedSaleRows = rowsOrEmpty(voidedSalesRes, "grocery_test_sale_voids");
+  const voidedSaleById = new Map(
+    voidedSaleRows.map((row) => [String(row.sale_id), row] as const),
+  );
+  const mappedSales: Sale[] = (salesRes.data ?? []).map((row) => {
+    const lines = (saleLinesBySale.get(row.id) ?? [])
+      .sort((a, b) => a.line_order - b.line_order)
+      .map((line) => ({
+        productId: line.product_id ?? "",
+        productName: line.product_name,
+        qty: num(line.qty),
+        unitPrice: num(line.unit_price),
+        buyPrice: num(line.buy_price),
+      }));
+
+    return {
+      id: row.id,
+      billNo: row.bill_no ?? undefined,
+      date: row.sale_date,
+      lines,
+      subtotal: row.subtotal != null ? num(row.subtotal) : undefined,
+      outputVat: row.output_vat != null ? num(row.output_vat) : undefined,
+      discount: row.discount != null ? num(row.discount) : undefined,
+      total: num(row.total),
+      profit: num(row.profit),
+      paymentMethod: asPaymentMethod(row.payment_method),
+      customerId: row.customer_id ?? undefined,
+      customerName: row.customer_name ?? undefined,
+      creditAmount: num(row.credit_amount),
+      chequeId: row.cheque_id ?? undefined,
+    };
+  });
+
   const data: AppData = {
     business: business ?? localBusiness ?? defaultBusiness(),
     products: (productsRes.data ?? []).map((row) => ({
@@ -330,33 +366,17 @@ export async function pullBusinessData(
       contactPerson: row.contact_person ?? undefined,
       payableBalance: num(row.payable_balance),
     })),
-    sales: (salesRes.data ?? []).map((row) => {
-      const lines = (saleLinesBySale.get(row.id) ?? [])
-        .sort((a, b) => a.line_order - b.line_order)
-        .map((line) => ({
-          productId: line.product_id ?? "",
-          productName: line.product_name,
-          qty: num(line.qty),
-          unitPrice: num(line.unit_price),
-          buyPrice: num(line.buy_price),
-        }));
-
-      return {
-        id: row.id,
-        billNo: row.bill_no ?? undefined,
-        date: row.sale_date,
-        lines,
-        subtotal: row.subtotal != null ? num(row.subtotal) : undefined,
-        outputVat: row.output_vat != null ? num(row.output_vat) : undefined,
-        discount: row.discount != null ? num(row.discount) : undefined,
-        total: num(row.total),
-        profit: num(row.profit),
-        paymentMethod: asPaymentMethod(row.payment_method),
-        customerId: row.customer_id ?? undefined,
-        customerName: row.customer_name ?? undefined,
-        creditAmount: num(row.credit_amount),
-        chequeId: row.cheque_id ?? undefined,
-      };
+    sales: mappedSales.filter((sale) => !voidedSaleById.has(sale.id)),
+    voidedSales: mappedSales.flatMap((sale) => {
+      const marker = voidedSaleById.get(sale.id);
+      return marker
+        ? [{
+            ...sale,
+            voidReason: String(marker.reason ?? "Voided test transaction"),
+            voidedAt: String(marker.voided_at ?? sale.date),
+            voidedBy: String(marker.voided_by ?? ""),
+          }]
+        : [];
     }),
     purchases: purchases.map((row) => {
       const lines = (purchaseLinesByPurchase.get(row.id) ?? [])
@@ -2494,7 +2514,12 @@ export async function pushBusinessData(
     balance: b.balance,
   }));
 
-  const saleRows = data.sales.map((s) => ({
+  const activeSaleIds = new Set(data.sales.map((sale) => sale.id));
+  const salesForSync = [
+    ...data.sales,
+    ...data.voidedSales.filter((sale) => !activeSaleIds.has(sale.id)),
+  ];
+  const saleRows = salesForSync.map((s) => ({
     id: s.id,
     organization_id: organizationId,
     bill_no: s.billNo ?? null,
@@ -2513,7 +2538,7 @@ export async function pushBusinessData(
 
   const saleLineRows = (
     await Promise.all(
-      data.sales.map((sale) => saleLineRowsFromSale(organizationId, sale)),
+      salesForSync.map((sale) => saleLineRowsFromSale(organizationId, sale)),
     )
   ).flat();
 
@@ -2847,7 +2872,7 @@ export async function pushBusinessData(
   // the URL query string, which has a real length limit inserts don't.
   const saleErr = await appendMissingSaleLinesBatch(
     organizationId,
-    data.sales.map((s) => s.id),
+    salesForSync.map((s) => s.id),
     saleLineRows,
   );
   if (saleErr) return { error: saleErr, stale: false, generation: seenGeneration };
@@ -2913,7 +2938,7 @@ export async function pushBusinessData(
       | "job_status_history";
     ids: string[];
   }> = [
-    { table: "sales", ids: data.sales.map((s) => s.id) },
+    { table: "sales", ids: salesForSync.map((s) => s.id) },
     { table: "purchases", ids: data.purchases.map((p) => p.id) },
     { table: "purchase_orders", ids: data.purchaseOrders.map((po) => po.id) },
     { table: "customer_payments", ids: data.customerPayments.map((p) => p.id) },
