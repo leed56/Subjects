@@ -157,11 +157,10 @@ export function HeldSaleDraftsDialog({
     <dialog
       ref={dialogRef}
       className="fixed inset-x-0 bottom-0 m-0 w-full max-w-none border-0 bg-transparent p-0 text-slate-900 backdrop:bg-slate-950/55 backdrop:backdrop-blur-sm sm:inset-0 sm:m-auto sm:w-full sm:max-w-2xl"
+      aria-labelledby="held-sale-drafts-title"
       onClick={(event) => {
         if (event.target === event.currentTarget) dialogRef.current?.close();
       }}
-    >
-      aria-labelledby="held-sale-drafts-title"
     >
       <section className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] border border-white/70 bg-white shadow-[0_28px_90px_rgba(15,23,42,0.3)] sm:rounded-[28px]">
         <header className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-7">
