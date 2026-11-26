@@ -44,6 +44,13 @@ import {
 import { PAYMENT_OPTIONS, paymentLabel } from "@/lib/i18n/payment";
 import { buildSaleInventoryAllocationLine } from "@/lib/inventory-sale-allocation";
 import {
+  clearGroceryTestBills as clearCloudGroceryTestBills,
+  deleteGroceryTestBill as deleteCloudGroceryTestBill,
+  fetchGroceryTestBills,
+  saveGroceryTestBill,
+  type GroceryTestBill,
+} from "@/lib/grocery-test-bills";
+import {
   summarizeSaleTenders,
   validateSaleTenders,
 } from "@/lib/sale-tender";
@@ -125,6 +132,71 @@ function boolField(value: unknown): boolean {
   return value === true || (typeof value === "string" && value.trim().toLowerCase() === "true");
 }
 
+function groceryTestCopy(locale: string) {
+  if (locale === "si") {
+    return {
+      toggleOn: "පරීක්ෂණ මාදිලිය",
+      toggleOff: "පරීක්ෂණ මාදිලියෙන් ඉවත් වන්න",
+      banner: "පරීක්ෂණ මාදිලිය · සැබෑ විකිණීමක් නොවේ",
+      description: "පරීක්ෂණ බිල්පත් ඔබේ වෙළඳසැලේ පුරනය වී ඇති සියලුම උපාංගවලින් දැකිය හැක. සැබෑ විකුණුම්, තොගය, ගෙවීම් හෝ බදු වාර්තා වෙනස් නොවේ.",
+      history: "පරීක්ෂණ බිල්",
+      save: "පරීක්ෂණ බිල් සුරකින්න",
+      update: "පරීක්ෂණ බිල් යාවත්කාලීන කරන්න",
+      edit: "සංස්කරණය",
+      remove: "මකන්න",
+      clear: "සියල්ල මකන්න",
+      empty: "තවම පරීක්ෂණ බිල් නැත.",
+      sharedInfo: "වෙළඳසැලේ කණ්ඩායම සමඟ සමමුහුර්ත වේ · සැබෑ ගනුදෙනුවලට ඇතුළත් නොවේ",
+      noPayment: "මෙය පරීක්ෂණ බිල්පතක් පමණි. ගනුදෙනුකරු, ගෙවීම, තොගය හෝ සැබෑ ඉන්වොයිසියක් සුරැකෙන්නේ නැත.",
+      saved: "පරීක්ෂණ බිල් සුරකින ලදී. සජීවී දත්ත වෙනස් කර නැත.",
+      startWithEmpty: "පරීක්ෂණ මාදිලිය ආරම්භ කිරීමට පෙර වත්මන් බිල්පත හිස් කරන්න.",
+      finishOrClear: "පරීක්ෂණ මාදිලියෙන් ඉවත් වීමට පෙර පරීක්ෂණ බිල්පත සුරකින්න හෝ හිස් කරන්න.",
+      missingProduct: "මෙම පරීක්ෂණ බිල්පතේ භාණ්ඩයක් දැන් ලබාගත නොහැක.",
+    };
+  }
+  if (locale === "ta") {
+    return {
+      toggleOn: "சோதனை முறை",
+      toggleOff: "சோதனை முறையிலிருந்து வெளியேறு",
+      banner: "சோதனை முறை · உண்மையான விற்பனை அல்ல",
+      description: "சோதனை பில்கள் உங்கள் கடைக் குழுவின் உள்நுழைந்த சாதனங்களில் தெரியும். நேரடி விற்பனை, சரக்கு, பணம் அல்லது VAT மாறாது.",
+      history: "சோதனை பில்கள்",
+      save: "சோதனை பில் சேமி",
+      update: "சோதனை பில்லைப் புதுப்பி",
+      edit: "திருத்து",
+      remove: "நீக்கு",
+      clear: "அனைத்தையும் நீக்கு",
+      empty: "இன்னும் சோதனை பில்கள் இல்லை.",
+      sharedInfo: "குழுவுடன் ஒத்திசைக்கப்படும் · நேரடி பரிவர்த்தனைகளில் சேராது",
+      noPayment: "இது சோதனை பில் மட்டுமே. வாடிக்கையாளர், கட்டணம், சரக்கு அல்லது உண்மையான விலைப்பட்டியல் எதுவும் சேமிக்கப்படாது.",
+      saved: "சோதனை பில் சேமிக்கப்பட்டது. நேரடி தரவு மாற்றப்படவில்லை.",
+      startWithEmpty: "சோதனை முறையைத் தொடங்கும் முன் தற்போதைய பில்லை காலி செய்யவும்.",
+      finishOrClear: "சோதனை முறையிலிருந்து வெளியேறும் முன் சோதனை பில்லை சேமிக்கவும் அல்லது காலி செய்யவும்.",
+      missingProduct: "இந்த சோதனை பில்லில் உள்ள ஒரு பொருள் இப்போது கிடைக்கவில்லை.",
+    };
+  }
+  return {
+    toggleOn: "Test mode",
+    toggleOff: "Exit test mode",
+    banner: "TEST MODE · NOT A REAL SALE",
+    description: "Test bills sync across your shop’s signed-in devices. They never post to live sales, stock, cash, payments, VAT or reports.",
+    history: "Test bills",
+    save: "Save test bill",
+    update: "Update test bill",
+    edit: "Edit",
+    remove: "Delete",
+    clear: "Clear all",
+    empty: "No test bills yet.",
+    sharedInfo: "Shared with the shop team · excluded from live transactions",
+    noPayment: "This saves a test copy only. No customer, payment, stock movement or real invoice is recorded.",
+    saved: "Test bill saved. Live records were not changed.",
+    startWithEmpty: "Clear the current bill before entering test mode.",
+    finishOrClear: "Save or clear the test cart before exiting test mode.",
+    missingProduct: "A product on this test bill is no longer available.",
+  };
+}
+
+
 export function AtomicRetailSalesPageV2() {
   const { data, ready } = useAppStore();
   const { t, locale } = useLocale();
@@ -136,6 +208,7 @@ export function AtomicRetailSalesPageV2() {
   const advancedRetail = ADVANCED_RETAIL_SECTORS.has(org.sector);
   const conditionRelevant = !fastRetail;
   const grocery = (key: GroceryUiKey) => groceryUi(locale, key);
+  const testCopy = groceryTestCopy(locale);
 
   // The quote share button here was a plain wa.me deep link only — always
   // opens WhatsApp with the text pre-filled, but never actually sends.
@@ -159,6 +232,11 @@ export function AtomicRetailSalesPageV2() {
   const [quoteApiFeedback, setQuoteApiFeedback] = useState<{ ok: boolean; message: string } | null>(null);
 
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [testMode, setTestMode] = useState(false);
+  const [testModeReady, setTestModeReady] = useState(false);
+  const [testBills, setTestBills] = useState<GroceryTestBill[]>([]);
+  const [editingTestBillId, setEditingTestBillId] = useState<string | null>(null);
+  const [showTestBills, setShowTestBills] = useState(false);
   const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
   const [inventoryStates, setInventoryStates] = useState<Record<string, AdvancedSaleLineState>>({});
   const [search, setSearch] = useState("");
@@ -217,6 +295,32 @@ export function AtomicRetailSalesPageV2() {
       sessionStorage.removeItem(SUCCESS_STORAGE_KEY);
     }
   }, [groceryPos, locale, si]);
+
+  useEffect(() => {
+    let current = true;
+    setTestModeReady(false);
+    setTestMode(false);
+    setEditingTestBillId(null);
+    setShowTestBills(false);
+    setTestBills([]);
+    if (!groceryPos || !org.id) {
+      setTestModeReady(true);
+      return () => { current = false; };
+    }
+    void fetchGroceryTestBills(org.id).then(({ data: bills, error }) => {
+      if (!current) return;
+      if (error) {
+        setMessage(`Test history could not load from the shop cloud: ${error}`);
+        return;
+      }
+      setTestBills(bills);
+      setTestModeReady(true);
+    }).catch((error: unknown) => {
+      if (!current) return;
+      setMessage(error instanceof Error ? error.message : "Test history could not load from the shop cloud.");
+    });
+    return () => { current = false; };
+  }, [groceryPos, org.id]);
 
   const groceryLiveMetrics = useMemo(() => {
     if (!groceryPos || !data) return null;
@@ -404,6 +508,17 @@ export function AtomicRetailSalesPageV2() {
     }
   };
 
+  const startNewGroceryBill = async () => {
+    if (!testMode) {
+      await startNewBill();
+      return;
+    }
+    if (lines.length > 0 && !window.confirm("Discard this unsaved test cart and start a new test bill?")) return;
+    resetBill();
+    setEditingTestBillId(null);
+    setShowTestBills(false);
+  };
+
   const openHeldBills = async () => {
     if (lines.length > 0 && !(await saveCurrentDraft())) return;
     setDraftDialogOpen(true);
@@ -459,7 +574,7 @@ export function AtomicRetailSalesPageV2() {
   };
 
   const inStock = data.products.filter((product) =>
-    product.active && product.stockQty > 0 && (!groceryPos || product.sellPrice > 0)
+    product.active && (testMode || product.stockQty > 0) && (!groceryPos || product.sellPrice > 0)
   );
   const query = search.trim().toLowerCase();
   const searched = query ? inStock.filter((product) => productSearchText(product, groceryPos).includes(query)) : inStock;
@@ -512,12 +627,86 @@ export function AtomicRetailSalesPageV2() {
   };
 
   const addOne = (product: Product) => {
-    setQty(product.id, (cart[product.id] ?? 0) + 1, product.stockQty);
+    setQty(product.id, (cart[product.id] ?? 0) + 1, testMode ? Number.MAX_SAFE_INTEGER : product.stockQty);
     if (fastRetail) {
       setSearch("");
       setCategoryFilter("all");
       setResultLimit(30);
     }
+  };
+
+  const toggleGroceryTestMode = () => {
+    if (!org.id || !groceryPos || !testModeReady || !canWrite) return;
+    if (!testMode && activeDraftId) {
+      setMessage("Finish or close the active held bill before entering test mode.");
+      return;
+    }
+    if (lines.length > 0) {
+      setMessage(testMode ? testCopy.finishOrClear : testCopy.startWithEmpty);
+      return;
+    }
+    if (testMode && !window.confirm("Exit test mode? The next checkout will create a real invoice and update live stock and payments.")) return;
+    setTestMode((current) => !current);
+    setEditingTestBillId(null);
+    setLastBillId(null);
+    setDraftDialogOpen(false);
+    setMessage("");
+  };
+
+  const editGroceryTestBill = (bill: GroceryTestBill) => {
+    if (!data || bill.lines.some((line) => !data.products.some((product) => product.id === line.productId))) {
+      setMessage(testCopy.missingProduct);
+      return;
+    }
+    if (lines.length > 0 && !window.confirm("Discard the current unsaved test cart and edit this saved test bill?")) return;
+    resetBill();
+    setTestMode(true);
+    setCart(Object.fromEntries(bill.lines.map((line) => [line.productId, line.qty])));
+    setPriceOverrides(Object.fromEntries(bill.lines.map((line) => [line.productId, line.unitPrice])));
+    setDiscount(bill.discount);
+    setEditingTestBillId(bill.id);
+    setShowTestBills(false);
+    setLastBillId(null);
+    setMessage(`${testCopy.edit} · ${bill.billNo}`);
+    document.getElementById("grocery-pos-search")?.focus();
+  };
+
+  const deleteTestBill = async (bill: GroceryTestBill) => {
+    if (!org.id || !window.confirm(`Delete test bill ${bill.billNo}? This only removes the shop's test copy.`)) return;
+    setSaving(true);
+    const result = await deleteCloudGroceryTestBill(org.id, bill.id).catch((error: unknown) => ({
+      error: error instanceof Error ? error.message : "The test bill could not be deleted.",
+    }));
+    setSaving(false);
+    if (result.error) {
+      setMessage(result.error);
+      return;
+    }
+    setTestBills((current) => current.filter((row) => row.id !== bill.id));
+    if (editingTestBillId === bill.id) {
+      resetBill();
+      setEditingTestBillId(null);
+    }
+    setMessage(`${testCopy.remove} · ${bill.billNo}`);
+  };
+
+  const clearAllTestBills = async () => {
+    if (!org.id || !window.confirm("Clear all test bills shared by this shop? Live sales and stock are not affected.")) return;
+    setSaving(true);
+    const result = await clearCloudGroceryTestBills(org.id).catch((error: unknown) => ({
+      error: error instanceof Error ? error.message : "Test bills could not be cleared.",
+    }));
+    setSaving(false);
+    if (result.error) {
+      setMessage(result.error);
+      return;
+    }
+    setTestBills([]);
+    if (editingTestBillId) {
+      resetBill();
+      setEditingTestBillId(null);
+    }
+    setMessage("");
   };
 
   const handlePosBarcodeDetected = (barcode: string) => {
@@ -592,6 +781,49 @@ export function AtomicRetailSalesPageV2() {
           ? "Checkout කිරීමට පෙර prescription / batch / variant / IMEI තේරීම් සම්පූර්ණ කරන්න."
           : "Complete prescription, batch, variant or IMEI requirements before checkout.",
       );
+      return;
+    }
+
+    if (groceryPos && testMode) {
+      if (!testModeReady) {
+        setMessage("Test history is still loading. Please wait and try again.");
+        return;
+      }
+      const previous = testBills.find((bill) => bill.id === editingTestBillId);
+      if (!previous && testBills.length >= 100) {
+        setMessage("This shop already has 100 test bills in recent history. Clear test history before creating more.");
+        return;
+      }
+      const timestamp = new Date().toISOString();
+      const billNo = previous?.billNo ?? `TEST-${timestamp.replace(/\D/g, "").slice(0, 14)}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+      setSaving(true);
+      const saved = await saveGroceryTestBill(org.id, {
+        ...(previous ? { id: previous.id } : {}),
+        billNo,
+        lines: lines.map((line) => ({
+          productId: line.product.id,
+          productName: line.product.name,
+          qty: line.qty,
+          unitPrice: line.unitPrice,
+        })),
+        discount: discountClamped,
+        total: netTotal,
+      }).catch((error: unknown) => ({
+        data: null,
+        error: error instanceof Error ? error.message : "Test bill could not be saved to the shop cloud.",
+      }));
+      setSaving(false);
+      if (saved.error || !saved.data) {
+        setMessage(saved.error ?? "Test bill could not be saved to the shop cloud.");
+        return;
+      }
+      setTestBills((current) => previous
+        ? current.map((bill) => bill.id === previous.id ? saved.data! : bill)
+        : [saved.data!, ...current].slice(0, 100));
+      resetBill();
+      setEditingTestBillId(null);
+      setShowTestBills(true);
+      setMessage(`${testCopy.saved} · ${billNo}`);
       return;
     }
 
@@ -754,9 +986,15 @@ export function AtomicRetailSalesPageV2() {
               </button>
               </div>
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                <button type="button" onClick={() => void startNewBill()} disabled={draftSaving} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-3 text-xs font-bold text-white shadow-[0_10px_20px_rgba(16,185,129,0.22)] transition hover:brightness-105 disabled:cursor-wait disabled:opacity-60"><span className="text-base">＋</span>{grocery("newBill")}</button>
+                <button type="button" onClick={() => void startNewGroceryBill()} disabled={draftSaving} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-3 text-xs font-bold text-white shadow-[0_10px_20px_rgba(16,185,129,0.22)] transition hover:brightness-105 disabled:cursor-wait disabled:opacity-60"><span className="text-base">＋</span>{grocery("newBill")}</button>
+                <button type="button" onClick={toggleGroceryTestMode} disabled={!canWrite || !testModeReady} aria-pressed={testMode} className={`inline-flex h-12 items-center justify-center rounded-2xl border px-3 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${testMode ? "border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-200" : "border-amber-200 bg-white/75 text-amber-800 hover:bg-amber-50"}`}>{testMode ? testCopy.toggleOff : testCopy.toggleOn}</button>
+                {testMode && <button type="button" onClick={() => setShowTestBills((current) => !current)} className="inline-flex h-12 items-center justify-center rounded-2xl border border-amber-200 bg-white/85 px-3 text-xs font-bold text-amber-900 transition hover:bg-amber-50">{testCopy.history} · {testBills.length}</button>}
+                {!testMode && (
                 <button type="button" onClick={() => void saveCurrentDraft()} disabled={draftSaving || lines.length === 0 || !canWrite} title={lines.length === 0 ? (locale === "si" ? "සුරැකීමට පෙර බිල්පතට භාණ්ඩ එක් කරන්න" : locale === "ta" ? "சேமிப்பதற்கு முன் பொருட்களை சேர்க்கவும்" : "Add products before holding a bill") : undefined} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/90 px-3 text-xs font-bold text-slate-700 transition hover:border-teal-200 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50">{draftSaving ? (locale === "si" ? "සුරකිමින්…" : locale === "ta" ? "சேமிக்கிறது…" : "Saving…") : grocery("holdBill")}</button>
+                )}
+{!testMode && (
                 <button type="button" onClick={() => void openHeldBills()} disabled={draftSaving || !canWrite} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/90 px-3 text-xs font-bold text-slate-700 transition hover:border-blue-200 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50">{grocery("recallBill")}</button>
+                )}
                 <button type="button" onClick={() => document.getElementById("grocery-pos-search")?.focus()} className="inline-flex h-12 items-center justify-center rounded-2xl border border-violet-100 bg-violet-50/90 px-3 text-xs font-bold text-violet-700 transition hover:bg-violet-100">{grocery("priceCheck")}</button>
                 <Link href="/stock" className="col-span-2 inline-flex h-10 items-center justify-center rounded-xl border border-blue-100 bg-white/75 px-3 text-xs font-bold text-blue-700 transition hover:bg-white sm:col-span-1 sm:h-12">{grocery("inventory")}</Link>
               </div>
@@ -772,6 +1010,49 @@ export function AtomicRetailSalesPageV2() {
         {barcodeScannerOpen && <BarcodeCameraScanner locale={locale} onDetected={handlePosBarcodeDetected} onClose={() => setBarcodeScannerOpen(false)} />}
 
         <WriteDisabledHint className="mb-5" />
+
+        {testMode && groceryPos && (
+          <section className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 shadow-sm" aria-live="polite">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-200 text-amber-900" aria-hidden="true">✓</span>
+              <div>
+                <h2 className="text-sm font-extrabold tracking-wide text-amber-950">{testCopy.banner}</h2>
+                <p className="mt-1 text-xs leading-5 text-amber-900">{testCopy.description}</p>
+              </div>
+            </div>
+          </section>
+        )}
+        {testMode && groceryPos && showTestBills && (
+          <section className="mb-5 rounded-2xl border border-amber-200 bg-white p-4 shadow-sm" aria-label={testCopy.history}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-extrabold text-slate-950">{testCopy.history} <span className="text-amber-700">· {testBills.length}</span></h2>
+                <p className="mt-1 text-xs text-slate-500">{testCopy.sharedInfo}</p>
+              </div>
+              <button type="button" onClick={() => void clearAllTestBills()} disabled={saving || testBills.length === 0} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-800 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50">{testCopy.clear}</button>
+            </div>
+            {testBills.length === 0 ? (
+              <p className="mt-4 rounded-xl bg-slate-50 px-4 py-5 text-center text-sm text-slate-500">{testCopy.empty}</p>
+            ) : (
+              <div className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200">
+                {testBills.map((bill) => (
+                  <article key={bill.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs font-extrabold text-amber-800">{bill.billNo}</p>
+                      <p className="mt-1 text-xs text-slate-500">{new Date(bill.createdAt).toLocaleString(locale === "si" ? "si-LK" : locale === "ta" ? "ta-LK" : "en-LK")}</p>
+                      <p className="mt-1 break-words text-xs text-slate-700">{bill.lines.map((line) => `${line.productName} × ${line.qty}`).join(" · ")}</p>
+                      <p className="mt-1 font-mono text-sm font-extrabold text-slate-950">{formatLkr(bill.total)}</p>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <button type="button" disabled={saving} onClick={() => editGroceryTestBill(bill)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">{testCopy.edit}</button>
+                      <button type="button" disabled={saving} onClick={() => void deleteTestBill(bill)} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-800 transition hover:bg-rose-100 disabled:cursor-wait disabled:opacity-60">{testCopy.remove}</button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {message && (
           <div className="mb-5 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-900">
@@ -1082,7 +1363,7 @@ export function AtomicRetailSalesPageV2() {
                                   <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-200 bg-white">
                                     <button type="button" aria-label={`${grocery("decrease")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, line.qty - 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-slate-600 hover:bg-slate-50">−</button>
                                     <span className="flex h-7 min-w-8 items-center justify-center border-x border-slate-200 px-1 text-xs font-bold text-slate-900">{line.qty}</span>
-                                    <button type="button" aria-label={`${grocery("increase")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, line.qty + 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-teal-700 hover:bg-teal-50">+</button>
+                                    <button type="button" aria-label={`${grocery("increase")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, line.qty + 1, testMode ? Number.MAX_SAFE_INTEGER : line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-teal-700 hover:bg-teal-50">+</button>
                                   </div>
                                   <span className="text-[10px] font-semibold text-slate-500">
                                     {groceryQuantityLabel(line.qty, line.product.customFields.unitVariant ?? line.product.customFields.unit, locale)}
@@ -1149,7 +1430,8 @@ export function AtomicRetailSalesPageV2() {
                   <p className="mt-1 text-3xl font-bold tracking-tight">{formatLkr(netTotal)}</p>
                 </div>
 
-                <div className="mt-5 space-y-4">
+                {!testMode && (
+                  <div className="mt-5 space-y-4">
                   <label className="block text-sm font-bold text-slate-700">
                     {t("common.customer")}
                     <select
@@ -1334,7 +1616,7 @@ export function AtomicRetailSalesPageV2() {
                     </div>
                   )}
 
-                  {lines.length > 0 && (
+                  {lines.length > 0 && !testMode && (
                     <div className="space-y-2">
                       <div className="flex gap-2">
                         <a
@@ -1388,9 +1670,23 @@ export function AtomicRetailSalesPageV2() {
                     onClick={() => void handleSale()}
                     className="w-full rounded-lg bg-teal-600 py-4 text-sm font-bold text-white shadow-[0_8px_20px_rgba(13,148,136,0.2)] transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {saving ? t("common.saving") : identityBlocked ? (si ? "Checkout අවශ්‍යතා සම්පූර්ණ කරන්න" : "Complete checkout requirements") : groceryPos ? grocery("completed") : splitPayment ? (si ? "බෙදා ගෙවීමෙන් විකිණීම සම්පූර්ණ කරන්න" : "Complete split-payment sale") : t("sales.complete")}
+                    {saving ? t("common.saving") : identityBlocked ? (si ? "Checkout අවශ්‍යතා සම්පූර්ණ කරන්න" : "Complete checkout requirements") : groceryPos && testMode ? (editingTestBillId ? testCopy.update : testCopy.save) : groceryPos ? grocery("completed") : splitPayment ? (si ? "බෙදා ගෙවීමෙන් විකිණීම සම්පූර්ණ කරන්න" : "Complete split-payment sale") : t("sales.complete")}
                   </button>
                 </div>
+                )}
+                {testMode && (
+                  <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-sm font-semibold leading-6 text-amber-950">{testCopy.noPayment}</p>
+                    <button
+                      type="button"
+                      disabled={lines.length === 0 || !canWrite || saving || netTotal <= 0}
+                      onClick={() => void handleSale()}
+                      className="mt-3 w-full rounded-xl bg-amber-700 py-3.5 text-sm font-bold text-white transition hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {saving ? t("common.saving") : editingTestBillId ? testCopy.update : testCopy.save}
+                    </button>
+                  </div>
+                )}
               </ProCard>
             </aside>
           </section>
@@ -1444,7 +1740,7 @@ export function AtomicRetailSalesPageV2() {
               onClick={() => void handleSale()}
               className="rounded-lg bg-teal-600 px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {saving ? t("common.saving") : identityBlocked ? (si ? "අවශ්‍යතා" : "Requirements") : t("sales.complete")}
+              {saving ? t("common.saving") : identityBlocked ? (si ? "අවශ්‍යතා" : "Requirements") : groceryPos && testMode ? (editingTestBillId ? testCopy.update : testCopy.save) : t("sales.complete")}
             </button>
           </div>
         </div>
