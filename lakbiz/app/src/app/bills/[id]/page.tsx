@@ -15,6 +15,7 @@ import {
   ProPageHeader,
 } from "@/components/ui/pro-shell";
 import { formatLkr } from "@/lib/format";
+import { groceryProductLabel } from "@/lib/grocery-localization";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { paymentLabel } from "@/lib/i18n/payment";
 import { useAppStore } from "@/lib/store/use-app-store";
@@ -24,8 +25,8 @@ export default function BillDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const { data, ready } = useAppStore();
-  const { t } = useLocale();
-  const { canSeeFinancials, orgRole } = useSubscription();
+  const { t, locale } = useLocale();
+  const { canSeeFinancials, orgRole, org } = useSubscription();
 
   if (!ready || !data) {
     return (
@@ -53,6 +54,24 @@ export default function BillDetailPage() {
       </AppShell>
     );
   }
+
+  const invoiceSale =
+    org.sector === "grocery"
+      ? {
+          ...sale,
+          lines: sale.lines.map((line) => {
+            const product = data.products.find((item) => item.id === line.productId);
+            if (!product) return line;
+            return {
+              ...line,
+              productName: groceryProductLabel(
+                { sku: product.sku, name: line.productName },
+                locale,
+              ),
+            };
+          }),
+        }
+      : sale;
 
   const customer = sale.customerId
     ? data.customers.find((c) => c.id === sale.customerId)
@@ -106,7 +125,7 @@ export default function BillDetailPage() {
 
         <div className="mx-auto max-w-3xl">
           <InvoiceView
-            sale={sale}
+            sale={invoiceSale}
             business={data.business}
             customerPhone={customer?.phone}
             customerAddress={customer?.address}

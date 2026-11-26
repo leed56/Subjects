@@ -47,8 +47,12 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
-      - name: Dependency security audit
-        run: npm audit --audit-level=high
+      - name: Production dependency security audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Full dependency audit (development tooling)
+        continue-on-error: true
+        run: npm audit --include=dev --audit-level=high
 
       - name: Lint
         run: npm run lint

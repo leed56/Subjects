@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import { parseSectorId } from "@/lib/sectors";
 import type { PlanId } from "@/lib/subscription/types";
 import type { SectorId } from "@/lib/types";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import { GROCERY_PROVISIONING_CATALOGUE } from "@/lib/grocery-provisioning-catalogue";
 import { resolveTemplate } from "./templates";
 import { normalizeProvisionInput } from "./validate-provision";
 
@@ -21,7 +23,20 @@ export type ProvisionShopResult = {
   email: string;
   sector: SectorId;
   planId: PlanId;
+  catalogueSetup?: {
+    status: "ready" | "needs_attention";
+    productCount: number;
+    error?: string;
+  };
 };
+
+function stableTemplateProductId(organizationId: string, sku: string): string {
+  const bytes = createHash("sha256").update(`${organizationId}:${sku}`).digest().subarray(0, 16);
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x50;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 export async function provisionShop(
   input: ProvisionShopInput,
@@ -99,6 +114,33 @@ export async function provisionShop(
     return { data: null, error: provisionError?.message ?? "Could not provision shop" };
   }
 
+  let catalogueSetup: ProvisionShopResult["catalogueSetup"];
+  if (sector === "grocery") {
+    const rows = GROCERY_PROVISIONING_CATALOGUE.map((product) => ({
+      id: stableTemplateProductId(orgId as string, product.sku ?? product.name),
+      organization_id: orgId as string,
+      name: product.name,
+      sku: product.sku ?? null,
+      category: product.category,
+      sector_id: "grocery",
+      condition: "new",
+      buy_price: 0,
+      sell_price: 0,
+      stock_qty: 0,
+      reorder_level: 0,
+      unit: product.unit || "pcs",
+      custom_fields: product.customFields ?? {},
+      active: false,
+      notes: product.notes ?? "Starter catalogue template. Set real prices, barcode and stock before activation.",
+    }));
+    const { error: catalogueError } = await admin
+      .from("products_base")
+      .upsert(rows, { onConflict: "id", ignoreDuplicates: true });
+    catalogueSetup = catalogueError
+      ? { status: "needs_attention", productCount: 0, error: catalogueError.message }
+      : { status: "ready", productCount: rows.length };
+  }
+
   return {
     data: {
       organizationId: orgId as string,
@@ -106,6 +148,7 @@ export async function provisionShop(
       email,
       sector,
       planId,
+      catalogueSetup,
     },
     error: null,
   };

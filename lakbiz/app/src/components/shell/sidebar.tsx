@@ -2,18 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useAuth } from "@/components/auth-provider";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { LOCALE_NAMES, nextLocale } from "@/lib/i18n/translations";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { useShopNav } from "@/components/shell/use-shop-nav";
 import { NAV_ICON_BY_HREF } from "@/components/shell/nav-icons";
 import { GroceryRetailNavigation } from "@/components/shell/grocery-retail-navigation";
-import { SettingsIcon, SignOutIcon, BellIcon } from "@/components/ui/icons";
-import { initialsFor } from "@/lib/format";
+import { SettingsIcon, BellIcon } from "@/components/ui/icons";
 import type { NavItem } from "@/lib/nav-sections";
 import { useCriticalAlertCount } from "@/lib/dashboard/use-critical-alert-count";
 import { GlobalSearch } from "@/components/shell/global-search";
+import { WorkspaceProfileMenu } from "@/components/shell/workspace-profile-menu";
 
 function navLabel(item: NavItem, locale: "si" | "en" | "ta", t: (key: string) => string): string {
   if (locale === "si" && item.labelSi) return item.labelSi;
@@ -48,7 +47,6 @@ function NavLink({ item, active, locale, t }: { item: NavItem; active: boolean; 
 export function Sidebar() {
   const pathname = usePathname();
   const { locale, setLocale, t } = useLocale();
-  const { user, logout } = useAuth();
   const { isPlatformAdmin, org } = useSubscription();
   const { sections, managementItems } = useShopNav();
   const criticalAlertCount = useCriticalAlertCount();
@@ -58,11 +56,6 @@ export function Sidebar() {
   const activeHref = allItems
     .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
-
-  const handleLogout = async () => {
-    await logout();
-    window.location.href = "/login";
-  };
 
   return (
     <aside className={`sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/[0.06] lg:flex ${org.sector === "grocery" ? "bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.24),transparent_30%),linear-gradient(160deg,#071327,#08111f_55%,#111239)]" : "bg-[#08111f]"}`}>
@@ -145,21 +138,7 @@ export function Sidebar() {
       )}
 
       <div className="border-t border-white/[0.06] p-3.5">
-        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-3">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-400/15 text-xs font-bold text-teal-200 ring-1 ring-inset ring-teal-300/10">{initialsFor(org.name, user?.email)}</span>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-white">{org.name}</p>
-              <p className="mt-0.5 truncate text-[11px] text-slate-500">{user?.email}</p>
-              {/* Same raw-enum-leak class as Team Members' "data_entry"/
-                  "ORG_MEMBERS" bug — .replace() stripped the underscore
-                  here so no literal underscore ever showed, but it was
-                  still unlocalized. Reuses the same team.role_* keys
-                  Team Members already has for every OrgRole. */}
-              <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-teal-300/80">{t(`team.role_${org.role}`)}</p>
-            </div>
-          </div>
-        </div>
+        <WorkspaceProfileMenu />
         {/* Desktop had no language control at all before this — only the
             mobile top bar could switch locale. Cycles si → en → ta → si. */}
         <button
@@ -170,19 +149,6 @@ export function Sidebar() {
           <span>{LOCALE_NAMES[locale]}</span>
           <span className="text-xs font-semibold text-teal-300/80">{LOCALE_NAMES[nextLocale(locale)]} →</span>
         </button>
-        {user ? (
-          <button type="button" onClick={handleLogout} className="mt-1.5 flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition hover:bg-rose-500/10 hover:text-rose-300">
-            <SignOutIcon className="h-4 w-4" />{t("sub.sign_out")}
-          </button>
-        ) : (
-          // Anonymous visitors land here in the local/demo experience (see
-          // subscription-provider's loadDemoOrg) — the shell had no way
-          // back to a real account at all before this, only a Sign out
-          // button gated behind `user`.
-          <Link href="/login" className="mt-1.5 flex min-h-10 w-full items-center justify-center rounded-xl bg-teal-400/15 px-3 py-2.5 text-sm font-semibold text-teal-200 transition hover:bg-teal-400/20">
-            {t("sub.sign_in")}
-          </Link>
-        )}
       </div>
     </aside>
   );

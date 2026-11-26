@@ -951,19 +951,14 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-/** Org-wide batched replace for a job/sale/purchase line-items table —
- * the full-sync counterpart to replaceSaleLines/replacePurchaseLines/
- * replacePurchaseOrderLines below, which stay as they are for the
- * single-record push paths (syncSaleSnapshot etc.), where one record's
- * lines really is the right unit of work. Deletes existing lines for
- * every given parent id, then inserts the full replacement set — same
- * end state as calling the single-record version once per parent, just
- * O(records / LINE_REPLACE_BATCH_SIZE) round trips instead of
- * O(records) × 2. */
+/** Org-wide batched replace for mutable purchase and purchase-order lines.
+ * Completed sale lines are append-only and use appendMissingSaleLinesBatch
+ * below: deleting and replaying them can erase a valid bill when the stock
+ * guard rejects a retry after checkout has already reduced inventory. */
 async function replaceLinesBatch(
-  table: "sale_lines" | "purchase_lines" | "purchase_order_lines",
+  table: "purchase_lines" | "purchase_order_lines",
   organizationId: string,
-  parentIdColumn: "sale_id" | "purchase_id" | "purchase_order_id",
+  parentIdColumn: "purchase_id" | "purchase_order_id",
   parentIds: string[],
   rows: Record<string, unknown>[],
 ): Promise<string | null> {
@@ -988,24 +983,78 @@ async function replaceLinesBatch(
   return null;
 }
 
-async function replaceSaleLines(
+/** Sale rows are immutable once finalized. Only append line positions that
+ * are missing, and give each position a stable UUID so two devices racing to
+ * repair the same incomplete snapshot cannot create duplicate bill lines. */
+async function appendMissingSaleLinesBatch(
+  organizationId: string,
+  saleIds: string[],
+  rows: Record<string, unknown>[],
+): Promise<string | null> {
+  if (saleIds.length === 0 || rows.length === 0) return null;
+  const supabase = createBrowserClient();
+  if (!supabase) return "Supabase not configured";
+
+  const existingPositions = new Set<string>();
+  for (const idBatch of chunk(saleIds, 100)) {
+    const { data, error } = await fetchAllPages((from, to) =>
+      supabase
+        .from("sale_lines")
+        .select("sale_id, line_order")
+        .eq("organization_id", organizationId)
+        .in("sale_id", idBatch)
+        .range(from, to),
+    );
+    if (error) return error.message;
+    for (const line of data ?? []) {
+      existingPositions.add(String(line.sale_id) + ":" + String(line.line_order));
+    }
+  }
+
+  const missingRows = rows.filter(
+    (row) => !existingPositions.has(String(row.sale_id) + ":" + String(row.line_order)),
+  );
+  for (const rowBatch of chunk(missingRows, LINE_REPLACE_BATCH_SIZE)) {
+    const { error } = await supabase.from("sale_lines").insert(rowBatch);
+    if (!error) continue;
+
+    // Another device may have inserted the same deterministic line IDs after
+    // our read. Treat that race as success only if every position now exists;
+    // validation or stock-guard failures remain visible to the owner.
+    const batchSaleIds = [...new Set(rowBatch.map((row) => String(row.sale_id)))];
+    const insertedPositions = new Set<string>();
+    for (const idBatch of chunk(batchSaleIds, 100)) {
+      const { data: concurrentRows, error: readError } = await fetchAllPages(
+        (from, to) =>
+          supabase
+            .from("sale_lines")
+            .select("sale_id, line_order")
+            .eq("organization_id", organizationId)
+            .in("sale_id", idBatch)
+            .range(from, to),
+      );
+      if (readError) return readError.message;
+      for (const line of concurrentRows ?? []) {
+        insertedPositions.add(String(line.sale_id) + ":" + String(line.line_order));
+      }
+    }
+    if (
+      !rowBatch.every((row) =>
+        insertedPositions.has(String(row.sale_id) + ":" + String(row.line_order)),
+      )
+    ) {
+      return error.message;
+    }
+  }
+  return null;
+}
+
+async function appendSaleLines(
   organizationId: string,
   saleId: string,
   rows: Record<string, unknown>[],
 ): Promise<string | null> {
-  const supabase = createBrowserClient();
-  if (!supabase) return "Supabase not configured";
-
-  const { error: delErr } = await supabase
-    .from("sale_lines")
-    .delete()
-    .eq("organization_id", organizationId)
-    .eq("sale_id", saleId);
-  if (delErr) return delErr.message;
-
-  if (rows.length === 0) return null;
-  const { error: insErr } = await supabase.from("sale_lines").insert(rows);
-  return insErr?.message ?? null;
+  return appendMissingSaleLinesBatch(organizationId, [saleId], rows);
 }
 
 async function replacePurchaseLines(
@@ -1136,20 +1185,41 @@ function saleRowFromSale(
   };
 }
 
-function saleLineRowsFromSale(
+async function stableSaleLineId(
+  organizationId: string,
+  saleId: string,
+  lineOrder: number,
+): Promise<string> {
+  const value = new TextEncoder().encode(
+    "lakbiz:sale-line:v1:" + organizationId + ":" + saleId + ":" + lineOrder,
+  );
+  const digest = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", value));
+  const bytes = digest.slice(0, 16);
+  // RFC 9562 UUIDv8: stable name-derived identifier for idempotent repairs.
+  bytes[6] = (bytes[6] & 0x0f) | 0x80;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return hex.slice(0, 8) + "-" + hex.slice(8, 12) + "-" + hex.slice(12, 16) + "-" +
+    hex.slice(16, 20) + "-" + hex.slice(20);
+}
+
+async function saleLineRowsFromSale(
   organizationId: string,
   sale: Sale,
-): Record<string, unknown>[] {
-  return sale.lines.map((line, index) => ({
-    organization_id: organizationId,
-    sale_id: sale.id,
-    product_id: line.productId || null,
-    product_name: line.productName,
-    qty: line.qty,
-    unit_price: line.unitPrice,
-    buy_price: line.buyPrice,
-    line_order: index,
-  }));
+): Promise<Record<string, unknown>[]> {
+  return Promise.all(
+    sale.lines.map(async (line, index) => ({
+      id: await stableSaleLineId(organizationId, sale.id, index),
+      organization_id: organizationId,
+      sale_id: sale.id,
+      product_id: line.productId || null,
+      product_name: line.productName,
+      qty: line.qty,
+      unit_price: line.unitPrice,
+      buy_price: line.buyPrice,
+      line_order: index,
+    })),
+  );
 }
 
 function chequeRowFromCheque(
@@ -1314,10 +1384,10 @@ export async function syncSaleSnapshot(
   ]);
   if (saleErr) return saleErr;
 
-  const linesErr = await replaceSaleLines(
+  const linesErr = await appendSaleLines(
     organizationId,
     saleId,
-    saleLineRowsFromSale(organizationId, sale),
+    await saleLineRowsFromSale(organizationId, sale),
   );
   if (linesErr) return linesErr;
 
@@ -2322,25 +2392,65 @@ export async function pushBusinessData(
 ): Promise<CloudPushResult> {
   const seenGeneration =
     options?.seenGeneration ?? (await fetchOrgSyncGeneration(organizationId));
+  const supabase = createBrowserClient();
   let products = data.products;
-  if (options?.preserveBuyPrices) {
-    const supabase = createBrowserClient();
-    if (supabase) {
-      const { data: rows } = await fetchAllPages((from, to) =>
-        supabase
-          .from("products")
-          .select("id, buy_price")
-          .eq("organization_id", organizationId)
-          .range(from, to),
-      );
-      const buyMap = new Map(
-        (rows ?? []).map((row) => [row.id as string, num(row.buy_price)]),
-      );
-      products = data.products.map((p) => ({
-        ...p,
-        buyPrice: buyMap.has(p.id) ? buyMap.get(p.id)! : p.buyPrice,
-      }));
+  if (data.products.length > 0) {
+    if (!supabase) {
+      return { error: "Supabase not configured", stale: false, generation: seenGeneration };
     }
+  
+    const [{ data: cloudProducts, error: productsError }, { data: cloudStockLogs, error: logsError }] =
+      await Promise.all([
+        fetchAllPages((from, to) =>
+          supabase
+            .from("products")
+            .select("id, buy_price, stock_qty")
+            .eq("organization_id", organizationId)
+            .range(from, to),
+        ),
+        fetchAllPages((from, to) =>
+          supabase
+            .from("stock_logs")
+            .select("id")
+            .eq("organization_id", organizationId)
+            .range(from, to),
+        ),
+      ]);
+    if (productsError || logsError) {
+      return {
+        error: productsError?.message ?? logsError?.message ?? "Could not reconcile cloud inventory",
+        stale: false,
+        generation: seenGeneration,
+      };
+    }
+  
+    const cloudProductById = new Map(
+      (cloudProducts ?? []).map((product) => [String(product.id), product]),
+    );
+    const cloudStockLogIds = new Set((cloudStockLogs ?? []).map((log) => String(log.id)));
+    const productsWithPendingMovements = new Set(
+      data.stockLogs
+        .filter((log) => !cloudStockLogIds.has(log.id))
+        .map((log) => log.productId),
+    );
+    // Stock is an inventory balance, not ordinary product metadata. Preserve the
+    // cloud balance unless this payload carries a movement the cloud has not
+    // seen yet; this prevents a delayed full snapshot from undoing a checkout or
+    // return that another request has already committed.
+    products = data.products.map((product) => {
+      const cloudProduct = cloudProductById.get(product.id);
+      return {
+        ...product,
+        buyPrice:
+          options?.preserveBuyPrices && cloudProduct
+            ? num(cloudProduct.buy_price)
+            : product.buyPrice,
+        stockQty:
+          cloudProduct && !productsWithPendingMovements.has(product.id)
+            ? num(cloudProduct.stock_qty)
+            : product.stockQty,
+      };
+    });
   }
 
   const productRows = products.map((p) => ({
@@ -2401,18 +2511,11 @@ export async function pushBusinessData(
     cheque_id: s.chequeId ?? null,
   }));
 
-  const saleLineRows = data.sales.flatMap((sale) =>
-    sale.lines.map((line, index) => ({
-      organization_id: organizationId,
-      sale_id: sale.id,
-      product_id: line.productId || null,
-      product_name: line.productName,
-      qty: line.qty,
-      unit_price: line.unitPrice,
-      buy_price: line.buyPrice,
-      line_order: index,
-    })),
-  );
+  const saleLineRows = (
+    await Promise.all(
+      data.sales.map((sale) => saleLineRowsFromSale(organizationId, sale)),
+    )
+  ).flat();
 
   const purchaseRows = data.purchases.map((p) => ({
     id: p.id,
@@ -2726,8 +2829,8 @@ export async function pushBusinessData(
     if (err) return { error: err, stale: false, generation: seenGeneration };
   }
 
-  // Phase 25 perf fix: this used to loop per sale/purchase/purchase-order
-  // and call replaceSaleLines/replacePurchaseLines/replacePurchaseOrderLines
+  // Phase 25 perf fix: this used to loop per purchase/purchase-order
+  // and call replacePurchaseLines/replacePurchaseOrderLines
   // once EACH — 2 sequential network round trips (delete + insert) per
   // record, awaited one at a time. pushBusinessData runs on a 1.5s
   // debounce after literally any local edit anywhere in the app (see
@@ -2742,10 +2845,8 @@ export async function pushBusinessData(
   // O(records / BATCH) round trips instead of O(records), chunked (not
   // one unbounded call) specifically because delete .in() filters ride in
   // the URL query string, which has a real length limit inserts don't.
-  const saleErr = await replaceLinesBatch(
-    "sale_lines",
+  const saleErr = await appendMissingSaleLinesBatch(
     organizationId,
-    "sale_id",
     data.sales.map((s) => s.id),
     saleLineRows,
   );
@@ -2768,11 +2869,10 @@ export async function pushBusinessData(
     purchaseOrderLineRows,
   );
   if (poErr) return { error: poErr, stale: false, generation: seenGeneration };
-
-  const supabase = createBrowserClient();
   if (!supabase) {
     return { error: "Supabase not configured", stale: false, generation: seenGeneration };
   }
+
   const { count: memberCount } = await supabase
     .from("org_members")
     .select("*", { count: "exact", head: true })

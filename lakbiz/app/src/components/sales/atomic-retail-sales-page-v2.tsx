@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { setBottomBarOccupied } from "@/components/shell/bottom-bar-overlay";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
+import { BarcodeCameraScanner } from "@/components/product/barcode-camera-scanner";
+import { HeldSaleDraftsDialog } from "@/components/sales/held-sale-drafts-dialog";
 import { AdvancedSaleSelector, type AdvancedSaleLineState } from "@/components/sales/advanced-sale-selector";
 import { GroceryCategoryArt, GroceryProductArt } from "@/components/sales/grocery-product-art";
-import { GroceryStarterCatalogueButton } from "@/components/grocery/starter-catalogue-button";
 import {
   ProBadge,
   ProButton,
@@ -35,6 +36,7 @@ import {
   groceryCategoryLabel,
   groceryProductLabel,
   groceryProductSearchText,
+  groceryQuantityLabel,
   groceryUi,
   groceryUnitLabel,
   type GroceryUiKey,
@@ -50,6 +52,13 @@ import {
   type CheckoutTenderKind,
 } from "@/lib/retail-tender-checkout";
 import { useAppStore } from "@/lib/store/use-app-store";
+import {
+  deleteSaleDraft,
+  saleDraftErrorMessage,
+  saveSaleDraft,
+  type SaleDraft,
+  type SaleDraftPayload,
+} from "@/lib/supabase/sale-drafts";
 import { saveAppData } from "@/lib/store/storage";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { pullBusinessData } from "@/lib/supabase/business-sync";
@@ -153,6 +162,7 @@ export function AtomicRetailSalesPageV2() {
   const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
   const [inventoryStates, setInventoryStates] = useState<Record<string, AdvancedSaleLineState>>({});
   const [search, setSearch] = useState("");
+  const [barcodeScannerOpen, setBarcodeScannerOpen] = useState(false);
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [resultLimit, setResultLimit] = useState(30);
@@ -173,24 +183,36 @@ export function AtomicRetailSalesPageV2() {
   const [message, setMessage] = useState("");
   const [lastBillId, setLastBillId] = useState<string | null>(null);
   const [pendingSaleId, setPendingSaleId] = useState<string | null>(null);
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  const [draftDialogOpen, setDraftDialogOpen] = useState(false);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const closeHeldBills = useCallback(() => setDraftDialogOpen(false), []);
 
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(SUCCESS_STORAGE_KEY);
       if (!raw) return;
-      const saved = JSON.parse(raw) as { saleId?: string; billNo?: string; paymentMethod?: string };
+      const saved = JSON.parse(raw) as { saleId?: string; billNo?: string; paymentMethod?: string; draftCleanupFailed?: boolean };
       sessionStorage.removeItem(SUCCESS_STORAGE_KEY);
       if (saved.saleId) setLastBillId(saved.saleId);
       const paymentNote = saved.paymentMethod === "mixed"
         ? groceryPos ? ` · ${groceryUi(locale, "splitPayment")}` : (si ? " · බෙදා ගෙවීම" : " · Split payment")
         : "";
-      setMessage(
-        groceryPos
-          ? `${groceryUi(locale, "completedBill")}${saved.billNo ? ` · ${saved.billNo}` : ""}${paymentNote}. ${locale === "si" ? "තොගය සහ ගෙවීම එකම ගනුදෙනුවක සුරකින ලදී." : locale === "ta" ? "கட்டணமும் சரக்கும் ஒரே பரிவர்த்தனையில் பதிவு செய்யப்பட்டன." : "Payment and inventory were committed in one transaction."}`
-          : si
-          ? `විකිණීම සම්පූර්ණයි${saved.billNo ? ` · ${saved.billNo}` : ""}${paymentNote}. තොගය සහ ගෙවීම එකම transaction එකක සුරකින ලදී.`
-          : `Sale completed${saved.billNo ? ` · ${saved.billNo}` : ""}${paymentNote}. Payment and inventory were committed in one transaction.`,
-      );
+      const billSuffix = saved.billNo ? " · " + saved.billNo : "";
+      const completionMessage = groceryPos
+        ? groceryUi(locale, "completedBill") + billSuffix + paymentNote + ". " +
+          (locale === "si" ? "තොගය සහ ගෙවීම එකම ගනුදෙනුවක සුරකින ලදී." : locale === "ta" ? "கட்டணமும் சரக்கும் ஒரே பரிவர்த்தனையில் பதிவு செய்யப்பட்டன." : "Payment and inventory were committed in one transaction.")
+        : si
+          ? "විකිණීම සම්පූර්ණයි" + billSuffix + paymentNote + ". තොගය සහ ගෙවීම එකම transaction එකක සුරකින ලදී."
+          : "Sale completed" + billSuffix + paymentNote + ". Payment and inventory were committed in one transaction.";
+      const cleanupMessage = saved.draftCleanupFailed
+        ? locale === "si"
+          ? " ගෙවීමට පෙර සුරැකූ පිටපත තවමත් පවතී; නැවත විකිණීමට පෙර එය රඳවාගත් බිල්පත් වලින් මකන්න."
+          : locale === "ta"
+            ? " சேமித்த வரைவு இன்னும் உள்ளது; மீண்டும் விற்பனை செய்வதற்கு முன் அதை சேமித்த பில்களில் இருந்து நீக்கவும்."
+            : " The saved draft is still present; remove it from Held bills before selling it again."
+        : "";
+      setMessage([completionMessage, cleanupMessage].filter(Boolean).join(" "));
     } catch {
       sessionStorage.removeItem(SUCCESS_STORAGE_KEY);
     }
@@ -300,6 +322,142 @@ export function AtomicRetailSalesPageV2() {
     });
   };
 
+  const saveCurrentDraft = async (): Promise<boolean> => {
+    if (draftSaving || lines.length === 0) return false;
+    if (!org.id) {
+      setMessage(locale === "si" ? "Shop එක සූදානම් වූ පසු බිල්පත රඳවාගන්න." : locale === "ta" ? "கடை தயாரான பிறகு பில்லை சேமிக்கவும்." : "The shop is not ready to save this bill yet.");
+      return false;
+    }
+    setDraftSaving(true);
+    setMessage("");
+    const title = (buyerName || lines[0]?.product.name || (locale === "si" ? "නව බිල්පත" : locale === "ta" ? "புதிய பில்" : "New bill")).trim().slice(0, 100);
+    const payload: SaleDraftPayload = {
+      cart,
+      priceOverrides,
+      inventoryStates,
+      discount: discountClamped,
+      cashReceived,
+      payment,
+      splitPayment,
+      secondaryPayment,
+      secondaryAmount,
+      customerId,
+      walkInName,
+      walkInPhone,
+      chequeNo,
+      chequeBank,
+      chequeDate,
+      postDated,
+      pendingSaleId,
+      snapshotTotal: netTotal,
+    };
+    let result: Awaited<ReturnType<typeof saveSaleDraft>>;
+    try {
+      result = await saveSaleDraft(org.id, activeDraftId, title, payload);
+    } catch {
+      setDraftSaving(false);
+      setMessage(saleDraftErrorMessage(locale, "failed"));
+      return false;
+    }
+    setDraftSaving(false);
+    if (!result.ok) {
+      setMessage(saleDraftErrorMessage(locale, result.code));
+      return false;
+    }
+    setActiveDraftId(result.data.id);
+    setMessage(locale === "si"
+      ? "ගෙවීමට පෙර බිල්පත සුරැකුණා. මෙම shop එකේ වෙනත් උපාංගයකින් එය නැවත විවෘත කළ හැක."
+      : locale === "ta"
+        ? "பணம் செலுத்துவதற்கு முன் பில் சேமிக்கப்பட்டது. இந்தக் கடையின் மற்றொரு சாதனத்தில் மீண்டும் திறக்கலாம்."
+        : "Bill held. It can be reopened on another device for this shop.");
+    return true;
+  };
+
+  const resetBill = () => {
+    setCart({});
+    setPriceOverrides({});
+    setInventoryStates({});
+    setDiscount(0);
+    setCashReceived("");
+    setPayment("cash");
+    setSplitPayment(false);
+    setSecondaryPayment("card");
+    setSecondaryAmount("");
+    setCustomerId("");
+    setWalkInName("");
+    setWalkInPhone("");
+    setChequeNo("");
+    setChequeBank(LK_BANKS[0]);
+    setChequeDate(new Date().toISOString().slice(0, 10));
+    setPostDated(false);
+    setPendingSaleId(null);
+    setActiveDraftId(null);
+    setMessage("");
+  };
+
+  const startNewBill = async () => {
+    const hadCurrentBill = lines.length > 0;
+    if (hadCurrentBill && !(await saveCurrentDraft())) return;
+    resetBill();
+    if (hadCurrentBill) {
+      setMessage(locale === "si" ? "වත්මන් බිල්පත රඳවාගත් බිල්පත් තුළ සුරැකුණා." : locale === "ta" ? "தற்போதைய பில் சேமிக்கப்பட்ட பில்களில் பாதுகாக்கப்பட்டது." : "Current bill saved to Held bills.");
+    }
+  };
+
+  const openHeldBills = async () => {
+    if (lines.length > 0 && !(await saveCurrentDraft())) return;
+    setDraftDialogOpen(true);
+  };
+
+  const resumeHeldBill = (draft: SaleDraft) => {
+    const restoredCart: Record<string, number> = {};
+    let missingProduct = false;
+    let overCurrentStock = false;
+    for (const [productId, qty] of Object.entries(draft.payload.cart)) {
+      const product = data.products.find((row) => row.id === productId);
+      if (!product) {
+        missingProduct = true;
+        continue;
+      }
+      restoredCart[productId] = qty;
+      if (qty > product.stockQty) overCurrentStock = true;
+    }
+    const validIds = new Set(Object.keys(restoredCart));
+    const overrides = Object.fromEntries(
+      Object.entries(draft.payload.priceOverrides).filter(([id]) => validIds.has(id)),
+    );
+    const inventory = Object.fromEntries(
+      Object.entries(draft.payload.inventoryStates).filter(([id]) => validIds.has(id)),
+    ) as Record<string, AdvancedSaleLineState>;
+    setCart(restoredCart);
+    setPriceOverrides(overrides);
+    setInventoryStates(inventory);
+    setDiscount(draft.payload.discount);
+    setCashReceived(draft.payload.cashReceived);
+    setPayment(draft.payload.payment as CheckoutPayment);
+    setSplitPayment(draft.payload.splitPayment);
+    setSecondaryPayment(draft.payload.secondaryPayment as CheckoutPayment);
+    setSecondaryAmount(draft.payload.secondaryAmount);
+    setCustomerId(data.customers.some((row) => row.id === draft.payload.customerId) ? draft.payload.customerId : "");
+    setWalkInName(draft.payload.walkInName);
+    setWalkInPhone(draft.payload.walkInPhone);
+    setChequeNo(draft.payload.chequeNo);
+    setChequeBank(draft.payload.chequeBank || LK_BANKS[0]);
+    setChequeDate(draft.payload.chequeDate || new Date().toISOString().slice(0, 10));
+    setPostDated(draft.payload.postDated);
+    setPendingSaleId(draft.payload.pendingSaleId);
+    setActiveDraftId(draft.id);
+    setDraftDialogOpen(false);
+    setSearch("");
+    setCategoryFilter("all");
+    setResultLimit(30);
+    setMessage(missingProduct
+      ? locale === "si" ? "සමහර භාණ්ඩ දැන් නැති නිසා ඉවත් කර ඇත. ගෙවීමට පෙර බිල්පත පරීක්ෂා කරන්න." : locale === "ta" ? "சில பொருட்கள் இனி இல்லை; கட்டணம் செலுத்துவதற்கு முன் பில்லை சரிபார்க்கவும்." : "Some products are no longer available. Review the bill before checkout."
+      : overCurrentStock
+        ? locale === "si" ? "භාණ්ඩයක තොගය රඳවාගත් විට තිබූ ප්‍රමාණයට වඩා අඩුයි. ගෙවීමට පෙර ප්‍රමාණය පරීක්ෂා කරන්න." : locale === "ta" ? "சில பொருட்களின் இருப்பு குறைந்துள்ளது. பணம் செலுத்தும் முன் அளவைச் சரிபார்க்கவும்." : "Current stock is lower than when this bill was held. Review quantities before checkout."
+        : locale === "si" ? "රඳවාගත් බිල්පත නැවත විවෘත කළා. අවශ්‍ය වෙනස්කම් කර පසුව ගෙවීම සම්පූර්ණ කරන්න." : locale === "ta" ? "சேமித்த பில் மீண்டும் திறக்கப்பட்டது. திருத்திய பின் கட்டணத்தை முடிக்கவும்." : "Held bill reopened. Edit it, then complete checkout when ready.");
+  };
+
   const inStock = data.products.filter((product) =>
     product.active && product.stockQty > 0 && (!groceryPos || product.sellPrice > 0)
   );
@@ -360,6 +518,29 @@ export function AtomicRetailSalesPageV2() {
       setCategoryFilter("all");
       setResultLimit(30);
     }
+  };
+
+  const handlePosBarcodeDetected = (barcode: string) => {
+    const normalized = barcode.trim().toLowerCase();
+    const product = inStock.find((row) =>
+      (row.sku ?? "").trim().toLowerCase() === normalized ||
+      String(row.customFields.barcode ?? "").trim().toLowerCase() === normalized,
+    );
+    setBarcodeScannerOpen(false);
+    if (product) {
+      setMessage("");
+      addOne(product);
+      return;
+    }
+
+    setCategoryFilter("all");
+    setSearch(barcode);
+    setResultLimit(30);
+    setMessage(locale === "si"
+      ? `තීරු කේතය ${barcode} කියවුණා. එයට ගැළපෙන සක්‍රිය භාණ්ඩයක් නැහැ. Stock හි එම භාණ්ඩයට මෙම කේතය එක් කරන්න.`
+      : locale === "ta"
+        ? `பார்கோடு ${barcode} வாசிக்கப்பட்டது. இதற்குப் பொருந்தும் செயலில் உள்ள பொருள் இல்லை. Stock-இல் அந்தப் பொருளுக்கு இந்தக் குறியீட்டைச் சேர்க்கவும்.`
+        : `Scanned ${barcode}, but no active product matches it. Add this code to the product in Stock.`);
   };
 
   const resetPricingForCustomer = (id: string) => {
@@ -512,12 +693,22 @@ export function AtomicRetailSalesPageV2() {
       }
       saveAppData(fresh, org.id);
     }
+    let draftCleanupFailed = false;
+    if (activeDraftId) {
+      try {
+        const cleanup = await deleteSaleDraft(org.id, activeDraftId);
+        draftCleanupFailed = !cleanup.ok;
+      } catch {
+        draftCleanupFailed = true;
+      }
+    }
     sessionStorage.setItem(
       SUCCESS_STORAGE_KEY,
       JSON.stringify({
         saleId: result.saleId,
         billNo: result.billNo,
         paymentMethod: result.paymentMethod ?? tenderPlan.paymentMethod,
+        draftCleanupFailed,
       }),
     );
     window.location.replace("/sales");
@@ -529,6 +720,7 @@ export function AtomicRetailSalesPageV2() {
         {groceryPos ? (
           <section className="overflow-hidden rounded-[24px] border border-blue-100 bg-[radial-gradient(circle_at_92%_16%,rgba(129,140,248,0.24),transparent_28%),radial-gradient(circle_at_8%_100%,rgba(16,185,129,0.16),transparent_25%),linear-gradient(115deg,#f8fbff_0%,#edf5ff_56%,#faf5ff_100%)] p-4 shadow-[0_18px_44px_rgba(59,130,246,0.10)] sm:p-5">
             <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center">
+              <div className="flex min-w-0 flex-1 gap-2">
               <label className="relative block min-w-0 flex-1">
                 <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-lg text-blue-500">⌕</span>
                 <input
@@ -549,13 +741,24 @@ export function AtomicRetailSalesPageV2() {
                   className="h-12 w-full rounded-2xl border border-white/80 bg-white/90 pl-11 pr-4 text-sm font-semibold text-slate-900 shadow-[0_8px_24px_rgba(37,99,235,0.09)] outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                 />
               </label>
+              <button
+                type="button"
+                onClick={() => setBarcodeScannerOpen(true)}
+                className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-bold text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100 focus:outline-none focus:ring-4 focus:ring-emerald-100"
+                aria-label={locale === "si" ? "Barcode ස්කෑන් කරන්න" : locale === "ta" ? "பார்கோடை ஸ்கேன் செய்" : "Scan barcode with camera"}
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="1.8">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 7V5a1 1 0 0 1 1-1h2m10 0h2a1 1 0 0 1 1 1v2M4 17v2a1 1 0 0 0 1 1h2m10 0h2a1 1 0 0 0 1-1v-2M8 8v8m3-8v8m3-8v8m3-8v8" />
+                </svg>
+                {locale === "si" ? "ස්කෑන්" : locale === "ta" ? "ஸ்கேன்" : "Scan"}
+              </button>
+              </div>
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                <button type="button" onClick={() => { setCart({}); setPendingSaleId(null); setMessage(""); }} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-3 text-xs font-bold text-white shadow-[0_10px_20px_rgba(16,185,129,0.22)] transition hover:brightness-105"><span className="text-base">＋</span>{grocery("newBill")}</button>
-                <button type="button" disabled title={locale === "si" ? "ඉක්මනින් පැමිණේ" : locale === "ta" ? "விரைவில் வருகிறது" : "Coming soon"} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/75 px-3 text-xs font-bold text-slate-400 disabled:cursor-not-allowed">{grocery("holdBill")}</button>
-                <button type="button" disabled title={locale === "si" ? "රඳවාගත් බිල්පත් ඉක්මනින් පැමිණේ" : locale === "ta" ? "சேமித்த பில்களை மீட்டெடுப்பது விரைவில் வருகிறது" : "Saved bill recall is coming soon"} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/75 px-3 text-xs font-bold text-slate-400 disabled:cursor-not-allowed">{grocery("recallBill")}</button>
+                <button type="button" onClick={() => void startNewBill()} disabled={draftSaving} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-3 text-xs font-bold text-white shadow-[0_10px_20px_rgba(16,185,129,0.22)] transition hover:brightness-105 disabled:cursor-wait disabled:opacity-60"><span className="text-base">＋</span>{grocery("newBill")}</button>
+                <button type="button" onClick={() => void saveCurrentDraft()} disabled={draftSaving || lines.length === 0 || !canWrite} title={lines.length === 0 ? (locale === "si" ? "සුරැකීමට පෙර බිල්පතට භාණ්ඩ එක් කරන්න" : locale === "ta" ? "சேமிப்பதற்கு முன் பொருட்களை சேர்க்கவும்" : "Add products before holding a bill") : undefined} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/90 px-3 text-xs font-bold text-slate-700 transition hover:border-teal-200 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50">{draftSaving ? (locale === "si" ? "සුරකිමින්…" : locale === "ta" ? "சேமிக்கிறது…" : "Saving…") : grocery("holdBill")}</button>
+                <button type="button" onClick={() => void openHeldBills()} disabled={draftSaving || !canWrite} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/90 px-3 text-xs font-bold text-slate-700 transition hover:border-blue-200 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50">{grocery("recallBill")}</button>
                 <button type="button" onClick={() => document.getElementById("grocery-pos-search")?.focus()} className="inline-flex h-12 items-center justify-center rounded-2xl border border-violet-100 bg-violet-50/90 px-3 text-xs font-bold text-violet-700 transition hover:bg-violet-100">{grocery("priceCheck")}</button>
                 <Link href="/stock" className="col-span-2 inline-flex h-10 items-center justify-center rounded-xl border border-blue-100 bg-white/75 px-3 text-xs font-bold text-blue-700 transition hover:bg-white sm:col-span-1 sm:h-12">{grocery("inventory")}</Link>
-                <GroceryStarterCatalogueButton compact />
               </div>
             </div>
           </section>
@@ -565,6 +768,8 @@ export function AtomicRetailSalesPageV2() {
           description={org.sector === "pharmacy" ? (si ? "Prescription, FEFO batch සහ ගෙවීම එකම checkout transaction එකක පාලනය කරයි." : "Prescription checks, FEFO batch allocation and payment commit in one checkout transaction.") : (si ? "ගෙවීම සහ තොගය එකම checkout transaction එකක සුරකියි." : "Payment and stock commit together in one checkout transaction.")}
           actions={<><ProBadge tone="emerald">Atomic checkout</ProBadge><ProButton href="/stock" variant="secondary">{t("sales.add_stock_link")}</ProButton>{lastBillId && <ProButton href={`/bills/${lastBillId}`} variant="dark">{t("sales.view_bill")}</ProButton>}</>}
         />}
+
+        {barcodeScannerOpen && <BarcodeCameraScanner locale={locale} onDetected={handlePosBarcodeDetected} onClose={() => setBarcodeScannerOpen(false)} />}
 
         <WriteDisabledHint className="mb-5" />
 
@@ -585,7 +790,9 @@ export function AtomicRetailSalesPageV2() {
               <ProStatCard
                 label={grocery("todaySales")}
                 value={formatLkr(groceryLiveMetrics.intelligence.todaySales)}
-                hint={groceryLiveMetrics.intelligence.todaySalesChangePct == null ? grocery("noBillsYet") : `${groceryLiveMetrics.intelligence.todaySalesChangePct >= 0 ? "▲" : "▼"} ${Math.abs(groceryLiveMetrics.intelligence.todaySalesChangePct).toFixed(0)}% ${locale === "si" ? "ඊයේට වඩා" : locale === "ta" ? "நேற்றை விட" : "vs yesterday"}`}
+                hint={groceryLiveMetrics.intelligence.todaySalesChangePct == null
+                  ? groceryLiveMetrics.intelligence.todayTransactions > 0 ? grocery("completedToday") : grocery("noBillsYet")
+                  : `${groceryLiveMetrics.intelligence.todaySalesChangePct >= 0 ? "▲" : "▼"} ${Math.abs(groceryLiveMetrics.intelligence.todaySalesChangePct).toFixed(0)}% ${locale === "si" ? "ඊයේට වඩා" : locale === "ta" ? "நேற்றை விட" : "vs yesterday"}`}
                 icon={<SalesIcon className="h-5 w-5" />}
                 tone="teal"
               />
@@ -643,12 +850,11 @@ export function AtomicRetailSalesPageV2() {
             {groceryPos ? (
               <div className="flex flex-col gap-4 rounded-2xl border border-blue-100 bg-[radial-gradient(circle_at_top_right,_rgba(129,140,248,0.14),transparent_34%),linear-gradient(105deg,#f8fbff,#ffffff_54%,#eef6ff)] px-5 py-4 shadow-[0_10px_28px_rgba(59,130,246,0.07)] sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <span className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-700">{locale === "si" ? "පළමු සැකසුම" : locale === "ta" ? "முதல் அமைப்பு" : "First-time setup"}</span>
-                  <h2 className="mt-1 text-base font-bold tracking-[-0.025em] text-slate-950">{locale === "si" ? "විකිණිය හැකි සිල්ලර නාමාවලියක් එක් කරන්න" : locale === "ta" ? "விற்பனைக்கான மளிகைப் பட்டியலைச் சேர்க்கவும்" : "Add a sellable grocery catalogue"}</h2>
-                  <p className="mt-1 text-xs leading-5 text-slate-600">{locale === "si" ? "ඔබ තහවුරු කළ පසු පමණක් ආරම්භක භාණ්ඩ 16ක් එක් වේ. මිල, තීරු කේත, තොග සහ පින්තූර තොග පිටුවෙන් වෙනස් කළ හැක." : locale === "ta" ? "நீங்கள் உறுதிப்படுத்திய பிறகே 16 தொடக்கப் பொருட்கள் சேர்க்கப்படும். விலை, பட்டைக் குறியீடு, சரக்கு மற்றும் படங்களை சரக்குப் பக்கத்தில் மாற்றலாம்." : "Starter products are only added when you confirm. Prices, barcodes, stock and images stay editable in Stock."}</p>
+                  <span className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-700">{locale === "si" ? "නාමාවලිය සූදානම්" : locale === "ta" ? "பட்டியல் தயார்" : "Catalogue ready"}</span>
+                  <h2 className="mt-1 text-base font-bold tracking-[-0.025em] text-slate-950">{locale === "si" ? "ආරම්භක භාණ්ඩ Stock හි ඇත" : locale === "ta" ? "தொடக்கப் பொருட்கள் கையிருப்பில் உள்ளன" : "Starter products are in Stock"}</h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">{locale === "si" ? "විකිණීමට පෙර සැබෑ මිල, barcode සහ ලැබුණු තොගය ඇතුළත් කර සක්‍රිය කරන්න." : locale === "ta" ? "விற்பனைக்கு முன் உண்மையான விலை, barcode மற்றும் பெற்ற சரக்கை உள்ளிட்டு செயல்படுத்தவும்." : "Enter real prices, barcodes and received stock in Stock before activating these items for sale."}</p>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  <GroceryStarterCatalogueButton compact />
                   <ProButton href="/stock" variant="secondary">{t("sales.add_stock_link")}</ProButton>
                 </div>
               </div>
@@ -756,7 +962,7 @@ export function AtomicRetailSalesPageV2() {
                       >
                         {groceryPos && (
                           <div className="relative h-24 overflow-hidden border-b border-slate-100 bg-[radial-gradient(circle_at_50%_30%,#ffffff_0%,#eff6ff_62%,#eef2ff_100%)]">
-                            <GroceryProductArt name={product.name} category={product.category} imageUrl={typeof product.customFields.imageUrl === "string" ? product.customFields.imageUrl : undefined} className="h-full w-full" />
+                            <GroceryProductArt name={product.name} sku={product.sku} barcode={typeof product.customFields.barcode === "string" ? product.customFields.barcode : undefined} category={product.category} imageUrl={typeof product.customFields.imageUrl === "string" ? product.customFields.imageUrl : undefined} className="h-full w-full" />
                             <span className="absolute left-2 top-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-white/90 px-2 py-1 text-[9px] font-bold text-slate-600 shadow-sm" title={groceryCategoryLabel(product.category, locale) || "Grocery"}>{groceryCategoryLabel(product.category, locale) || "Grocery"}</span>
                           </div>
                         )}
@@ -861,6 +1067,8 @@ export function AtomicRetailSalesPageV2() {
                               <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-blue-100 bg-gradient-to-br from-white to-blue-50">
                                 <GroceryProductArt
                                   name={line.product.name}
+                                  sku={line.product.sku}
+                                  barcode={typeof line.product.customFields.barcode === "string" ? line.product.customFields.barcode : undefined}
                                   category={line.product.category}
                                   imageUrl={typeof line.product.customFields.imageUrl === "string" ? line.product.customFields.imageUrl : undefined}
                                   className="h-full w-full p-1"
@@ -870,10 +1078,15 @@ export function AtomicRetailSalesPageV2() {
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-bold text-slate-950">{groceryPos ? groceryProductLabel(line.product, locale) : line.product.name}</p>
                               {groceryPos ? (
-                                <div className="mt-1.5 inline-flex items-center overflow-hidden rounded-lg border border-slate-200 bg-white">
-                                  <button type="button" aria-label={`${grocery("decrease")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, line.qty - 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-slate-600 hover:bg-slate-50">−</button>
-                                  <span className="flex h-7 min-w-8 items-center justify-center border-x border-slate-200 px-1 text-xs font-bold text-slate-900">{line.qty}</span>
-                                  <button type="button" aria-label={`${grocery("increase")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, line.qty + 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-teal-700 hover:bg-teal-50">+</button>
+                                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                  <div className="inline-flex items-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+                                    <button type="button" aria-label={`${grocery("decrease")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, line.qty - 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-slate-600 hover:bg-slate-50">−</button>
+                                    <span className="flex h-7 min-w-8 items-center justify-center border-x border-slate-200 px-1 text-xs font-bold text-slate-900">{line.qty}</span>
+                                    <button type="button" aria-label={`${grocery("increase")} ${groceryProductLabel(line.product, locale)}`} onClick={() => setQty(line.product.id, line.qty + 1, line.product.stockQty)} className="flex h-7 w-7 items-center justify-center text-sm font-bold text-teal-700 hover:bg-teal-50">+</button>
+                                  </div>
+                                  <span className="text-[10px] font-semibold text-slate-500">
+                                    {groceryQuantityLabel(line.qty, line.product.customFields.unitVariant ?? line.product.customFields.unit, locale)}
+                                  </span>
                                 </div>
                               ) : <p className="mt-0.5 text-xs font-semibold text-slate-500">× {line.qty}</p>}
                             </div>
@@ -1235,6 +1448,14 @@ export function AtomicRetailSalesPageV2() {
             </button>
           </div>
         </div>
+      )}
+      {draftDialogOpen && org.id && data && (
+        <HeldSaleDraftsDialog
+          organizationId={org.id}
+          locale={locale}
+          onClose={closeHeldBills}
+          onResume={resumeHeldBill}
+        />
       )}
     </AppShell>
   );
