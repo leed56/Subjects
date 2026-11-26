@@ -55,6 +55,7 @@ function data(products: Product[]): AppData {
         creditAmount: 0,
       },
     ],
+    voidedSales: [],
     stockLogs: [],
     customers: [],
     customerPayments: [],

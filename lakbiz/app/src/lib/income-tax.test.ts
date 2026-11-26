@@ -25,6 +25,7 @@ function makeAppData(overrides: Partial<AppData> = {}): AppData {
     business: { name: "Test Shop", quarterStartMonth: 4, companyIncomeTaxRate: 30 },
     products: [],
     sales: [],
+    voidedSales: [],
     stockLogs: [],
     customers: [],
     customerPayments: [],
