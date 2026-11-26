@@ -38,11 +38,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function numberMap(value: unknown, allowZero = false): Record<string, number> {
   if (!isRecord(value)) return {};
-  return Object.fromEntries(
-    Object.entries(value).filter(([, item]) =>
-      typeof item === "number" && Number.isFinite(item) && (allowZero ? item >= 0 : item > 0),
-    ),
-  );
+  const result: Record<string, number> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (
+      typeof item === "number" &&
+      Number.isFinite(item) &&
+      (allowZero ? item >= 0 : item > 0)
+    ) {
+      result[key] = item;
+    }
+  }
+  return result;
 }
 
 function normalizePayload(value: unknown): SaleDraftPayload | null {
