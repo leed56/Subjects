@@ -101,18 +101,18 @@ export default function BillsPage() {
     ? {
         recordReturn: "ආපසු භාරදීම සටහන් කරන්න",
         guidanceTitle: "නිකුත් කළ බිල්පතක් නිවැරදි කරන්නේ කෙසේද?",
-        guidance: "නිකුත් කළ බිල්පත් ගිණුම් ඉතිහාසයේ තබාගනී. පාරිභෝගිකයා භාණ්ඩ සැබවින්ම ආපසු දුන් විට පමණක් ආපසු භාරදීම සටහන් කරන්න. සෘජුව සංස්කරණය කිරීම හෝ අවලංගු කිරීම දැනට නොමැත.",
+        guidance: "ගෙවීමට පෙර POS හි බිල්පත රඳවා තබා ඕනෑම උපාංගයකින් නැවත විවෘත කර සංස්කරණය කරන්න. ගෙවීමෙන් පසු බිල්පත ගිණුම් ඉතිහාසයේ තබාගන්න; භාණ්ඩ සැබවින්ම ආපසු ලැබුණු විට පමණක් ආපසු භාරදීම සටහන් කරන්න.",
       }
     : locale === "ta"
       ? {
           recordReturn: "திரும்பப் பெறுதலைப் பதிவு செய்",
           guidanceTitle: "வழங்கிய பிலை எவ்வாறு சரிசெய்வது?",
-          guidance: "வழங்கிய பில்கள் கணக்குப் பதிவில் பாதுகாக்கப்படும். வாடிக்கையாளர் பொருளை உண்மையாகத் திருப்பிக் கொடுத்தால் மட்டும் திரும்பப் பெறுதலைப் பதிவு செய்யவும். நேரடித் திருத்தம் அல்லது ரத்து செய்வது தற்போது கிடையாது.",
+          guidance: "பணம் செலுத்துவதற்கு முன் POS-இல் பில்லை சேமித்து மீண்டும் திறந்து திருத்தலாம். செலுத்திய பின் பில்லை கணக்கு வரலாற்றில் வைத்திருக்கவும்; பொருள் உண்மையில் திரும்பியபோது மட்டுமே திருப்பிப் பெறுதலைப் பதிவு செய்யவும்.",
         }
       : {
           recordReturn: "Record return",
           guidanceTitle: "Need to correct an issued bill?",
-          guidance: "Issued bills stay in the account history. Record a return only for goods the customer actually brought back. Direct edits and voids are not available yet.",
+          guidance: "Use Hold/Recall in POS to save, reopen and edit unpaid bills on any device. Completed bills stay in the account history; record a return only when goods were actually brought back.",
         };
   const activeFilterCount = Number(paymentFilter !== "all") + Number(invoiceType !== "all");
   const salesExportLabels = {

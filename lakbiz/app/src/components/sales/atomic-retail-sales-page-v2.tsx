@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/app-shell";
 import { setBottomBarOccupied } from "@/components/shell/bottom-bar-overlay";
 import { ProductConditionBadge } from "@/components/product-condition-badge";
 import { BarcodeCameraScanner } from "@/components/product/barcode-camera-scanner";
+import { HeldSaleDraftsDialog } from "@/components/sales/held-sale-drafts-dialog";
 import { AdvancedSaleSelector, type AdvancedSaleLineState } from "@/components/sales/advanced-sale-selector";
 import { GroceryCategoryArt, GroceryProductArt } from "@/components/sales/grocery-product-art";
 import {
@@ -51,6 +52,12 @@ import {
   type CheckoutTenderKind,
 } from "@/lib/retail-tender-checkout";
 import { useAppStore } from "@/lib/store/use-app-store";
+import {
+  deleteSaleDraft,
+  saveSaleDraft,
+  type SaleDraft,
+  type SaleDraftPayload,
+} from "@/lib/supabase/sale-drafts";
 import { saveAppData } from "@/lib/store/storage";
 import { useSubscription } from "@/lib/subscription/subscription-provider";
 import { pullBusinessData } from "@/lib/supabase/business-sync";
@@ -175,24 +182,36 @@ export function AtomicRetailSalesPageV2() {
   const [message, setMessage] = useState("");
   const [lastBillId, setLastBillId] = useState<string | null>(null);
   const [pendingSaleId, setPendingSaleId] = useState<string | null>(null);
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  const [draftDialogOpen, setDraftDialogOpen] = useState(false);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const closeHeldBills = useCallback(() => setDraftDialogOpen(false), []);
 
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(SUCCESS_STORAGE_KEY);
       if (!raw) return;
-      const saved = JSON.parse(raw) as { saleId?: string; billNo?: string; paymentMethod?: string };
+      const saved = JSON.parse(raw) as { saleId?: string; billNo?: string; paymentMethod?: string; draftCleanupFailed?: boolean };
       sessionStorage.removeItem(SUCCESS_STORAGE_KEY);
       if (saved.saleId) setLastBillId(saved.saleId);
       const paymentNote = saved.paymentMethod === "mixed"
         ? groceryPos ? ` · ${groceryUi(locale, "splitPayment")}` : (si ? " · බෙදා ගෙවීම" : " · Split payment")
         : "";
-      setMessage(
-        groceryPos
-          ? `${groceryUi(locale, "completedBill")}${saved.billNo ? ` · ${saved.billNo}` : ""}${paymentNote}. ${locale === "si" ? "තොගය සහ ගෙවීම එකම ගනුදෙනුවක සුරකින ලදී." : locale === "ta" ? "கட்டணமும் சரக்கும் ஒரே பரிவர்த்தனையில் பதிவு செய்யப்பட்டன." : "Payment and inventory were committed in one transaction."}`
-          : si
-          ? `විකිණීම සම්පූර්ණයි${saved.billNo ? ` · ${saved.billNo}` : ""}${paymentNote}. තොගය සහ ගෙවීම එකම transaction එකක සුරකින ලදී.`
-          : `Sale completed${saved.billNo ? ` · ${saved.billNo}` : ""}${paymentNote}. Payment and inventory were committed in one transaction.`,
-      );
+      const billSuffix = saved.billNo ? " · " + saved.billNo : "";
+      const completionMessage = groceryPos
+        ? groceryUi(locale, "completedBill") + billSuffix + paymentNote + ". " +
+          (locale === "si" ? "තොගය සහ ගෙවීම එකම ගනුදෙනුවක සුරකින ලදී." : locale === "ta" ? "கட்டணமும் சரக்கும் ஒரே பரிவர்த்தனையில் பதிவு செய்யப்பட்டன." : "Payment and inventory were committed in one transaction.")
+        : si
+          ? "විකිණීම සම්පූර්ණයි" + billSuffix + paymentNote + ". තොගය සහ ගෙවීම එකම transaction එකක සුරකින ලදී."
+          : "Sale completed" + billSuffix + paymentNote + ". Payment and inventory were committed in one transaction.";
+      const cleanupMessage = saved.draftCleanupFailed
+        ? locale === "si"
+          ? " ගෙවීමට පෙර සුරැකූ පිටපත තවමත් පවතී; නැවත විකිණීමට පෙර එය රඳවාගත් බිල්පත් වලින් මකන්න."
+          : locale === "ta"
+            ? " சேமித்த வரைவு இன்னும் உள்ளது; மீண்டும் விற்பனை செய்வதற்கு முன் அதை சேமித்த பில்களில் இருந்து நீக்கவும்."
+            : " The saved draft is still present; remove it from Held bills before selling it again."
+        : "";
+      setMessage([completionMessage, cleanupMessage].filter(Boolean).join(" "));
     } catch {
       sessionStorage.removeItem(SUCCESS_STORAGE_KEY);
     }
@@ -300,6 +319,142 @@ export function AtomicRetailSalesPageV2() {
       ok: result.ok,
       message: result.ok ? t("msg.api_sent_ok") : (result.error ?? t("msg.sent_fail")),
     });
+  };
+
+  const saveCurrentDraft = async (): Promise<boolean> => {
+    if (draftSaving || lines.length === 0) return false;
+    if (!org.id) {
+      setMessage(locale === "si" ? "Shop එක සූදානම් වූ පසු බිල්පත රඳවාගන්න." : locale === "ta" ? "கடை தயாரான பிறகு பில்லை சேமிக்கவும்." : "The shop is not ready to save this bill yet.");
+      return false;
+    }
+    setDraftSaving(true);
+    setMessage("");
+    const title = (buyerName || lines[0]?.product.name || (locale === "si" ? "නව බිල්පත" : locale === "ta" ? "புதிய பில்" : "New bill")).trim().slice(0, 100);
+    const payload: SaleDraftPayload = {
+      cart,
+      priceOverrides,
+      inventoryStates,
+      discount: discountClamped,
+      cashReceived,
+      payment,
+      splitPayment,
+      secondaryPayment,
+      secondaryAmount,
+      customerId,
+      walkInName,
+      walkInPhone,
+      chequeNo,
+      chequeBank,
+      chequeDate,
+      postDated,
+      pendingSaleId,
+      snapshotTotal: netTotal,
+    };
+    let result: Awaited<ReturnType<typeof saveSaleDraft>>;
+    try {
+      result = await saveSaleDraft(org.id, activeDraftId, title, payload);
+    } catch {
+      setDraftSaving(false);
+      setMessage(saleDraftErrorMessage(locale, "failed"));
+      return false;
+    }
+    setDraftSaving(false);
+    if (!result.ok) {
+      setMessage(saleDraftErrorMessage(locale, result.code));
+      return false;
+    }
+    setActiveDraftId(result.data.id);
+    setMessage(locale === "si"
+      ? "ගෙවීමට පෙර බිල්පත සුරැකුණා. මෙම shop එකේ වෙනත් උපාංගයකින් එය නැවත විවෘත කළ හැක."
+      : locale === "ta"
+        ? "பணம் செலுத்துவதற்கு முன் பில் சேமிக்கப்பட்டது. இந்தக் கடையின் மற்றொரு சாதனத்தில் மீண்டும் திறக்கலாம்."
+        : "Bill held. It can be reopened on another device for this shop.");
+    return true;
+  };
+
+  const resetBill = () => {
+    setCart({});
+    setPriceOverrides({});
+    setInventoryStates({});
+    setDiscount(0);
+    setCashReceived("");
+    setPayment("cash");
+    setSplitPayment(false);
+    setSecondaryPayment("card");
+    setSecondaryAmount("");
+    setCustomerId("");
+    setWalkInName("");
+    setWalkInPhone("");
+    setChequeNo("");
+    setChequeBank(LK_BANKS[0]);
+    setChequeDate(new Date().toISOString().slice(0, 10));
+    setPostDated(false);
+    setPendingSaleId(null);
+    setActiveDraftId(null);
+    setMessage("");
+  };
+
+  const startNewBill = async () => {
+    const hadCurrentBill = lines.length > 0;
+    if (hadCurrentBill && !(await saveCurrentDraft())) return;
+    resetBill();
+    if (hadCurrentBill) {
+      setMessage(locale === "si" ? "වත්මන් බිල්පත රඳවාගත් බිල්පත් තුළ සුරැකුණා." : locale === "ta" ? "தற்போதைய பில் சேமிக்கப்பட்ட பில்களில் பாதுகாக்கப்பட்டது." : "Current bill saved to Held bills.");
+    }
+  };
+
+  const openHeldBills = async () => {
+    if (lines.length > 0 && !(await saveCurrentDraft())) return;
+    setDraftDialogOpen(true);
+  };
+
+  const resumeHeldBill = (draft: SaleDraft) => {
+    const restoredCart: Record<string, number> = {};
+    let missingProduct = false;
+    let overCurrentStock = false;
+    for (const [productId, qty] of Object.entries(draft.payload.cart)) {
+      const product = data.products.find((row) => row.id === productId);
+      if (!product) {
+        missingProduct = true;
+        continue;
+      }
+      restoredCart[productId] = qty;
+      if (qty > product.stockQty) overCurrentStock = true;
+    }
+    const validIds = new Set(Object.keys(restoredCart));
+    const overrides = Object.fromEntries(
+      Object.entries(draft.payload.priceOverrides).filter(([id]) => validIds.has(id)),
+    );
+    const inventory = Object.fromEntries(
+      Object.entries(draft.payload.inventoryStates).filter(([id]) => validIds.has(id)),
+    ) as Record<string, AdvancedSaleLineState>;
+    setCart(restoredCart);
+    setPriceOverrides(overrides);
+    setInventoryStates(inventory);
+    setDiscount(draft.payload.discount);
+    setCashReceived(draft.payload.cashReceived);
+    setPayment(draft.payload.payment as CheckoutPayment);
+    setSplitPayment(draft.payload.splitPayment);
+    setSecondaryPayment(draft.payload.secondaryPayment as CheckoutPayment);
+    setSecondaryAmount(draft.payload.secondaryAmount);
+    setCustomerId(data.customers.some((row) => row.id === draft.payload.customerId) ? draft.payload.customerId : "");
+    setWalkInName(draft.payload.walkInName);
+    setWalkInPhone(draft.payload.walkInPhone);
+    setChequeNo(draft.payload.chequeNo);
+    setChequeBank(draft.payload.chequeBank || LK_BANKS[0]);
+    setChequeDate(draft.payload.chequeDate || new Date().toISOString().slice(0, 10));
+    setPostDated(draft.payload.postDated);
+    setPendingSaleId(draft.payload.pendingSaleId);
+    setActiveDraftId(draft.id);
+    setDraftDialogOpen(false);
+    setSearch("");
+    setCategoryFilter("all");
+    setResultLimit(30);
+    setMessage(missingProduct
+      ? locale === "si" ? "සමහර භාණ්ඩ දැන් නැති නිසා ඉවත් කර ඇත. ගෙවීමට පෙර බිල්පත පරීක්ෂා කරන්න." : locale === "ta" ? "சில பொருட்கள் இனி இல்லை; கட்டணம் செலுத்துவதற்கு முன் பில்லை சரிபார்க்கவும்." : "Some products are no longer available. Review the bill before checkout."
+      : overCurrentStock
+        ? locale === "si" ? "භාණ්ඩයක තොගය රඳවාගත් විට තිබූ ප්‍රමාණයට වඩා අඩුයි. ගෙවීමට පෙර ප්‍රමාණය පරීක්ෂා කරන්න." : locale === "ta" ? "சில பொருட்களின் இருப்பு குறைந்துள்ளது. பணம் செலுத்தும் முன் அளவைச் சரிபார்க்கவும்." : "Current stock is lower than when this bill was held. Review quantities before checkout."
+        : locale === "si" ? "රඳවාගත් බිල්පත නැවත විවෘත කළා. අවශ්‍ය වෙනස්කම් කර පසුව ගෙවීම සම්පූර්ණ කරන්න." : locale === "ta" ? "சேமித்த பில் மீண்டும் திறக்கப்பட்டது. திருத்திய பின் கட்டணத்தை முடிக்கவும்." : "Held bill reopened. Edit it, then complete checkout when ready.");
   };
 
   const inStock = data.products.filter((product) =>
@@ -537,12 +692,22 @@ export function AtomicRetailSalesPageV2() {
       }
       saveAppData(fresh, org.id);
     }
+    let draftCleanupFailed = false;
+    if (activeDraftId) {
+      try {
+        const cleanup = await deleteSaleDraft(org.id, activeDraftId);
+        draftCleanupFailed = !cleanup.ok;
+      } catch {
+        draftCleanupFailed = true;
+      }
+    }
     sessionStorage.setItem(
       SUCCESS_STORAGE_KEY,
       JSON.stringify({
         saleId: result.saleId,
         billNo: result.billNo,
         paymentMethod: result.paymentMethod ?? tenderPlan.paymentMethod,
+        draftCleanupFailed,
       }),
     );
     window.location.replace("/sales");
@@ -588,9 +753,9 @@ export function AtomicRetailSalesPageV2() {
               </button>
               </div>
               <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                <button type="button" onClick={() => { setCart({}); setPendingSaleId(null); setMessage(""); }} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-3 text-xs font-bold text-white shadow-[0_10px_20px_rgba(16,185,129,0.22)] transition hover:brightness-105"><span className="text-base">＋</span>{grocery("newBill")}</button>
-                <button type="button" disabled title={locale === "si" ? "ඉක්මනින් පැමිණේ" : locale === "ta" ? "விரைவில் வருகிறது" : "Coming soon"} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/75 px-3 text-xs font-bold text-slate-400 disabled:cursor-not-allowed">{grocery("holdBill")}</button>
-                <button type="button" disabled title={locale === "si" ? "රඳවාගත් බිල්පත් ඉක්මනින් පැමිණේ" : locale === "ta" ? "சேமித்த பில்களை மீட்டெடுப்பது விரைவில் வருகிறது" : "Saved bill recall is coming soon"} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/75 px-3 text-xs font-bold text-slate-400 disabled:cursor-not-allowed">{grocery("recallBill")}</button>
+                <button type="button" onClick={() => void startNewBill()} disabled={draftSaving} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-3 text-xs font-bold text-white shadow-[0_10px_20px_rgba(16,185,129,0.22)] transition hover:brightness-105 disabled:cursor-wait disabled:opacity-60"><span className="text-base">＋</span>{grocery("newBill")}</button>
+                <button type="button" onClick={() => void saveCurrentDraft()} disabled={draftSaving || lines.length === 0 || !canWrite} title={lines.length === 0 ? (locale === "si" ? "සුරැකීමට පෙර බිල්පතට භාණ්ඩ එක් කරන්න" : locale === "ta" ? "சேமிப்பதற்கு முன் பொருட்களை சேர்க்கவும்" : "Add products before holding a bill") : undefined} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/90 px-3 text-xs font-bold text-slate-700 transition hover:border-teal-200 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50">{draftSaving ? (locale === "si" ? "සුරකිමින්…" : locale === "ta" ? "சேமிக்கிறது…" : "Saving…") : grocery("holdBill")}</button>
+                <button type="button" onClick={() => void openHeldBills()} disabled={draftSaving || !canWrite} className="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white/90 px-3 text-xs font-bold text-slate-700 transition hover:border-blue-200 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50">{grocery("recallBill")}</button>
                 <button type="button" onClick={() => document.getElementById("grocery-pos-search")?.focus()} className="inline-flex h-12 items-center justify-center rounded-2xl border border-violet-100 bg-violet-50/90 px-3 text-xs font-bold text-violet-700 transition hover:bg-violet-100">{grocery("priceCheck")}</button>
                 <Link href="/stock" className="col-span-2 inline-flex h-10 items-center justify-center rounded-xl border border-blue-100 bg-white/75 px-3 text-xs font-bold text-blue-700 transition hover:bg-white sm:col-span-1 sm:h-12">{grocery("inventory")}</Link>
               </div>
@@ -1282,6 +1447,14 @@ export function AtomicRetailSalesPageV2() {
             </button>
           </div>
         </div>
+      )}
+      {draftDialogOpen && org.id && data && (
+        <HeldSaleDraftsDialog
+          organizationId={org.id}
+          locale={locale}
+          onClose={closeHeldBills}
+          onResume={resumeHeldBill}
+        />
       )}
     </AppShell>
   );
