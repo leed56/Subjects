@@ -1022,6 +1022,74 @@ export function AtomicRetailSalesPageV2() {
           actions={<><ProBadge tone="emerald">Atomic checkout</ProBadge><ProButton href="/stock" variant="secondary">{t("sales.add_stock_link")}</ProButton>{lastBillId && <ProButton href={`/bills/${lastBillId}`} variant="dark">{t("sales.view_bill")}</ProButton>}</>}
         />}
 
+        {groceryPos && lines.length > 0 && (
+          <section
+            id="grocery-mobile-cart-preview"
+            className="mt-4 scroll-mt-24 lg:hidden"
+            aria-label={locale === "si" ? "ස්කෑන් කළ භාණ්ඩ" : locale === "ta" ? "ஸ்கேன் செய்த பொருட்கள்" : "Latest scanned items"}
+            aria-live="polite"
+          >
+            <div className="rounded-2xl border border-emerald-200 bg-[linear-gradient(120deg,#f0fdf9_0%,#ffffff_52%,#f1f5ff_100%)] p-3.5 shadow-[0_12px_28px_rgba(15,118,110,0.10)] sm:p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">
+                    {locale === "si" ? "ස්කෑන් කළ භාණ්ඩ" : locale === "ta" ? "ஸ்கேன் செய்த பொருட்கள்" : "Latest scanned items"}
+                  </p>
+                  <p className="mt-1 text-sm font-extrabold text-slate-950">
+                    {cartCount} {locale === "si" ? "භාණ්ඩ" : locale === "ta" ? "பொருட்கள்" : cartCount === 1 ? "item" : "items"} · {formatLkr(netTotal)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBarcodeScannerOpen(true)}
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-extrabold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.98]"
+                >
+                  <span aria-hidden="true">⌗</span>
+                  {locale === "si" ? "තවත් ස්කෑන්" : locale === "ta" ? "அடுத்ததை ஸ்கேன்" : "Scan next"}
+                </button>
+              </div>
+              <div className="mt-3 space-y-2">
+                {lines.slice(0, 3).map((line, index) => (
+                  <div key={line.product.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-white/90 bg-white/85 p-2 shadow-sm">
+                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-50">
+                      <GroceryProductArt
+                        name={line.product.name}
+                        category={line.product.category}
+                        imageUrl={typeof line.product.customFields.imageUrl === "string" ? line.product.customFields.imageUrl : undefined}
+                        className="h-full w-full p-1"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <p className="min-w-0 flex-1 truncate text-xs font-extrabold text-slate-900">{groceryProductLabel(line.product, locale)}</p>
+                        {index === 0 && <span className="shrink-0 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-emerald-700">{locale === "si" ? "දැන් එක් කළා" : locale === "ta" ? "இப்போது சேர்க்கப்பட்டது" : "Just added"}</span>}
+                      </div>
+                      <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-500">
+                        {groceryQuantityLabel(line.qty, line.product.customFields.unitVariant ?? line.product.customFields.unit, locale)}
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-mono text-xs font-extrabold text-slate-900">{formatLkr(line.unitPrice * line.qty)}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                {lines.length > 3 && (
+                  <p className="text-[11px] font-semibold text-slate-500">
+                    {locale === "si" ? `තවත් ${lines.length - 3}ක්` : locale === "ta" ? `மேலும் ${lines.length - 3}` : `+ ${lines.length - 3} more in bill`}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => document.getElementById("grocery-checkout")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                  className="ml-auto inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition hover:border-emerald-300 hover:text-emerald-800"
+                >
+                  {locale === "si" ? "බිල්පත බලන්න" : locale === "ta" ? "பில்லைப் பார்க்க" : "Review bill"}
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
         {barcodeScannerOpen && <BarcodeCameraScanner locale={locale} onDetected={handlePosBarcodeDetected} onClose={() => setBarcodeScannerOpen(false)} />}
 
         <WriteDisabledHint className="mb-5" />
@@ -1141,73 +1209,7 @@ export function AtomicRetailSalesPageV2() {
           )}
         </section>
 
-        {groceryPos && lines.length > 0 && (
-          <section
-            id="grocery-mobile-cart-preview"
-            className="mt-4 scroll-mt-24 lg:hidden"
-            aria-label={locale === "si" ? "ස්කෑන් කළ භාණ්ඩ" : locale === "ta" ? "ஸ்கேன் செய்த பொருட்கள்" : "Latest scanned items"}
-            aria-live="polite"
-          >
-            <div className="rounded-2xl border border-emerald-200 bg-[linear-gradient(120deg,#f0fdf9_0%,#ffffff_52%,#f1f5ff_100%)] p-3.5 shadow-[0_12px_28px_rgba(15,118,110,0.10)] sm:p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">
-                    {locale === "si" ? "ස්කෑන් කළ භාණ්ඩ" : locale === "ta" ? "ஸ்கேன் செய்த பொருட்கள்" : "Latest scanned items"}
-                  </p>
-                  <p className="mt-1 text-sm font-extrabold text-slate-950">
-                    {cartCount} {locale === "si" ? "භාණ්ඩ" : locale === "ta" ? "பொருட்கள்" : cartCount === 1 ? "item" : "items"} · {formatLkr(netTotal)}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setBarcodeScannerOpen(true)}
-                  className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-extrabold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.98]"
-                >
-                  <span aria-hidden="true">⌗</span>
-                  {locale === "si" ? "තවත් ස්කෑන්" : locale === "ta" ? "அடுத்ததை ஸ்கேன்" : "Scan next"}
-                </button>
-              </div>
-              <div className="mt-3 space-y-2">
-                {lines.slice(0, 3).map((line, index) => (
-                  <div key={line.product.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-white/90 bg-white/85 p-2 shadow-sm">
-                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-50">
-                      <GroceryProductArt
-                        name={line.product.name}
-                        category={line.product.category}
-                        imageUrl={typeof line.product.customFields.imageUrl === "string" ? line.product.customFields.imageUrl : undefined}
-                        className="h-full w-full p-1"
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <p className="min-w-0 flex-1 truncate text-xs font-extrabold text-slate-900">{groceryProductLabel(line.product, locale)}</p>
-                        {index === 0 && <span className="shrink-0 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-emerald-700">{locale === "si" ? "දැන් එක් කළා" : locale === "ta" ? "இப்போது சேர்க்கப்பட்டது" : "Just added"}</span>}
-                      </div>
-                      <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-500">
-                        {groceryQuantityLabel(line.qty, line.product.customFields.unitVariant ?? line.product.customFields.unit, locale)}
-                      </p>
-                    </div>
-                    <p className="shrink-0 font-mono text-xs font-extrabold text-slate-900">{formatLkr(line.unitPrice * line.qty)}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 flex items-center justify-between gap-3">
-                {lines.length > 3 && (
-                  <p className="text-[11px] font-semibold text-slate-500">
-                    {locale === "si" ? `තවත් ${lines.length - 3}ක්` : locale === "ta" ? `மேலும் ${lines.length - 3}` : `+ ${lines.length - 3} more in bill`}
-                  </p>
-                )}
-                <button
-                  type="button"
-                  onClick={() => document.getElementById("grocery-checkout")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                  className="ml-auto inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition hover:border-emerald-300 hover:text-emerald-800"
-                >
-                  {locale === "si" ? "බිල්පත බලන්න" : locale === "ta" ? "பில்லைப் பார்க்க" : "Review bill"}
-                </button>
-              </div>
-            </div>
-          </section>
-        )}
+
 
         {inStock.length === 0 ? (
           <section className="mt-6">
