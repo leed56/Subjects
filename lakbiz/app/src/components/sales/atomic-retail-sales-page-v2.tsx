@@ -232,6 +232,7 @@ export function AtomicRetailSalesPageV2() {
   const [quoteApiFeedback, setQuoteApiFeedback] = useState<{ ok: boolean; message: string } | null>(null);
 
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [cartOrder, setCartOrder] = useState<string[]>([]);
   const [testMode, setTestMode] = useState(false);
   const [testModeReady, setTestModeReady] = useState(false);
   const [testBills, setTestBills] = useState<GroceryTestBill[]>([]);
@@ -334,6 +335,7 @@ export function AtomicRetailSalesPageV2() {
   }, [canSeeFinancials, data, groceryPos]);
   const lines = useMemo(() => {
     if (!data) return [];
+    const order = new Map(cartOrder.map((productId, index) => [productId, index] as const));
     return Object.entries(cart)
       .filter(([, qty]) => qty > 0)
       .map(([productId, qty]) => {
@@ -346,8 +348,9 @@ export function AtomicRetailSalesPageV2() {
         );
         const unitPrice = groceryPos && selectedPrice <= 0 ? product.sellPrice : selectedPrice;
         return { product, qty, unitPrice };
-      });
-  }, [cart, priceOverrides, data, customerId, groceryPos, orgRole]);
+      })
+      .sort((left, right) => (order.get(left.product.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(right.product.id) ?? Number.MAX_SAFE_INTEGER));
+  }, [cart, cartOrder, priceOverrides, data, customerId, groceryPos, orgRole]);
 
   // Tell the shared mobile bottom nav to step aside only while our own
   // fixed settlement bar is actually showing (lines non-empty) — see
@@ -479,6 +482,7 @@ export function AtomicRetailSalesPageV2() {
 
   const resetBill = () => {
     setCart({});
+    setCartOrder([]);
     setPriceOverrides({});
     setInventoryStates({});
     setDiscount(0);
@@ -545,6 +549,7 @@ export function AtomicRetailSalesPageV2() {
       Object.entries(draft.payload.inventoryStates).filter(([id]) => validIds.has(id)),
     ) as Record<string, AdvancedSaleLineState>;
     setCart(restoredCart);
+    setCartOrder(Object.keys(restoredCart));
     setPriceOverrides(overrides);
     setInventoryStates(inventory);
     setDiscount(draft.payload.discount);
@@ -615,6 +620,9 @@ export function AtomicRetailSalesPageV2() {
   const setQty = (productId: string, qty: number, max: number) => {
     const clamped = Math.max(0, Math.min(max, Number.isFinite(qty) ? qty : 0));
     setCart((current) => ({ ...current, [productId]: clamped }));
+    setCartOrder((current) => clamped <= 0
+      ? current.filter((id) => id !== productId)
+      : current.includes(productId) ? current : [...current, productId]);
     setPendingSaleId(null);
     if (clamped <= 0) {
       setInventoryStates((current) => {
@@ -628,6 +636,7 @@ export function AtomicRetailSalesPageV2() {
 
   const addOne = (product: Product) => {
     setQty(product.id, (cart[product.id] ?? 0) + 1, testMode ? Number.MAX_SAFE_INTEGER : product.stockQty);
+    setCartOrder((current) => [product.id, ...current.filter((id) => id !== product.id)]);
     if (fastRetail) {
       setSearch("");
       setCategoryFilter("all");
@@ -662,6 +671,7 @@ export function AtomicRetailSalesPageV2() {
     resetBill();
     setTestMode(true);
     setCart(Object.fromEntries(bill.lines.map((line) => [line.productId, line.qty])));
+    setCartOrder(bill.lines.map((line) => line.productId));
     setPriceOverrides(Object.fromEntries(bill.lines.map((line) => [line.productId, line.unitPrice])));
     setDiscount(bill.discount);
     setEditingTestBillId(bill.id);
@@ -719,6 +729,11 @@ export function AtomicRetailSalesPageV2() {
     if (product) {
       setMessage("");
       addOne(product);
+      if (window.matchMedia("(max-width: 1023px)").matches) {
+        window.setTimeout(() => {
+          document.getElementById("grocery-mobile-cart-preview")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 80);
+      }
       return;
     }
 
@@ -1126,6 +1141,74 @@ export function AtomicRetailSalesPageV2() {
           )}
         </section>
 
+        {groceryPos && lines.length > 0 && (
+          <section
+            id="grocery-mobile-cart-preview"
+            className="mt-4 scroll-mt-24 lg:hidden"
+            aria-label={locale === "si" ? "ස්කෑන් කළ භාණ්ඩ" : locale === "ta" ? "ஸ்கேன் செய்த பொருட்கள்" : "Latest scanned items"}
+            aria-live="polite"
+          >
+            <div className="rounded-2xl border border-emerald-200 bg-[linear-gradient(120deg,#f0fdf9_0%,#ffffff_52%,#f1f5ff_100%)] p-3.5 shadow-[0_12px_28px_rgba(15,118,110,0.10)] sm:p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">
+                    {locale === "si" ? "ස්කෑන් කළ භාණ්ඩ" : locale === "ta" ? "ஸ்கேன் செய்த பொருட்கள்" : "Latest scanned items"}
+                  </p>
+                  <p className="mt-1 text-sm font-extrabold text-slate-950">
+                    {cartCount} {locale === "si" ? "භාණ්ඩ" : locale === "ta" ? "பொருட்கள்" : cartCount === 1 ? "item" : "items"} · {formatLkr(netTotal)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBarcodeScannerOpen(true)}
+                  className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-extrabold text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.98]"
+                >
+                  <span aria-hidden="true">⌗</span>
+                  {locale === "si" ? "තවත් ස්කෑන්" : locale === "ta" ? "அடுத்ததை ஸ்கேன்" : "Scan next"}
+                </button>
+              </div>
+              <div className="mt-3 space-y-2">
+                {lines.slice(0, 3).map((line, index) => (
+                  <div key={line.product.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-white/90 bg-white/85 p-2 shadow-sm">
+                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-50">
+                      <GroceryProductArt
+                        name={line.product.name}
+                        category={line.product.category}
+                        imageUrl={typeof line.product.customFields.imageUrl === "string" ? line.product.customFields.imageUrl : undefined}
+                        className="h-full w-full p-1"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <p className="min-w-0 flex-1 truncate text-xs font-extrabold text-slate-900">{groceryProductLabel(line.product, locale)}</p>
+                        {index === 0 && <span className="shrink-0 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-emerald-700">{locale === "si" ? "දැන් එක් කළා" : locale === "ta" ? "இப்போது சேர்க்கப்பட்டது" : "Just added"}</span>}
+                      </div>
+                      <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-500">
+                        {groceryQuantityLabel(line.qty, line.product.customFields.unitVariant ?? line.product.customFields.unit, locale)}
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-mono text-xs font-extrabold text-slate-900">{formatLkr(line.unitPrice * line.qty)}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                {lines.length > 3 && (
+                  <p className="text-[11px] font-semibold text-slate-500">
+                    {locale === "si" ? `තවත් ${lines.length - 3}ක්` : locale === "ta" ? `மேலும் ${lines.length - 3}` : `+ ${lines.length - 3} more in bill`}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => document.getElementById("grocery-checkout")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                  className="ml-auto inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition hover:border-emerald-300 hover:text-emerald-800"
+                >
+                  {locale === "si" ? "බිල්පත බලන්න" : locale === "ta" ? "பில்லைப் பார்க்க" : "Review bill"}
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
         {inStock.length === 0 ? (
           <section className="mt-6">
             {groceryPos ? (
@@ -1334,7 +1417,7 @@ export function AtomicRetailSalesPageV2() {
               )}
             </div>
 
-            <aside className="space-y-4 lg:sticky lg:top-5 lg:self-start">
+            <aside id={groceryPos ? "grocery-checkout" : undefined} className="scroll-mt-24 space-y-4 lg:sticky lg:top-5 lg:self-start">
               <ProCard title={groceryPos ? grocery("cart") : t("sales.cart_title")} eyebrow={groceryPos ? grocery("checkout") : t("sales.checkout_eyebrow")}>
                 {lines.length === 0 ? (
                   <ProEmptyState title={groceryPos ? grocery("noItemsSelected") : t("sales.no_selected")} description={groceryPos ? grocery("chooseProducts") : t("sales.choose_products_desc")} />
@@ -1729,7 +1812,8 @@ export function AtomicRetailSalesPageV2() {
       {lines.length > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur-xl safe-area-pb xl:hidden">
           <div className="mx-auto flex max-w-2xl items-center justify-between gap-3">
-            <div>
+            <div className="min-w-0">
+              {groceryPos && lines[0] && <p className="max-w-[52vw] truncate text-[11px] font-bold text-slate-600">{groceryProductLabel(lines[0].product, locale)}</p>}
               <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{cartCount} items</p>
               <p className="text-lg font-bold text-slate-950">{formatLkr(netTotal)}</p>
               {splitPayment && <p className="text-[10px] font-bold uppercase tracking-wide text-teal-600">{si ? "බෙදා ගෙවීම" : "Split payment"}</p>}
