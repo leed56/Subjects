@@ -20,7 +20,7 @@ import type { SectorId } from "@/lib/types";
 type Mode = "signin" | "signup";
 
 export default function LoginPage() {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const router = useRouter();
   const { signIn, signUp, user, loading: authLoading } = useAuth();
   const [mode, setMode] = useState<Mode>("signin");
@@ -73,6 +73,12 @@ export default function LoginPage() {
 
   const alreadySignedIn = !!user && !authLoading;
   const continueDestination = safeNextPath() ?? "/dashboard";
+
+  const startDemo = () => {
+    const secure = window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `lakbiz-demo-mode=1; Path=/; SameSite=Lax${secure}`;
+    window.location.assign(safeNextPath() ?? "/dashboard");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,6 +180,33 @@ export default function LoginPage() {
             </>
           )}
         </div>
+
+        {!adminLogin && !alreadySignedIn && !authLoading && (
+          <section className="mt-6 rounded-2xl border border-emerald-200 bg-[linear-gradient(115deg,#ecfdf5_0%,#f8fffd_55%,#eef2ff_100%)] p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800">
+                  {locale === "si" ? "නියැදි අත්දැකීම" : locale === "ta" ? "மாதிரி அனுபவம்" : "EXPLORE LAKBIZ"}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-slate-600">
+                  {locale === "si"
+                    ? "නියැදි වෙළඳසැලක් බලන්න. සජීවී වෙළඳසැලේ දත්ත වෙනස් නොවේ."
+                    : locale === "ta"
+                      ? "மாதிரி கடையைப் பாருங்கள். நேரடி கடைத் தரவு மாறாது."
+                      : "Explore a sample shop. Live shop data stays untouched."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={startDemo}
+                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-extrabold text-white shadow-[0_8px_18px_rgba(4,120,87,0.18)] transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+              >
+                {locale === "si" ? "ඩෙමෝව බලන්න" : locale === "ta" ? "டெமோவைப் பார்க்க" : "Try demo"}
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
+          </section>
+        )}
 
         {alreadySignedIn && (
           <div
