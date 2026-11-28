@@ -164,7 +164,7 @@ export default function LoginPage() {
       )}
       <main className={`mx-auto flex flex-col px-4 py-10 sm:py-16 ${mode === "signup" && !adminLogin ? "max-w-2xl" : "max-w-md"}`}>
         <div className="text-center">
-          {!adminLogin && (
+          {!adminLogin && !alreadySignedIn && (
             <>
               <h1 className="text-2xl font-bold text-slate-900">{t("sub.login_title")}</h1>
               <p className="mt-2 text-slate-600">
@@ -209,38 +209,51 @@ export default function LoginPage() {
         )}
 
         {alreadySignedIn && (
-          <div
-            className={`mt-6 rounded-xl border p-6 text-center sm:p-7 ${
-              adminLogin ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-white"
-            }`}
-          >
-            <p className={`text-base font-semibold ${adminLogin ? "text-white" : "text-slate-900"}`}>
-              {t("auth.already_signed_in")}
-            </p>
-            <p className={`mt-1 text-sm ${adminLogin ? "text-slate-400" : "text-slate-500"}`}>
-              {user?.email}
-            </p>
-            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
-              <button
-                type="button"
-                onClick={() => window.location.assign(continueDestination)}
-                className={`inline-flex min-h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold text-white ${
-                  adminLogin ? "bg-teal-600 hover:bg-teal-500" : "bg-teal-700 hover:bg-teal-800"
-                }`}
-              >
-                {t("auth.continue_dashboard")}
-              </button>
-              <SignOutButton
-                redirectTo={adminLogin ? "/login?next=/admin" : "/login"}
-                label={t("auth.sign_out_other")}
-                className={`inline-flex min-h-11 items-center justify-center rounded-lg border px-4 text-sm font-semibold ${
-                  adminLogin
-                    ? "border-slate-700 text-slate-300 hover:bg-slate-800"
-                    : "border-slate-300 text-slate-700 hover:bg-slate-50"
-                }`}
-              />
+          adminLogin ? (
+            <div
+              className="mt-6 rounded-xl border border-slate-800 bg-slate-900 p-6 text-center sm:p-7"
+            >
+              <p className="text-base font-semibold text-white">
+                {t("auth.already_signed_in")}
+              </p>
+              <p className="mt-1 text-sm text-slate-400">{user?.email}</p>
+              <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
+                <button
+                  type="button"
+                  onClick={() => window.location.assign(continueDestination)}
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-500"
+                >
+                  {t("auth.continue_dashboard")}
+                </button>
+                <SignOutButton
+                  redirectTo="/login?next=/admin"
+                  label={t("auth.sign_out_other")}
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-700 px-4 text-sm font-semibold text-slate-300 hover:bg-slate-800"
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div
+              role="status"
+              aria-live="polite"
+              className="mt-10 flex flex-col items-center rounded-2xl border border-emerald-100 bg-white px-6 py-10 text-center shadow-sm"
+            >
+              <span
+                aria-hidden="true"
+                className="mb-4 h-10 w-10 animate-spin rounded-full border-[3px] border-emerald-100 border-t-emerald-600"
+              />
+              <p className="text-base font-semibold text-slate-900">
+                {locale === "si" ? "ඔබේ වෙළඳසැල විවෘත කරමින්" : locale === "ta" ? "உங்கள் கடையைத் திறக்கிறது" : "Opening your shop"}
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                {locale === "si"
+                  ? "ඔබේ වැඩ අවකාශයට යොමු කරමින්..."
+                  : locale === "ta"
+                    ? "உங்கள் பணியிடத்திற்குச் செல்கிறது..."
+                    : "Taking you to your workspace…"}
+              </p>
+            </div>
+          )
         )}
 
         {!alreadySignedIn && (
