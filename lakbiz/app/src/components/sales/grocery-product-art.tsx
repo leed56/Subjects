@@ -369,6 +369,10 @@ const BARCODE_PRODUCT_IMAGES: ReadonlyArray<{
   { barcodes: ["4792192060202"], terms: ["tiara swiss roll chocolate 200g","tiara chocolate swiss roll 200g"], src: "/images/grocery/brands/tiara-chocolate-swiss-roll-200g.jpg" },
   { barcodes: ["4792212008412"], terms: ["rb soya sause catering 5kg","r b soya catering sauce 5kg"], src: "/images/grocery/brands/r-b-soya-catering-sauce-5kg.jpg" },
   { barcodes: ["4792098089604"], terms: ["tomato sauce 15g","md original tomato sauce 15g"], src: "/images/grocery/brands/md-original-tomato-sauce-15g.jpg" },
+  // Batch B3 — exact brand + pack-size verified photos for Ammar Farmshop
+  { barcodes: [], terms: ["fogg monarch body spray120ml","fogg body spray monarch 120ml"], src: "/images/grocery/brands/fogg-body-spray-monarch-120ml.jpg" },
+  { barcodes: [], terms: ["rin detergent powder 1kg","rin detergent powder anti germ 1kg"], src: "/images/grocery/brands/rin-detergent-powder-anti-germ-1kg.jpg" },
+  { barcodes: [], terms: ["maliban kiri w f 400g","maliban kiri full cream milk powder 400g"], src: "/images/grocery/brands/maliban-kiri-full-cream-milk-powder-400g.png" },
 ];
 
 // These isolated photographs are for unbranded produce and bulk staples only.

@@ -399,3 +399,11 @@ Verified branded photos require the product name (including pack size where know
 | RB Soya Sause Catering 5kg | `r-b-soya-catering-sauce-5kg.jpg` | [R.B. Soya Catering Sauce 5kg](https://globalfoodcity.com/product/r-b-soya-catering-sauce-5kg/) (globalfoodcity; exact barcode `4792212008412` corroborated). |
 | Tomato Sauce 15g | `md-original-tomato-sauce-15g.jpg` | [MD Original Tomato Sauce 15G](https://globalfoodcity.com/product/md-original-tomato-sauce-15g/) (globalfoodcity; exact barcode `4792098089604` corroborated). |
 
+## Batch B3 verified product photos (2026-11-28)
+
+| Product match | Local asset | Product listing / image source |
+| --- | --- | --- |
+| Fogg Monarch Body Spray120ml | `fogg-body-spray-monarch-120ml.jpg` | [FOGG Body Spray Monarch, 120ml](https://spar2u.lk/products/fogg-body-spray-monarch-120ml) (spar2u; matched by exact brand, variant, and pack size). |
+| Rin Detergent Powder 1Kg | `rin-detergent-powder-anti-germ-1kg.jpg` | [Rin Detergent Powder Anti - Germ 1Kg](https://globalfoodcity.com/product/rin-detergent-powder-anti-germ-1kg/) (globalfoodcity; matched by exact brand, variant, and pack size). |
+| Maliban Kiri W/F 400g | `maliban-kiri-full-cream-milk-powder-400g.png` | [Maliban Kiri Full Cream Milk Powder 400G](https://globalfoodcity.com/product/maliban-kiri-full-cream-milk-powder-400g/) (globalfoodcity; matched by exact brand, variant, and pack size). |
+
