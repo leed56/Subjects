@@ -385,15 +385,40 @@ export default function BillsPage() {
           )}
         </section>
 
-        {orgRole === "owner" && data.voidedSales.length > 0 && (
+        {orgRole === "owner" && data.voidedSales.length > 0 && (() => {
+          const voidDateLocale = locale === "si" ? "si-LK" : locale === "ta" ? "ta-LK" : "en-LK";
+          const voidCopy = locale === "si"
+            ? {
+                title: "අවලංගු කළ පරීක්ෂණ බිල්පත්",
+                eyebrow: "හිමිකරු විගණන ඉතිහාසය",
+                archived: `${data.voidedSales.length} සංරක්ෂිතයි`,
+                desc: "මෙම පරීක්ෂණ ගනුදෙනු සක්‍රිය විකුණුම් සහ මූල්‍ය එකතුවලින් ඉවත් කර ඇත. මුල් ඉන්වොයිසි සහ ආපසු භාරදීමේ ලේඛන විගණනය සඳහා සුරක්ෂිතව පවතී.",
+                badge: "පරීක්ෂණ · අවලංගුයි",
+              }
+            : locale === "ta"
+              ? {
+                  title: "ரத்து செய்யப்பட்ட சோதனை பில்கள்",
+                  eyebrow: "உரிமையாளர் தணிக்கை வரலாறு",
+                  archived: `${data.voidedSales.length} காப்பகப்படுத்தப்பட்டது`,
+                  desc: "இந்த சோதனைப் பரிவர்த்தனைகள் செயலில் உள்ள விற்பனை மற்றும் நிதி மொத்தங்களிலிருந்து விலக்கப்பட்டுள்ளன. மூல பில்கள் மற்றும் திரும்பப் பெறுதல் ஆவணங்கள் தணிக்கைக்காகப் பாதுகாக்கப்படுகின்றன.",
+                  badge: "சோதனை · ரத்து",
+                }
+              : {
+                  title: "Voided test bills",
+                  eyebrow: "Owner audit history",
+                  archived: `${data.voidedSales.length} archived`,
+                  desc: "These test transactions are excluded from active sales and financial totals. Original invoices and linked return documents remain preserved for audit.",
+                  badge: "Test · voided",
+                };
+          return (
           <section className="mt-5">
             <ProCard
-              title="Voided test bills"
-              eyebrow="Owner audit history"
-              action={<ProBadge tone="amber">{data.voidedSales.length} archived</ProBadge>}
+              title={voidCopy.title}
+              eyebrow={voidCopy.eyebrow}
+              action={<ProBadge tone="amber">{voidCopy.archived}</ProBadge>}
             >
               <p className="mb-4 text-sm leading-6 text-slate-600">
-                These test transactions are excluded from active sales and financial totals. Original invoices and linked return documents remain preserved for audit.
+                {voidCopy.desc}
               </p>
               <div className="space-y-3">
                 {data.voidedSales.map((sale) => (
@@ -405,10 +430,10 @@ export default function BillsPage() {
                     <div className="min-w-0">
                       <p className="font-mono text-sm font-bold text-slate-900">{sale.billNo ?? sale.id}</p>
                       <p className="mt-1 truncate text-sm font-semibold text-slate-700">{sale.lines.map((line) => line.productName).join(", ")}</p>
-                      <p className="mt-1 text-xs text-slate-500">{new Date(sale.voidedAt).toLocaleString("en-LK")} · {sale.voidReason}</p>
+                      <p className="mt-1 text-xs text-slate-500">{new Date(sale.voidedAt).toLocaleString(voidDateLocale)} · {sale.voidReason}</p>
                     </div>
                     <div className="flex shrink-0 items-center justify-between gap-4 sm:justify-end">
-                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">Test · voided</span>
+                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">{voidCopy.badge}</span>
                       <span className="font-mono font-bold text-slate-900">{formatLkr(sale.total)}</span>
                     </div>
                   </Link>
@@ -416,7 +441,8 @@ export default function BillsPage() {
               </div>
             </ProCard>
           </section>
-        )}
+          );
+        })()}
 
         {data.sales.length > 0 && (
           <section className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4" aria-label={t("bills.archive_eyebrow")}>

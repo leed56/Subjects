@@ -38,9 +38,22 @@ export default function LoginPage() {
   // Shop/sector provisioning is exclusively a platform-admin operation.
   const adminOnly = true;
 
+  const isAdminDestination = (next: string | null): boolean =>
+    next === "/admin" || Boolean(next?.startsWith("/admin/"));
+
+  const safeNextPath = (): string | null => {
+    if (typeof window === "undefined") return null;
+    const next = new URLSearchParams(window.location.search).get("next");
+    if (!next?.startsWith("/") || next.startsWith("//")) return null;
+    if (next === "/login" || next.startsWith("/login?") || next.startsWith("/login/")) {
+      return null;
+    }
+    return next;
+  };
+
   useEffect(() => {
     const next = new URLSearchParams(window.location.search).get("next");
-    setAdminLogin(next === "/admin");
+    setAdminLogin(isAdminDestination(next));
   }, []);
 
   useEffect(() => {
@@ -50,7 +63,7 @@ export default function LoginPage() {
     if (!supabase) return;
 
     void isPlatformAdminClient(supabase).then((isAdmin) => {
-      if (isAdmin) window.location.replace("/admin");
+      if (isAdmin) window.location.replace(safeNextPath() ?? "/admin");
     });
   }, [adminLogin, configured, authLoading, user]);
 
@@ -60,16 +73,10 @@ export default function LoginPage() {
   useEffect(() => {
     if (adminLogin || authLoading || !user) return;
     const next = new URLSearchParams(window.location.search).get("next");
-    const destination = next?.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+    if (isAdminDestination(next)) return;
+    const destination = safeNextPath() ?? "/dashboard";
     window.location.replace(destination);
   }, [adminLogin, authLoading, user]);
-
-  const safeNextPath = (): string | null => {
-    if (typeof window === "undefined") return null;
-    const next = new URLSearchParams(window.location.search).get("next");
-    if (!next?.startsWith("/") || next.startsWith("//")) return null;
-    return next;
-  };
 
   const alreadySignedIn = !!user && !authLoading;
   const continueDestination = safeNextPath() ?? "/dashboard";

@@ -663,14 +663,23 @@ export function AtomicRetailSalesPageV2() {
   const toggleGroceryTestMode = () => {
     if (!org.id || !groceryPos || !testModeReady || !canWrite) return;
     if (!testMode && activeDraftId) {
-      setMessage("Finish or close the active held bill before entering test mode.");
+      setMessage(locale === "si"
+        ? "පරීක්ෂණ ප්‍රකාරයට පිවිසීමට පෙර රඳවා ඇති බිල්පත සම්පූර්ණ කරන්න හෝ වසන්න."
+        : locale === "ta"
+          ? "சோதனை முறைக்குச் செல்வதற்கு முன் நிறுத்தி வைத்துள்ள பில்லை முடிக்கவும் அல்லது மூடவும்."
+          : "Finish or close the active held bill before entering test mode.");
       return;
     }
     if (lines.length > 0) {
       setMessage(testMode ? testCopy.finishOrClear : testCopy.startWithEmpty);
       return;
     }
-    if (testMode && !window.confirm("Exit test mode? The next checkout will create a real invoice and update live stock and payments.")) return;
+    const exitConfirm = locale === "si"
+      ? "පරීක්ෂණ ප්‍රකාරයෙන් ඉවත් වන්නද? මීළඟ ගෙවීම සැබෑ බිල්පතක් සාදා සජීවී තොග සහ ගෙවීම් යාවත්කාලීන කරයි."
+      : locale === "ta"
+        ? "சோதனை முறையிலிருந்து வெளியேறவா? அடுத்த கட்டணம் உண்மையான பில்லை உருவாக்கி நேரடி சரக்கு மற்றும் கட்டணங்களைப் புதுப்பிக்கும்."
+        : "Exit test mode? The next checkout will create a real invoice and update live stock and payments.";
+    if (testMode && !window.confirm(exitConfirm)) return;
     setTestMode((current) => !current);
     setEditingTestBillId(null);
     setLastBillId(null);
@@ -683,7 +692,12 @@ export function AtomicRetailSalesPageV2() {
       setMessage(testCopy.missingProduct);
       return;
     }
-    if (lines.length > 0 && !window.confirm("Discard the current unsaved test cart and edit this saved test bill?")) return;
+    const discardConfirm = locale === "si"
+      ? "දැනට සුරැකී නැති පරීක්ෂණ කරත්තය ඉවත් කර මෙම සුරැකි පරීක්ෂණ බිල්පත සංස්කරණය කරන්නද?"
+      : locale === "ta"
+        ? "சேமிக்கப்படாத தற்போதைய சோதனைக் கூடையை நீக்கி இந்த சேமித்த சோதனை பில்லைத் திருத்தவா?"
+        : "Discard the current unsaved test cart and edit this saved test bill?";
+    if (lines.length > 0 && !window.confirm(discardConfirm)) return;
     resetBill();
     setTestMode(true);
     setCart(Object.fromEntries(bill.lines.map((line) => [line.productId, line.qty])));
@@ -698,7 +712,12 @@ export function AtomicRetailSalesPageV2() {
   };
 
   const deleteTestBill = async (bill: GroceryTestBill) => {
-    if (!org.id || !window.confirm(`Delete test bill ${bill.billNo}? This only removes the shop's test copy.`)) return;
+    const deleteConfirm = locale === "si"
+      ? `පරීක්ෂණ බිල්පත ${bill.billNo} මකන්නද? මෙය වෙළඳසැලේ පරීක්ෂණ පිටපත පමණක් ඉවත් කරයි.`
+      : locale === "ta"
+        ? `சோதனை பில் ${bill.billNo}-ஐ நீக்கவா? இது கடையின் சோதனை நகலை மட்டுமே அகற்றும்.`
+        : `Delete test bill ${bill.billNo}? This only removes the shop's test copy.`;
+    if (!org.id || !window.confirm(deleteConfirm)) return;
     setSaving(true);
     const result = await deleteCloudGroceryTestBill(org.id, bill.id).catch((error: unknown) => ({
       error: error instanceof Error ? error.message : "The test bill could not be deleted.",
@@ -717,7 +736,12 @@ export function AtomicRetailSalesPageV2() {
   };
 
   const clearAllTestBills = async () => {
-    if (!org.id || !window.confirm("Clear all test bills shared by this shop? Live sales and stock are not affected.")) return;
+    const clearConfirm = locale === "si"
+      ? "මෙම වෙළඳසැලේ සියලුම පරීක්ෂණ බිල්පත් මකන්නද? සජීවී විකුණුම් සහ තොග වෙනස් නොවේ."
+      : locale === "ta"
+        ? "இந்தக் கடையில் பகிரப்பட்ட அனைத்து சோதனை பில்களையும் அழிக்கவா? நேரடி விற்பனை மற்றும் சரக்கு பாதிக்கப்படாது."
+        : "Clear all test bills shared by this shop? Live sales and stock are not affected.";
+    if (!org.id || !window.confirm(clearConfirm)) return;
     setSaving(true);
     const result = await clearCloudGroceryTestBills(org.id).catch((error: unknown) => ({
       error: error instanceof Error ? error.message : "Test bills could not be cleared.",
@@ -737,10 +761,10 @@ export function AtomicRetailSalesPageV2() {
 
   const handlePosBarcodeDetected = (barcode: string) => {
     const normalized = barcode.trim().toLowerCase();
-    const product = inStock.find((row) =>
+    const matchesBarcode = (row: Product) =>
       (row.sku ?? "").trim().toLowerCase() === normalized ||
-      String(row.customFields.barcode ?? "").trim().toLowerCase() === normalized,
-    );
+      String(row.customFields.barcode ?? "").trim().toLowerCase() === normalized;
+    const product = inStock.find(matchesBarcode);
     setBarcodeScannerOpen(false);
     if (product) {
       setMessage("");
@@ -749,9 +773,38 @@ export function AtomicRetailSalesPageV2() {
       return;
     }
 
+    const catalogMatch = data.products.find(matchesBarcode);
     setCategoryFilter("all");
     setSearch(barcode);
     setResultLimit(30);
+    if (catalogMatch) {
+      const label = groceryPos ? groceryProductLabel(catalogMatch, locale) : catalogMatch.name;
+      if (!catalogMatch.active) {
+        setMessage(locale === "si"
+          ? `${label} (${barcode}) දැනට අක්‍රියයි. විකිණීමට පෙර Stock හි එය සක්‍රිය කරන්න.`
+          : locale === "ta"
+            ? `${label} (${barcode}) தற்போது செயலற்றது. விற்பனைக்கு முன் Stock-இல் அதை செயல்படுத்தவும்.`
+            : `${label} (${barcode}) is inactive. Activate it in Stock before selling.`);
+        return;
+      }
+      if (groceryPos && catalogMatch.sellPrice <= 0) {
+        setMessage(locale === "si"
+          ? `${label} (${barcode}) සඳහා විකුණුම් මිල සකසා නැහැ. Stock හි විකුණුම් මිල ඇතුළත් කරන්න.`
+          : locale === "ta"
+            ? `${label} (${barcode}) பொருளுக்கு விற்பனை விலை அமைக்கப்படவில்லை. Stock-இல் விற்பனை விலையை உள்ளிடவும்.`
+            : `${label} (${barcode}) has no selling price set. Add a selling price in Stock.`);
+        return;
+      }
+      if (!testMode && catalogMatch.stockQty <= 0) {
+        setMessage(locale === "si"
+          ? `${label} (${barcode}) තොග අවසන් (0). විකිණීමට පෙර Stock හි තොගය එක් කරන්න.`
+          : locale === "ta"
+            ? `${label} (${barcode}) சரக்கு இல்லை (0). விற்பனைக்கு முன் Stock-இல் சரக்கைச் சேர்க்கவும்.`
+            : `${label} (${barcode}) is out of stock (0 available). Add stock in Stock before selling.`);
+        return;
+      }
+    }
+
     setMessage(locale === "si"
       ? `තීරු කේතය ${barcode} කියවුණා. එයට ගැළපෙන සක්‍රිය භාණ්ඩයක් නැහැ. Stock හි එම භාණ්ඩයට මෙම කේතය එක් කරන්න.`
       : locale === "ta"

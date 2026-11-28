@@ -41,34 +41,91 @@ export default function BillDetailPage() {
   const sale = data.sales.find((s) => s.id === id);
   const voidedSale = data.voidedSales.find((s) => s.id === id);
   if (!sale && voidedSale && orgRole === "owner") {
+    const voidDateLocale = locale === "si" ? "si-LK" : locale === "ta" ? "ta-LK" : "en-LK";
+    const voidCopy = locale === "si"
+      ? {
+          eyebrow: "හිමිකරු විගණන වාර්තාව",
+          title: `අවලංගු කළ පරීක්ෂණ බිල්පත ${voidedSale.billNo ?? voidedSale.id}`,
+          marked: "සලකුණු කළේ",
+          walkIn: t("bills.walk_in_customer"),
+          bannerTitle: "පරීක්ෂණ ගනුදෙනුව සක්‍රිය විකුණුම්වලින් ඉවත් කර ඇත.",
+          bannerNoCash: "මුදල් හුවමාරුවක් සිදු නොවීය. ආපසු ගෙවීමක් හෝ පියවීමක් සටහන් නොවීය.",
+          bannerPreserved: "මුල් ඉන්වොයිසිය, ආපසු භාරදීමේ වාර්තාව සහ බැර සටහන විගණන ඉතිහාසයේ සුරක්ෂිතව පවතී. මෙය සක්‍රිය විකුණුම්, ආපසු භාරදීම් සහ ආදායම් එකතුවලින් බැහැර කර ඇත.",
+          reason: "හේතුව:",
+          cardTitle: "මුල් පරීක්ෂණ විස්තර",
+          cardEyebrow: "විගණනයට පමණි",
+          recordedValue: "සටහන් කළ බිල් වටිනාකම",
+          recordedTender: "ඉන්වොයිසියේ සටහන් කළ ගෙවීම් ක්‍රමය",
+          noMoneyExchanged: "මුදල් හුවමාරු නොවීය",
+          originalDate: "මුල් දිනය",
+        }
+      : locale === "ta"
+        ? {
+            eyebrow: "உரிமையாளர் தணிக்கை பதிவு",
+            title: `ரத்து செய்யப்பட்ட சோதனை பில் ${voidedSale.billNo ?? voidedSale.id}`,
+            marked: "குறிக்கப்பட்டது",
+            walkIn: t("bills.walk_in_customer"),
+            bannerTitle: "சோதனைப் பரிவர்த்தனை செயலில் உள்ள விற்பனையிலிருந்து விலக்கப்பட்டுள்ளது.",
+            bannerNoCash: "பணம் பரிமாறப்படவில்லை. திருப்பிச் செலுத்துதல் அல்லது தீர்வு எதுவும் பதிவு செய்யப்படவில்லை.",
+            bannerPreserved: "மூல பில், பொருள் திரும்பப் பெறுதல் பதிவு மற்றும் கடன் குறிப்பு தணிக்கை வரலாற்றில் பாதுகாக்கப்படுகின்றன. இது செயலில் உள்ள விற்பனை, திரும்பப் பெறுதல் மற்றும் வருவாய் மொத்தங்களிலிருந்து விலக்கப்பட்டுள்ளது.",
+            reason: "காரணம்:",
+            cardTitle: "மூல சோதனை விவரங்கள்",
+            cardEyebrow: "தணிக்கைக்கு மட்டும்",
+            recordedValue: "பதிவு செய்யப்பட்ட பில் மதிப்பு",
+            recordedTender: "பில்லில் பதிவு செய்யப்பட்ட கட்டண முறை",
+            noMoneyExchanged: "பணம் பரிமாறப்படவில்லை",
+            originalDate: "மூல தேதி",
+          }
+        : {
+            eyebrow: "Owner audit record",
+            title: `Voided test bill ${voidedSale.billNo ?? voidedSale.id}`,
+            marked: "Marked",
+            walkIn: "Walk-in customer",
+            bannerTitle: "Test transaction excluded from active sales.",
+            bannerNoCash: "No cash changed hands. No refund or settlement was recorded.",
+            bannerPreserved: "The original invoice, physical-return record, and credit note remain preserved in the audit history. This test is excluded from active sales, return, and revenue totals.",
+            reason: "Reason:",
+            cardTitle: "Original test details",
+            cardEyebrow: "Audit only",
+            recordedValue: "Recorded bill value",
+            recordedTender: "Tender recorded on invoice",
+            noMoneyExchanged: "No money exchanged",
+            originalDate: "Original date",
+          };
     return (
       <AppShell>
         <ProMain>
           <ProPageHeader
-            eyebrow="Owner audit record"
-            title={`Voided test bill ${voidedSale.billNo ?? voidedSale.id}`}
-            description={`Marked ${new Date(voidedSale.voidedAt).toLocaleString("en-LK")} · ${voidedSale.customerName || "Walk-in customer"}`}
+            eyebrow={voidCopy.eyebrow}
+            title={voidCopy.title}
+            description={`${voidCopy.marked} ${new Date(voidedSale.voidedAt).toLocaleString(voidDateLocale)} · ${voidedSale.customerName || voidCopy.walkIn}`}
             actions={<ProButton href="/bills" variant="secondary">← {t("bills.all_bills")}</ProButton>}
           />
           <div role="note" className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-950">
-            <p className="font-bold">Test transaction excluded from active sales.</p>
-            <p className="mt-1">No cash changed hands. No refund or settlement was recorded.</p>
-            <p className="mt-1">The original invoice, physical-return record, and credit note remain preserved in the audit history. This test is excluded from active sales, return, and revenue totals.</p>
-            <p className="mt-2 text-amber-800"><span className="font-semibold">Reason:</span> {voidedSale.voidReason}</p>
+            <p className="font-bold">{voidCopy.bannerTitle}</p>
+            <p className="mt-1">{voidCopy.bannerNoCash}</p>
+            <p className="mt-1">{voidCopy.bannerPreserved}</p>
+            <p className="mt-2 text-amber-800"><span className="font-semibold">{voidCopy.reason}</span> {voidedSale.voidReason}</p>
           </div>
-          <ProCard title="Original test details" eyebrow="Audit only">
+          <ProCard title={voidCopy.cardTitle} eyebrow={voidCopy.cardEyebrow}>
             <div className="mb-4 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Recorded bill value</p><p className="mt-1 font-mono text-xl font-bold">{formatLkr(voidedSale.total)}</p></div>
-              <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Tender recorded on invoice</p><p className="mt-1 text-xl font-bold">{paymentLabel(t, voidedSale.paymentMethod)}</p><p className="text-xs text-slate-500">No money exchanged</p></div>
-              <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Original date</p><p className="mt-1 font-semibold">{new Date(voidedSale.date).toLocaleString("en-LK")}</p></div>
+              <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{voidCopy.recordedValue}</p><p className="mt-1 font-mono text-xl font-bold">{formatLkr(voidedSale.total)}</p></div>
+              <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{voidCopy.recordedTender}</p><p className="mt-1 text-xl font-bold">{paymentLabel(t, voidedSale.paymentMethod)}</p><p className="text-xs text-slate-500">{voidCopy.noMoneyExchanged}</p></div>
+              <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{voidCopy.originalDate}</p><p className="mt-1 font-semibold">{new Date(voidedSale.date).toLocaleString(voidDateLocale)}</p></div>
             </div>
             <div className="divide-y divide-slate-100">
-              {voidedSale.lines.map((line, index) => (
+              {voidedSale.lines.map((line, index) => {
+                const product = data.products.find((item) => item.id === line.productId);
+                const label = org.sector === "grocery" && product
+                  ? groceryProductLabel({ sku: product.sku, name: line.productName }, locale)
+                  : line.productName;
+                return (
                 <div key={`${line.productId}-${index}`} className="flex items-center justify-between gap-4 py-3 text-sm">
-                  <span className="font-semibold text-slate-800">{line.productName}</span>
+                  <span className="font-semibold text-slate-800">{label}</span>
                   <span className="shrink-0 text-slate-600">{line.qty} × {formatLkr(line.unitPrice)}</span>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </ProCard>
         </ProMain>
